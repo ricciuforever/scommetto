@@ -37,7 +37,14 @@ def analyze_match_with_gemini(intelligence_json):
     """
 
     try:
-        response = model.generate_content(prompt)
+        # Configuration for better results and no truncation
+        config = {
+            "temperature": 0.3,
+            "top_p": 0.95,
+            "top_k": 40,
+            "max_output_tokens": 4096,
+        }
+        response = model.generate_content(prompt, generation_config=config)
         return response.text
     except Exception as e:
         return f"Errore durante l'analisi con Gemini: {str(e)}"

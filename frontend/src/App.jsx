@@ -27,8 +27,11 @@ function App() {
       if (!jsonMatch) return;
 
       const betInfo = JSON.parse(jsonMatch[1]);
+      if (!fixtureData || !fixtureData.teams) {
+        throw new Error("Dati partita non validi per la scommessa");
+      }
       const betData = {
-        fixture_id: fixtureData.id,
+        fixture_id: fixtureData.id || fixtureData.fixture_id || 'unknown',
         match: `${fixtureData.teams.home.name} vs ${fixtureData.teams.away.name}`,
         ...betInfo
       };

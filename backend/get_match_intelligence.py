@@ -18,6 +18,7 @@ def get_fixture_details(fixture_id):
     
     intelligence = {
         "fixture_id": fixture_id,
+        "fixture": None, # Will be filled below
         "stats": None,
         "events": None,
         "lineups": None,
@@ -43,6 +44,7 @@ def get_fixture_details(fixture_id):
         return {"error": "Fixture not found"}
     
     fixture = fix_data[0]
+    intelligence["fixture"] = fixture
     home_id = fixture["teams"]["home"]["id"]
     away_id = fixture["teams"]["away"]["id"]
     league_id = fixture["league"]["id"]
