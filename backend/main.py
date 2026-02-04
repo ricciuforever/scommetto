@@ -40,6 +40,14 @@ def fetch_live_data():
     except Exception as e:
         print(f"Error updating live data: {e}")
 
+from get_match_intelligence import get_fixture_details
+
+@app.get("/api/intelligence/{fixture_id}")
+async def get_intelligence(fixture_id: int):
+    # Warning: Consumes ~6 API requests
+    data = get_fixture_details(fixture_id)
+    return data
+
 def fetch_initial_data():
     if not os.path.exists(TEAMS_FILE):
         print("Seeding initial teams data...")

@@ -1,9 +1,24 @@
 import React, { useState, useEffect } from 'react';
 
 function App() {
-  const [liveMatches, setLiveMatches] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [selectedMatch, setSelectedMatch] = useState(null);
+  const [analysis, setAnalysis] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  const analyzeMatch = async (fixtureId) => {
+    setAnalyzing(true);
+    setAnalysis(null);
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || '';
+      const res = await fetch(`${apiBase}/api/intelligence/${fixtureId}`);
+      const data = await res.json();
+      setAnalysis(data);
+    } catch (err) {
+      console.error("Analysis error:", err);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -50,7 +65,7 @@ function App() {
               <div className="match-list">
                 {liveMatches.length > 0 ? (
                   liveMatches.map((m) => (
-                    <div key={m.fixture.id} className="match-item">
+                    <div key={m.fixture.id} className="match-item" style={{ position: 'relative' }}>
                       <div className="league-name">{m.league.name} - {m.league.country}</div>
                       <div className="time">{m.fixture.status.elapsed}'</div>
                       <div className="team">
@@ -64,6 +79,21 @@ function App() {
                         <img src={m.teams.away.logo} alt="" />
                         {m.teams.away.name}
                       </div>
+                      <button
+                        onClick={() => analyzeMatch(m.fixture.id)}
+                        className="live-indicator"
+                        style={{
+                          gridColumn: '1 / -1',
+                          marginTop: '10px',
+                          cursor: 'pointer',
+                          background: 'rgba(0, 242, 255, 0.1)',
+                          borderColor: 'var(--primary)',
+                          color: 'var(--primary)',
+                          animation: 'none'
+                        }}
+                      >
+                        {analyzing ? 'GATHERING DATA...' : '🧠 ANALYZE PROMPT'}
+                      </button>
                     </div>
                   ))
                 ) : (
@@ -89,6 +119,27 @@ function App() {
                 <div className="loading">Loading teams...</div>
               )}
             </div>
+          </div>
+
+          <div className="card" style={{ marginTop: '2rem' }}>
+            <h2>🤖 Gemini Intelligence</h2>
+            {analysis ? (
+              <div style={{
+                background: '#000',
+                padding: '1rem',
+                borderRadius: '1rem',
+                fontSize: '0.8rem',
+                maxHeight: '400px',
+                overflow: 'auto',
+                border: '1px solid var(--primary)'
+              }}>
+                <pre style={{ color: '#00f2ff', whiteSpace: 'pre-wrap' }}>
+                  {JSON.stringify(analysis, null, 2)}
+                </pre>
+              </div>
+            ) : (
+              <div className="loading">Select a match to prepare the Gemini Intelligence prompt.</div>
+            )}
           </div>
 
           <div className="card">
