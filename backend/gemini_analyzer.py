@@ -22,11 +22,15 @@ def analyze_match_with_gemini(intelligence_json):
     3. Confronta le quote pre-match con la situazione attuale.
     4. Fornisci un verdetto sintetico e professionale.
 
-    FORMATO RISPOSTA (Markdown):
-    - **Analisi Momentum**: Breve descrizione della fase attuale.
-    - **Valutazione Valore**: C'è valore nella scommessa? Perché?
-    - **VERDETTO SCOMMESSA**: Mercato consigliato (es: 1X2, Over, etc), Esito e Stake consigliato (1-5%).
-    - **Rischio**: Basso/Medio/Alto.
+    FORMATO RISPOSTA:
+    Restituisci la tua analisi in formato testuale Markdown, ma alla fine aggiungi OBBLIGATORIAMENTE un blocco JSON racchiuso tra ```json e ``` con i seguenti campi:
+    {
+      "advice": "Vittoria Squadra X",
+      "market": "1X2",
+      "odds": 2.10,
+      "stake": 2.5,
+      "urgency": "High/Medium/Low"
+    }
     """
 
     try:

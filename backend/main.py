@@ -31,6 +31,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LIVE_DATA_FILE = os.path.join(BASE_DIR, "live_matches.json")
 TEAMS_FILE = os.path.join(BASE_DIR, "serie_a_teams.json")
 SQUADS_FILE = os.path.join(BASE_DIR, "serie_a_squads.json")
+BETS_HISTORY_FILE = os.path.join(BASE_DIR, "bets_history.json")
 
 def fetch_live_data():
     print("Updating live data...")
@@ -66,6 +67,31 @@ async def get_gemini_analysis(fixture_id: int):
         "raw_data": intelligence,
         "prediction": prediction
     }
+
+@app.get("/api/history")
+async def get_history():
+    if os.path.exists(BETS_HISTORY_FILE):
+        with open(BETS_HISTORY_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+@app.post("/api/place_bet")
+async def place_bet(bet_data: dict):
+    history = []
+    if os.path.exists(BETS_HISTORY_FILE):
+        with open(BETS_HISTORY_FILE, "r") as f:
+            history = json.load(f)
+    
+    # Simple ID generation
+    bet_data["id"] = str(len(history) + 1)
+    bet_data["status"] = "pending"
+    bet_data["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    
+    history.append(bet_data)
+    with open(BETS_HISTORY_FILE, "w") as f:
+        json.dump(history, f, indent=4)
+        
+    return {"status": "success", "bet": bet_data}
 
 def fetch_initial_data():
     if not os.path.exists(TEAMS_FILE):
