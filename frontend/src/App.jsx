@@ -4,6 +4,48 @@ function App() {
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [betHistory, setBetHistory] = useState([]);
+  const [liveMatches, setLiveMatches] = useState([]);
+  const [teams, setTeams] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchHistory = async () => {
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || '';
+      const res = await fetch(`${apiBase}/api/history`);
+      const data = await res.json();
+      setBetHistory(data);
+    } catch (err) {
+      console.error("History error:", err);
+    }
+  };
+
+  const placeBet = async (predictionText, fixtureData) => {
+    try {
+      // Extract JSON from prediction text
+      const jsonMatch = predictionText.match(/```json\n([\s\S]*?)\n```/);
+      if (!jsonMatch) return;
+
+      const betInfo = JSON.parse(jsonMatch[1]);
+      const betData = {
+        fixture_id: fixtureData.id,
+        match: `${fixtureData.teams.home.name} vs ${fixtureData.teams.away.name}`,
+        ...betInfo
+      };
+
+      const apiBase = import.meta.env.VITE_API_URL || '';
+      await fetch(`${apiBase}/api/place_bet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(betData)
+      });
+
+      fetchHistory();
+      alert("Scommessa Simulata Piazzata!");
+    } catch (err) {
+      console.error("Place bet error:", err);
+    }
+  };
 
   const analyzeMatch = async (fixtureId) => {
     setAnalyzing(true);
@@ -42,6 +84,7 @@ function App() {
     };
 
     fetchData();
+    fetchHistory();
     const interval = setInterval(fetchData, 60000); // UI poll every minute
     return () => clearInterval(interval);
   }, []);
@@ -106,17 +149,34 @@ function App() {
 
         <section className="stats-section">
           <div className="card">
-            <h2>🏆 Serie A Teams (24/25)</h2>
-            <div className="teams-grid">
-              {teams.length > 0 ? (
-                teams.map((t) => (
-                  <div key={t.team.id} className="team-badge">
-                    <img src={t.team.logo} alt="" />
-                    <span>{t.team.name}</span>
+            <h2>🗒️ Betting Book (Simulator)</h2>
+            <div className="match-list" style={{ maxHeight: '300px', overflow: 'auto' }}>
+              {betHistory.length > 0 ? (
+                betHistory.slice().reverse().map((b) => (
+                  <div key={b.id} className="match-item" style={{ gridTemplateColumns: '1fr 1fr 1fr', padding: '0.8rem' }}>
+                    <div style={{ fontSize: '0.8rem' }}>
+                      <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{b.match}</div>
+                      <div style={{ color: 'var(--text-dim)' }}>{b.timestamp}</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontWeight: 'bold' }}>{b.advice}</div>
+                      <div style={{ fontSize: '0.7rem' }}>{b.market} @ {b.odds}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        fontSize: '0.7rem',
+                        background: b.status === 'pending' ? 'rgba(255,165,0,0.2)' : 'rgba(0,255,0,0.2)',
+                        color: b.status === 'pending' ? 'orange' : 'green'
+                      }}>
+                        {b.status.toUpperCase()}
+                      </span>
+                    </div>
                   </div>
                 ))
               ) : (
-                <div className="loading">Loading teams...</div>
+                <div className="loading">No bets placed yet.</div>
               )}
             </div>
           </div>
@@ -138,6 +198,21 @@ function App() {
                 }}>
                   {analysis.prediction}
                 </div>
+
+                <button
+                  onClick={() => placeBet(analysis.prediction, analysis.raw_data.fixture)}
+                  className="live-indicator"
+                  style={{
+                    width: '100%',
+                    background: 'var(--primary)',
+                    color: '#000',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    animation: 'none'
+                  }}
+                >
+                  📝 PIAZZA SCOMMESSA SIMULATA
+                </button>
 
                 <details style={{ marginTop: '1rem' }}>
                   <summary style={{ cursor: 'pointer', color: 'var(--text-dim)', fontSize: '0.8rem' }}>
