@@ -40,7 +40,21 @@ def fetch_live_data():
     except Exception as e:
         print(f"Error updating live data: {e}")
 
+def fetch_initial_data():
+    if not os.path.exists(TEAMS_FILE):
+        print("Seeding initial teams data...")
+        try:
+            url = f"{BASE_URL}/teams?league=135&season=2024"
+            response = requests.get(url, headers=HEADERS)
+            data = response.json()
+            with open(TEAMS_FILE, "w") as f:
+                json.dump(data, f)
+            print("Initial teams data seeded.")
+        except Exception as e:
+            print(f"Error seeding teams: {e}")
+
 def update_loop():
+    fetch_initial_data() # Seed once at startup
     while True:
         fetch_live_data()
         time.sleep(900) # Every 15 minutes (96 requests/day)
