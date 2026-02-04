@@ -8,9 +8,10 @@ function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const apiBase = import.meta.env.VITE_API_URL || '';
         const [liveRes, teamsRes] = await Promise.all([
-          fetch('http://localhost:8000/api/live'),
-          fetch('http://localhost:8000/api/teams')
+          fetch(`${apiBase}/api/live`),
+          fetch(`${apiBase}/api/teams`)
         ]);
 
         const liveData = await liveRes.json();
