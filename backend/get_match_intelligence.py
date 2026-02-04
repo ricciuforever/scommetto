@@ -1,8 +1,11 @@
-import requests
-import json
 import os
+import requests
+from dotenv import load_dotenv
 
-API_KEY = "e8fd1c2aba7d8551320a0e8047b70eba"
+# Load variables from .env file
+load_dotenv()
+
+API_KEY = os.getenv("FOOTBALL_API_KEY")
 BASE_URL = "https://v3.football.api-sports.io"
 HEADERS = {
     'x-rapidapi-host': "v3.football.api-sports.io",

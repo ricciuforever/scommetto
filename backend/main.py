@@ -5,6 +5,10 @@ import os
 import requests
 import time
 from threading import Thread
+from dotenv import load_dotenv
+
+# Load variables from .env file
+load_dotenv()
 
 app = FastAPI()
 
@@ -16,7 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-API_KEY = "e8fd1c2aba7d8551320a0e8047b70eba"
+API_KEY = os.getenv("FOOTBALL_API_KEY")
 BASE_URL = "https://v3.football.api-sports.io"
 HEADERS = {
     'x-rapidapi-host': "v3.football.api-sports.io",
