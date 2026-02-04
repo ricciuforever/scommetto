@@ -10,7 +10,7 @@ function App() {
     setAnalysis(null);
     try {
       const apiBase = import.meta.env.VITE_API_URL || '';
-      const res = await fetch(`${apiBase}/api/intelligence/${fixtureId}`);
+      const res = await fetch(`${apiBase}/api/analyze/${fixtureId}`);
       const data = await res.json();
       setAnalysis(data);
     } catch (err) {
@@ -124,18 +124,40 @@ function App() {
           <div className="card" style={{ marginTop: '2rem' }}>
             <h2>🤖 Gemini Intelligence</h2>
             {analysis ? (
-              <div style={{
-                background: '#000',
-                padding: '1rem',
-                borderRadius: '1rem',
-                fontSize: '0.8rem',
-                maxHeight: '400px',
-                overflow: 'auto',
-                border: '1px solid var(--primary)'
-              }}>
-                <pre style={{ color: '#00f2ff', whiteSpace: 'pre-wrap' }}>
-                  {JSON.stringify(analysis, null, 2)}
-                </pre>
+              <div className="analysis-result">
+                <div style={{
+                  background: 'rgba(0, 242, 255, 0.05)',
+                  padding: '1.5rem',
+                  borderRadius: '1rem',
+                  borderLeft: '4px solid var(--primary)',
+                  marginBottom: '1rem',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: '1.6',
+                  color: '#fff',
+                  fontSize: '0.95rem'
+                }}>
+                  {analysis.prediction}
+                </div>
+
+                <details style={{ marginTop: '1rem' }}>
+                  <summary style={{ cursor: 'pointer', color: 'var(--text-dim)', fontSize: '0.8rem' }}>
+                    View Raw Intelligence Data
+                  </summary>
+                  <div style={{
+                    background: '#000',
+                    padding: '1rem',
+                    borderRadius: '1rem',
+                    fontSize: '0.7rem',
+                    maxHeight: '200px',
+                    overflow: 'auto',
+                    marginTop: '0.5rem',
+                    border: '1px solid var(--glass-border)'
+                  }}>
+                    <pre style={{ color: '#94a3b8' }}>
+                      {JSON.stringify(analysis.raw_data, null, 2)}
+                    </pre>
+                  </div>
+                </details>
               </div>
             ) : (
               <div className="loading">Select a match to prepare the Gemini Intelligence prompt.</div>

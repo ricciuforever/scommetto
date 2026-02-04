@@ -45,12 +45,27 @@ def fetch_live_data():
         print(f"Error updating live data: {e}")
 
 from get_match_intelligence import get_fixture_details
+from gemini_analyzer import analyze_match_with_gemini
 
 @app.get("/api/intelligence/{fixture_id}")
 async def get_intelligence(fixture_id: int):
     # Warning: Consumes ~6 API requests
     data = get_fixture_details(fixture_id)
     return data
+
+@app.get("/api/analyze/{fixture_id}")
+async def get_gemini_analysis(fixture_id: int):
+    # Step 1: Gather raw data
+    intelligence = get_fixture_details(fixture_id)
+    
+    # Step 2: Send to Gemini
+    prediction = analyze_match_with_gemini(intelligence)
+    
+    return {
+        "fixture_id": fixture_id,
+        "raw_data": intelligence,
+        "prediction": prediction
+    }
 
 def fetch_initial_data():
     if not os.path.exists(TEAMS_FILE):
