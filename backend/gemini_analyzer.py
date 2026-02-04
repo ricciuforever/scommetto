@@ -11,7 +11,7 @@ model = genai.GenerativeModel('gemini-1.5-flash-8b') # Faster and cheaper for da
 def analyze_match_with_gemini(intelligence_json):
     prompt = f"""
     Sei un esperto scommettitore professionista ed analista di dati calcistici.
-    Analizza i seguenti dati JSON di una partita di calcio live e determina se esiste un valore nelle quote attuali.
+    Analizza i seguenti dati JSON di una partita di calcio live in tempo reale.
 
     DATI PARTITA (JSON):
     {intelligence_json}
@@ -19,18 +19,21 @@ def analyze_match_with_gemini(intelligence_json):
     ISTRUZIONI:
     1. Analizza l'inerzia della partita dai dati statistici (tiri, attacchi pericolosi, possesso).
     2. Considera il contesto (classifica, forma recente, precedenti H2H).
-    3. Confronta le quote pre-match con la situazione attuale.
-    4. Fornisci un verdetto sintetico e professionale.
+    3. Confronta le quote pre-match con la situazione attuale per trovare discrepanze.
+    4. LA TUA RISPOSTA DEVE ESSERE INTERAMENTE IN LINGUA ITALIANA.
 
     FORMATO RISPOSTA:
-    Restituisci la tua analisi in formato testuale Markdown, ma alla fine aggiungi OBBLIGATORIAMENTE un blocco JSON racchiuso tra ```json e ``` con i seguenti campi:
-    {
-      "advice": "Vittoria Squadra X",
-      "market": "1X2",
+    - Scrivi un'analisi Markdown in ITALIANO che spieghi il perché del tuo consiglio.
+    - Alla fine, aggiungi OBBLIGATORIAMENTE un blocco JSON per il simulatore:
+    ```json
+    {{
+      "advice": "Esito consigliato",
+      "market": "Mercato (es. 1X2 o Over 2.5)",
       "odds": 2.10,
       "stake": 2.5,
       "urgency": "High/Medium/Low"
-    }
+    }}
+    ```
     """
 
     try:
