@@ -6,7 +6,7 @@ load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-model = genai.GenerativeModel('gemini-1.5-flash-8b') # Faster and cheaper for data analysis
+model = genai.GenerativeModel('gemini-2.0-flash-lite-preview-02-05') # Using the requested Flash Lite model
 
 def analyze_match_with_gemini(intelligence_json):
     prompt = f"""
