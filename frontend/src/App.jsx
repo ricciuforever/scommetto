@@ -58,6 +58,9 @@ function App() {
       const res = await fetch(`${apiBase}/api/analyze/${fixtureId}`);
       const data = await res.json();
       setAnalysis(data);
+      if (data.auto_bet_status === 'success') {
+        fetchHistory();
+      }
     } catch (err) {
       console.error("Analysis error:", err);
     } finally {
@@ -202,20 +205,35 @@ function App() {
                   {analysis.prediction}
                 </div>
 
-                <button
-                  onClick={() => placeBet(analysis.prediction, analysis.raw_data.fixture)}
-                  className="live-indicator"
-                  style={{
-                    width: '100%',
-                    background: 'var(--primary)',
-                    color: '#000',
-                    fontWeight: '800',
-                    cursor: 'pointer',
-                    animation: 'none'
-                  }}
-                >
-                  📝 PIAZZA SCOMMESSA SIMULATA
-                </button>
+                {analysis.auto_bet_status === 'success' && (
+                  <div style={{
+                    background: 'rgba(0, 255, 0, 0.1)',
+                    color: '#00ff00',
+                    padding: '0.8rem',
+                    borderRadius: '0.5rem',
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    marginBottom: '1rem',
+                    border: '1px solid #00ff00'
+                  }}>
+                    ✅ SCOMMESSA PIAZZATA AUTOMATICAMENTE!
+                  </div>
+                )}
+
+                {analysis.auto_bet_status === 'already_exists' && (
+                  <div style={{
+                    background: 'rgba(255, 165, 0, 0.1)',
+                    color: 'orange',
+                    padding: '0.8rem',
+                    borderRadius: '0.5rem',
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    marginBottom: '1rem',
+                    border: '1px solid orange'
+                  }}>
+                    ⚠️ ANALISI GIÀ PRESENTE NEL REGISTRO
+                  </div>
+                )}
 
                 <details style={{ marginTop: '1rem' }}>
                   <summary style={{ cursor: 'pointer', color: 'var(--text-dim)', fontSize: '0.8rem' }}>

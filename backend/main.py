@@ -62,10 +62,29 @@ async def get_gemini_analysis(fixture_id: int):
     # Step 2: Send to Gemini
     prediction = analyze_match_with_gemini(intelligence)
     
+    # Step 3: AUTO-PLACE BET if valid JSON found
+    auto_bet_status = "no_bet"
+    try:
+        import re
+        json_match = re.search(r'```json\n([\s\S]*?)\n```', prediction)
+        if json_match:
+            bet_info = json.loads(json_match.group(1))
+            bet_data = {
+                "fixture_id": fixture_id,
+                "match": f"{intelligence['fixture']['teams']['home']['name']} vs {intelligence['fixture']['teams']['away']['name']}",
+                **bet_info
+            }
+            result = await place_bet(bet_data)
+            auto_bet_status = result["status"]
+    except Exception as e:
+        print(f"Auto-bet error: {e}")
+        auto_bet_status = f"error: {str(e)}"
+    
     return {
         "fixture_id": fixture_id,
         "raw_data": intelligence,
-        "prediction": prediction
+        "prediction": prediction,
+        "auto_bet_status": auto_bet_status
     }
 
 @app.get("/api/history")
@@ -81,6 +100,11 @@ async def place_bet(bet_data: dict):
     if os.path.exists(BETS_HISTORY_FILE):
         with open(BETS_HISTORY_FILE, "r") as f:
             history = json.load(f)
+    
+    # DUPLICATE CHECK: Don't place the same bet for the same fixture twice
+    existing = next((b for b in history if b["fixture_id"] == bet_data["fixture_id"] and b["advice"] == bet_data["advice"]), None)
+    if existing:
+        return {"status": "already_exists", "bet": existing}
     
     # Simple ID generation
     bet_data["id"] = str(len(history) + 1)
