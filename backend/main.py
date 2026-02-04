@@ -23,9 +23,10 @@ HEADERS = {
     'x-rapidapi-key': API_KEY
 }
 
-LIVE_DATA_FILE = "live_matches.json"
-TEAMS_FILE = "serie_a_teams.json"
-SQUADS_FILE = "serie_a_squads.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LIVE_DATA_FILE = os.path.join(BASE_DIR, "live_matches.json")
+TEAMS_FILE = os.path.join(BASE_DIR, "serie_a_teams.json")
+SQUADS_FILE = os.path.join(BASE_DIR, "serie_a_squads.json")
 
 def fetch_live_data():
     print("Updating live data...")
