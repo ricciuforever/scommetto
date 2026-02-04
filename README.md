@@ -40,4 +40,4 @@ Per restare sotto le 100 request/day:
 - I match live usano un unico endpoint globale (`live=all`) invece di uno per ogni lega.
 - L'aggiornamento avviene 4 volte l'ora (4 * 24 = 96 requests).
 
-<!-- Last redeploy trigger: 2026-02-05 00:38 -->
+<!-- Last redeploy trigger: 2026-02-05 00:40 -->
