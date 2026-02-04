@@ -1,0 +1,73 @@
+from fastapi import FastAPI, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+import json
+import os
+import requests
+import time
+from threading import Thread
+
+app = FastAPI()
+
+# Enable CORS for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+API_KEY = "e8fd1c2aba7d8551320a0e8047b70eba"
+BASE_URL = "https://v3.football.api-sports.io"
+HEADERS = {
+    'x-rapidapi-host': "v3.football.api-sports.io",
+    'x-rapidapi-key': API_KEY
+}
+
+LIVE_DATA_FILE = "live_matches.json"
+TEAMS_FILE = "serie_a_teams.json"
+SQUADS_FILE = "serie_a_squads.json"
+
+def fetch_live_data():
+    print("Updating live data...")
+    try:
+        url = f"{BASE_URL}/fixtures?live=all"
+        response = requests.get(url, headers=HEADERS)
+        data = response.json()
+        with open(LIVE_DATA_FILE, "w") as f:
+            json.dump(data, f)
+        print("Live data updated.")
+    except Exception as e:
+        print(f"Error updating live data: {e}")
+
+def update_loop():
+    while True:
+        fetch_live_data()
+        time.sleep(900) # Every 15 minutes (96 requests/day)
+
+# Start background thread for updates
+Thread(target=update_loop, daemon=True).start()
+
+@app.get("/api/live")
+async def get_live():
+    if os.path.exists(LIVE_DATA_FILE):
+        with open(LIVE_DATA_FILE, "r") as f:
+            return json.load(f)
+    return {"response": []}
+
+@app.get("/api/teams")
+async def get_teams():
+    if os.path.exists(TEAMS_FILE):
+        with open(TEAMS_FILE, "r") as f:
+            return json.load(f)
+    return {"response": []}
+
+@app.get("/api/squads")
+async def get_squads():
+    if os.path.exists(SQUADS_FILE):
+        with open(SQUADS_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
