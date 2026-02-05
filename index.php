@@ -22,6 +22,8 @@ if ($path === '/' || $path === '/index.php' || $path === '') {
     (new BetController())->getHistory();
 } elseif (preg_match('#^/api/analyze/(\d+)$#', $path, $matches)) {
     (new MatchController())->analyze($matches[1]);
+} elseif (preg_match('#^/api/predictions/(\d+)$#', $path, $matches)) {
+    (new MatchController())->getPredictions($matches[1]);
 } elseif (preg_match('#^/api/standings/(\d+)$#', $path, $matches)) {
     (new MatchController())->getStandings($matches[1]);
 } elseif (preg_match('#^/api/team/(\d+)$#', $path, $matches)) {

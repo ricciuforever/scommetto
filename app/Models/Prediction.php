@@ -15,50 +15,51 @@ class Prediction
         $this->db = Database::getInstance()->getConnection();
     }
 
-    public function getByFixtureId($fixtureId)
+    public function getByFixtureId($fixture_id)
     {
         $stmt = $this->db->prepare("SELECT * FROM predictions WHERE fixture_id = ?");
-        $stmt->execute([$fixtureId]);
-        return $stmt->fetch();
+        $stmt->execute([$fixture_id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row)
+            return null;
+
+        return [
+            'advice' => $row['advice'],
+            'comparison' => json_decode($row['comparison_json'], true),
+            'percent' => json_decode($row['percent_json'], true)
+        ];
     }
 
-    public function needsRefresh($fixtureId)
+    public function save($fixture_id, $data)
     {
-        $prediction = $this->getByFixtureId($fixtureId);
-        if (!$prediction) return true;
-
-        $lastUpdated = strtotime($prediction['updated_at']);
-        // Refresh every hour
-        return (time() - $lastUpdated) > 3600;
-    }
-
-    public function save($fixtureId, $data)
-    {
-        $advice = $data['predictions']['advice'] ?? null;
-        $winnerId = $data['predictions']['winner']['id'] ?? null;
-        $winnerName = $data['predictions']['winner']['name'] ?? null;
-        $winOrDraw = isset($data['predictions']['win_or_draw']) ? ($data['predictions']['win_or_draw'] ? 1 : 0) : null;
-
-        $comparison = json_encode($data['comparison'] ?? []);
-        $percent = json_encode($data['predictions']['percent'] ?? []);
-
-        $sql = "INSERT INTO predictions (fixture_id, advice, winner_id, winner_name, win_or_draw, comparison, percent, updated_at)
-                VALUES (:fixture_id, :advice, :winner_id, :winner_name, :win_or_draw, :comparison, :percent, CURRENT_TIMESTAMP)
-                ON DUPLICATE KEY UPDATE
-                advice = VALUES(advice), winner_id = VALUES(winner_id),
-                winner_name = VALUES(winner_name), win_or_draw = VALUES(win_or_draw),
-                comparison = VALUES(comparison), percent = VALUES(percent),
-                updated_at = CURRENT_TIMESTAMP";
+        $sql = "INSERT INTO predictions (fixture_id, advice, comparison_json, percent_json) 
+                VALUES (:id, :advice, :comp, :perc) 
+                ON DUPLICATE KEY UPDATE 
+                    advice = VALUES(advice), 
+                    comparison_json = VALUES(comparison_json), 
+                    percent_json = VALUES(percent_json),
+                    last_updated = CURRENT_TIMESTAMP";
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
-            'fixture_id' => $fixtureId,
-            'advice' => $advice,
-            'winner_id' => $winnerId,
-            'winner_name' => $winnerName,
-            'win_or_draw' => $winOrDraw,
-            'comparison' => $comparison,
-            'percent' => $percent
+            'id' => $fixture_id,
+            'advice' => $data['predictions']['advice'] ?? 'N/A',
+            'comp' => json_encode($data['comparison'] ?? []),
+            'perc' => json_encode($data['predictions']['percent'] ?? [])
         ]);
+    }
+
+    public function needsRefresh($fixture_id, $hours = 24)
+    {
+        $stmt = $this->db->prepare("SELECT last_updated FROM predictions WHERE fixture_id = ?");
+        $stmt->execute([$fixture_id]);
+        $row = $stmt->fetch();
+
+        if (!$row)
+            return true;
+
+        $lastUpdated = strtotime($row['last_updated']);
+        return (time() - $lastUpdated) > ($hours * 3600);
     }
 }
