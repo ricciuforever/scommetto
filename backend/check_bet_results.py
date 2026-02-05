@@ -23,74 +23,69 @@ def check_bets():
     with open(BETS_HISTORY_FILE, "r") as f:
         history = json.load(f)
 
-    updated = False
-    for bet in history:
-        if bet.get("status") == "pending":
-            try:
-                # Ensure fixture_id is valid
-                raw_id = bet.get("fixture_id")
-                if raw_id is None:
-                    print(f"DEBUG: Skipping {bet.get('match')} - Missing Fixture ID")
-                    continue
-                fixture_id = int(raw_id)
-                match_name = bet.get("match", "Unknown")
-                print(f"DEBUG: Processing {match_name} (ID: {fixture_id})")
-                
-                res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"id": fixture_id})
-                data = res.json()
-                
-                if data.get("response"):
-                    fixture = data["response"][0]
-                    f_status = fixture["fixture"]["status"]["short"]
-                    goals = fixture["goals"] # Current goals
-                    score = fixture.get("score", {})
-                    
-                    market = bet.get("market", "").lower()
-                    advice = bet.get("advice", "").lower()
-                    
-                    print(f"DEBUG: {match_name} status is {f_status}. Goals: {goals}")
+    pending_bets = [b for b in history if b.get("status") == "pending"]
+    if not pending_bets:
+        return
 
-                    # 1. 1X2 (Full Time)
-                    if f_status == "FT":
-                        h, a = goals["home"], goals["away"]
+    # Group IDs to fetch in bulk (API-Football supports 'ids' param with up to 20 comma-separated IDs)
+    ids_to_check = [str(b["fixture_id"]) for b in pending_bets if b.get("fixture_id")]
+    if not ids_to_check:
+        return
+
+    updated = False
+    try:
+        # One call for all pending fixtures!
+        ids_param = ",".join(ids_to_check[:20]) 
+        res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param})
+        data = res.json()
+        
+        fixtures_data = {f["fixture"]["id"]: f for f in data.get("response", [])}
+
+        for bet in history:
+            if bet.get("status") == "pending":
+                f_id = bet.get("fixture_id")
+                if f_id not in fixtures_data: continue
+                
+                fixture = fixtures_data[f_id]
+                f_status = fixture["fixture"]["status"]["short"]
+                goals = fixture["goals"]
+                score = fixture.get("score", {})
+                
+                market = bet.get("market", "").lower()
+                advice = bet.get("advice", "").lower()
+                
+                # Settle FT
+                if f_status == "FT":
+                    h, a = goals["home"], goals["away"]
+                    is_win = False
+                    if any(x in advice for x in ["vittoria", "1", "home", "casa"]) and h > a: is_win = True
+                    elif any(x in advice for x in ["2", "away", "ospite", "trasferta"]) and a > h: is_win = True
+                    elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a: is_win = True
+                    bet["status"] = "win" if is_win else "lost"
+                    bet["result"] = f"{h}-{a}"
+                    updated = True
+
+                # Settle HT
+                is_1st_half = any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"])
+                if is_1st_half and f_status in ["HT", "2H", "FT"]:
+                    ht_score = score.get("halftime", {})
+                    h = ht_score.get("home") if ht_score.get("home") is not None else goals["home"]
+                    a = ht_score.get("away") if ht_score.get("away") is not None else goals["away"]
+                    if h is not None and a is not None:
                         is_win = False
                         if any(x in advice for x in ["vittoria", "1", "home", "casa"]) and h > a: is_win = True
                         elif any(x in advice for x in ["2", "away", "ospite", "trasferta"]) and a > h: is_win = True
                         elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a: is_win = True
-                        
                         bet["status"] = "win" if is_win else "lost"
-                        bet["result"] = f"{h}-{a}"
+                        bet["result"] = f"(HT) {h}-{a}"
                         updated = True
-                        print(f"DEBUG: Settle FT for {match_name} -> {bet['status']}")
-
-                    # 2. 1X2 (1st Half) / First Half Winner
-                    else:
-                        is_1st_half = any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"])
-                        if is_1st_half and f_status in ["HT", "2H", "FT"]:
-                            # Use halftime score if available, otherwise current goals if it's HT
-                            ht_score = score.get("halftime", {})
-                            h = ht_score.get("home") if ht_score.get("home") is not None else goals["home"]
-                            a = ht_score.get("away") if ht_score.get("away") is not None else goals["away"]
-                            
-                            if h is not None and a is not None:
-                                is_win = False
-                                if any(x in advice for x in ["vittoria", "1", "home", "casa"]) and h > a: is_win = True
-                                elif any(x in advice for x in ["2", "away", "ospite", "trasferta"]) and a > h: is_win = True
-                                elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a: is_win = True
-                                
-                                bet["status"] = "win" if is_win else "lost"
-                                bet["result"] = f"(HT) {h}-{a}"
-                                updated = True
-                                print(f"DEBUG: Settle HT for {match_name} -> {bet['status']}")
-
-                time.sleep(1) 
-            except Exception as e:
-                print(f"DEBUG: ERROR on fixture {bet.get('fixture_id')}: {e}")
+    except Exception as e:
+        print(f"ERROR Batch Checking: {e}")
 
     if updated:
         with open(BETS_HISTORY_FILE, "w") as f:
             json.dump(history, f, indent=4)
-        print("Bets history updated with new results.")
+        print("Bets settled.")
 
 if __name__ == "__main__":
     check_bets()
