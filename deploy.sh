@@ -10,6 +10,15 @@ echo "=== Deploy iniziato: $(date) ===" >> "$LOG_FILE"
 echo "Pulling latest changes..." >> "$LOG_FILE"
 git pull origin main >> "$LOG_FILE" 2>&1
 
+# 0b. DETECT PLESK NODE
+if [ -d "/opt/plesk/node/24/bin" ]; then
+    export PATH=/opt/plesk/node/24/bin:$PATH
+    echo "Using Plesk Node 24" >> "$LOG_FILE"
+elif [ -d "/opt/plesk/node/25/bin" ]; then
+    export PATH=/opt/plesk/node/25/bin:$PATH
+    echo "Using Plesk Node 25" >> "$LOG_FILE"
+fi
+
 # 1. FRONTEND BUILD
 echo "Cleaning and Building Frontend..." >> "$LOG_FILE"
 cd "$APP_DIR/frontend"
