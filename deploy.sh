@@ -49,6 +49,9 @@ fi
 # 3. RESTART AGENTE
 echo "Restarting Agent..." >> "$LOG_FILE"
 
+# Capture old PID if exists
+OLD_PID=$(pgrep -f "main.py" | head -n 1)
+
 # Clean up any existing process on port 8000 or running main.py
 fuser -k 8000/tcp >> "$LOG_FILE" 2>&1 || true
 pkill -9 -f main.py >> "$LOG_FILE" 2>&1 || true
@@ -57,19 +60,28 @@ pkill -9 -f main.py >> "$LOG_FILE" 2>&1 || true
 echo "Waiting for port 8000 to be released..." >> "$LOG_FILE"
 sleep 5
 
-# Fix global ownership before start to ensure logs can be written
-chown -R $USER:$GROUP "$APP_DIR"
-chmod -R 755 "$APP_DIR"
-
-# Start
-echo "Starting new instance..." >> "$LOG_FILE"
-setsid ./venv/bin/python3 main.py >> agent_log.txt 2>&1 &
-sleep 3
-
-if pgrep -f "main.py" > /dev/null; then
-    echo "Agent started successfully (PID: $(pgrep -f "main.py"))." >> "$LOG_FILE"
+# Check if port 8000 is still busy
+if lsof -i :8000 > /dev/null; then
+    echo "CRITICAL ERROR: Port 8000 is still in use. Could not kill the old process." >> "$LOG_FILE"
+    echo "This usually happens due to permission conflicts (process owned by root?)." >> "$LOG_FILE"
+    echo "Please run: 'sudo fuser -k 8000/tcp' manually and then restart the deploy." >> "$LOG_FILE"
 else
-    echo "ERROR: Agent failed to start. Check backend/agent_log.txt" >> "$LOG_FILE"
+    # Fix global ownership before start to ensure logs can be written
+    chown -R $USER:$GROUP "$APP_DIR"
+    chmod -R 755 "$APP_DIR"
+
+    # Start
+    echo "Starting new instance..." >> "$LOG_FILE"
+    setsid ./venv/bin/python3 main.py >> agent_log.txt 2>&1 &
+    sleep 3
+
+    NEW_PID=$(pgrep -f "main.py" | sort -n | tail -n 1)
+
+    if [ ! -z "$NEW_PID" ] && [ "$NEW_PID" != "$OLD_PID" ]; then
+        echo "Agent started successfully (PID: $NEW_PID)." >> "$LOG_FILE"
+    else
+        echo "ERROR: Agent failed to start. Check backend/agent_log.txt" >> "$LOG_FILE"
+    fi
 fi
 
 echo "=== Deploy completato: $(date) ===" >> "$LOG_FILE"
