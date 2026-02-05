@@ -15,42 +15,52 @@ HEADERS = {
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BETS_HISTORY_FILE = os.path.join(BASE_DIR, "bets_history.json")
+LOG_FILE = os.path.join(BASE_DIR, "agent_log.txt")
 
-def check_bets():
+def log_message(msg):
+    timestamp = time.ctime()
+    full_msg = f"{timestamp}: {msg}"
+    print(full_msg)
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(full_msg + "\n")
+    except:
+        pass
+
+def check_bets(usage_callback=None):
     if not os.path.exists(BETS_HISTORY_FILE):
         return
 
-    with open(BETS_HISTORY_FILE, "r") as f:
-        history = json.load(f)
+    try:
+        with open(BETS_HISTORY_FILE, "r") as f:
+            history = json.load(f)
+    except:
+        return
 
     pending_bets = [b for b in history if b.get("status") == "pending"]
     if not pending_bets:
         return
 
-    # API-Football supports up to 20 IDs per call. Let's chunk them.
     ids_to_check = [str(b["fixture_id"]) for b in pending_bets if b.get("fixture_id")]
     updated = False
 
+    # Process in batches of 20
     for i in range(0, len(ids_to_check), 20):
         chunk = ids_to_check[i:i + 20]
         try:
             ids_param = ",".join(chunk)
-            msg = f"Checking batch of {len(chunk)} bets..."
-            print(msg)
-            with open("agent_log.txt", "a") as f:
-                f.write(f"{time.ctime()}: {msg}\n")
+            log_message(f"Checking batch of {len(chunk)} bets...")
 
             res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param})
-            data = res.json()
+            if usage_callback:
+                usage_callback(res)
             
+            data = res.json()
             fixtures_data = {f["fixture"]["id"]: f for f in data.get("response", [])}
 
             for bet in history:
                 if bet.get("status") == "pending":
-                    raw_id = bet.get("fixture_id")
-                    if raw_id is None: continue
-                    f_id = int(raw_id)
-                    
+                    f_id = int(bet.get("fixture_id", 0))
                     if f_id not in fixtures_data: continue
                     
                     fixture = fixtures_data[f_id]
@@ -63,62 +73,70 @@ def check_bets():
                     
                     home_name = fixture["teams"]["home"]["name"].lower()
                     away_name = fixture["teams"]["away"]["name"].lower()
+
+                    # Handle Void/Cancelled matches
+                    if f_status in ["PST", "CANC", "ABD", "WO"]:
+                        bet["status"] = "void"
+                        bet["result"] = f_status
+                        updated = True
+                        log_message(f"🚫 VOIDED {match_name}: Match {f_status}")
+                        continue
                     
-                    # 1. Full Time Settlement (FT, AET, PEN)
-                    if f_status in ["FT", "AET", "PEN"]:
-                        h, a = goals["home"], goals["away"]
-                        if h is None or a is None: continue
-                        
+                    # Determine if it's a Half Time market
+                    is_ht_market = any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"])
+
+                    target_h, target_a = None, None
+                    settle_now = False
+                    res_prefix = ""
+
+                    if is_ht_market:
+                        if f_status in ["HT", "2H", "FT", "AET", "PEN"]:
+                            ht_score = score.get("halftime", {})
+                            target_h = ht_score.get("home") if ht_score.get("home") is not None else goals["home"]
+                            target_a = ht_score.get("away") if ht_score.get("away") is not None else goals["away"]
+                            settle_now = (target_h is not None and target_a is not None)
+                            res_prefix = "(HT) "
+                    else:
+                        if f_status in ["FT", "AET", "PEN"]:
+                            target_h, target_a = goals["home"], goals["away"]
+                            settle_now = (target_h is not None and target_a is not None)
+                            res_prefix = ""
+
+                    if settle_now:
+                        h, a = target_h, target_a
                         is_win = False
-                        # Logic: Home Win (1)
-                        if (any(x in advice for x in ["vittoria", "1", "home", "casa"]) or home_name in advice) and h > a:
+
+                        # Logic: Home Win
+                        if (any(x in advice for x in ["vittoria casa", "vince casa", " 1 ", "1-0", "2-0", "2-1"]) or (home_name in advice and "vince" in advice)) and h > a:
                             is_win = True
-                        # Logic: Away Win (2)
-                        elif (any(x in advice for x in ["2", "away", "ospite", "trasferta"]) or away_name in advice) and a > h:
+                        # Logic: Away Win
+                        elif (any(x in advice for x in ["vittoria ospite", "vince trasferta", " 2 ", "0-1", "0-2", "1-2"]) or (away_name in advice and "vince" in advice)) and a > h:
                             is_win = True
-                        # Logic: Draw (X)
-                        elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a:
+                        # Logic: Draw
+                        elif (any(x in advice for x in ["pareggio", " draw ", " segno x", " x "])) and h == a:
                             is_win = True
                         # Logic: Over/Under
                         elif "over" in advice and (h + a) > 2.5: is_win = True
                         elif "under" in advice and (h + a) < 2.5: is_win = True
+                        # Fallback simple team name
+                        elif home_name in advice and h > a: is_win = True
+                        elif away_name in advice and a > h: is_win = True
                         
                         bet["status"] = "win" if is_win else "lost"
-                        bet["result"] = f"{h}-{a}"
+                        bet["result"] = f"{res_prefix}{h}-{a}"
                         updated = True
-                        with open("agent_log.txt", "a") as f:
-                            f.write(f"{time.ctime()}: 💰 DECISED {match_name}: {h}-{a} ({bet['status'].upper()})\n")
-                    
-                    # 2. HT Settlement (If match is HT or later)
-                    elif any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"]):
-                        if f_status in ["HT", "2H", "FT", "AET", "PEN"]:
-                            ht_score = score.get("halftime", {})
-                            h = ht_score.get("home") if ht_score.get("home") is not None else goals["home"]
-                            a = ht_score.get("away") if ht_score.get("away") is not None else goals["away"]
-                            
-                            if h is not None and a is not None:
-                                is_win = False
-                                if (any(x in advice for x in ["vittoria", "1", "home", "casa"]) or home_name in advice) and h > a:
-                                    is_win = True
-                                elif (any(x in advice for x in ["2", "away", "ospite", "trasferta"]) or away_name in advice) and a > h:
-                                    is_win = True
-                                elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a:
-                                    is_win = True
-                                
-                                bet["status"] = "win" if is_win else "lost"
-                                bet["result"] = f"(HT) {h}-{a}"
-                                updated = True
-                                with open("agent_log.txt", "a") as f:
-                                    f.write(f"{time.ctime()}: 🕒 HT SETTLED: {match_name} ({h}-{a}) -> {bet['status'].upper()}\n")
+                        log_message(f"💰 DECIDED {match_name}: {bet['result']} ({bet['status'].upper()})")
+
             time.sleep(1) 
         except Exception as e:
-            with open("agent_log.txt", "a") as f:
-                f.write(f"{time.ctime()}: ❌ Settlement Error: {e}\n")
+            log_message(f"❌ Settlement Error: {e}")
 
     if updated:
-        with open(BETS_HISTORY_FILE, "w") as f:
-            json.dump(history, f, indent=4)
-        print("Bets settled.")
+        try:
+            with open(BETS_HISTORY_FILE, "w") as f:
+                json.dump(history, f, indent=4)
+        except Exception as e:
+            log_message(f"❌ Error saving history: {e}")
 
 if __name__ == "__main__":
     check_bets()
