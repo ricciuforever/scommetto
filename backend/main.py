@@ -61,10 +61,19 @@ def update_usage_from_response(response):
         print(f"Error updating usage: {e}")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Ensure BASE_DIR is added to env loading
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
 LIVE_DATA_FILE = os.path.join(BASE_DIR, "live_matches.json")
 TEAMS_FILE = os.path.join(BASE_DIR, "serie_a_teams.json")
 SQUADS_FILE = os.path.join(BASE_DIR, "serie_a_squads.json")
 BETS_HISTORY_FILE = os.path.join(BASE_DIR, "bets_history.json")
+LOG_FILE = os.path.join(BASE_DIR, "agent_log.txt")
+
+# Initialize empty history if it doesn't exist
+if not os.path.exists(BETS_HISTORY_FILE):
+    with open(BETS_HISTORY_FILE, "w") as f:
+        json.dump([], f)
 
 def fetch_live_data():
     print("Updating live data...")
