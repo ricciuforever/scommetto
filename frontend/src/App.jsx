@@ -146,7 +146,7 @@ function App() {
     return `${ticked}'`;
   };
 
-  const sortedHistory = [...history].sort((a, b) => {
+  const sortedHistory = [...betHistory].sort((a, b) => {
     // 1. Pending first
     if (a.status === 'pending' && b.status !== 'pending') return -1;
     if (a.status !== 'pending' && b.status === 'pending') return 1;
