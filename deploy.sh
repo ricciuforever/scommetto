@@ -10,7 +10,7 @@ echo "=== Deploy iniziato: $(date) ===" >> "$LOG_FILE"
 
 # 0. UPDATE REPO
 echo "Updating Repo..." >> "$LOG_FILE"
-git pull origin main >> "$LOG_FILE" 2>&1 # Commented out to avoid sandbox issues
+git pull origin main >> "$LOG_FILE" 2>&1
 
 # 0b. DETECT PLESK NODE
 if [ -d "/opt/plesk/node/24/bin" ]; then
