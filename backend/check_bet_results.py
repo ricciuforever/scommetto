@@ -27,60 +27,61 @@ def check_bets():
     if not pending_bets:
         return
 
-    # Group IDs to fetch in bulk (API-Football supports 'ids' param with up to 20 comma-separated IDs)
+    # API-Football supports up to 20 IDs per call. Let's chunk them.
     ids_to_check = [str(b["fixture_id"]) for b in pending_bets if b.get("fixture_id")]
-    if not ids_to_check:
-        return
-
     updated = False
-    try:
-        # One call for all pending fixtures!
-        ids_param = ",".join(ids_to_check[:20]) 
-        res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param})
-        data = res.json()
-        
-        fixtures_data = {f["fixture"]["id"]: f for f in data.get("response", [])}
 
-        for bet in history:
-            if bet.get("status") == "pending":
-                f_id = bet.get("fixture_id")
-                if f_id not in fixtures_data: continue
-                
-                fixture = fixtures_data[f_id]
-                f_status = fixture["fixture"]["status"]["short"]
-                goals = fixture["goals"]
-                score = fixture.get("score", {})
-                
-                market = bet.get("market", "").lower()
-                advice = bet.get("advice", "").lower()
-                
-                # Settle FT
-                if f_status == "FT":
-                    h, a = goals["home"], goals["away"]
-                    is_win = False
-                    if any(x in advice for x in ["vittoria", "1", "home", "casa"]) and h > a: is_win = True
-                    elif any(x in advice for x in ["2", "away", "ospite", "trasferta"]) and a > h: is_win = True
-                    elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a: is_win = True
-                    bet["status"] = "win" if is_win else "lost"
-                    bet["result"] = f"{h}-{a}"
-                    updated = True
+    for i in range(0, len(ids_to_check), 20):
+        chunk = ids_to_check[i:i + 20]
+        try:
+            ids_param = ",".join(chunk)
+            print(f"DEBUG: Batch checking fixtures: {ids_param}")
+            res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param})
+            data = res.json()
+            
+            fixtures_data = {f["fixture"]["id"]: f for f in data.get("response", [])}
 
-                # Settle HT
-                is_1st_half = any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"])
-                if is_1st_half and f_status in ["HT", "2H", "FT"]:
-                    ht_score = score.get("halftime", {})
-                    h = ht_score.get("home") if ht_score.get("home") is not None else goals["home"]
-                    a = ht_score.get("away") if ht_score.get("away") is not None else goals["away"]
-                    if h is not None and a is not None:
+            for bet in history:
+                if bet.get("status") == "pending":
+                    f_id = bet.get("fixture_id")
+                    if f_id not in fixtures_data: continue
+                    
+                    fixture = fixtures_data[f_id]
+                    f_status = fixture["fixture"]["status"]["short"]
+                    goals = fixture["goals"]
+                    score = fixture.get("score", {})
+                    
+                    market = bet.get("market", "").lower()
+                    advice = bet.get("advice", "").lower()
+                    
+                    # Settle FT
+                    if f_status == "FT":
+                        h, a = goals["home"], goals["away"]
                         is_win = False
                         if any(x in advice for x in ["vittoria", "1", "home", "casa"]) and h > a: is_win = True
                         elif any(x in advice for x in ["2", "away", "ospite", "trasferta"]) and a > h: is_win = True
                         elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a: is_win = True
                         bet["status"] = "win" if is_win else "lost"
-                        bet["result"] = f"(HT) {h}-{a}"
+                        bet["result"] = f"{h}-{a}"
                         updated = True
-    except Exception as e:
-        print(f"ERROR Batch Checking: {e}")
+
+                    # Settle HT
+                    is_1st_half = any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"])
+                    if is_1st_half and f_status in ["HT", "2H", "FT"]:
+                        ht_score = score.get("halftime", {})
+                        h = ht_score.get("home") if ht_score.get("home") is not None else goals["home"]
+                        a = ht_score.get("away") if ht_score.get("away") is not None else goals["away"]
+                        if h is not None and a is not None:
+                            is_win = False
+                            if any(x in advice for x in ["vittoria", "1", "home", "casa"]) and h > a: is_win = True
+                            elif any(x in advice for x in ["2", "away", "ospite", "trasferta"]) and a > h: is_win = True
+                            elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a: is_win = True
+                            bet["status"] = "win" if is_win else "lost"
+                            bet["result"] = f"(HT) {h}-{a}"
+                            updated = True
+            time.sleep(1) # Small gap between chunks
+        except Exception as e:
+            print(f"ERROR Batch Checking Chunk: {e}")
 
     if updated:
         with open(BETS_HISTORY_FILE, "w") as f:
