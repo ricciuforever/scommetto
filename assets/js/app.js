@@ -1,13 +1,52 @@
 // assets/js/app.js
 
 let liveMatches = [];
+let matchStates = {};
+let pinnedMatches = new Set();
+const notificationSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+notificationSound.volume = 0.5;
 let selectedLeague = 'all';
 
 async function fetchLive() {
     try {
         const res = await fetch('/api/live');
         const data = await res.json();
-        liveMatches = data.response || [];
+        const newMatches = data.response || [];
+
+        let hasNewUpdates = false;
+
+        newMatches.forEach(m => {
+            const id = m.fixture.id;
+            const prevState = matchStates[id];
+            const currentEventsCount = (m.events || []).filter(ev => ev.type !== 'subst').length;
+
+            if (prevState) {
+                const goalsChanged = m.goals.home !== prevState.goals.home || m.goals.away !== prevState.goals.away;
+                const eventsChanged = currentEventsCount > prevState.eventsCount;
+
+                if (goalsChanged || eventsChanged) {
+                    pinnedMatches.add(id);
+                    hasNewUpdates = true;
+
+                    setTimeout(() => {
+                        pinnedMatches.delete(id);
+                        renderMatches();
+                    }, 10000);
+                }
+            }
+
+            matchStates[id] = {
+                goals: { home: m.goals.home, away: m.goals.away },
+                eventsCount: currentEventsCount
+            };
+        });
+
+        liveMatches = newMatches;
+
+        if (hasNewUpdates) {
+            notificationSound.play().catch(e => console.warn("Audio play blocked"));
+        }
+
         renderFilters();
         renderMatches();
         document.getElementById('active-matches-count').textContent = liveMatches.length;
@@ -60,13 +99,13 @@ async function fetchHistory() {
         const profitEl = document.getElementById("profit-val");
         if (profitEl) {
             profitEl.textContent = `${netProfit >= 0 ? "+" : ""}${netProfit.toFixed(2)}€`;
-            profitEl.className = `stat-value ${netProfit >= 0 ? "text-success" : "text-danger"}`;
+            profitEl.className = `block text-2xl font-black mb-1 ${netProfit >= 0 ? "text-success" : "text-danger"}`;
         }
 
         const roiEl = document.getElementById("roi-val");
         if (roiEl) {
             roiEl.textContent = `${roi.toFixed(1)}%`;
-            roiEl.className = `stat-value ${roi >= 0 ? "text-success" : "text-danger"}`;
+            roiEl.className = `block text-2xl font-black mb-1 text-success`;
         }
     } catch (e) {
         console.error("Error fetching history", e);
@@ -88,24 +127,23 @@ async function fetchUsage() {
 function renderFilters() {
     const container = document.getElementById('league-filters');
     const leagues = ['all'];
-
     liveMatches.forEach(m => {
-        if (!leagues.includes(m.league.name)) {
-            leagues.push(m.league.name);
-        }
+        if (!leagues.includes(m.league.name)) { leagues.push(m.league.name); }
     });
-
     if (container.children.length === leagues.length) return;
-
     container.innerHTML = '';
     leagues.forEach(league => {
-        const pill = document.createElement('div');
-        pill.className = `filter-pill ${selectedLeague === league ? 'active' : ''}`;
+        const isActive = selectedLeague === league;
+        const pill = document.createElement('button');
+        pill.className = `px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+            isActive
+            ? 'bg-accent text-white border-accent shadow-lg shadow-accent/20'
+            : 'bg-white/5 text-slate-500 border-white/5 hover:border-accent/50 hover:text-slate-300 dark:bg-slate-800/50'
+        }`;
         pill.textContent = league === 'all' ? 'Tutti i Campionati' : league;
         pill.onclick = () => {
             selectedLeague = league;
-            document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
-            pill.classList.add('active');
+            renderFilters();
             renderMatches();
         };
         container.appendChild(pill);
@@ -115,58 +153,88 @@ function renderFilters() {
 function renderMatches() {
     const container = document.getElementById('live-matches-container');
     const filtered = selectedLeague === 'all'
-        ? liveMatches
+        ? [...liveMatches]
         : liveMatches.filter(m => m.league.name === selectedLeague);
 
-    container.innerHTML = filtered.length === 0 ? '<p>Nessuna partita disponibile per questo filtro.</p>' : '';
+    filtered.sort((a, b) => {
+        const aPinned = pinnedMatches.has(a.fixture.id) ? 1 : 0;
+        const bPinned = pinnedMatches.has(b.fixture.id) ? 1 : 0;
+        return bPinned - aPinned;
+    });
+
+    container.innerHTML = filtered.length === 0 ? '<div class="glass p-10 rounded-[32px] text-center text-slate-500 font-bold">Nessun evento live disponibile al momento.</div>' : '';
 
     filtered.forEach(m => {
+        const isPinned = pinnedMatches.has(m.fixture.id);
         const eventsHtml = (m.events || []).map(ev => {
-            let icon = '⚽';
-            let iconClass = 'event-icon-goal';
-
-            if (ev.type === 'Goal') { icon = '⚽'; iconClass = 'event-icon-goal'; }
-            if (ev.type === 'Card' && ev.detail === 'Yellow Card') { icon = '🟨'; iconClass = 'event-icon-yellow'; }
-            if (ev.type === 'Card' && ev.detail === 'Red Card') { icon = '🟥'; iconClass = 'event-icon-red'; }
-            if (ev.type === 'Var') { icon = '🖥️'; iconClass = 'event-icon-var'; }
+            let icon = '⚽'; let iconClass = 'text-success';
+            if (ev.type === 'Goal') { icon = '⚽'; iconClass = 'text-success'; }
+            if (ev.type === 'Card' && ev.detail === 'Yellow Card') { icon = '🟨'; iconClass = 'text-warning'; }
+            if (ev.type === 'Card' && ev.detail === 'Red Card') { icon = '🟥'; iconClass = 'text-danger'; }
+            if (ev.type === 'Var') { icon = '🖥️'; iconClass = 'text-accent'; }
             if (ev.type === 'subst') return '';
 
             return `
-                <div class="event-pill" style="cursor:pointer" onclick="showPlayerDetails(${ev.player.id}, '${ev.player.name}')">
-                    <span class="event-time">${ev.time.elapsed}'</span>
+                <div class="flex items-center gap-2 bg-white/5 dark:bg-slate-800/50 px-3 py-1.5 rounded-xl text-[10px] font-black cursor-pointer hover:bg-white/10 transition-colors border border-white/5" onclick="showPlayerDetails(${ev.player.id}, '${ev.player.name}')">
+                    <span class="text-accent font-black">${ev.time.elapsed}'</span>
                     <span class="${iconClass}">${icon}</span>
-                    <span>${ev.player.name || ''}</span>
+                    <span class="truncate max-w-[70px] uppercase tracking-tight">${ev.player.name || ''}</span>
                 </div>
             `;
         }).join('');
 
         const card = document.createElement('div');
-        card.className = 'glass-panel match-card';
+        card.className = `glass rounded-[40px] p-8 border-white/5 dark:border-slate-800 transition-all duration-500 relative group ${isPinned ? 'pinned-match' : 'hover:border-accent/30'}`;
         card.dataset.id = m.fixture.id;
         card.innerHTML = `
-            <div class="league-header" style="cursor:pointer" onclick="showStandings(${m.league.id}, '${m.league.name}')">
-                <img src="${m.league.logo}" class="league-logo" alt="${m.league.name}">
-                <span>${m.league.name} - ${m.league.country}</span>
+            ${isPinned ? '<div class="update-badge">LIVE UPDATE</div>' : ''}
+            <div class="flex items-center justify-between mb-8">
+                <div class="flex items-center gap-3 cursor-pointer opacity-60 hover:opacity-100 transition-opacity" onclick="showStandings(${m.league.id}, '${m.league.name}')">
+                    <img src="${m.league.logo}" class="w-5 h-5 object-contain">
+                    <span class="text-[10px] font-black uppercase tracking-[0.2em]">${m.league.name}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 bg-danger rounded-full animate-ping"></div>
+                    <span class="text-[10px] font-black text-danger uppercase tracking-widest">Live</span>
+                    <span class="text-[10px] font-black text-slate-500 ml-2 uppercase tracking-widest tabular-nums"><span class="elapsed-time" data-start="${m.fixture.status.elapsed}">${m.fixture.status.elapsed}</span>'</span>
+                </div>
             </div>
-            <div class="match-main-info">
-                <div class="live-badge"><span class="elapsed-time" data-start="${m.fixture.status.elapsed}">${m.fixture.status.elapsed}</span>'</div>
-                <div class="team-info">
-                    <div style="display:flex; align-items:center; gap:0.5rem; cursor:pointer" onclick="showTeamDetails(${m.teams.home.id})">
-                        <img src="${m.teams.home.logo}" class="team-logo" alt="${m.teams.home.name}">
-                        <span>${m.teams.home.name}</span>
+
+            <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-4 md:gap-8 mb-8">
+                <div class="flex flex-col items-center gap-4 cursor-pointer group/team" onclick="showTeamDetails(${m.teams.home.id})">
+                    <div class="w-16 h-16 md:w-24 md:h-24 glass rounded-[32px] p-4 flex items-center justify-center group-hover/team:scale-110 transition-transform border-white/5 dark:bg-slate-800/50">
+                        <img src="${m.teams.home.logo}" class="w-full h-full object-contain">
                     </div>
-                    <span style="color:var(--accent); font-size:1.4rem; font-weight:800; margin:0 10px;">${m.goals.home} - ${m.goals.away}</span>
-                    <div style="display:flex; align-items:center; gap:0.5rem; cursor:pointer" onclick="showTeamDetails(${m.teams.away.id})">
-                        <span>${m.teams.away.name}</span>
-                        <img src="${m.teams.away.logo}" class="team-logo" alt="${m.teams.away.name}">
+                    <span class="text-xs md:text-sm font-black tracking-tight uppercase group-hover/team:text-accent transition-colors text-center max-w-[100px] truncate">${m.teams.home.name}</span>
+                </div>
+
+                <div class="flex flex-col items-center gap-2">
+                    <div class="text-4xl md:text-7xl font-black tracking-tighter text-slate-900 dark:text-white tabular-nums drop-shadow-2xl flex items-center">
+                        ${m.goals.home}<span class="text-accent/30 mx-2 text-3xl md:text-5xl font-light">-</span>${m.goals.away}
                     </div>
                 </div>
-                <button class="btn-analyze" onclick="analyzeMatch(${m.fixture.id})">Analizza AI</button>
+
+                <div class="flex flex-col items-center gap-4 cursor-pointer group/team" onclick="showTeamDetails(${m.teams.away.id})">
+                    <div class="w-16 h-16 md:w-24 md:h-24 glass rounded-[32px] p-4 flex items-center justify-center group-hover/team:scale-110 transition-transform border-white/5 dark:bg-slate-800/50">
+                        <img src="${m.teams.away.logo}" class="w-full h-full object-contain">
+                    </div>
+                    <span class="text-xs md:text-sm font-black tracking-tight uppercase group-hover/team:text-accent transition-colors text-center max-w-[100px] truncate">${m.teams.away.name}</span>
+                </div>
             </div>
-            ${eventsHtml ? `<div class="match-events">${eventsHtml}</div>` : ''}
+
+            <div class="flex flex-col md:flex-row items-center gap-6 pt-4 border-t border-white/5">
+                <div class="flex-1 flex flex-wrap gap-2">
+                    ${eventsHtml}
+                </div>
+                <button class="w-full md:w-auto bg-accent hover:bg-sky-500 text-white px-8 py-4 rounded-[20px] font-black text-xs uppercase tracking-[0.1em] transition-all shadow-xl shadow-accent/20 hover:scale-105 active:scale-95 flex items-center justify-center gap-3 group/btn" onclick="analyzeMatch(${m.fixture.id})">
+                    <i data-lucide="brain-circuit" class="w-5 h-5 group-hover/btn:animate-pulse"></i>
+                    Analyze AI
+                </button>
+            </div>
         `;
         container.appendChild(card);
     });
+    if (window.lucide) lucide.createIcons();
 }
 
 async function showPlayerDetails(playerId, playerName = 'Giocatore') {
@@ -176,10 +244,10 @@ async function showPlayerDetails(playerId, playerName = 'Giocatore') {
     const title = document.getElementById('modal-title');
     const btn = document.getElementById('place-bet-btn');
 
-    modal.style.display = 'block';
+    modal.classList.remove('hidden');
     title.textContent = playerName;
-    body.innerHTML = '<div style="text-align:center; padding:2rem;">Caricamento dettagli giocatore...</div>';
-    btn.style.display = 'none';
+    body.innerHTML = '<div class="text-center py-12 text-slate-500 font-bold uppercase tracking-widest animate-pulse">Caricamento dettagli giocatore...</div>';
+    btn.classList.add('hidden');
 
     try {
         const res = await fetch(`/api/player/${playerId}`);
@@ -191,32 +259,32 @@ async function showPlayerDetails(playerId, playerName = 'Giocatore') {
         }
 
         body.innerHTML = `
-            <div class="analysis-content">
-                <div style="display:flex; gap:2rem; margin-bottom:2rem; align-items:center;">
-                    <img src="${p.photo}" style="width:100px; border-radius:10px; border:2px solid var(--accent);">
+            <div class="space-y-6 text-slate-900 dark:text-slate-100">
+                <div class="flex items-center gap-6">
+                    <img src="${p.photo}" class="w-24 h-24 rounded-2xl border-2 border-accent object-cover p-1 bg-white">
                     <div>
-                        <h2 style="margin:0;">${p.name}</h2>
-                        <p style="color:var(--text-secondary); margin:5px 0;">${p.firstname} ${p.lastname}</p>
-                        <span class="status-tag status-active">${p.nationality}</span>
+                        <h2 class="text-3xl font-black tracking-tight text-slate-900 dark:text-white">${p.name}</h2>
+                        <p class="text-slate-500 mb-2 font-bold">${p.firstname} ${p.lastname}</p>
+                        <span class="bg-accent/10 text-accent px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest border border-accent/20">${p.nationality}</span>
                     </div>
                 </div>
                 
-                <div class="glass-panel" style="padding:1.5rem; display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem;">
-                    <div>
-                        <h4 style="margin:0 0 0.5rem 0; color:var(--accent); font-size:0.8rem;">Età</h4>
-                        <p style="margin:0; font-size:1.1rem; font-weight:600;">${p.age || 'N/A'} anni</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-100 dark:bg-white/5 p-5 rounded-[24px] border border-slate-200 dark:border-white/5">
+                        <h4 class="text-[10px] uppercase tracking-widest text-slate-500 font-black mb-1">Età</h4>
+                        <p class="text-lg font-black text-slate-900 dark:text-white">${p.age || 'N/A'} anni</p>
                     </div>
-                    <div>
-                        <h4 style="margin:0 0 0.5rem 0; color:var(--accent); font-size:0.8rem;">Nazionalità</h4>
-                        <p style="margin:0; font-size:1.1rem; font-weight:600;">${p.nationality || 'N/A'}</p>
+                    <div class="bg-slate-100 dark:bg-white/5 p-5 rounded-[24px] border border-slate-200 dark:border-white/5">
+                        <h4 class="text-[10px] uppercase tracking-widest text-slate-500 font-black mb-1">Nazionalità</h4>
+                        <p class="text-lg font-black text-slate-900 dark:text-white">${p.nationality || 'N/A'}</p>
                     </div>
-                    <div>
-                        <h4 style="margin:0 0 0.5rem 0; color:var(--accent); font-size:0.8rem;">Altezza</h4>
-                        <p style="margin:0; font-size:1.1rem; font-weight:600;">${p.height || 'N/A'}</p>
+                    <div class="bg-slate-100 dark:bg-white/5 p-5 rounded-[24px] border border-slate-200 dark:border-white/5">
+                        <h4 class="text-[10px] uppercase tracking-widest text-slate-500 font-black mb-1">Altezza</h4>
+                        <p class="text-lg font-black text-slate-900 dark:text-white">${p.height || 'N/A'}</p>
                     </div>
-                    <div>
-                        <h4 style="margin:0 0 0.5rem 0; color:var(--accent); font-size:0.8rem;">Peso</h4>
-                        <p style="margin:0; font-size:1.1rem; font-weight:600;">${p.weight || 'N/A'}</p>
+                    <div class="bg-slate-100 dark:bg-white/5 p-5 rounded-[24px] border border-slate-200 dark:border-white/5">
+                        <h4 class="text-[10px] uppercase tracking-widest text-slate-500 font-black mb-1">Peso</h4>
+                        <p class="text-lg font-black text-slate-900 dark:text-white">${p.weight || 'N/A'}</p>
                     </div>
                 </div>
             </div>
@@ -242,70 +310,69 @@ function showBetDetails(bet) {
     const title = document.getElementById("modal-title");
     const btn = document.getElementById("place-bet-btn");
 
-    modal.style.display = "block";
+    modal.classList.remove('hidden');
     title.textContent = "Dettaglio Scommessa";
-    btn.style.display = "none";
+    btn.classList.add('hidden');
 
-    let statusColor = "var(--text-secondary)";
-    if (bet.status === "won") statusColor = "var(--success)";
-    if (bet.status === "lost") statusColor = "var(--danger)";
+    const statusColors = {
+        'won': 'text-success border-success',
+        'lost': 'text-danger border-danger',
+        'pending': 'text-warning border-warning'
+    };
+    const statusColorClass = statusColors[bet.status] || 'text-slate-500 border-slate-200';
 
     const stake = parseFloat(bet.stake) || 0;
     const odds = parseFloat(bet.odds) || 0;
     const profit = bet.status === "won" ? (stake * (odds - 1)) : (bet.status === "lost" ? -stake : 0);
 
     body.innerHTML = `
-        <div style="margin-bottom: 1.5rem;">
-            <div style="font-size: 1.2rem; font-weight: 800; margin-bottom: 0.25rem;">${bet.match_name}</div>
-            <div style="color: var(--text-secondary); font-size: 0.85rem;">${bet.timestamp}</div>
+        <div class="mb-8 text-slate-900 dark:text-white">
+            <div class="text-2xl font-black mb-1">${bet.match_name}</div>
+            <div class="text-xs text-slate-500 font-black uppercase tracking-widest">${bet.timestamp}</div>
         </div>
 
-        <div class="glass-panel" style="padding: 1rem; margin-bottom: 1.5rem; border-left: 4px solid ${statusColor};">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <span style="font-weight: 700; color: var(--accent);">RIEPILOGO</span>
-                <span class="status-tag status-${bet.status}" style="font-size: 0.8rem; padding: 0.2rem 0.6rem;">${bet.status.toUpperCase()}</span>
+        <div class="bg-slate-100 dark:bg-white/5 p-8 rounded-[32px] border-l-4 ${statusColorClass} mb-8 shadow-sm">
+            <div class="flex justify-between items-center mb-6">
+                <span class="text-[10px] font-black text-slate-400 tracking-widest uppercase italic">Riepilogo Giocata</span>
+                <span class="px-4 py-1.5 rounded-xl text-[10px] font-black uppercase bg-white dark:bg-slate-900 border ${statusColorClass.split(' ')[1]}">${bet.status}</span>
             </div>
-            <div style="font-size: 1.1rem; margin-bottom: 0.5rem;">
-                <strong>Risultato Finale:</strong> ${bet.result || "Non disponibile"}
+            <div class="text-xl font-black mb-8 text-slate-900 dark:text-white flex items-center gap-2">
+                <span class="text-slate-500 font-medium">Risultato:</span> ${bet.result || "In corso..."}
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.95rem;">
-                <div><strong>Mercato:</strong> ${bet.market}</div>
-                <div><strong>Quota:</strong> ${bet.odds}</div>
-                <div><strong>Puntata:</strong> ${bet.stake}€</div>
-                <div><strong>Bilancio:</strong> <span class="${profit >= 0 ? (profit > 0 ? "text-success" : "") : "text-danger"}">
-                    ${profit >= 0 ? "+" : ""}${profit.toFixed(2)}€
-                </span></div>
+            <div class="grid grid-cols-2 gap-8 text-slate-900 dark:text-white">
+                <div>
+                    <p class="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-2">Mercato</p>
+                    <p class="font-black text-accent uppercase tracking-tight">${bet.market}</p>
+                </div>
+                <div>
+                    <p class="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-2">Quota</p>
+                    <p class="font-black text-2xl tabular-nums">${bet.odds}</p>
+                </div>
+                <div>
+                    <p class="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-2">Puntata</p>
+                    <p class="font-black text-lg tabular-nums">${bet.stake}€</p>
+                </div>
+                <div>
+                    <p class="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-2">Bilancio</p>
+                    <p class="font-black text-2xl tabular-nums ${profit >= 0 ? (profit > 0 ? "text-success" : "") : "text-danger"}">
+                        ${profit >= 0 ? "+" : ""}${profit.toFixed(2)}€
+                    </p>
+                </div>
             </div>
         </div>
 
         ${bet.advice ? `
-            <div style="margin-top: 1.5rem;">
-                <div style="font-weight: 700; color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.8rem; text-transform: uppercase;">Analisi di Gemini</div>
-                <div class="analysis-content" style="max-height: 250px; overflow-y: auto; font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 8px;">${bet.advice}</div>
+            <div class="mt-8">
+                <div class="text-[10px] font-black text-slate-500 tracking-widest uppercase mb-4 flex items-center gap-2">
+                    <i data-lucide="brain-circuit" class="w-4 h-4 text-accent"></i> Analisi di Gemini Intelligence
+                </div>
+                <div class="bg-slate-100 dark:bg-white/5 p-6 rounded-[24px] border border-slate-200 dark:border-white/5 text-sm leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto custom-scrollbar italic text-slate-600 dark:text-slate-400 font-medium">
+                    ${bet.advice}
+                </div>
             </div>
         ` : ""}
     `;
-}
-
-function renderHistory(history) {
-    const container = document.getElementById("history-container");
-    container.innerHTML = history.length === 0 ? "<p style=\"padding:1rem;\">Nessuna scommessa registrata.</p>" : "";
-
-    history.slice(0, 15).forEach(h => {
-        const item = document.createElement("div");
-        item.className = "history-item";
-        item.onclick = () => showBetDetails(h);
-        item.innerHTML = `
-            <div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">
-                <span style="font-weight:600; font-size:0.9rem;">${h.match_name || h.match}</span>
-                <span class="status-tag status-${h.status}">${h.status}</span>
-            </div>
-            <div style="color:var(--text-secondary); font-size:0.8rem;">
-                ${h.market} @ ${h.odds} | Stake: ${h.stake}€
-            </div>
-        `;
-        container.appendChild(item);
-    });
+    if (window.lucide) lucide.createIcons();
 }
 
 async function showStandings(leagueId, leagueName) {
@@ -314,43 +381,55 @@ async function showStandings(leagueId, leagueName) {
     const title = document.getElementById('modal-title');
     const btn = document.getElementById('place-bet-btn');
 
-    modal.style.display = 'block';
+    modal.classList.remove('hidden');
     title.textContent = `Classifica: ${leagueName}`;
-    body.innerHTML = '<div style="text-align:center; padding:2rem;">Caricamento classifica...</div>';
-    btn.style.display = 'none';
+    body.innerHTML = '<div class="text-center py-12 text-slate-500 font-bold uppercase tracking-widest animate-pulse">Caricamento classifica...</div>';
+    btn.classList.add('hidden');
 
     try {
         const res = await fetch(`/api/standings/${leagueId}`);
         const data = await res.json();
 
         let html = `
-            <table style="width:100%; border-collapse: collapse; font-size:0.85rem;">
-                <thead>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:left;">
-                        <th style="padding:0.5rem;">#</th>
-                        <th style="padding:0.5rem;">Squadra</th>
-                        <th style="padding:0.5rem;">Punti</th>
-                        <th style="padding:0.5rem;">Forma</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-white/10 text-slate-500 uppercase text-[9px] font-black tracking-widest">
+                            <th class="py-4 px-3">Pos</th>
+                            <th class="py-4 px-3">Squadra</th>
+                            <th class="py-4 px-3 text-center">Punti</th>
+                            <th class="py-4 px-3">Forma</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-white/5">
         `;
 
         data.forEach(row => {
             html += `
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                    <td style="padding:0.5rem;">${row.rank}</td>
-                    <td style="padding:0.5rem; display:flex; align-items:center; gap:0.5rem;">
-                        <img src="${row.team_logo}" style="width:16px;"> ${row.team_name}
+                <tr class="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                    <td class="py-4 px-3 font-black text-accent tabular-nums">${row.rank}</td>
+                    <td class="py-4 px-3 flex items-center gap-3">
+                        <img src="${row.team_logo}" class="w-5 h-5 object-contain">
+                        <span class="font-black uppercase tracking-tight text-slate-900 dark:text-white">${row.team_name}</span>
                     </td>
-                    <td style="padding:0.5rem;"><strong>${row.points}</strong></td>
-                    <td style="padding:0.5rem;">${row.form || '-'}</td>
+                    <td class="py-4 px-3 font-black text-center text-slate-900 dark:text-white tabular-nums">${row.points}</td>
+                    <td class="py-4 px-3">
+                        <div class="flex gap-1">
+                            ${(row.form || '').split('').map(f => {
+                                let c = 'bg-slate-500';
+                                if (f === 'W') c = 'bg-success';
+                                if (f === 'L') c = 'bg-danger';
+                                if (f === 'D') c = 'bg-warning';
+                                return `<span class="w-1.5 h-1.5 rounded-full ${c}"></span>`;
+                            }).join('')}
+                        </div>
+                    </td>
                 </tr>
             `;
         });
 
-        html += '</tbody></table>';
-        body.innerHTML = `<div class="analysis-content" style="max-height:500px; overflow-y:auto;">${html}</div>`;
+        html += '</tbody></table></div>';
+        body.innerHTML = `<div class="max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">${html}</div>`;
     } catch (e) {
         body.innerHTML = "Errore nel caricamento della classifica.";
     }
@@ -362,10 +441,10 @@ async function showTeamDetails(teamId) {
     const title = document.getElementById('modal-title');
     const btn = document.getElementById('place-bet-btn');
 
-    modal.style.display = 'block';
+    modal.classList.remove('hidden');
     title.textContent = `Dettagli Squadra`;
-    body.innerHTML = '<div style="text-align:center; padding:2rem;">Caricamento dettagli...</div>';
-    btn.style.display = 'none';
+    body.innerHTML = '<div class="text-center py-12 text-slate-500 font-bold uppercase tracking-widest animate-pulse">Caricamento dettagli...</div>';
+    btn.classList.add('hidden');
 
     try {
         const res = await fetch(`/api/team/${teamId}`);
@@ -383,57 +462,63 @@ async function showTeamDetails(teamId) {
         let squadHtml = '';
         if (squad.length > 0) {
             squadHtml = `
-                <div class="glass-panel" style="padding:1rem; margin-top:1rem;">
-                    <h4 style="margin-top:0; color:var(--accent);">Rosa Giocatori</h4>
-                    <div style="max-height: 250px; overflow-y: auto;">
-                        <table style="width:100%; border-collapse: collapse; font-size:0.8rem;">
-                            <thead>
-                                <tr style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:left; color:var(--text-secondary);">
-                                    <th style="padding:0.4rem;">#</th>
-                                    <th style="padding:0.4rem;">Nome</th>
-                                    <th style="padding:0.4rem;">Pos</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${squad.map(p => `
-                                    <tr style="border-bottom:1px solid rgba(255,255,255,0.03); cursor:pointer" onclick="showPlayerDetails(${p.id}, '${p.name}')">
-                                        <td style="padding:0.4rem; color:var(--accent); font-weight:800;">${p.number || '-'}</td>
-                                        <td style="padding:0.4rem;">${p.name}</td>
-                                        <td style="padding:0.4rem; font-size:0.7rem; color:var(--text-secondary);">${p.position}</td>
+                <div class="mt-8">
+                    <h4 class="text-xs uppercase tracking-widest text-slate-500 font-black mb-4 flex items-center gap-2 italic">
+                        <i data-lucide="users" class="w-4 h-4 text-accent"></i> Rosa Giocatori
+                    </h4>
+                    <div class="bg-slate-50 dark:bg-white/5 rounded-[24px] overflow-hidden border border-slate-200 dark:border-white/5">
+                        <div class="max-h-[300px] overflow-y-auto custom-scrollbar">
+                            <table class="w-full text-[10px] text-left">
+                                <thead class="sticky top-0 bg-slate-100 dark:bg-slate-900 text-slate-500 uppercase text-[8px] font-black tracking-widest">
+                                    <tr>
+                                        <th class="py-3 px-4">#</th>
+                                        <th class="py-3 px-4">Nome</th>
+                                        <th class="py-3 px-4">Pos</th>
                                     </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-white/5">
+                                    ${squad.map(p => `
+                                        <tr class="hover:bg-accent/10 cursor-pointer transition-colors text-slate-900 dark:text-white" onclick="showPlayerDetails(${p.id}, '${p.name}')">
+                                            <td class="py-3 px-4 font-black text-accent tabular-nums">${p.number || '-'}</td>
+                                            <td class="py-3 px-4 font-black uppercase tracking-tight">${p.name}</td>
+                                            <td class="py-3 px-4 text-slate-500 font-bold uppercase">${p.position}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             `;
         }
 
         body.innerHTML = `
-            <div class="analysis-content" style="max-height: 550px; overflow-y: auto;">
-                <div style="display:flex; gap:2rem; margin-bottom:2rem; align-items:center;">
-                    <img src="${t.logo}" style="width:80px;">
+            <div class="max-h-[550px] overflow-y-auto pr-2 custom-scrollbar">
+                <div class="flex items-center gap-6 mb-10">
+                    <div class="w-24 h-24 bg-white rounded-[32px] p-4 shadow-xl border border-slate-200 dark:border-white/10 flex items-center justify-center">
+                        <img src="${t.logo}" class="w-full h-full object-contain">
+                    </div>
                     <div>
-                        <h2 style="margin:0;">${t.name}</h2>
-                        <p style="color:var(--text-secondary); margin:5px 0;">${t.country} | Fondata nel ${t.founded || 'N/A'}</p>
+                        <h2 class="text-4xl font-black tracking-tighter text-slate-900 dark:text-white uppercase italic">${t.name}</h2>
+                        <p class="text-slate-500 font-bold uppercase tracking-widest text-xs">${t.country} | Fondata nel ${t.founded || 'N/A'}</p>
                     </div>
                 </div>
                 
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-bottom:1rem;">
-                    <div class="glass-panel" style="padding:1rem;">
-                        <h4 style="margin-top:0; color:var(--accent); font-size:0.8rem;">Stadio</h4>
-                        <p style="margin:0; font-size:0.9rem;">${t.venue_name || 'N/A'}</p>
-                        <p style="margin:0; font-size:0.75rem; color:var(--text-secondary);">Posti: ${t.venue_capacity || 'N/A'}</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-slate-50 dark:bg-white/5 p-5 rounded-[24px] border border-slate-200 dark:border-white/5">
+                        <h4 class="text-[10px] uppercase tracking-widest text-slate-500 font-black mb-1 italic">Stadio</h4>
+                        <p class="font-black text-slate-900 dark:text-white uppercase truncate text-sm">${t.venue_name || 'N/A'}</p>
+                        <p class="text-[10px] text-slate-500 font-bold">Capacità: ${t.venue_capacity || 'N/A'}</p>
                     </div>
 
                     ${c ? `
-                    <div class="glass-panel" style="padding:1rem;">
-                        <h4 style="margin-top:0; color:var(--accent); font-size:0.8rem;">Allenatore</h4>
-                        <div style="display:flex; align-items:center; gap:0.5rem;">
-                            <img src="${c.photo}" style="width:30px; border-radius:50%;">
-                            <div>
-                                <p style="margin:0; font-weight:600; font-size:0.85rem;">${c.name}</p>
-                                <p style="margin:0; font-size:0.7rem; color:var(--text-secondary);">${c.nationality || ''}</p>
+                    <div class="bg-slate-50 dark:bg-white/5 p-5 rounded-[24px] border border-slate-200 dark:border-white/5">
+                        <h4 class="text-[10px] uppercase tracking-widest text-slate-500 font-black mb-1 italic">Coach</h4>
+                        <div class="flex items-center gap-3">
+                            <img src="${c.photo}" class="w-10 h-10 rounded-full border border-accent/20">
+                            <div class="truncate">
+                                <p class="font-black text-sm uppercase tracking-tight text-slate-900 dark:text-white truncate">${c.name}</p>
+                                <p class="text-[9px] text-slate-500 font-black uppercase truncate tracking-widest">${c.nationality || ''}</p>
                             </div>
                         </div>
                     </div>
@@ -443,6 +528,7 @@ async function showTeamDetails(teamId) {
                 ${squadHtml}
             </div>
         `;
+        if (window.lucide) lucide.createIcons();
     } catch (e) {
         console.error(e);
         body.innerHTML = "Errore nel caricamento dei dettagli squadra.";
@@ -455,17 +541,18 @@ async function analyzeMatch(id) {
     const title = document.getElementById('modal-title');
     const btn = document.getElementById('place-bet-btn');
 
-    modal.style.display = 'block';
+    modal.classList.remove('hidden');
     title.textContent = "Analisi Prossima Giocata";
-    body.innerHTML = '<div style="text-align:center; padding:2rem;"><div class="live-badge" style="animation:none; background:var(--accent);">ANALIZZANDO DATI CON GEMINI AI...</div></div>';
-    btn.style.display = 'none';
+    body.innerHTML = '<div class="text-center py-12"><div class="inline-flex items-center gap-3 bg-accent text-white px-8 py-4 rounded-[24px] font-black text-xs tracking-widest shadow-xl shadow-accent/30 animate-pulse uppercase"><i data-lucide="brain-circuit" class="w-5 h-5"></i> Analizzando con Gemini AI...</div></div>';
+    btn.classList.add('hidden');
+    if (window.lucide) lucide.createIcons();
 
     try {
         const res = await fetch(`/api/analyze/${id}`);
         const data = await res.json();
 
         if (data.error) {
-            body.innerHTML = `<div style="color:var(--danger);">${data.error}</div>`;
+            body.innerHTML = `<div class="text-danger font-bold">${data.error}</div>`;
             return;
         }
 
@@ -473,7 +560,9 @@ async function analyzeMatch(id) {
         let betData = null;
         let displayHtml = prediction;
 
-        const jsonMatch = prediction.match(/```json\n?([\s\S]*?)\n?```/i);
+        const jsonMatch = prediction.match(/```json
+?([\s\S]*?)
+?```/i);
         if (jsonMatch) {
             try {
                 betData = JSON.parse(jsonMatch[1]);
@@ -484,25 +573,40 @@ async function analyzeMatch(id) {
         }
 
         body.innerHTML = `
-            <div class="analysis-content" style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
-                <div style="white-space: pre-wrap; margin-bottom: 2rem;">${displayHtml}</div>
+            <div class="max-h-[450px] overflow-y-auto pr-4 custom-scrollbar">
+                <div class="text-slate-700 dark:text-slate-400 leading-relaxed font-bold mb-10 whitespace-pre-wrap">${displayHtml}</div>
                 ${betData ? `
-                    <div class="glass-panel" style="padding: 1rem; border-left: 4px solid var(--accent);">
-                        <div style="font-weight: 800; color: var(--accent); margin-bottom: 0.5rem;">CONSIGLIO AI</div>
-                        <div style="font-size: 1.1rem; margin-bottom: 0.5rem;">${betData.advice}</div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.9rem;">
-                            <div><strong>Mercato:</strong> ${betData.market}</div>
-                            <div><strong>Quota:</strong> ${betData.odds}</div>
-                            <div><strong>Urgenza:</strong> ${betData.urgency}</div>
-                            <div><strong>Stake:</strong> ${betData.stake}</div>
+                    <div class="bg-slate-100 dark:bg-white/5 p-8 rounded-[32px] border-l-4 border-accent shadow-xl">
+                        <div class="flex items-center gap-2 font-black text-accent mb-4 tracking-widest text-xs uppercase">
+                            <i data-lucide="zap" class="w-4 h-4"></i> Consiglio AI Premium
+                        </div>
+                        <div class="text-xl font-black text-slate-900 dark:text-white mb-6 uppercase italic">${betData.advice}</div>
+                        <div class="grid grid-cols-2 gap-8 text-slate-900 dark:text-white">
+                            <div>
+                                <p class="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-1">Mercato</p>
+                                <p class="font-bold text-sm uppercase">${betData.market}</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-1">Quota</p>
+                                <p class="font-black text-xl tabular-nums">${betData.odds}</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-1">Urgenza</p>
+                                <p class="font-bold text-warning uppercase text-sm">${betData.urgency}</p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-1">Stake</p>
+                                <p class="font-black text-xl text-success tabular-nums">${betData.stake}</p>
+                            </div>
                         </div>
                     </div>
-                ` : '<div style="color:var(--warning);">Nessun dato scommessa strutturato trovato.</div>'}
+                ` : '<div class="text-warning font-bold bg-warning/10 p-4 rounded-xl border border-warning/20">Nessun dato scommessa strutturato trovato.</div>'}
             </div>
         `;
+        if (window.lucide) lucide.createIcons();
 
         if (betData) {
-            btn.style.display = 'block';
+            btn.classList.remove('hidden');
             btn.onclick = () => placeBet(id, data.match, betData);
         }
 
@@ -531,7 +635,7 @@ async function placeBet(fixture_id, match, betData) {
 }
 
 function closeModal() {
-    document.getElementById('analysis-modal').style.display = 'none';
+    document.getElementById('analysis-modal').classList.add('hidden');
 }
 
 // Initial fetch
@@ -545,7 +649,7 @@ if (syncBtn) {
     syncBtn.addEventListener('click', async () => {
         syncBtn.disabled = true;
         const originalContent = syncBtn.innerHTML;
-        syncBtn.innerHTML = '<i data-lucide="loader" class="rotator"></i> Attendere...';
+        syncBtn.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4 rotator"></i>';
         if (window.lucide) lucide.createIcons();
 
         try {
@@ -575,3 +679,31 @@ window.onclick = (event) => {
         closeModal();
     }
 };
+
+// Theme Toggle Logic
+const themeToggle = document.getElementById('theme-toggle');
+const htmlElement = document.documentElement;
+
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    if (savedTheme === 'dark') {
+        htmlElement.classList.add('dark');
+    } else {
+        htmlElement.classList.remove('dark');
+    }
+}
+
+if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+        if (htmlElement.classList.contains('dark')) {
+            htmlElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+        } else {
+            htmlElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        }
+        if (window.lucide) lucide.createIcons();
+    });
+}
+
+initTheme();
