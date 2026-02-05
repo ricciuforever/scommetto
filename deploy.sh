@@ -13,20 +13,27 @@ git pull origin main >> "$LOG_FILE" 2>&1
 # 1. FRONTEND BUILD
 echo "Cleaning and Building Frontend..." >> "$LOG_FILE"
 cd "$APP_DIR/frontend"
-rm -rf dist >> "$LOG_FILE" 2>&1
+rm -rf dist node_modules >> "$LOG_FILE" 2>&1
+# Install blocks if run as root sometimes, so we use --unsafe-perm if needed
 npm install >> "$LOG_FILE" 2>&1
-npm run build >> "$LOG_FILE" 2>&1
+# Use npx to be sure we call the local vite
+npx vite build >> "$LOG_FILE" 2>&1
 
 # 1b. SYNC TO PUBLIC_HTML
-if [ -f "dist/index.html" ]; then
+if [ -d "dist" ] && [ -f "dist/index.html" ]; then
     echo "Build success, syncing to public_html..." >> "$LOG_FILE"
+    # Clean public_html before sync to avoid old file pollution
+    rm -rf "$APP_DIR/public_html/*"
     mkdir -p "$APP_DIR/public_html"
     cp -r dist/* "$APP_DIR/public_html/" >> "$LOG_FILE" 2>&1
     cp .htaccess "$APP_DIR/public_html/" >> "$LOG_FILE" 2>&1
+    # Important: Set owner to the domain user so Plesk doesn't block it
+    chown -R emanueletolomei.it_4qrclx883cu:psacln "$APP_DIR/public_html"
     chmod -R 755 "$APP_DIR/public_html" >> "$LOG_FILE" 2>&1
-    echo "Frontend built and synced." >> "$LOG_FILE"
+    echo "Frontend built and synced successfully." >> "$LOG_FILE"
 else
-    echo "ERROR: Build failed, dist/index.html not found!" >> "$LOG_FILE"
+    echo "CRITICAL ERROR: Build failed. dist/index.html not found!" >> "$LOG_FILE"
+    echo "Check frontend/node_modules status." >> "$LOG_FILE"
 fi
 
 # 2. BACKEND SETUP
