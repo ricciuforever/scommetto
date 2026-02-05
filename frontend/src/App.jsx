@@ -16,8 +16,8 @@ function App() {
 
   const fetchHistory = async () => {
     try {
-      const apiBase = import.meta.env.VITE_API_URL || '';
-      const res = await fetch(`${apiBase}/api/history?t=${Date.now()}`);
+      const apiBase = (import.meta.env.VITE_API_URL || '').replace(':8000', '');
+      const res = await fetch(`${apiBase}/backend/api.php/history?t=${Date.now()}`);
       const data = await res.json();
       setBetHistory(data);
     } catch (err) {
@@ -27,8 +27,8 @@ function App() {
 
   const fetchUsage = async () => {
     try {
-      const apiBase = import.meta.env.VITE_API_URL || '';
-      const res = await fetch(`${apiBase}/api/usage?t=${Date.now()}`);
+      const apiBase = (import.meta.env.VITE_API_URL || '').replace(':8000', '');
+      const res = await fetch(`${apiBase}/backend/api.php/usage?t=${Date.now()}`);
       const data = await res.json();
       setUsage(data);
     } catch (err) {
@@ -38,8 +38,8 @@ function App() {
 
   const fetchLogs = async () => {
     try {
-      const apiBase = import.meta.env.VITE_API_URL || '';
-      const res = await fetch(`${apiBase}/api/logs?t=${Date.now()}`);
+      const apiBase = (import.meta.env.VITE_API_URL || '').replace(':8000', '');
+      const res = await fetch(`${apiBase}/backend/api.php/logs?t=${Date.now()}`);
       const data = await res.json();
       setLogs(data.logs || []);
     } catch (err) {
@@ -63,8 +63,8 @@ function App() {
         ...betInfo
       };
 
-      const apiBase = import.meta.env.VITE_API_URL || '';
-      await fetch(`${apiBase}/api/place_bet`, {
+      const apiBase = (import.meta.env.VITE_API_URL || '').replace(':8000', '');
+      await fetch(`${apiBase}/backend/api.php/place_bet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(betData)
@@ -81,8 +81,8 @@ function App() {
     setAnalyzing(true);
     setAnalysis(null);
     try {
-      const apiBase = import.meta.env.VITE_API_URL || '';
-      const res = await fetch(`${apiBase}/api/analyze/${fixtureId}`);
+      const apiBase = (import.meta.env.VITE_API_URL || '').replace(':8000', '');
+      const res = await fetch(`${apiBase}/backend/api.php/analyze/${fixtureId}`);
       const data = await res.json();
       setAnalysis(data);
       if (data.auto_bet_status === 'success') {
@@ -102,7 +102,8 @@ function App() {
       const now = Date.now();
 
       try {
-        const liveRes = await fetch(`${apiBase}/api/live?t=${now}`);
+        const apiBase = (import.meta.env.VITE_API_URL || '').replace(':8000', '');
+        const liveRes = await fetch(`${apiBase}/backend/api.php/live?t=${now}`);
         const liveData = await liveRes.json();
         setLiveMatches(liveData.response || []);
         if (liveData.server_time) {
@@ -112,7 +113,8 @@ function App() {
       } catch (err) { console.error("Live fetch error:", err); }
 
       try {
-        const teamsRes = await fetch(`${apiBase}/api/teams?t=${now}`);
+        const apiBase = (import.meta.env.VITE_API_URL || '').replace(':8000', '');
+        const teamsRes = await fetch(`${apiBase}/backend/api.php/teams?t=${now}`);
         const teamsData = await teamsRes.json();
         setTeams(teamsData.response || []);
       } catch (err) { console.error("Teams fetch error:", err); }
