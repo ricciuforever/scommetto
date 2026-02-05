@@ -12,6 +12,7 @@ function App() {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [usage, setUsage] = useState({ used: 0, remaining: 7500 });
   const [serverLastUpdate, setServerLastUpdate] = useState(Date.now());
+  const [logs, setLogs] = useState([]);
 
   const fetchHistory = async () => {
     try {
@@ -32,6 +33,17 @@ function App() {
       setUsage(data);
     } catch (err) {
       console.error("Usage fetch error:", err);
+    }
+  };
+
+  const fetchLogs = async () => {
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || '';
+      const res = await fetch(`${apiBase}/api/logs?t=${Date.now()}`);
+      const data = await res.json();
+      setLogs(data.logs || []);
+    } catch (err) {
+      console.error("Logs fetch error:", err);
     }
   };
 
@@ -111,11 +123,13 @@ function App() {
     fetchData();
     fetchHistory();
     fetchUsage();
+    fetchLogs();
 
     const interval = setInterval(() => {
       fetchData();
       fetchHistory();
       fetchUsage();
+      fetchLogs();
     }, 30000);
 
     const tick = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -425,18 +439,24 @@ function App() {
               <div className="loading">Select a match to prepare the Gemini Intelligence prompt.</div>
             )}
           </div>
-
-          <div className="card">
-            <h2>ℹ️ Agent Status</h2>
-            <div style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: '1.6' }}>
-              • API Polling: Active (15m interval)<br />
-              • Daily Quota: {usage.used} / {usage.used + usage.remaining} used<br />
-              • Remaining: <span style={{ color: usage.remaining < 20 ? 'red' : 'var(--primary)' }}>{usage.remaining} calls</span><br />
-              • Strategy: Real-time monitoring<br />
-              • Monitoring: {liveMatches.length} events
-            </div>
-          </div>
         </section>
+      </div>
+
+      <section className="logs-section" style={{ marginTop: '2rem' }}>
+        <div className="card" style={{ background: '#000', border: '1px solid var(--primary)', fontFamily: 'monospace' }}>
+          <h2 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '10px' }}>📡 Live Agent Terminal (Telemetry)</h2>
+          <div style={{ height: '180px', overflowY: 'auto', fontSize: '0.8rem', color: '#0f0', padding: '10px', whiteSpace: 'pre-wrap' }}>
+            {logs.length > 0 ? logs.map((log, i) => (
+              <div key={i} style={{ marginBottom: '4px', borderBottom: '1px solid #030' }}>{log}</div>
+            )) : "Awaiting agent telemetry..."}
+          </div>
+        </div>
+      </section>
+
+      <div className="footer-stats" style={{ marginTop: '2rem', padding: '1rem', borderTop: '1px solid var(--glass-border)' }}>
+        <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textAlign: 'center' }}>
+          AGENTE SCOMMESSE PRO v2.5 • API STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> • QUOTA: {usage.used}/{usage.used + usage.remaining}
+        </div>
       </div>
     </div>
   );
