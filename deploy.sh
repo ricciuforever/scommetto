@@ -9,8 +9,7 @@ GROUP="psacln"
 echo "=== Deploy iniziato: $(date) ===" >> "$LOG_FILE"
 
 # 0. UPDATE REPO
-echo "Updating Repo..." >> "$LOG_FILE"
-git pull origin main >> "$LOG_FILE" 2>&1
+echo "Skipping Git Pull (Handled by Plesk Webhook)..." >> "$LOG_FILE"
 
 # 0b. DETECT PLESK NODE
 if [ -d "/opt/plesk/node/24/bin" ]; then
@@ -35,7 +34,7 @@ if [ -d "dist" ] && [ -f "dist/index.html" ]; then
     chown -R $USER:$GROUP "$APP_DIR/public_html"
     chmod -R 755 "$APP_DIR/public_html"
 else
-    echo "ERROR: Frontend build failed." >> "$LOG_FILE"
+    echo "ERROR: Frontend build failed. Check frontend/dist directory." >> "$LOG_FILE"
 fi
 
 # 2. BACKEND SETUP
@@ -49,9 +48,11 @@ fi
 
 # 3. RESTART AGENTE
 echo "Restarting Agent..." >> "$LOG_FILE"
+# Try to kill by port if pkill fails
+fuser -k 8000/tcp >> "$LOG_FILE" 2>&1
 pkill -9 -f main.py || true
 
-# Fix ownership
+# Fix ownership for the whole project to avoid permission denied on logs/json
 chown -R $USER:$GROUP "$APP_DIR"
 chmod -R 755 "$APP_DIR"
 
@@ -61,7 +62,7 @@ sleep 2
 if pgrep -f "main.py" > /dev/null; then
     echo "Agent started successfully." >> "$LOG_FILE"
 else
-    echo "ERROR: Agent failed to start." >> "$LOG_FILE"
+    echo "ERROR: Agent failed to start. Check backend/agent_log.txt for Python errors." >> "$LOG_FILE"
 fi
 
 echo "=== Deploy completato: $(date) ===" >> "$LOG_FILE"
