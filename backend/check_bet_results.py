@@ -59,7 +59,8 @@ def check_bets(usage_callback=None):
         try:
             ids_param = ",".join(chunk)
             log_message(f"Settling backlog: Checking batch of {len(chunk)} matches...")
-            res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param})
+            # Added timeout
+            res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param}, timeout=10)
             if usage_callback: usage_callback(res)
 
             data = res.json()

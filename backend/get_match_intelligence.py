@@ -40,7 +40,8 @@ def get_fixture_details(fixture_id, fixture_data=None, usage_callback=None):
 
     def safe_get(url, params):
         try:
-            res = requests.get(url, headers=HEADERS, params=params)
+            # Added timeout to prevent hanging
+            res = requests.get(url, headers=HEADERS, params=params, timeout=10)
             if usage_callback:
                 usage_callback(res)
             return res.json().get("response", [])

@@ -1,12 +1,15 @@
 import os
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Initialize the new Google Gen AI client
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-model = genai.GenerativeModel('gemini-flash-lite-latest') # Specified by USER
+# Using the latest Flash Lite model available in the new SDK
+MODEL_NAME = 'gemini-2.0-flash-lite-preview-02-05'
 
 def analyze_match_with_gemini(intelligence_json):
     prompt = f"""
@@ -37,14 +40,24 @@ def analyze_match_with_gemini(intelligence_json):
     """
 
     try:
-        # Configuration for better results and no truncation
-        config = {
-            "temperature": 0.3,
-            "top_p": 0.95,
-            "top_k": 40,
-            "max_output_tokens": 4096,
-        }
-        response = model.generate_content(prompt, generation_config=config)
-        return response.text
+        # Configuration using the new types.GenerateContentConfig
+        config = types.GenerateContentConfig(
+            temperature=0.3,
+            top_p=0.95,
+            top_k=40,
+            max_output_tokens=4096,
+        )
+
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=config
+        )
+
+        if response.text:
+            return response.text
+        else:
+            return "Errore: Gemini non ha restituito alcun testo."
+
     except Exception as e:
-        return f"Errore durante l'analisi con Gemini: {str(e)}"
+        return f"Errore durante l'analisi con Gemini (New SDK): {str(e)}"
