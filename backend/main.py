@@ -159,18 +159,74 @@ def fetch_initial_data():
         except Exception as e:
             print(f"Error seeding teams: {e}")
 
+def auto_scanner_logic():
+    print("--- 🤖 BOT SCANNER: Searching for value bets ---")
+    try:
+        if not os.path.exists(LIVE_DATA_FILE): return
+        with open(LIVE_DATA_FILE, "r") as f:
+            data = json.load(f)
+        
+        matches = data.get("response", [])
+        top_leagues = [135, 140, 39, 61, 78] # Serie A, La Liga, PL, Ligue 1, Bunde
+        
+        for m in matches:
+            fix_id = m["fixture"]["id"]
+            status = m["fixture"]["status"]["short"]
+            league_id = m["league"]["id"]
+            
+            # CRITERIA: Top League AND at Half-Time (HT)
+            if league_id in top_leagues and status == "HT":
+                # Check if already in history to avoid multiple AI calls
+                history = []
+                if os.path.exists(BETS_HISTORY_FILE):
+                    with open(BETS_HISTORY_FILE, "r") as f:
+                        history = json.load(f)
+                
+                if not any(b["fixture_id"] == fix_id for b in history):
+                    print(f"🤖 BOT: Analyzing High-Value match at HT: {m['teams']['home']['name']} vs {m['teams']['away']['name']}")
+                    # Trigger the same logic as the manual button
+                    import asyncio
+                    # Since we are in a thread, we call the function directly
+                    # We can't easily call an async route from here, so we'll run it synchronously or via a background task logic
+                    # For simplicity in this loop, we do the logic directly:
+                    intelligence = get_fixture_details(fix_id)
+                    prediction = analyze_match_with_gemini(intelligence)
+                    
+                    # Auto-place if JSON found
+                    import re
+                    json_match = re.search(r'```json\n([\s\S]*?)\n```', prediction)
+                    if json_match:
+                        bet_info = json.loads(json_match.group(1))
+                        bet_data = {
+                            "fixture_id": fix_id,
+                            "match": f"{m['teams']['home']['name']} vs {m['teams']['away']['name']}",
+                            **bet_info,
+                            "status": "pending",
+                            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                            "id": str(len(history) + 1)
+                        }
+                        history.append(bet_data)
+                        with open(BETS_HISTORY_FILE, "w") as f:
+                            json.dump(history, f, indent=4)
+                        print(f"🤖 BOT: AUTO-BET PLACED for {bet_data['match']}")
+                    
+    except Exception as e:
+        print(f"🤖 BOT ERROR: {e}")
+
 def update_loop():
-    fetch_initial_data() # Seed once at startup
+    fetch_initial_data() 
     while True:
         try:
             print("--- STARTING UPDATE CYCLE ---")
             fetch_live_data()
             print("Checking bet results...")
-            check_bets() 
+            check_bets()
+            print("Running Auto-Scanner...")
+            auto_scanner_logic()
             print("--- UPDATE CYCLE COMPLETE ---")
         except Exception as e:
             print(f"Error in update loop: {e}")
-        time.sleep(900) # Every 15 minutes (96 requests/day)
+        time.sleep(900) # Every 15 minutes
 
 # Start background thread for updates
 Thread(target=update_loop, daemon=True).start()
