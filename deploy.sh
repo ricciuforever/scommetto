@@ -11,10 +11,15 @@ echo "Pulling latest changes..." >> "$LOG_FILE"
 git pull origin main >> "$LOG_FILE" 2>&1
 
 # 1. FRONTEND BUILD
-echo "Building Frontend..." >> "$LOG_FILE"
+echo "Cleaning and Building Frontend..." >> "$LOG_FILE"
 cd "$APP_DIR/frontend"
+rm -rf dist >> "$LOG_FILE" 2>&1
 npm install >> "$LOG_FILE" 2>&1
 npm run build >> "$LOG_FILE" 2>&1
+
+# OPTIONAL: Se Plesk punta alla root, copia i file del build qui
+# cp -r dist/* .. 
+echo "Frontend built successfully in frontend/dist" >> "$LOG_FILE"
 
 # 2. BACKEND SETUP
 echo "Updating Backend..." >> "$LOG_FILE"

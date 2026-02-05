@@ -87,9 +87,11 @@ function App() {
     const fetchData = async () => {
       try {
         const apiBase = import.meta.env.VITE_API_URL || '';
+        const now = Date.now();
+        // Cache busting with timestamp
         const [liveRes, teamsRes] = await Promise.all([
-          fetch(`${apiBase}/api/live`),
-          fetch(`${apiBase}/api/teams`)
+          fetch(`${apiBase}/api/live?t=${now}`),
+          fetch(`${apiBase}/api/teams?t=${now}`)
         ]);
 
         const liveData = await liveRes.json();
@@ -97,8 +99,7 @@ function App() {
 
         setLiveMatches(liveData.response || []);
         setTeams(teamsData.response || []);
-        setLastFetchTimestamp(Date.now());
-        setCurrentTime(Date.now());
+        setLastFetchTimestamp(now);
       } catch (err) {
         console.error("Error fetching data:", err);
       } finally {
