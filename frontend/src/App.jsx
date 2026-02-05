@@ -170,14 +170,17 @@ function App() {
     return <span className="time">{ticked}'</span>;
   };
 
-  const sortedHistory = [...betHistory].sort((a, b) => {
+  const safeHistory = Array.isArray(betHistory) ? betHistory : [];
+  const safeLiveMatches = Array.isArray(liveMatches) ? liveMatches : [];
+
+  const sortedHistory = [...safeHistory].sort((a, b) => {
     // 1. Pending first
     if (a.status === 'pending' && b.status !== 'pending') return -1;
     if (a.status !== 'pending' && b.status === 'pending') return 1;
 
     // 2. If both pending, try to find the match in liveMatches to see progress
-    const matchA = liveMatches.find(m => m.fixture.id === Number(a.fixture_id));
-    const matchB = liveMatches.find(m => m.fixture.id === Number(b.fixture_id));
+    const matchA = safeLiveMatches.find(m => m.fixture.id === Number(a.fixture_id));
+    const matchB = safeLiveMatches.find(m => m.fixture.id === Number(b.fixture_id));
 
     if (matchA && matchB) {
       const elapsedA = matchA.fixture.status.elapsed || 0;
@@ -189,7 +192,7 @@ function App() {
     return new Date(b.timestamp) - new Date(a.timestamp);
   });
 
-  const sortedMatches = [...liveMatches].sort((a, b) => {
+  const sortedMatches = [...safeLiveMatches].sort((a, b) => {
     // Priority 1: Top Leagues (can add more IDs here)
     const topLeagues = [135, 140, 39, 61, 78]; // Serie A, La Liga, PL, Ligue 1, Bunde
     const aIsTop = topLeagues.includes(a.league.id);
