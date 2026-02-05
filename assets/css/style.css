@@ -177,6 +177,12 @@ header {
 .history-item {
     padding: 1rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.history-item:hover {
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .history-item:last-child {
@@ -309,3 +315,6 @@ header {
     background: var(--accent);
     border-radius: 10px;
 }
+.text-success { color: var(--success) !important; }
+.text-danger { color: var(--danger) !important; }
+.text-warning { color: var(--warning) !important; }

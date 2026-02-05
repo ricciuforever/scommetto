@@ -18,11 +18,56 @@ async function fetchLive() {
 
 async function fetchHistory() {
     try {
-        const res = await fetch('/api/history');
+        const res = await fetch("/api/history");
         const data = await res.json();
-        renderHistory(data || []);
-        const pendingCount = (data || []).filter(b => b.status === 'pending').length;
-        document.getElementById('pending-bets-count').textContent = pendingCount;
+        const history = data || [];
+        renderHistory(history);
+
+        // Calculate Stats
+        let pendingCount = 0;
+        let winCount = 0;
+        let lossCount = 0;
+        let totalStake = 0;
+        let netProfit = 0;
+        const startingPortfolio = 100;
+
+        history.forEach(bet => {
+            const stake = parseFloat(bet.stake) || 0;
+            const odds = parseFloat(bet.odds) || 0;
+
+            if (bet.status === "pending") {
+                pendingCount++;
+            } else if (bet.status === "won") {
+                winCount++;
+                totalStake += stake;
+                netProfit += stake * (odds - 1);
+            } else if (bet.status === "lost") {
+                lossCount++;
+                totalStake += stake;
+                netProfit -= stake;
+            }
+        });
+
+        const currentPortfolio = startingPortfolio + netProfit;
+        const roi = totalStake > 0 ? (netProfit / totalStake) * 100 : 0;
+        const portfolioChangePercent = ((currentPortfolio - startingPortfolio) / startingPortfolio) * 100;
+
+        // Update UI
+        document.getElementById("pending-bets-count").textContent = pendingCount;
+        document.getElementById("win-loss-count").textContent = `${winCount}W - ${lossCount}L`;
+        document.getElementById("portfolio-val").textContent = `${currentPortfolio.toFixed(2)}€ (${portfolioChangePercent >= 0 ? "+" : ""}${portfolioChangePercent.toFixed(1)}%)`;
+
+        const profitEl = document.getElementById("profit-val");
+        if (profitEl) {
+            profitEl.textContent = `${netProfit >= 0 ? "+" : ""}${netProfit.toFixed(2)}€`;
+            profitEl.className = `stat-value ${netProfit >= 0 ? "text-success" : "text-danger"}`;
+        }
+
+        const roiEl = document.getElementById("roi-val");
+        if (roiEl) {
+            roiEl.textContent = `${roi.toFixed(1)}%`;
+            roiEl.className = `stat-value ${roi >= 0 ? "text-success" : "text-danger"}`;
+        }
     } catch (e) {
         console.error("Error fetching history", e);
     }
@@ -191,20 +236,72 @@ function updateMinutes() {
     });
 }
 
-function renderHistory(history) {
-    const container = document.getElementById('history-container');
-    container.innerHTML = history.length === 0 ? '<p style="padding:1rem;">Nessuna scommessa registrata.</p>' : '';
+function showBetDetails(bet) {
+    const modal = document.getElementById("analysis-modal");
+    const body = document.getElementById("modal-body");
+    const title = document.getElementById("modal-title");
+    const btn = document.getElementById("place-bet-btn");
 
-    history.slice(0, 10).forEach(h => {
-        const item = document.createElement('div');
-        item.className = 'history-item';
+    modal.style.display = "block";
+    title.textContent = "Dettaglio Scommessa";
+    btn.style.display = "none";
+
+    let statusColor = "var(--text-secondary)";
+    if (bet.status === "won") statusColor = "var(--success)";
+    if (bet.status === "lost") statusColor = "var(--danger)";
+
+    const stake = parseFloat(bet.stake) || 0;
+    const odds = parseFloat(bet.odds) || 0;
+    const profit = bet.status === "won" ? (stake * (odds - 1)) : (bet.status === "lost" ? -stake : 0);
+
+    body.innerHTML = `
+        <div style="margin-bottom: 1.5rem;">
+            <div style="font-size: 1.2rem; font-weight: 800; margin-bottom: 0.25rem;">${bet.match_name}</div>
+            <div style="color: var(--text-secondary); font-size: 0.85rem;">${bet.timestamp}</div>
+        </div>
+
+        <div class="glass-panel" style="padding: 1rem; margin-bottom: 1.5rem; border-left: 4px solid ${statusColor};">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <span style="font-weight: 700; color: var(--accent);">RIEPILOGO</span>
+                <span class="status-tag status-${bet.status}" style="font-size: 0.8rem; padding: 0.2rem 0.6rem;">${bet.status.toUpperCase()}</span>
+            </div>
+            <div style="font-size: 1.1rem; margin-bottom: 0.5rem;">
+                <strong>Risultato Finale:</strong> ${bet.result || "Non disponibile"}
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.95rem;">
+                <div><strong>Mercato:</strong> ${bet.market}</div>
+                <div><strong>Quota:</strong> ${bet.odds}</div>
+                <div><strong>Puntata:</strong> ${bet.stake}€</div>
+                <div><strong>Bilancio:</strong> <span class="${profit >= 0 ? (profit > 0 ? "text-success" : "") : "text-danger"}">
+                    ${profit >= 0 ? "+" : ""}${profit.toFixed(2)}€
+                </span></div>
+            </div>
+        </div>
+
+        ${bet.advice ? `
+            <div style="margin-top: 1.5rem;">
+                <div style="font-weight: 700; color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.8rem; text-transform: uppercase;">Analisi di Gemini</div>
+                <div class="analysis-content" style="max-height: 250px; overflow-y: auto; font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 8px;">${bet.advice}</div>
+            </div>
+        ` : ""}
+    `;
+}
+
+function renderHistory(history) {
+    const container = document.getElementById("history-container");
+    container.innerHTML = history.length === 0 ? "<p style=\"padding:1rem;\">Nessuna scommessa registrata.</p>" : "";
+
+    history.slice(0, 15).forEach(h => {
+        const item = document.createElement("div");
+        item.className = "history-item";
+        item.onclick = () => showBetDetails(h);
         item.innerHTML = `
             <div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">
                 <span style="font-weight:600; font-size:0.9rem;">${h.match_name || h.match}</span>
                 <span class="status-tag status-${h.status}">${h.status}</span>
             </div>
             <div style="color:var(--text-secondary); font-size:0.8rem;">
-                ${h.market} @ ${h.odds} | Stake: ${h.stake}
+                ${h.market} @ ${h.odds} | Stake: ${h.stake}€
             </div>
         `;
         container.appendChild(item);

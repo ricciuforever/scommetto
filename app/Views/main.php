@@ -23,6 +23,20 @@
     <main class="container">
         <div class="stats-bar">
             <div class="glass-panel stat-item">
+                <span class="stat-value" id="portfolio-val">100€</span>
+                <span class="stat-label">Portafoglio</span>
+            </div>
+            <div class="glass-panel stat-item">
+                <span class="stat-value" id="win-loss-count">0W - 0L</span>
+                <span class="stat-label">Win/Loss</span>
+            </div>
+            <div class="glass-panel stat-item">
+                <span class="stat-value" id="profit-val">+0.00€</span>
+                <span class="stat-label">Profitto Netto</span>
+            </div>
+
+
+            <div class="glass-panel stat-item">
                 <span class="stat-value" id="active-matches-count">0</span>
                 <span class="stat-label">Match Live</span>
             </div>
