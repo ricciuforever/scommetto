@@ -52,6 +52,12 @@ class FootballApiService
         return $this->request("/players?id=$id&season=$season");
     }
 
+
+    public function fetchPredictions($fixtureId)
+    {
+        return $this->request("/predictions?fixture=$fixtureId");
+    }
+
     private function request($endpoint)
     {
         $url = $this->baseUrl . $endpoint;

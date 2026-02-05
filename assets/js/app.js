@@ -230,6 +230,10 @@ function renderMatches() {
                     <i data-lucide="brain-circuit" class="w-5 h-5 group-hover/btn:animate-pulse"></i>
                     Analyze AI
                 </button>
+                <button class="w-full md:w-auto bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white px-6 py-4 rounded-[20px] font-black text-xs uppercase tracking-[0.1em] transition-all border border-white/5 flex items-center justify-center gap-3 group/intel" onclick="showIntelligence(${m.fixture.id})">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5 group-hover/intel:scale-110 transition-transform"></i>
+                    Stats
+                </button>
             </div>
         `;
         container.appendChild(card);
@@ -372,6 +376,43 @@ function showBetDetails(bet) {
             </div>
         ` : ""}
     `;
+    if (window.lucide) lucide.createIcons();
+}
+
+function renderHistory(history) {
+    const container = document.getElementById("history-container");
+    container.innerHTML = history.length === 0 ? "<div class='p-10 text-center text-slate-500 font-bold text-sm'>Nessuna attività registrata.</div>" : "";
+
+    history.slice(0, 15).forEach(h => {
+        const item = document.createElement("div");
+        item.className = "p-6 hover:bg-white/5 cursor-pointer transition-all group relative border-l-4 border-transparent dark:hover:bg-slate-800/50";
+        item.onclick = () => showBetDetails(h);
+
+        const statusConfigs = {
+            'won': { color: 'text-success', bg: 'bg-success/10', border: 'border-success', icon: 'check-circle' },
+            'lost': { color: 'text-danger', bg: 'bg-danger/10', border: 'border-danger', icon: 'x-circle' },
+            'pending': { color: 'text-warning', bg: 'bg-warning/10', border: 'border-warning', icon: 'clock' }
+        };
+        const config = statusConfigs[h.status] || { color: 'text-slate-500', bg: 'bg-slate-500/10', border: 'border-slate-500', icon: 'help-circle' };
+
+        if (h.status === 'won') item.classList.add('border-success');
+        if (h.status === 'lost') item.classList.add('border-danger');
+        if (h.status === 'pending') item.classList.add('border-warning');
+
+        item.innerHTML = `
+            <div class="flex justify-between items-start mb-2">
+                <span class="font-black text-sm uppercase tracking-tight group-hover:text-accent transition-colors truncate max-w-[150px] text-slate-900 dark:text-slate-100 italic">${h.match_name || h.match}</span>
+                <div class="flex items-center gap-1.5 ${config.color} ${config.bg} px-2 py-0.5 rounded-lg border ${config.border}">
+                    <i data-lucide="${config.icon}" class="w-3 h-3"></i>
+                    <span class="text-[9px] font-black uppercase tracking-widest">${h.status}</span>
+                </div>
+            </div>
+            <div class="text-[11px] text-slate-500 font-bold uppercase tracking-wider">
+                ${h.market} <span class="text-accent">@ ${h.odds}</span> <span class="mx-1 opacity-30">•</span> <span class="text-slate-900 dark:text-white font-black">${h.stake}€</span>
+            </div>
+        `;
+        container.appendChild(item);
+    });
     if (window.lucide) lucide.createIcons();
 }
 
@@ -629,6 +670,96 @@ async function placeBet(fixture_id, match, betData) {
         }
     } catch (e) {
         alert("Errore nell'invio della scommessa.");
+    }
+}
+
+
+async function showIntelligence(id) {
+    const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    const title = document.getElementById('modal-title');
+    const btn = document.getElementById('place-bet-btn');
+
+    modal.classList.remove('hidden');
+    title.textContent = "Intelligence & Predizioni";
+    body.innerHTML = '<div class="text-center py-12"><div class="inline-flex items-center gap-3 bg-white/5 text-slate-500 px-8 py-4 rounded-[24px] font-black text-xs tracking-widest animate-pulse uppercase border border-white/5"><i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Loading Intelligence...</div></div>';
+    btn.classList.add('hidden');
+    if (window.lucide) lucide.createIcons();
+
+    try {
+        const res = await fetch(`/api/predictions/${id}`);
+        const data = await res.json();
+
+        if (!data || data.error) {
+            body.innerHTML = '<div class="text-center py-12 text-slate-500 font-bold">Dati non disponibili per questo match.</div>';
+            return;
+        }
+
+        const comp = JSON.parse(data.comparison || '{}');
+        const perc = JSON.parse(data.percent || '{}');
+
+        const metrics = [
+            { label: 'Forma', key: 'form' },
+            { label: 'Attacco', key: 'attaching' },
+            { label: 'Difesa', key: 'defensive' },
+            { label: 'Poisson', key: 'poisson_distribution' },
+            { label: 'Testa a Testa', key: 'h2h' },
+            { label: 'Gol', key: 'goals' }
+        ];
+
+        let metricsHtml = metrics.map(m => {
+            const val = comp[m.key] || { home: '50%', away: '50%' };
+            const h = parseInt(val.home);
+            const a = parseInt(val.away);
+            return `
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        <span>${h}%</span>
+                        <span class="text-white italic">${m.label}</span>
+                        <span>${a}%</span>
+                    </div>
+                    <div class="h-2 bg-white/5 rounded-full overflow-hidden flex">
+                        <div class="h-full bg-accent" style="width: ${h}%"></div>
+                        <div class="h-full bg-success/50" style="width: ${a}%"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        body.innerHTML = `
+            <div class="max-h-[550px] overflow-y-auto pr-4 custom-scrollbar">
+                <div class="bg-accent/10 border border-accent/20 p-6 rounded-[32px] mb-10">
+                    <div class="text-[10px] font-black text-accent uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <i data-lucide="info" class="w-4 h-4"></i> Algorithmic Advice
+                    </div>
+                    <div class="text-2xl font-black text-white italic tracking-tight uppercase">${data.advice || 'N/A'}</div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-4 mb-10">
+                    <div class="bg-white/5 p-5 rounded-[24px] border border-white/5 text-center">
+                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Home</p>
+                        <p class="text-2xl font-black text-white">${perc.home || 'N/A'}</p>
+                    </div>
+                    <div class="bg-white/5 p-5 rounded-[24px] border border-white/5 text-center">
+                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Draw</p>
+                        <p class="text-2xl font-black text-white">${perc.draw || 'N/A'}</p>
+                    </div>
+                    <div class="bg-white/5 p-5 rounded-[24px] border border-white/5 text-center">
+                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Away</p>
+                        <p class="text-2xl font-black text-white">${perc.away || 'N/A'}</p>
+                    </div>
+                </div>
+
+                <div class="space-y-8 bg-white/5 p-8 rounded-[40px] border border-white/5">
+                    <h4 class="text-xs font-black text-white uppercase tracking-[0.2em] mb-4 text-center">Data Comparison</h4>
+                    ${metricsHtml}
+                </div>
+            </div>
+        `;
+        if (window.lucide) lucide.createIcons();
+    } catch (e) {
+        console.error(e);
+        body.innerHTML = "Errore nel caricamento delle statistiche.";
     }
 }
 
