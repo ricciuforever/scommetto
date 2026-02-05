@@ -10,19 +10,30 @@ function fetch_live_data()
 {
     $ch = curl_init(BASE_URL . "/fixtures?live=all");
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HEADER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'x-rapidapi-host: v3.football.api-sports.io',
         'x-rapidapi-key: ' . FOOTBALL_API_KEY
     ]);
-    $res = curl_exec($ch);
+    $response = curl_exec($ch);
+    $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    $headers = substr($response, 0, $header_size);
+    $body = substr($response, $header_size);
     curl_close($ch);
 
-    if ($res) {
-        file_put_contents(LIVE_DATA_FILE, $res);
-        log_msg("Live data updated.");
-        return json_decode($res, true);
+    if (
+        preg_match('/x-ratelimit-requests-used: (\d+)/i', $headers, $m1) &&
+        preg_match('/x-ratelimit-requests-remaining: (\d+)/i', $headers, $m2)
+    ) {
+        $usage = ['used' => (int) $m1[1], 'remaining' => (int) $m2[1], 'updated' => time()];
+        file_put_contents(__DIR__ . '/usage.json', json_encode($usage));
     }
-    log_msg("Error fetching live data.");
+
+    if ($body) {
+        file_put_contents(LIVE_DATA_FILE, $body);
+        log_msg("Live data updated.");
+        return json_decode($body, true);
+    }
     return null;
 }
 
@@ -35,16 +46,20 @@ function settle_bets()
     if (!$history)
         return;
 
-    $pending = array_filter($history, function ($b) {
-        return ($b['status'] ?? '') === 'pending';
-    });
+    $pending_indices = [];
+    foreach ($history as $idx => $b) {
+        if (($b['status'] ?? '') === 'pending')
+            $pending_indices[] = $idx;
+    }
 
-    if (empty($pending))
+    if (empty($pending_indices)) {
+        log_msg("No pending bets to settle.");
         return;
+    }
 
-    // Chunk IDs for Batch API (max 20)
-    $ids = array_map(function ($b) {
-        return $b['fixture_id']; }, $pending);
+    $ids = [];
+    foreach ($pending_indices as $idx)
+        $ids[] = $history[$idx]['fixture_id'];
     $chunks = array_chunk(array_unique($ids), 20);
 
     $fixtures_data = [];
@@ -57,7 +72,6 @@ function settle_bets()
         ]);
         $res = curl_exec($ch);
         curl_close($ch);
-
         $data = json_decode($res, true);
         foreach ($data['response'] ?? [] as $f) {
             $fixtures_data[$f['fixture']['id']] = $f;
@@ -65,18 +79,15 @@ function settle_bets()
     }
 
     $updated = false;
-    foreach ($history as &$bet) {
-        if (($bet['status'] ?? '') !== 'pending')
-            continue;
-
+    foreach ($pending_indices as $idx) {
+        $bet = &$history[$idx];
         $fid = $bet['fixture_id'];
+
         if (!isset($fixtures_data[$fid])) {
-            // Check if bet is too old (e.g. > 4 hours)
-            $bet_time = strtotime($bet['timestamp']);
-            if (time() - $bet_time > 14400) { // 4 hours
+            if (time() - strtotime($bet['timestamp']) > 10800) {
                 $bet['status'] = 'stale';
                 $updated = true;
-                log_msg("Stale bet: " . $bet['match']);
+                log_msg("Marked stale: " . $bet['match']);
             }
             continue;
         }
@@ -85,33 +96,51 @@ function settle_bets()
         $status = $f['fixture']['status']['short'];
         $h = $f['goals']['home'];
         $a = $f['goals']['away'];
-        $advice = strtolower($bet['advice'] ?? '');
-        $home_name = strtolower($f['teams']['home']['name'] ?? '');
-        $away_name = strtolower($f['teams']['away']['name'] ?? '');
+        if ($h === null || $a === null)
+            continue;
 
-        // Basic Settlement Logic
         if (in_array($status, ['FT', 'AET', 'PEN'])) {
+            $advice = strtolower($bet['advice'] ?? '');
             $is_win = false;
-            // Precise Win Logic
-            if ((strpos($advice, '1') !== false || strpos($advice, 'casa') !== false || strpos($advice, 'home') !== false) && $h > $a)
-                $is_win = true;
-            elseif ((strpos($advice, '2') !== false || strpos($advice, 'trasferta') !== false || strpos($advice, 'away') !== false) && $a > $h)
-                $is_win = true;
-            elseif ((strpos($advice, 'x') !== false || strpos($advice, 'draw') !== false || strpos($advice, 'pareggio') !== false) && $h == $a)
-                $is_win = true;
-            elseif (strpos($advice, 'over') !== false && ($h + $a) > 2.5)
-                $is_win = true;
-            elseif (strpos($advice, 'under') !== false && ($h + $a) < 2.5)
-                $is_win = true;
-            elseif (strpos($advice, $home_name) !== false && $h > $a)
-                $is_win = true;
-            elseif (strpos($advice, $away_name) !== false && $a > $h)
-                $is_win = true;
+            $found = false;
 
-            $bet['status'] = $is_win ? 'win' : 'lost';
-            $bet['result'] = "$h-$a";
-            $updated = true;
-            log_msg("Settled: " . $bet['match'] . " (" . $bet['status'] . ") $h-$a");
+            if (preg_match('/\b(vittoria casa|vince casa|^1$|casa vince|home win)\b/', $advice)) {
+                $found = true;
+                if ($h > $a)
+                    $is_win = true;
+            } elseif (preg_match('/\b(vittoria ospite|vince trasferta|^2$|trasferta vince|away win)\b/', $advice)) {
+                $found = true;
+                if ($a > $h)
+                    $is_win = true;
+            } elseif (preg_match('/\b(x|draw|pareggio)\b/', $advice) && !preg_match('/\d/', str_replace('x', '', $advice))) {
+                $found = true;
+                if ($h == $a)
+                    $is_win = true;
+            } elseif (strpos($advice, 'over') !== false) {
+                $found = true;
+                preg_match('/(\d+\.\d+)/', $advice, $m);
+                $thr = isset($m[1]) ? (float) $m[1] : 2.5;
+                if (($h + $a) > $thr)
+                    $is_win = true;
+            } elseif (strpos($advice, 'under') !== false) {
+                $found = true;
+                preg_match('/(\d+\.\d+)/', $advice, $m);
+                $thr = isset($m[1]) ? (float) $m[1] : 2.5;
+                if (($h + $a) < $thr)
+                    $is_win = true;
+            }
+
+            if ($found) {
+                $bet['status'] = $is_win ? 'win' : 'lost';
+                $bet['result'] = "$h-$a";
+                $updated = true;
+                log_msg("SETTLED: {$bet['match']} -> " . strtoupper($bet['status']) . " ($h-$a)");
+            } else {
+                $bet['status'] = 'lost';
+                $bet['result'] = "$h-$a (Ambig)";
+                $updated = true;
+                log_msg("SETTLED (Ambig): {$bet['match']} -> LOST ($h-$a)");
+            }
         }
     }
 

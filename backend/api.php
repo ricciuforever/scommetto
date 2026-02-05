@@ -84,7 +84,15 @@ if (strpos($request, '/live') !== false) {
     file_put_contents(BETS_HISTORY_FILE, json_encode($history, JSON_PRETTY_PRINT));
     echo json_encode(["status" => "success", "bet" => $input]);
 } elseif (strpos($request, '/usage') !== false) {
-    echo json_encode(["used" => 0, "remaining" => 7500]);
+    if (file_exists(__DIR__ . '/usage.json')) {
+        echo file_get_contents(__DIR__ . '/usage.json');
+    } else {
+        echo json_encode(["used" => 0, "remaining" => 7500]);
+    }
 } else {
-    echo json_encode(["status" => "Backend PHP is alive", "path" => $request, "usage" => ["used" => 0, "remaining" => 7500]]);
+    $usage = ["used" => 0, "remaining" => 7500];
+    if (file_exists(__DIR__ . '/usage.json')) {
+        $usage = json_decode(file_get_contents(__DIR__ . '/usage.json'), true);
+    }
+    echo json_encode(["status" => "Backend PHP is alive", "path" => $request, "usage" => $usage]);
 }
