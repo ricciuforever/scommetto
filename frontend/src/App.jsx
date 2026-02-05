@@ -209,7 +209,7 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <div className="logo">SCOMMETTO_AGENTE <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>v2.6</span></div>
+        <div className="logo">SCOMMETTO_AGENTE <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>v2.8</span></div>
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textAlign: 'right', borderRight: '1px solid var(--glass-border)', paddingRight: '15px' }}>
             SERVER LAST SYNC<br />
@@ -455,7 +455,7 @@ function App() {
 
       <div className="footer-stats" style={{ marginTop: '2rem', padding: '1rem', borderTop: '1px solid var(--glass-border)' }}>
         <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textAlign: 'center' }}>
-          AGENTE SCOMMESSE PRO v2.7 • API STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> • QUOTA: {usage.used}/{usage.used + usage.remaining}
+          AGENTE SCOMMESSE PRO v2.8 • API STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> • QUOTA: {usage.used}/{usage.used + usage.remaining}
         </div>
       </div>
     </div>
