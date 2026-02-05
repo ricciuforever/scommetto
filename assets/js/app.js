@@ -580,6 +580,9 @@ async function showTeamDetails(teamId) {
 
 async function analyzeMatch(id) {
     const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    const title = document.getElementById('modal-title');
+    const btn = document.getElementById('place-bet-btn');
     const confInd = document.getElementById('confidence-indicator');
     const confVal = document.getElementById('confidence-val');
     const confBar = document.getElementById('confidence-bar');
