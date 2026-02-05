@@ -59,8 +59,17 @@ fi
 
 # 3. RESTART AGENTE
 echo "Restarting Agent..." >> "$LOG_FILE"
-pkill -f main.py || true
-# Usiamo setsid per staccare completamente il processo dal deploy di Plesk
-setsid ./venv/bin/python3 main.py >> agent_log.txt 2>&1 &
+# Kill more aggressively to prevent ghost processes
+pkill -9 -f main.py || true
+pkill -9 -f "python3 main.py" || true
+
+# Fix ownership for the whole directory before starting
+echo "Fixing global ownership..." >> "$LOG_FILE"
+chown -R emanueletolomei.it_4qrclx883cu:psacln "$APP_DIR"
+chmod -R 755 "$APP_DIR/public_html" >> "$LOG_FILE" 2>&1
+
+# Start as setsid
+setsid ./venv/bin/python3 main.py >> "$APP_DIR/backend/agent_log.txt" 2>&1 &
 
 echo "=== Deploy completato: $(date) ===" >> "$LOG_FILE"
+
