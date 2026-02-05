@@ -58,16 +58,20 @@ def check_bets():
                         bet["result"] = f"{h}-{a}"
                         updated = True
 
-                    # 2. 1X2 (1st Half)
-                    elif ("1st half" in market or "primo tempo" in market) and f_status in ["HT", "2H", "FT"]:
+                    # 2. 1X2 (1st Half) / First Half Winner
+                    is_1st_half = any(x in market for x in ["1st half", "primo tempo", "first half", "1° tempo"])
+                    
+                    if is_1st_half and f_status in ["HT", "2H", "FT"]:
                         ht_score = score.get("halftime", {})
                         h, a = ht_score.get("home"), ht_score.get("away")
                         
                         if h is not None and a is not None:
                             is_win = False
-                            if ("vittoria" in advice or "1" in advice or "home" in advice) and h > a: is_win = True
-                            elif ("2" in advice or "away" in advice) and a > h: is_win = True
-                            elif ("x" in advice or "draw" in advice or "pareggio" in advice) and h == a: is_win = True
+                            # Normalize advice for easier matching
+                            adv = advice.lower()
+                            if any(x in adv for x in ["vittoria", "1", "home", "casa"]) and h > a: is_win = True
+                            elif any(x in adv for x in ["2", "away", "ospite", "trasferta"]) and a > h: is_win = True
+                            elif any(x in adv for x in ["x", "draw", "pareggio", "n"]) and h == a: is_win = True
                             
                             bet["status"] = "win" if is_win else "lost"
                             bet["result"] = f"(HT) {h}-{a}"
