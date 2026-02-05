@@ -58,46 +58,48 @@ def check_bets():
                     goals = fixture["goals"]
                     score = fixture.get("score", {})
                     match_name = bet.get("match", "Unknown")
+                    advice = bet.get("advice", "").lower()
+                    market = bet.get("market", "").lower()
                     
-                    # Settle FT
-                    if f_status == "FT":
+                    # 1. Full Time Settlement
+                    if f_status in ["FT", "AET", "PEN"]:
                         h, a = goals["home"], goals["away"]
                         is_win = False
-                        advice = bet.get("advice", "").lower()
                         if any(x in advice for x in ["vittoria", "1", "home", "casa"]) and h > a: is_win = True
                         elif any(x in advice for x in ["2", "away", "ospite", "trasferta"]) and a > h: is_win = True
                         elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a: is_win = True
+                        
                         bet["status"] = "win" if is_win else "lost"
                         bet["result"] = f"{h}-{a}"
                         updated = True
                         with open("agent_log.txt", "a") as f:
-                            f.write(f"{time.ctime()}: SETTLED {match_name} as {bet['status'].upper()} ({h}-{a})\n")
-                    else:
-                        # Check HT settlement
-                        market = bet.get("market", "").lower()
-                        is_1st_half = any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"])
-                        if is_1st_half and f_status in ["HT", "2H", "FT"]:
+                            f.write(f"{time.ctime()}: ✅ SETTLED FT: {match_name} ({h}-{a}) -> {bet['status'].upper()}\n")
+                    
+                    # 2. Half Time Settlement
+                    elif any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"]):
+                        if f_status in ["HT", "2H", "FT", "AET", "PEN"]:
                             ht_score = score.get("halftime", {})
                             h = ht_score.get("home") if ht_score.get("home") is not None else goals["home"]
                             a = ht_score.get("away") if ht_score.get("away") is not None else goals["away"]
+                            
                             if h is not None and a is not None:
                                 is_win = False
-                                advice = bet.get("advice", "").lower()
                                 if any(x in advice for x in ["vittoria", "1", "home", "casa"]) and h > a: is_win = True
                                 elif any(x in advice for x in ["2", "away", "ospite", "trasferta"]) and a > h: is_win = True
                                 elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a: is_win = True
+                                
                                 bet["status"] = "win" if is_win else "lost"
                                 bet["result"] = f"(HT) {h}-{a}"
                                 updated = True
                                 with open("agent_log.txt", "a") as f:
-                                    f.write(f"{time.ctime()}: SETTLED HT for {match_name} as {bet['status'].upper()}\n")
-                        else:
-                            # Still pending
-                            pass
-            time.sleep(1) # Small gap between chunks
+                                    f.write(f"{time.ctime()}: 🕒 SETTLED HT: {match_name} ({h}-{a}) -> {bet['status'].upper()}\n")
+                    else:
+                        # Log why we are waiting
+                        pass
+            time.sleep(1) 
         except Exception as e:
             with open("agent_log.txt", "a") as f:
-                f.write(f"{time.ctime()}: Error checking chunk: {e}\n")
+                f.write(f"{time.ctime()}: ❌ Error: {e}\n")
 
     if updated:
         with open(BETS_HISTORY_FILE, "w") as f:
