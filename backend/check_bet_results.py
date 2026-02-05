@@ -47,7 +47,10 @@ def check_bets():
 
             for bet in history:
                 if bet.get("status") == "pending":
-                    f_id = bet.get("fixture_id")
+                    raw_id = bet.get("fixture_id")
+                    if raw_id is None: continue
+                    f_id = int(raw_id)
+                    
                     if f_id not in fixtures_data: continue
                     
                     fixture = fixtures_data[f_id]

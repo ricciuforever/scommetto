@@ -209,7 +209,7 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <div className="logo">SCOMMETTO_AGENTE</div>
+        <div className="logo">SCOMMETTO_AGENTE <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>v2.6</span></div>
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textAlign: 'right', borderRight: '1px solid var(--glass-border)', paddingRight: '15px' }}>
             SERVER LAST SYNC<br />
