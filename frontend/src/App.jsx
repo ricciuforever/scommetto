@@ -111,8 +111,9 @@ function App() {
     fetchUsage();
     const interval = setInterval(() => {
       fetchData();
+      fetchHistory();
       fetchUsage();
-    }, 60000); // UI poll every minute
+    }, 30000); // UI poll every 30s for PRO plan
 
     // Clock tick every second for smooth minute calculation
     const tick = setInterval(() => setCurrentTime(Date.now()), 1000);
