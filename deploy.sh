@@ -21,6 +21,10 @@ npm run build >> "$LOG_FILE" 2>&1
 echo "Syncing to public_html..." >> "$LOG_FILE"
 mkdir -p "$APP_DIR/public_html"
 cp -r dist/* "$APP_DIR/public_html/" >> "$LOG_FILE" 2>&1
+# Copy .htaccess for routing
+cp .htaccess "$APP_DIR/public_html/" >> "$LOG_FILE" 2>&1
+# Fix permissions (using whoami to be dynamic)
+chmod -R 755 "$APP_DIR/public_html" >> "$LOG_FILE" 2>&1
 echo "Frontend built and synced to public_html" >> "$LOG_FILE"
 
 # 2. BACKEND SETUP
