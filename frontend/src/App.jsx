@@ -18,7 +18,7 @@ function App() {
     try {
       const res = await fetch(`/api.php/history?t=${Date.now()}`);
       const data = await res.json();
-      setBetHistory(data);
+      setBetHistory(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("History error:", err);
     }
@@ -99,18 +99,26 @@ function App() {
       try {
         const res = await fetch(`/api.php/live?t=${now}`);
         const liveData = await res.json();
-        setLiveMatches(liveData.response || []);
-        if (liveData.server_time) {
+        const matches = (liveData && Array.isArray(liveData.response)) ? liveData.response : [];
+        setLiveMatches(matches);
+        if (liveData && liveData.server_time) {
           setServerLastUpdate(liveData.server_time * 1000);
         }
         setLastFetchTimestamp(now);
-      } catch (err) { console.error("Live fetch error:", err); }
+      } catch (err) {
+        console.error("Live fetch error:", err);
+        setLiveMatches([]);
+      }
 
       try {
         const res = await fetch(`/api.php/teams?t=${now}`);
         const teamsData = await res.json();
-        setTeams(teamsData.response || []);
-      } catch (err) { console.error("Teams fetch error:", err); }
+        const tData = (teamsData && Array.isArray(teamsData.response)) ? teamsData.response : [];
+        setTeams(tData);
+      } catch (err) {
+        console.error("Teams fetch error:", err);
+        setTeams([]);
+      }
 
       setLoading(false);
     };
