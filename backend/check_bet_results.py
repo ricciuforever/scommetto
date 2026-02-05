@@ -2,6 +2,7 @@ import os
 import json
 import requests
 import time
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -41,10 +42,9 @@ def check_bets(usage_callback=None):
     if not pending_bets:
         return
 
-    ids_to_check = [str(b["fixture_id"]) for b in pending_bets if b.get("fixture_id")]
+    ids_to_check = list(set([str(b["fixture_id"]) for b in pending_bets if b.get("fixture_id")]))
     updated = False
 
-    # Process in batches of 20
     for i in range(0, len(ids_to_check), 20):
         chunk = ids_to_check[i:i + 20]
         try:
@@ -74,17 +74,14 @@ def check_bets(usage_callback=None):
                     home_name = fixture["teams"]["home"]["name"].lower()
                     away_name = fixture["teams"]["away"]["name"].lower()
 
-                    # Handle Void/Cancelled matches
                     if f_status in ["PST", "CANC", "ABD", "WO"]:
                         bet["status"] = "void"
                         bet["result"] = f_status
                         updated = True
-                        log_message(f"🚫 VOIDED {match_name}: Match {f_status}")
+                        log_message(f"🚫 VOIDED {match_name}: {f_status}")
                         continue
                     
-                    # Determine if it's a Half Time market
                     is_ht_market = any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"])
-
                     target_h, target_a = None, None
                     settle_now = False
                     res_prefix = ""
@@ -100,32 +97,38 @@ def check_bets(usage_callback=None):
                         if f_status in ["FT", "AET", "PEN"]:
                             target_h, target_a = goals["home"], goals["away"]
                             settle_now = (target_h is not None and target_a is not None)
-                            res_prefix = ""
 
                     if settle_now:
                         h, a = target_h, target_a
                         is_win = False
 
-                        # Logic: Home Win
-                        if (any(x in advice for x in ["vittoria casa", "vince casa", " 1 ", "1-0", "2-0", "2-1"]) or (home_name in advice and "vince" in advice)) and h > a:
-                            is_win = True
-                        # Logic: Away Win
-                        elif (any(x in advice for x in ["vittoria ospite", "vince trasferta", " 2 ", "0-1", "0-2", "1-2"]) or (away_name in advice and "vince" in advice)) and a > h:
-                            is_win = True
-                        # Logic: Draw
-                        elif (any(x in advice for x in ["pareggio", " draw ", " segno x", " x "])) and h == a:
-                            is_win = True
-                        # Logic: Over/Under
+                        # IMPROVED LOGIC: Regular expressions for better matching
+                        # 1. Home Win
+                        if re.search(r'\b(1|home|vittoria casa|vince casa|casa)\b', advice) or (home_name in advice and "vince" in advice):
+                            if h > a: is_win = True
+                        # 2. Away Win
+                        elif re.search(r'\b(2|away|vittoria ospite|vince trasferta|ospite|trasferta)\b', advice) or (away_name in advice and "vince" in advice):
+                            if a > h: is_win = True
+                        # 3. Draw
+                        elif re.search(r'\b(x|draw|pareggio|segno x)\b', advice):
+                            if h == a: is_win = True
+                        # 4. Over 2.5
+                        elif "over" in advice and "2.5" in advice:
+                            if (h + a) > 2.5: is_win = True
+                        # 5. Under 2.5
+                        elif "under" in advice and "2.5" in advice:
+                            if (h + a) < 2.5: is_win = True
+                        # 6. Simple Over/Under fallback
                         elif "over" in advice and (h + a) > 2.5: is_win = True
                         elif "under" in advice and (h + a) < 2.5: is_win = True
-                        # Fallback simple team name
+                        # 7. Fallback simple team name
                         elif home_name in advice and h > a: is_win = True
                         elif away_name in advice and a > h: is_win = True
                         
                         bet["status"] = "win" if is_win else "lost"
                         bet["result"] = f"{res_prefix}{h}-{a}"
                         updated = True
-                        log_message(f"💰 DECIDED {match_name}: {bet['result']} ({bet['status'].upper()})")
+                        log_message(f"💰 DECIDED {match_name}: {bet['result']} ({bet['status'].upper()}) [Advice: {bet['advice']}]")
 
             time.sleep(1) 
         except Exception as e:

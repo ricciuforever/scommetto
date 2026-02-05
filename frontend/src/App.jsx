@@ -455,7 +455,7 @@ function App() {
 
       <div className="footer-stats" style={{ marginTop: '2rem', padding: '1rem', borderTop: '1px solid var(--glass-border)' }}>
         <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', textAlign: 'center' }}>
-          AGENTE SCOMMESSE PRO v2.5 • API STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> • QUOTA: {usage.used}/{usage.used + usage.remaining}
+          AGENTE SCOMMESSE PRO v2.7 • API STATUS: <span style={{ color: '#22c55e' }}>ONLINE</span> • QUOTA: {usage.used}/{usage.used + usage.remaining}
         </div>
       </div>
     </div>
