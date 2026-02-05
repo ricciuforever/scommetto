@@ -17,9 +17,11 @@ rm -rf dist >> "$LOG_FILE" 2>&1
 npm install >> "$LOG_FILE" 2>&1
 npm run build >> "$LOG_FILE" 2>&1
 
-# OPTIONAL: Se Plesk punta alla root, copia i file del build qui
-# cp -r dist/* .. 
-echo "Frontend built successfully in frontend/dist" >> "$LOG_FILE"
+# 1b. SYNC TO PUBLIC_HTML
+echo "Syncing to public_html..." >> "$LOG_FILE"
+mkdir -p "$APP_DIR/public_html"
+cp -r dist/* "$APP_DIR/public_html/" >> "$LOG_FILE" 2>&1
+echo "Frontend built and synced to public_html" >> "$LOG_FILE"
 
 # 2. BACKEND SETUP
 echo "Updating Backend..." >> "$LOG_FILE"
