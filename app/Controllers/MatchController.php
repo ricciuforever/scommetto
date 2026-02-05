@@ -110,44 +110,53 @@ class MatchController
     public function getTeamDetails($teamId)
     {
         header('Content-Type: application/json');
-        $teamModel = new \App\Models\Team();
-        $coachModel = new \App\Models\Coach();
-        $playerModel = new \App\Models\Player();
+        try {
+            $teamModel = new \App\Models\Team();
+            $coachModel = new \App\Models\Coach();
+            $playerModel = new \App\Models\Player();
 
-        if ($teamModel->needsRefresh((int) $teamId)) {
-            // 1. Team Info
-            $data = $this->apiService->fetchTeam($teamId);
-            if (isset($data['response'][0])) {
-                $teamModel->save($data['response'][0]['team']);
-            }
+            if ($teamModel->needsRefresh((int) $teamId)) {
+                // 1. Team & Venue Info
+                $data = $this->apiService->fetchTeam($teamId);
+                if (isset($data['response'][0])) {
+                    // Pass the whole object which contains both 'team' and 'venue'
+                    $teamModel->save($data['response'][0]);
+                }
 
-            // 2. Coach
-            $coachData = $this->apiService->fetchCoach($teamId);
-            if (isset($coachData['response'][0])) {
-                $coachModel->save($coachData['response'][0], (int) $teamId);
-            }
+                // 2. Coach
+                $coachData = $this->apiService->fetchCoach($teamId);
+                if (isset($coachData['response'][0])) {
+                    $coachModel->save($coachData['response'][0], (int) $teamId);
+                }
 
-            // 3. Squad & Players
-            $squadData = $this->apiService->fetchSquad($teamId);
-            if (isset($squadData['response'][0]['players'])) {
-                foreach ($squadData['response'][0]['players'] as $p) {
-                    $playerModel->save($p);
-                    $playerModel->linkToSquad((int) $teamId, $p, [
-                        'position' => $p['position'],
-                        'number' => $p['number']
-                    ]);
+                // 3. Squad & Players
+                $squadData = $this->apiService->fetchSquad($teamId);
+                if (isset($squadData['response'][0]['players'])) {
+                    foreach ($squadData['response'][0]['players'] as $p) {
+                        $playerModel->save($p);
+                        $playerModel->linkToSquad((int) $teamId, $p, [
+                            'position' => $p['position'],
+                            'number' => $p['number']
+                        ]);
+                    }
                 }
             }
+
+            $team = $teamModel->getById((int) $teamId);
+            $coach = $coachModel->getByTeam((int) $teamId);
+            $squad = $playerModel->getByTeam((int) $teamId);
+
+            echo json_encode([
+                'team' => $team,
+                'coach' => $coach,
+                'squad' => $squad
+            ]);
+        } catch (\Exception $e) {
+            error_log("Error in getTeamDetails: " . $e->getMessage());
+            echo json_encode([
+                'error' => 'Si è verificato un errore nel recupero dei dati.',
+                'details' => $e->getMessage()
+            ]);
         }
-
-        $team = $teamModel->getById((int) $teamId);
-        $coach = $coachModel->getByTeam((int) $teamId);
-        $squad = $playerModel->getByTeam((int) $teamId);
-
-        echo json_encode([
-            'team' => $team,
-            'coach' => $coach,
-            'squad' => $squad
-        ]);
     }
 }

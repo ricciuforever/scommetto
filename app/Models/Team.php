@@ -34,6 +34,10 @@ class Team
 
     public function save($data)
     {
+        // Detect if we received the wrapper object with 'team' and 'venue'
+        $team = isset($data['team']) ? $data['team'] : $data;
+        $venue = isset($data['venue']) ? $data['venue'] : null;
+
         $sql = "INSERT INTO teams (id, name, logo, country, founded, venue_name, venue_capacity) 
                 VALUES (:id, :name, :logo, :country, :founded, :venue_name, :venue_capacity)
                 ON DUPLICATE KEY UPDATE 
@@ -43,13 +47,13 @@ class Team
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
-            'id' => $data['id'],
-            'name' => $data['name'],
-            'logo' => $data['logo'] ?? null,
-            'country' => $data['country'] ?? null,
-            'founded' => $data['founded'] ?? null,
-            'venue_name' => $data['venue']['name'] ?? null,
-            'venue_capacity' => $data['venue']['capacity'] ?? null
+            'id' => $team['id'],
+            'name' => $team['name'],
+            'logo' => $team['logo'] ?? null,
+            'country' => $team['country'] ?? null,
+            'founded' => $team['founded'] ?? null,
+            'venue_name' => $venue['name'] ?? null,
+            'venue_capacity' => $venue['capacity'] ?? null
         ]);
     }
 }
