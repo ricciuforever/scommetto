@@ -560,9 +560,7 @@ async function analyzeMatch(id) {
         let betData = null;
         let displayHtml = prediction;
 
-        const jsonMatch = prediction.match(/```json
-?([\s\S]*?)
-?```/i);
+        const jsonMatch = prediction.match(/```json\n?([\s\S]*?)\n?```/i);
         if (jsonMatch) {
             try {
                 betData = JSON.parse(jsonMatch[1]);
