@@ -237,31 +237,37 @@ def auto_scanner_logic():
         print(f"🤖 BOT ERROR: {e}")
 
 def single_update_loop():
-    """Sequential update: fetch data -> check bets -> scan matches."""
+    """Optimized loop: Sync Live (60s), Settle Bets (5min)."""
     fetch_initial_data()
+    cycle_count = 0
     while True:
         try:
             nowStr = time.strftime("%H:%M:%S")
             print(f"[{nowStr}] --- STARTING SYNC CYCLE ---")
             
-            # 1. Fetch live matches
+            # 1. Fetch live matches (1 call per 60s)
             fetch_live_data()
             
-            # 2. Check bet results (Settle WIN/LOSS)
-            check_bets()
+            # 2. Check bet results (Every 5 cycles = 5 minutes)
+            # This is the biggest saving!
+            if cycle_count % 5 == 0:
+                print(f"[{nowStr}] Running Bet Settlement (Savings Mode)...")
+                check_bets()
             
-            # 3. Auto-Scanner (AI analysis)
-            # We run the scanner every 3 cycles (approx every 1.5 mins) to save calls
-            if int(time.time()) % 90 < 31:
+            # 3. Auto-Scanner (Every 2 cycles = 2 minutes)
+            if cycle_count % 2 == 0:
                 auto_scanner_logic()
                 
+            cycle_count += 1
             print(f"[{nowStr}] --- SYNC CYCLE COMPLETE ---")
         except Exception as e:
-            msg = f"CRITICAL LOOP ERROR: {e}"
+            msg = f"LOOP ERROR: {e}"
             print(msg)
             with open("agent_log.txt", "a") as f:
                 f.write(f"{time.ctime()}: {msg}\n")
-        time.sleep(30)
+        
+        # Sleep 60s instead of 30s to save 50% on live updates
+        time.sleep(60)
 
 # Start single clean background thread
 Thread(target=single_update_loop, daemon=True).start()
