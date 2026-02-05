@@ -98,7 +98,7 @@ function App() {
 
       try {
         const res = await fetch(`/api.php/live?t=${now}`);
-        const liveData = await liveRes.json();
+        const liveData = await res.json();
         setLiveMatches(liveData.response || []);
         if (liveData.server_time) {
           setServerLastUpdate(liveData.server_time * 1000);
@@ -108,7 +108,7 @@ function App() {
 
       try {
         const res = await fetch(`/api.php/teams?t=${now}`);
-        const teamsData = await teamsRes.json();
+        const teamsData = await res.json();
         setTeams(teamsData.response || []);
       } catch (err) { console.error("Teams fetch error:", err); }
 
