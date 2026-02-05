@@ -207,7 +207,8 @@ fetchHistory();
 fetchUsage();
 
 // Intervals
-setInterval(fetchLive, 30000);   // Refresh full data every 30s
+setInterval(fetchLive, 20000);    // Refresh full data every 20s
+setInterval(fetchHistory, 40000); // Refresh history every 40s
 setInterval(updateMinutes, 60000); // Increment local minutes every 60s
 setInterval(fetchUsage, 60000);   // Refresh usage every 60s
 
