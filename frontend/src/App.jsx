@@ -85,38 +85,35 @@ function App() {
 
   useEffect(() => {
     const fetchData = async () => {
+      const apiBase = import.meta.env.VITE_API_URL || '';
+      const now = Date.now();
+
       try {
-        const apiBase = import.meta.env.VITE_API_URL || '';
-        const now = Date.now();
-        // Cache busting with timestamp
-        const [liveRes, teamsRes] = await Promise.all([
-          fetch(`${apiBase}/api/live?t=${now}`),
-          fetch(`${apiBase}/api/teams?t=${now}`)
-        ]);
-
+        const liveRes = await fetch(`${apiBase}/api/live?t=${now}`);
         const liveData = await liveRes.json();
-        const teamsData = await teamsRes.json();
-
         setLiveMatches(liveData.response || []);
-        setTeams(teamsData.response || []);
         setLastFetchTimestamp(now);
-      } catch (err) {
-        console.error("Error fetching data:", err);
-      } finally {
-        setLoading(false);
-      }
+      } catch (err) { console.error("Live fetch error:", err); }
+
+      try {
+        const teamsRes = await fetch(`${apiBase}/api/teams?t=${now}`);
+        const teamsData = await teamsRes.json();
+        setTeams(teamsData.response || []);
+      } catch (err) { console.error("Teams fetch error:", err); }
+
+      setLoading(false);
     };
 
     fetchData();
     fetchHistory();
     fetchUsage();
+
     const interval = setInterval(() => {
       fetchData();
       fetchHistory();
       fetchUsage();
-    }, 30000); // UI poll every 30s for PRO plan
+    }, 30000);
 
-    // Clock tick every second for smooth minute calculation
     const tick = setInterval(() => setCurrentTime(Date.now()), 1000);
 
     return () => {
@@ -127,12 +124,9 @@ function App() {
 
   const getTickedMinute = (elapsed) => {
     if (!elapsed) return 0;
-    const diffMinutes = Math.floor((currentTime - lastFetchTimestamp) / 60000);
-    const total = elapsed + diffMinutes;
-    // Don't show more than 90+ offset or 45+ offset for standard halves
-    if (elapsed <= 45 && total > 48) return 45;
-    if (elapsed > 45 && total > 95) return 90;
-    return total;
+    const diffSeconds = Math.floor((currentTime - lastFetchTimestamp) / 1000);
+    const extraMinutes = Math.floor(diffSeconds / 60);
+    return elapsed + extraMinutes;
   };
 
   const getMatchTimeDisplay = (m) => {
@@ -140,11 +134,11 @@ function App() {
     const elapsed = m.fixture.status.elapsed;
 
     if (status === 'HT') return <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>HT</span>;
-    if (status === 'FT') return 'FT';
+    if (status === 'FT') return <span style={{ color: '#ef4444' }}>FT</span>;
     if (status === 'NS') return 'Scheduled';
 
     const ticked = getTickedMinute(elapsed);
-    return `${ticked}'`;
+    return <span className="time">{ticked}'</span>;
   };
 
   const sortedHistory = [...betHistory].sort((a, b) => {
@@ -182,8 +176,16 @@ function App() {
     <div className="app-container">
       <header>
         <div className="logo">SCOMMETTO_AGENTE</div>
-        <div className="live-indicator">
-          <span className="dot">•</span> LIVE NOW
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textAlign: 'right' }}>
+            LAST DATA UPDATE<br />
+            <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
+              {Math.floor((currentTime - lastFetchTimestamp) / 1000)}s AGO
+            </span>
+          </div>
+          <div className="live-indicator">
+            <span className="dot">•</span> LIVE NOW
+          </div>
         </div>
       </header>
 
