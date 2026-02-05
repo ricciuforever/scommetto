@@ -309,6 +309,7 @@ async def health_check():
         "telemetry": loop_telemetry
     }
 
+
 @app.get("/api/logs")
 async def get_logs():
     try:

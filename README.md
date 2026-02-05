@@ -1,4 +1,4 @@
-# 🤖 AGENTE SCOMMESSE PRO v2.6
+# 🤖 AGENTE SCOMMESSE PRO v2.6 
 
 Sistema di monitoraggio e analisi scommesse live basato su **AI (Google Gemini)** e **API-Football**. Progettato per girare H24 su architettura Plesk/Linux.
 
