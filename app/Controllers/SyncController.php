@@ -95,7 +95,7 @@ class SyncController
             $prediction = $this->geminiService->analyze($m);
             $this->analysisModel->log($fid, $prediction);
 
-            if (preg_match('/```json\n([\s\S]*?)\n```/', $prediction, $matches_json)) {
+            if (preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches_json)) {
                 $betData = json_decode($matches_json[1], true);
                 if ($betData) {
                     $betData['fixture_id'] = $fid;

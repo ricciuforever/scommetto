@@ -40,95 +40,111 @@ class MatchController
     public function getLive()
     {
         header('Content-Type: application/json');
-        $cacheFile = Config::LIVE_DATA_FILE;
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 60)) {
-            echo file_get_contents($cacheFile);
-            return;
-        }
+        try {
+            $cacheFile = Config::LIVE_DATA_FILE;
+            if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 60)) {
+                echo file_get_contents($cacheFile);
+                return;
+            }
 
-        $data = $this->apiService->fetchLiveMatches();
-        if (!isset($data['error'])) {
-            file_put_contents($cacheFile, json_encode($data));
-            $this->betSettler->settleFromLive($data['response'] ?? []);
+            $data = $this->apiService->fetchLiveMatches();
+            if (!isset($data['error'])) {
+                file_put_contents($cacheFile, json_encode($data));
+                $this->betSettler->settleFromLive($data['response'] ?? []);
+            }
+            echo json_encode($data);
+        } catch (\Exception $e) {
+            echo json_encode(['error' => $e->getMessage()]);
         }
-        echo json_encode($data);
     }
 
     public function analyze($id)
     {
         header('Content-Type: application/json');
-        $liveData = json_decode(file_exists(Config::LIVE_DATA_FILE) ? file_get_contents(Config::LIVE_DATA_FILE) : '{"response":[]}', true);
-        $match = null;
-
-        foreach ($liveData['response'] ?? [] as $m) {
-            if ($m['fixture']['id'] == $id) {
-                $match = $m;
-                break;
-            }
-        }
-
-        if (!$match) {
-            echo json_encode(['error' => 'Match not found in live data']);
-            return;
-        }
-
-        // Fetch Predictions for AI
-        $predictionModel = new Prediction();
-        if ($predictionModel->needsRefresh((int) $id)) {
-            $predData = $this->apiService->fetchPredictions($id);
-            if (isset($predData['response'][0])) {
-                $predictionModel->save((int) $id, $predData['response'][0]);
-            }
-        }
-        $storedPrediction = $predictionModel->getByFixtureId((int) $id);
-
-        $prediction = $this->geminiService->analyze($match, $storedPrediction);
-
         try {
-            $analysisModel = new Analysis();
-            $analysisModel->log((int) $id, $prediction);
-        } catch (\Exception $e) {
-            error_log("Error saving analysis: " . $e->getMessage());
-        }
+            $liveData = json_decode(file_exists(Config::LIVE_DATA_FILE) ? file_get_contents(Config::LIVE_DATA_FILE) : '{"response":[]}', true);
+            $match = null;
 
-        echo json_encode([
-            'fixture_id' => $id,
-            'prediction' => $prediction,
-            'match' => $match
-        ]);
+            foreach ($liveData['response'] ?? [] as $m) {
+                if ($m['fixture']['id'] == $id) {
+                    $match = $m;
+                    break;
+                }
+            }
+
+            if (!$match) {
+                echo json_encode(['error' => 'Match not found in live data']);
+                return;
+            }
+
+            // Fetch Predictions for AI
+            $predictionModel = new Prediction();
+            if ($predictionModel->needsRefresh((int) $id)) {
+                $predData = $this->apiService->fetchPredictions($id);
+                if (isset($predData['response'][0])) {
+                    $predictionModel->save((int) $id, $predData['response'][0]);
+                }
+            }
+            $storedPrediction = $predictionModel->getByFixtureId((int) $id);
+
+            $prediction = $this->geminiService->analyze($match, $storedPrediction);
+
+            try {
+                $analysisModel = new Analysis();
+                $analysisModel->log((int) $id, $prediction);
+            } catch (\Exception $e) {
+                error_log("Error saving analysis: " . $e->getMessage());
+            }
+
+            echo json_encode([
+                'fixture_id' => $id,
+                'prediction' => $prediction,
+                'match' => $match
+            ]);
+        } catch (\Exception $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
     }
 
     public function getPredictions($id)
     {
         header('Content-Type: application/json');
-        $predictionModel = new Prediction();
+        try {
+            $predictionModel = new Prediction();
 
-        if ($predictionModel->needsRefresh((int) $id)) {
-            $data = $this->apiService->fetchPredictions($id);
-            if (isset($data['response'][0])) {
-                $predictionModel->save((int) $id, $data['response'][0]);
+            if ($predictionModel->needsRefresh((int) $id)) {
+                $data = $this->apiService->fetchPredictions($id);
+                if (isset($data['response'][0])) {
+                    $predictionModel->save((int) $id, $data['response'][0]);
+                }
             }
+            echo json_encode($predictionModel->getByFixtureId((int) $id));
+        } catch (\Exception $e) {
+            echo json_encode(['error' => $e->getMessage()]);
         }
-        echo json_encode($predictionModel->getByFixtureId((int) $id));
     }
 
     public function getStandings($leagueId)
     {
         header('Content-Type: application/json');
-        $standingModel = new Standing();
-        $season = 2025;
-        if ($standingModel->needsRefresh((int) $leagueId)) {
-            $data = $this->apiService->fetchStandings($leagueId, $season);
-            if (isset($data['response'][0]['league']['standings'][0])) {
-                $rows = $data['response'][0]['league']['standings'][0];
-                $teamModel = new Team();
-                foreach ($rows as $row) {
-                    $teamModel->save($row['team']);
-                    $standingModel->save((int) $leagueId, $row);
+        try {
+            $standingModel = new Standing();
+            $season = 2025;
+            if ($standingModel->needsRefresh((int) $leagueId)) {
+                $data = $this->apiService->fetchStandings($leagueId, $season);
+                if (isset($data['response'][0]['league']['standings'][0])) {
+                    $rows = $data['response'][0]['league']['standings'][0];
+                    $teamModel = new Team();
+                    foreach ($rows as $row) {
+                        $teamModel->save($row['team']);
+                        $standingModel->save((int) $leagueId, $row);
+                    }
                 }
             }
+            echo json_encode($standingModel->getByLeague((int) $leagueId));
+        } catch (\Exception $e) {
+            echo json_encode(['error' => $e->getMessage()]);
         }
-        echo json_encode($standingModel->getByLeague((int) $leagueId));
     }
 
     public function getTeamDetails($teamId)
