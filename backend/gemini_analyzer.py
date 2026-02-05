@@ -8,8 +8,8 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 model = genai.GenerativeModel('gemini-flash-lite-latest') # Specified by USER
 
-def analyze_match_with_gemini(intelligence_json):
-    prompt = f"""
+def _get_prompt(intelligence_json):
+    return f"""
     Sei un esperto scommettitore professionista ed analista di dati calcistici.
     Analizza i seguenti dati JSON di una partita di calcio live in tempo reale.
 
@@ -36,6 +36,8 @@ def analyze_match_with_gemini(intelligence_json):
     ```
     """
 
+def analyze_match_with_gemini(intelligence_json):
+    prompt = _get_prompt(intelligence_json)
     try:
         # Configuration for better results and no truncation
         config = {
@@ -45,6 +47,21 @@ def analyze_match_with_gemini(intelligence_json):
             "max_output_tokens": 4096,
         }
         response = model.generate_content(prompt, generation_config=config)
+        return response.text
+    except Exception as e:
+        return f"Errore durante l'analisi con Gemini: {str(e)}"
+
+async def analyze_match_with_gemini_async(intelligence_json):
+    prompt = _get_prompt(intelligence_json)
+    try:
+        # Configuration for better results and no truncation
+        config = {
+            "temperature": 0.3,
+            "top_p": 0.95,
+            "top_k": 40,
+            "max_output_tokens": 4096,
+        }
+        response = await model.generate_content_async(prompt, generation_config=config)
         return response.text
     except Exception as e:
         return f"Errore durante l'analisi con Gemini: {str(e)}"

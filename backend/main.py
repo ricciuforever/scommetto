@@ -1,4 +1,5 @@
 from fastapi import FastAPI, BackgroundTasks
+from anyio.to_thread import run_sync
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
@@ -74,18 +75,18 @@ def fetch_live_data():
         print(f"Error updating live data: {e}")
 
 from get_match_intelligence import get_fixture_details
-from gemini_analyzer import analyze_match_with_gemini
+from gemini_analyzer import analyze_match_with_gemini, analyze_match_with_gemini_async
 from check_bet_results import check_bets
 
 @app.get("/api/intelligence/{fixture_id}")
 async def get_intelligence(fixture_id: int):
-    data = get_fixture_details(fixture_id, usage_callback=update_usage_from_response)
+    data = await run_sync(get_fixture_details, fixture_id, None, update_usage_from_response)
     return data
 
 @app.get("/api/analyze/{fixture_id}")
 async def get_gemini_analysis(fixture_id: int):
-    intelligence = get_fixture_details(fixture_id, usage_callback=update_usage_from_response)
-    prediction = analyze_match_with_gemini(intelligence)
+    intelligence = await run_sync(get_fixture_details, fixture_id, None, update_usage_from_response)
+    prediction = await analyze_match_with_gemini_async(intelligence)
     
     auto_bet_status = "no_bet"
     try:
