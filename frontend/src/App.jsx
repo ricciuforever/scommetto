@@ -8,6 +8,8 @@ function App() {
   const [liveMatches, setLiveMatches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lastFetchTimestamp, setLastFetchTimestamp] = useState(Date.now());
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   const fetchHistory = async () => {
     try {
@@ -82,6 +84,8 @@ function App() {
 
         setLiveMatches(liveData.response || []);
         setTeams(teamsData.response || []);
+        setLastFetchTimestamp(Date.now());
+        setCurrentTime(Date.now());
       } catch (err) {
         console.error("Error fetching data:", err);
       } finally {
@@ -92,8 +96,37 @@ function App() {
     fetchData();
     fetchHistory();
     const interval = setInterval(fetchData, 60000); // UI poll every minute
-    return () => clearInterval(interval);
+
+    // Clock tick every second for smooth minute calculation
+    const tick = setInterval(() => setCurrentTime(Date.now()), 1000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(tick);
+    };
   }, []);
+
+  const getTickedMinute = (elapsed) => {
+    if (!elapsed) return 0;
+    const diffMinutes = Math.floor((currentTime - lastFetchTimestamp) / 60000);
+    const total = elapsed + diffMinutes;
+    // Don't show more than 90+ offset or 45+ offset for standard halves
+    if (elapsed <= 45 && total > 48) return 45;
+    if (elapsed > 45 && total > 95) return 90;
+    return total;
+  };
+
+  const sortedMatches = [...liveMatches].sort((a, b) => {
+    // Priority 1: Top Leagues (can add more IDs here)
+    const topLeagues = [135, 140, 39, 61, 78]; // Serie A, La Liga, PL, Ligue 1, Bunde
+    const aIsTop = topLeagues.includes(a.league.id);
+    const bIsTop = topLeagues.includes(b.league.id);
+    if (aIsTop && !bIsTop) return -1;
+    if (!aIsTop && bIsTop) return 1;
+
+    // Priority 2: Elapsed time (descending, games near the end)
+    return (b.fixture.status.elapsed || 0) - (a.fixture.status.elapsed || 0);
+  });
 
   return (
     <div className="app-container">
@@ -112,11 +145,11 @@ function App() {
               <div className="loading">Initializing live feed...</div>
             ) : (
               <div className="match-list">
-                {liveMatches.length > 0 ? (
-                  liveMatches.map((m) => (
+                {sortedMatches.length > 0 ? (
+                  sortedMatches.map((m) => (
                     <div key={m.fixture.id} className="match-item" style={{ position: 'relative' }}>
                       <div className="league-name">{m.league.name} - {m.league.country}</div>
-                      <div className="time">{m.fixture.status.elapsed}'</div>
+                      <div className="time">{getTickedMinute(m.fixture.status.elapsed)}'</div>
                       <div className="team">
                         <img src={m.teams.home.logo} alt="" />
                         {m.teams.home.name}
