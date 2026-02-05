@@ -126,11 +126,27 @@ function App() {
     };
   }, []);
 
-  const getTickedMinute = (elapsed) => {
-    if (!elapsed) return 0;
+  const [matchElapsedMap, setMatchElapsedMap] = useState({});
+
+  const getTickedMinute = (fixtureId, apiElapsed) => {
+    if (!apiElapsed) return 0;
+
+    // Calculate how many minutes passed since the SERVER updated the data
     const diffSeconds = Math.floor((currentTime - serverLastUpdate) / 1000);
     const extraMinutes = Math.floor(diffSeconds / 60);
-    return elapsed + (extraMinutes > 0 ? extraMinutes : 0);
+    const calculated = apiElapsed + extraMinutes;
+
+    // Prevention of "Snap-back": Always show the highest value we've reached
+    // unless the match resets (e.g. from 0)
+    const stored = matchElapsedMap[fixtureId] || 0;
+    if (calculated > stored || calculated < 10) {
+      // Update our local highest minute for this match
+      setTimeout(() => {
+        setMatchElapsedMap(prev => ({ ...prev, [fixtureId]: calculated }));
+      }, 0);
+      return calculated;
+    }
+    return stored;
   };
 
   const getMatchTimeDisplay = (m) => {
@@ -141,7 +157,7 @@ function App() {
     if (status === 'FT') return <span style={{ color: '#ef4444' }}>FT</span>;
     if (status === 'NS') return 'Scheduled';
 
-    const ticked = getTickedMinute(elapsed);
+    const ticked = getTickedMinute(m.fixture.id, elapsed);
     return <span className="time">{ticked}'</span>;
   };
 
