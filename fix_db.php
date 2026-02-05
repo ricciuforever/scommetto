@@ -74,6 +74,21 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
   echo "✅ Tabella 'coaches' verificata.\n";
 
+  $db->exec("CREATE TABLE IF NOT EXISTS `api_usage` (
+      `id` INT PRIMARY KEY DEFAULT 1,
+      `requests_used` INT DEFAULT 0,
+      `requests_remaining` INT DEFAULT 7500,
+      `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+  echo "✅ Tabella 'api_usage' verificata.\n";
+
+  $db->exec("CREATE TABLE IF NOT EXISTS `analyses` (
+      `fixture_id` INT PRIMARY KEY,
+      `last_checked` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      `prediction_raw` TEXT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+  echo "✅ Tabella 'analyses' verificata.\n";
+
   $db->exec("CREATE TABLE IF NOT EXISTS `player_seasons` (
       `year` INT PRIMARY KEY,
       `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -203,13 +218,15 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
   echo "✅ Tabella 'player_statistics' verificata.\n";
 
-  $db->exec("CREATE TABLE IF NOT EXISTS `team_squads` (
+  $db->exec("CREATE TABLE IF NOT EXISTS `squads` (
       `team_id` INT,
       `player_id` INT,
+      `position` VARCHAR(50),
+      `number` INT,
       `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (`team_id`, `player_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-  echo "✅ Tabella 'team_squads' verificata.\n";
+  echo "✅ Tabella 'squads' verificata.\n";
 
   $db->exec("CREATE TABLE IF NOT EXISTS `top_stats` (
       `league_id` INT,

@@ -113,49 +113,138 @@ class SyncController
         echo json_encode($results);
     }
 
-    public function deepSync($leagueId = 135) // Default Serie A
+    public function deepSync($leagueId = 135, $season = 2024)
     {
         header('Content-Type: application/json');
-        $season = 2024;
-        $results = ['fixtures' => 0, 'stats' => 0, 'standings' => 0];
 
-        // 1. Sync Standings
+        $results = [
+            'overview' => $this->syncLeagueOverview($leagueId, $season),
+            'top_stats' => $this->syncLeagueTopStats($leagueId, $season),
+            'status' => 'success'
+        ];
+
+        echo json_encode($results);
+    }
+
+    public function syncLeagueOverview($leagueId, $season)
+    {
+        $results = ['teams' => 0, 'standings' => 0, 'rounds' => 0];
+
+        // 1. Sync Standings & Teams (Standings API provides team basic info)
         $standingModel = new \App\Models\Standing();
+        $teamModel = new \App\Models\Team();
         $data = $this->apiService->fetchStandings($leagueId, $season);
-        if (isset($data['response'][0]['league']['standings'][0])) {
-            foreach ($data['response'][0]['league']['standings'][0] as $row) {
-                $standingModel->save($leagueId, $row);
-                $results['standings']++;
-            }
-        }
 
-        // 2. Sync Recent Fixtures (last 50 matches for context)
-        $fixtureModel = new \App\Models\Fixture();
-        $ch = curl_init(Config::FOOTBALL_API_BASE_URL . "/fixtures?league=$leagueId&season=$season&last=50");
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ["x-rapidapi-host: v3.football.api-sports.io", "x-rapidapi-key: " . Config::get('FOOTBALL_API_KEY')]);
-        $fixData = json_decode(curl_exec($ch), true);
-        curl_close($ch);
+        if (isset($data['response'][0]['league']['standings'])) {
+            foreach ($data['response'][0]['league']['standings'] as $group) {
+                foreach ($group as $row) {
+                    // Save Team Info
+                    $teamModel->save(['team' => $row['team']]);
+                    $teamModel->linkToLeague($row['team']['id'], $leagueId, $season);
+                    $results['teams']++;
 
-        foreach ($fixData['response'] ?? [] as $f) {
-            $fixtureModel->save($f);
-            $results['fixtures']++;
-        }
-
-        // 3. Sync Team Stats (for teams in standings)
-        $statsModel = new \App\Models\TeamStats();
-        if (isset($data['response'][0]['league']['standings'][0])) {
-            foreach ($data['response'][0]['league']['standings'][0] as $row) {
-                $tid = $row['team']['id'];
-                $sData = $this->apiService->request("/teams/statistics?league=$leagueId&season=$season&team=$tid");
-                if (isset($sData['response'])) {
-                    $statsModel->save($tid, $leagueId, $season, $sData['response']);
-                    $results['stats']++;
+                    // Save Standing
+                    $standingModel->save($leagueId, $row);
+                    $results['standings']++;
                 }
             }
         }
 
-        echo json_encode($results);
+        // 2. Sync Rounds
+        $roundModel = new \App\Models\Round();
+        $roundsData = $this->apiService->fetchLeaguesRounds($leagueId, $season);
+        if (isset($roundsData['response'])) {
+            foreach ($roundsData['response'] as $roundName) {
+                $roundModel->save($leagueId, $season, $roundName);
+                $results['rounds']++;
+            }
+        }
+
+        return $results;
+    }
+
+    public function syncLeagueFixtures($leagueId, $season)
+    {
+        $fixtureModel = new \App\Models\Fixture();
+        $data = $this->apiService->request("/fixtures?league=$leagueId&season=$season");
+        $results = ['fixtures' => 0];
+
+        if (isset($data['response'])) {
+            foreach ($data['response'] as $f) {
+                $fixtureModel->save($f);
+                $results['fixtures']++;
+            }
+        }
+        return $results;
+    }
+
+    public function syncLeagueTopStats($leagueId, $season)
+    {
+        $topStatsModel = new \App\Models\TopStats();
+        $types = ['scorers', 'assists', 'yellow_cards', 'red_cards'];
+        $results = [];
+
+        foreach ($types as $type) {
+            $method = 'fetchTop' . str_replace('_', '', ucwords($type, '_'));
+            // Standardize method names in service if needed, or use a switch
+            switch ($type) {
+                case 'scorers':
+                    $data = $this->apiService->fetchTopScorers($leagueId, $season);
+                    break;
+                case 'assists':
+                    $data = $this->apiService->fetchTopAssists($leagueId, $season);
+                    break;
+                case 'yellow_cards':
+                    $data = $this->apiService->fetchTopYellowCards($leagueId, $season);
+                    break;
+                case 'red_cards':
+                    $data = $this->apiService->fetchTopRedCards($leagueId, $season);
+                    break;
+                default:
+                    $data = null;
+            }
+
+            if ($data && isset($data['response'])) {
+                $topStatsModel->save($leagueId, $season, $type, $data['response']);
+                $results[$type] = count($data['response']);
+            }
+        }
+        return $results;
+    }
+
+    public function syncTeamDetails($teamId, $leagueId, $season)
+    {
+        $teamModel = new \App\Models\Team();
+        $statsModel = new \App\Models\TeamStats();
+        $playerModel = new \App\Models\Player();
+
+        $results = ['team' => false, 'stats' => false, 'squad' => 0];
+
+        // 1. Full Team & Venue Details
+        $tData = $this->apiService->fetchTeam($teamId);
+        if (isset($tData['response'][0])) {
+            $teamModel->save($tData['response'][0]);
+            $results['team'] = true;
+        }
+
+        // 2. Team Stats
+        $tsData = $this->apiService->fetchTeamStatistics($teamId, $leagueId, $season);
+        if (isset($tsData['response'])) {
+            $statsModel->save($teamId, $leagueId, $season, $tsData['response']);
+            $results['stats'] = true;
+        }
+
+        // 3. Squad
+        $sqData = $this->apiService->fetchSquad($teamId);
+        if (isset($sqData['response'][0]['players'])) {
+            foreach ($sqData['response'][0]['players'] as $p) {
+                $playerModel->save($p);
+                $playerModel->linkToSquad($teamId, $p, $p); // Passing $p as squadInfo too since it contains position/number
+                $results['squad']++;
+            }
+        }
+
+        return $results;
     }
 
     private function runScheduledTasks()
@@ -195,6 +284,16 @@ class SyncController
                         $leagueModel->save($row);
                     }
                     $log[] = "Leagues Synced: " . count($data['response']);
+                }
+            }
+
+            // SYNC PREMIUM LEAGUES STANDINGS & ROUNDS (Every 12h)
+            $standingModel = new \App\Models\Standing();
+            $season = 2024; // Could be dynamic
+            foreach (Config::PREMIUM_LEAGUES as $lId) {
+                if ($standingModel->needsRefresh($lId, 12)) {
+                    $res = $this->syncLeagueOverview($lId, $season);
+                    $log[] = "League $lId Overview Refreshed: " . json_encode($res);
                 }
             }
         } catch (\Exception $e) {

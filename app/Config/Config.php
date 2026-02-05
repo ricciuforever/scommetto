@@ -38,4 +38,21 @@ class Config
     public const LIVE_DATA_FILE = self::DATA_PATH . 'live_matches.json';
     public const BETS_HISTORY_FILE = self::DATA_PATH . 'bets_history.json';
     public const USAGE_FILE = self::DATA_PATH . 'usage.json';
+
+    // Popular League IDs
+    public const LEAGUE_SERIE_A = 135;
+    public const LEAGUE_PREMIER = 39;
+    public const LEAGUE_LA_LIGA = 140;
+    public const LEAGUE_BUNDESLIGA = 78;
+    public const LEAGUE_LIGUE_1 = 61;
+    public const LEAGUE_CHAMPIONS = 2;
+    public const LEAGUE_EUROPA = 3;
+
+    public const PREMIUM_LEAGUES = [
+        self::LEAGUE_SERIE_A,
+        self::LEAGUE_PREMIER,
+        self::LEAGUE_LA_LIGA,
+        self::LEAGUE_BUNDESLIGA,
+        self::LEAGUE_LIGUE_1
+    ];
 }
