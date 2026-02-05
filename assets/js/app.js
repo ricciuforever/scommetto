@@ -21,7 +21,8 @@ async function fetchHistory() {
         const res = await fetch('/api/history');
         const data = await res.json();
         renderHistory(data || []);
-        document.getElementById('pending-bets-count').textContent = (data || []).filter(b => b.status === 'pending').length;
+        const pendingCount = (data || []).filter(b => b.status === 'pending').length;
+        document.getElementById('pending-bets-count').textContent = pendingCount;
     } catch (e) {
         console.error("Error fetching history", e);
     }
@@ -49,7 +50,6 @@ function renderFilters() {
         }
     });
 
-    // Only re-render if count changed or for initial run
     if (container.children.length === leagues.length) return;
 
     container.innerHTML = '';
@@ -84,7 +84,7 @@ function renderMatches() {
             if (ev.type === 'Card' && ev.detail === 'Yellow Card') { icon = '🟨'; iconClass = 'event-icon-yellow'; }
             if (ev.type === 'Card' && ev.detail === 'Red Card') { icon = '🟥'; iconClass = 'event-icon-red'; }
             if (ev.type === 'Var') { icon = '🖥️'; iconClass = 'event-icon-var'; }
-            if (ev.type === 'subst') return ''; // Skip substitutions to avoid clutter
+            if (ev.type === 'subst') return '';
 
             return `
                 <div class="event-pill">
@@ -99,18 +99,22 @@ function renderMatches() {
         card.className = 'glass-panel match-card';
         card.dataset.id = m.fixture.id;
         card.innerHTML = `
-            <div class="league-header">
+            <div class="league-header" style="cursor:pointer" onclick="showStandings(${m.league.id}, '${m.league.name}')">
                 <img src="${m.league.logo}" class="league-logo" alt="${m.league.name}">
                 <span>${m.league.name} - ${m.league.country}</span>
             </div>
             <div class="match-main-info">
                 <div class="live-badge"><span class="elapsed-time" data-start="${m.fixture.status.elapsed}">${m.fixture.status.elapsed}</span>'</div>
                 <div class="team-info">
-                    <img src="${m.teams.home.logo}" class="team-logo" alt="${m.teams.home.name}">
-                    <span>${m.teams.home.name}</span>
+                    <div style="display:flex; align-items:center; gap:0.5rem; cursor:pointer" onclick="showTeamDetails(${m.teams.home.id})">
+                        <img src="${m.teams.home.logo}" class="team-logo" alt="${m.teams.home.name}">
+                        <span>${m.teams.home.name}</span>
+                    </div>
                     <span style="color:var(--accent); font-size:1.4rem; font-weight:800; margin:0 10px;">${m.goals.home} - ${m.goals.away}</span>
-                    <span>${m.teams.away.name}</span>
-                    <img src="${m.teams.away.logo}" class="team-logo" alt="${m.teams.away.name}">
+                    <div style="display:flex; align-items:center; gap:0.5rem; cursor:pointer" onclick="showTeamDetails(${m.teams.away.id})">
+                        <span>${m.teams.away.name}</span>
+                        <img src="${m.teams.away.logo}" class="team-logo" alt="${m.teams.away.name}">
+                    </div>
                 </div>
                 <button class="btn-analyze" onclick="analyzeMatch(${m.fixture.id})">Analizza AI</button>
             </div>
@@ -150,12 +154,120 @@ function renderHistory(history) {
     });
 }
 
-async function analyzeMatch(id) {
+async function showStandings(leagueId, leagueName) {
     const modal = document.getElementById('analysis-modal');
     const body = document.getElementById('modal-body');
+    const title = document.getElementById('modal-title');
     const btn = document.getElementById('place-bet-btn');
 
     modal.style.display = 'block';
+    title.textContent = `Classifica: ${leagueName}`;
+    body.innerHTML = '<div style="text-align:center; padding:2rem;">Caricamento classifica...</div>';
+    btn.style.display = 'none';
+
+    try {
+        const res = await fetch(`/api/standings/${leagueId}`);
+        const data = await res.json();
+
+        let html = `
+            <table style="width:100%; border-collapse: collapse; font-size:0.85rem;">
+                <thead>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:left;">
+                        <th style="padding:0.5rem;">#</th>
+                        <th style="padding:0.5rem;">Squadra</th>
+                        <th style="padding:0.5rem;">Punti</th>
+                        <th style="padding:0.5rem;">Forma</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        data.forEach(row => {
+            html += `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:0.5rem;">${row.rank}</td>
+                    <td style="padding:0.5rem; display:flex; align-items:center; gap:0.5rem;">
+                        <img src="${row.team_logo}" style="width:16px;"> ${row.team_name}
+                    </td>
+                    <td style="padding:0.5rem;"><strong>${row.points}</strong></td>
+                    <td style="padding:0.5rem;">${row.form || '-'}</td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table>';
+        body.innerHTML = `<div class="analysis-content" style="max-height:500px; overflow-y:auto;">${html}</div>`;
+    } catch (e) {
+        body.innerHTML = "Errore nel caricamento della classifica.";
+    }
+}
+
+async function showTeamDetails(teamId) {
+    const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    const title = document.getElementById('modal-title');
+    const btn = document.getElementById('place-bet-btn');
+
+    modal.style.display = 'block';
+    title.textContent = `Dettagli Squadra`;
+    body.innerHTML = '<div style="text-align:center; padding:2rem;">Caricamento dettagli...</div>';
+    btn.style.display = 'none';
+
+    try {
+        const res = await fetch(`/api/team/${teamId}`);
+        const data = await res.json();
+        const t = data.team;
+        const c = data.coach;
+
+        title.textContent = t ? t.name : 'Team details';
+        if (!t) {
+            body.innerHTML = "Dati squadra non trovati.";
+            return;
+        }
+
+        body.innerHTML = `
+            <div class="analysis-content">
+                <div style="display:flex; gap:2rem; margin-bottom:2rem; align-items:center;">
+                    <img src="${t.logo}" style="width:80px;">
+                    <div>
+                        <h2 style="margin:0;">${t.name}</h2>
+                        <p style="color:var(--text-secondary); margin:5px 0;">${t.country} | Fondata nel ${t.founded || 'N/A'}</p>
+                    </div>
+                </div>
+                
+                <div class="glass-panel" style="padding:1rem; margin-bottom:1rem;">
+                    <h4 style="margin-top:0; color:var(--accent);">Stadio</h4>
+                    <p style="margin:0;">${t.venue_name || 'N/A'} (Capienza: ${t.venue_capacity || 'N/A'})</p>
+                </div>
+
+                ${c ? `
+                <div class="glass-panel" style="padding:1rem;">
+                    <h4 style="margin-top:0; color:var(--accent);">Allenatore</h4>
+                    <div style="display:flex; align-items:center; gap:1rem;">
+                        <img src="${c.photo}" style="width:40px; border-radius:50%;">
+                        <div>
+                            <p style="margin:0; font-weight:600;">${c.name}</p>
+                            <p style="margin:0; font-size:0.8rem; color:var(--text-secondary);">${c.nationality || ''} | Età: ${c.age || 'N/A'}</p>
+                        </div>
+                    </div>
+                </div>
+                ` : '<p>Allenatore non disponibile.</p>'}
+            </div>
+        `;
+    } catch (e) {
+        console.error(e);
+        body.innerHTML = "Errore nel caricamento dei dettagli squadra.";
+    }
+}
+
+async function analyzeMatch(id) {
+    const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    const title = document.getElementById('modal-title');
+    const btn = document.getElementById('place-bet-btn');
+
+    modal.style.display = 'block';
+    title.textContent = "Analisi Prossima Giocata";
     body.innerHTML = '<div style="text-align:center; padding:2rem;"><div class="live-badge" style="animation:none; background:var(--accent);">ANALIZZANDO DATI CON GEMINI AI...</div></div>';
     btn.style.display = 'none';
 
@@ -169,8 +281,6 @@ async function analyzeMatch(id) {
         }
 
         const prediction = data.prediction;
-
-        // Robust JSON extraction
         let betData = null;
         let displayHtml = prediction;
 
@@ -217,11 +327,7 @@ async function placeBet(fixture_id, match, betData) {
         const matchName = typeof match === 'string' ? match : `${match.teams.home.name} vs ${match.teams.away.name}`;
         const res = await fetch('/api/place_bet', {
             method: 'POST',
-            body: JSON.stringify({
-                fixture_id,
-                match: matchName,
-                ...betData
-            })
+            body: JSON.stringify({ fixture_id, match: matchName, ...betData })
         });
         const result = await res.json();
         if (result.status === 'success') {

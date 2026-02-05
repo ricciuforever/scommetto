@@ -27,6 +27,21 @@ class FootballApiService
         return $this->request("/fixtures?id=$id");
     }
 
+    public function fetchStandings($leagueId, $season)
+    {
+        return $this->request("/standings?league=$leagueId&season=$season");
+    }
+
+    public function fetchTeam($id)
+    {
+        return $this->request("/teams?id=$id");
+    }
+
+    public function fetchCoach($teamId)
+    {
+        return $this->request("/coaches?team=$teamId");
+    }
+
     private function request($endpoint)
     {
         $url = $this->baseUrl . $endpoint;

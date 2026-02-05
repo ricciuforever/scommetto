@@ -85,4 +85,53 @@ class MatchController
             'match' => $match
         ]);
     }
+
+    public function getStandings($leagueId)
+    {
+        header('Content-Type: application/json');
+        $standingModel = new \App\Models\Standing();
+        $season = 2025; // Standard season for now
+
+        if ($standingModel->needsRefresh((int) $leagueId)) {
+            $data = $this->apiService->fetchStandings($leagueId, $season);
+            if (isset($data['response'][0]['league']['standings'][0])) {
+                $rows = $data['response'][0]['league']['standings'][0];
+                $teamModel = new \App\Models\Team();
+                foreach ($rows as $row) {
+                    $teamModel->save($row['team']); // Minimal save
+                    $standingModel->save((int) $leagueId, $row);
+                }
+            }
+        }
+
+        echo json_encode($standingModel->getByLeague((int) $leagueId));
+    }
+
+    public function getTeamDetails($teamId)
+    {
+        header('Content-Type: application/json');
+        $teamModel = new \App\Models\Team();
+        $coachModel = new \App\Models\Coach();
+
+        if ($teamModel->needsRefresh((int) $teamId)) {
+            $data = $this->apiService->fetchTeam($teamId);
+            if (isset($data['response'][0])) {
+                $teamModel->save($data['response'][0]['team']);
+            }
+        }
+
+        $coach = $coachModel->getByTeam((int) $teamId);
+        if (!$coach) {
+            $coachData = $this->apiService->fetchCoach($teamId);
+            if (isset($coachData['response'][0])) {
+                $coachModel->save($coachData['response'][0], $teamId);
+                $coach = $coachModel->getByTeam((int) $teamId);
+            }
+        }
+
+        echo json_encode([
+            'team' => $teamModel->getById((int) $teamId),
+            'coach' => $coach
+        ]);
+    }
 }
