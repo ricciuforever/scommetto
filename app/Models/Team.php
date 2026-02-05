@@ -28,6 +28,12 @@ class Team
         if (!$team)
             return true;
 
+        // SE mancano dati fondamentali (es. stadio o anno fondazione), forziamo il refresh
+        // utile quando il team è stato creato con "dati minimi" dalla classifica
+        if (empty($team['founded']) || empty($team['venue_name']) || empty($team['country'])) {
+            return true;
+        }
+
         $lastUpdated = strtotime($team['last_updated']);
         return (time() - $lastUpdated) > ($days * 24 * 60 * 60);
     }

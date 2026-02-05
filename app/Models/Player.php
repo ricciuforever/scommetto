@@ -15,6 +15,13 @@ class Player
         $this->db = Database::getInstance()->getConnection();
     }
 
+    public function getById($id)
+    {
+        $stmt = $this->db->prepare("SELECT * FROM players WHERE id = ?");
+        $stmt->execute([$id]);
+        return $stmt->fetch();
+    }
+
     public function getByTeam($teamId)
     {
         $sql = "SELECT p.*, s.position, s.number 

@@ -159,4 +159,26 @@ class MatchController
             ]);
         }
     }
+
+    public function getPlayerDetails($playerId)
+    {
+        header('Content-Type: application/json');
+        try {
+            $playerModel = new \App\Models\Player();
+            $player = $playerModel->getById((int) $playerId);
+
+            // Se non lo abbiamo o è vecchio, aggiorniamo (ma per ora basta averlo)
+            if (!$player) {
+                $data = $this->apiService->fetchPlayer($playerId);
+                if (isset($data['response'][0]['player'])) {
+                    $playerModel->save($data['response'][0]['player']);
+                    $player = $playerModel->getById((int) $playerId);
+                }
+            }
+
+            echo json_encode($player);
+        } catch (\Exception $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
 }

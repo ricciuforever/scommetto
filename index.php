@@ -26,6 +26,8 @@ if ($path === '/' || $path === '/index.php' || $path === '') {
     (new MatchController())->getStandings($matches[1]);
 } elseif (preg_match('#^/api/team/(\d+)$#', $path, $matches)) {
     (new MatchController())->getTeamDetails($matches[1]);
+} elseif (preg_match('#^/api/player/(\d+)$#', $path, $matches)) {
+    (new MatchController())->getPlayerDetails($matches[1]);
 } elseif ($path === '/api/place_bet' && $method === 'POST') {
     (new BetController())->placeBet();
 } elseif ($path === '/api/sync') {

@@ -87,7 +87,7 @@ function renderMatches() {
             if (ev.type === 'subst') return '';
 
             return `
-                <div class="event-pill">
+                <div class="event-pill" style="cursor:pointer" onclick="showPlayerDetails(${ev.player.id}, '${ev.player.name}')">
                     <span class="event-time">${ev.time.elapsed}'</span>
                     <span class="${iconClass}">${icon}</span>
                     <span>${ev.player.name || ''}</span>
@@ -122,6 +122,63 @@ function renderMatches() {
         `;
         container.appendChild(card);
     });
+}
+
+async function showPlayerDetails(playerId, playerName = 'Giocatore') {
+    if (!playerId) return;
+    const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    const title = document.getElementById('modal-title');
+    const btn = document.getElementById('place-bet-btn');
+
+    modal.style.display = 'block';
+    title.textContent = playerName;
+    body.innerHTML = '<div style="text-align:center; padding:2rem;">Caricamento dettagli giocatore...</div>';
+    btn.style.display = 'none';
+
+    try {
+        const res = await fetch(`/api/player/${playerId}`);
+        const p = await res.json();
+
+        if (!p || p.error) {
+            body.innerHTML = "Dati giocatore non disponibili.";
+            return;
+        }
+
+        body.innerHTML = `
+            <div class="analysis-content">
+                <div style="display:flex; gap:2rem; margin-bottom:2rem; align-items:center;">
+                    <img src="${p.photo}" style="width:100px; border-radius:10px; border:2px solid var(--accent);">
+                    <div>
+                        <h2 style="margin:0;">${p.name}</h2>
+                        <p style="color:var(--text-secondary); margin:5px 0;">${p.firstname} ${p.lastname}</p>
+                        <span class="status-tag status-active">${p.nationality}</span>
+                    </div>
+                </div>
+                
+                <div class="glass-panel" style="padding:1.5rem; display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem;">
+                    <div>
+                        <h4 style="margin:0 0 0.5rem 0; color:var(--accent); font-size:0.8rem;">Età</h4>
+                        <p style="margin:0; font-size:1.1rem; font-weight:600;">${p.age || 'N/A'} anni</p>
+                    </div>
+                    <div>
+                        <h4 style="margin:0 0 0.5rem 0; color:var(--accent); font-size:0.8rem;">Nazionalità</h4>
+                        <p style="margin:0; font-size:1.1rem; font-weight:600;">${p.nationality || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <h4 style="margin:0 0 0.5rem 0; color:var(--accent); font-size:0.8rem;">Altezza</h4>
+                        <p style="margin:0; font-size:1.1rem; font-weight:600;">${p.height || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <h4 style="margin:0 0 0.5rem 0; color:var(--accent); font-size:0.8rem;">Peso</h4>
+                        <p style="margin:0; font-size:1.1rem; font-weight:600;">${p.weight || 'N/A'}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (e) {
+        body.innerHTML = "Errore nel caricamento del giocatore.";
+    }
 }
 
 function updateMinutes() {
@@ -242,7 +299,7 @@ async function showTeamDetails(teamId) {
                             </thead>
                             <tbody>
                                 ${squad.map(p => `
-                                    <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+                                    <tr style="border-bottom:1px solid rgba(255,255,255,0.03); cursor:pointer" onclick="showPlayerDetails(${p.id}, '${p.name}')">
                                         <td style="padding:0.4rem; color:var(--accent); font-weight:800;">${p.number || '-'}</td>
                                         <td style="padding:0.4rem;">${p.name}</td>
                                         <td style="padding:0.4rem; font-size:0.7rem; color:var(--text-secondary);">${p.position}</td>
