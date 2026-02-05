@@ -169,6 +169,7 @@ def auto_scanner_logic():
         matches = data.get("response", [])
         
         for m in matches:
+            fix_id = m["fixture"]["id"]
             # SAFETY: Don't start a new analysis if we have less than 15 API calls left
             if api_usage_info["remaining"] < 15:
                 print("--- 🤖 BOT PAUSED: API Quota too low to continue scanning ---")
