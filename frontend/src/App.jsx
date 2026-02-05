@@ -15,7 +15,7 @@ function App() {
   const fetchHistory = async () => {
     try {
       const apiBase = import.meta.env.VITE_API_URL || '';
-      const res = await fetch(`${apiBase}/api/history`);
+      const res = await fetch(`${apiBase}/api/history?t=${Date.now()}`);
       const data = await res.json();
       setBetHistory(data);
     } catch (err) {
@@ -26,7 +26,7 @@ function App() {
   const fetchUsage = async () => {
     try {
       const apiBase = import.meta.env.VITE_API_URL || '';
-      const res = await fetch(`${apiBase}/api/usage`);
+      const res = await fetch(`${apiBase}/api/usage?t=${Date.now()}`);
       const data = await res.json();
       setUsage(data);
     } catch (err) {
