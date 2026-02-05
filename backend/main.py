@@ -28,7 +28,7 @@ HEADERS = {
 }
 
 # Global tracker for API usage
-api_usage_info = {"used": 0, "remaining": 100}
+api_usage_info = {"used": 0, "remaining": 7500}
 
 def update_usage_from_response(response):
     global api_usage_info
@@ -174,16 +174,32 @@ def auto_scanner_logic():
                 print("--- 🤖 BOT PAUSED: API Quota too low to continue scanning ---")
                 break
 
-            fix_id = m["fixture"]["id"]
-            
-            # Check if already in history to avoid multiple AI calls for the same match/logic
+            # Check if recently analyzed to avoid wasting credits
             history = []
             if os.path.exists(BETS_HISTORY_FILE):
                 with open(BETS_HISTORY_FILE, "r") as f:
                     history = json.load(f)
             
-            # We only analyze a match once per 15-minute fetch cycle if it's not already logged
-            if not any(b["fixture_id"] == fix_id for b in history):
+            # Allow re-analysis if 30 minutes have passed since the last bet/analysis for this fixture
+            # OR if no analysis has ever been done for this match
+            recent_bet = next((b for b in reversed(history) if b["fixture_id"] == fix_id), None)
+            
+            should_analyze = False
+            if not recent_bet:
+                should_analyze = True
+            else:
+                # Calculate time since last analysis
+                try:
+                    from datetime import datetime
+                    last_time = datetime.strptime(recent_bet["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
+                    now_time = datetime.utcnow()
+                    diff = (now_time - last_time).total_seconds() / 60
+                    if diff > 30 and recent_bet["status"] == "pending": # Re-analyze every 30 mins
+                        should_analyze = True
+                except:
+                    pass
+
+            if should_analyze:
                 print(f"🤖 BOT: Automatic Analysis for {m['teams']['home']['name']} vs {m['teams']['away']['name']}")
                 
                 # Intelligence gathering (approx 6-7 calls)
@@ -196,6 +212,7 @@ def auto_scanner_logic():
                 if json_match:
                     try:
                         bet_info = json.loads(json_match.group(1))
+                        # Only add if advice is different or situation changed significantly
                         bet_data = {
                             "fixture_id": fix_id,
                             "match": f"{m['teams']['home']['name']} vs {m['teams']['away']['name']}",
@@ -207,12 +224,12 @@ def auto_scanner_logic():
                         history.append(bet_data)
                         with open(BETS_HISTORY_FILE, "w") as f:
                             json.dump(history, f, indent=4)
-                        print(f"🤖 BOT: AUTO-BET PLACED for {bet_data['match']}")
+                        print(f"🤖 BOT: AUTO-BET/UPDATE PLACED for {bet_data['match']}")
                     except Exception as e:
                         print(f"Error parsing Gemini JSON: {e}")
                 
-                # Small delay to respect rate limit and not burst too much
-                time.sleep(2)
+                # Respect rate limit
+                time.sleep(1)
                     
     except Exception as e:
         print(f"🤖 BOT ERROR: {e}")
@@ -230,7 +247,7 @@ def update_loop():
             print("--- UPDATE CYCLE COMPLETE ---")
         except Exception as e:
             print(f"Error in update loop: {e}")
-        time.sleep(60) # High frequency polling for BASIC plan (1440 calls/day)
+        time.sleep(30) # Ultra-high frequency polling for PRO plan (2880 calls/day)
 
 # Start background thread for updates
 Thread(target=update_loop, daemon=True).start()

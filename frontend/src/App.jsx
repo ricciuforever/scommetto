@@ -10,7 +10,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [lastFetchTimestamp, setLastFetchTimestamp] = useState(Date.now());
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [usage, setUsage] = useState({ used: 0, remaining: 100 });
+  const [usage, setUsage] = useState({ used: 0, remaining: 7500 });
 
   const fetchHistory = async () => {
     try {
