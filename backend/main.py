@@ -4,7 +4,9 @@ import json
 import os
 import requests
 import time
+import threading
 from threading import Thread
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load variables from .env file
@@ -27,13 +29,15 @@ HEADERS = {
     'x-rapidapi-key': API_KEY
 }
 
+# Global lock for file operations
+file_lock = threading.Lock()
+
 # Global tracker for API usage
 api_usage_info = {"used": 0, "remaining": 7500}
 
 def update_usage_from_response(response):
     global api_usage_info
     try:
-        # Check various header variants
         used = response.headers.get("x-ratelimit-requests-used") or response.headers.get("X-RateLimit-Requests-Used")
         rem = response.headers.get("x-ratelimit-requests-remaining") or response.headers.get("X-RateLimit-Remaining")
         limit = response.headers.get("x-ratelimit-requests-limit") or response.headers.get("X-RateLimit-Limit")
@@ -62,8 +66,9 @@ def fetch_live_data():
         response = requests.get(url, headers=HEADERS)
         update_usage_from_response(response)
         data = response.json()
-        with open(LIVE_DATA_FILE, "w") as f:
-            json.dump(data, f)
+        with file_lock:
+            with open(LIVE_DATA_FILE, "w") as f:
+                json.dump(data, f)
         print("Live data updated.")
     except Exception as e:
         print(f"Error updating live data: {e}")
@@ -74,19 +79,14 @@ from check_bet_results import check_bets
 
 @app.get("/api/intelligence/{fixture_id}")
 async def get_intelligence(fixture_id: int):
-    # Warning: Consumes ~6 API requests
-    data = get_fixture_details(fixture_id)
+    data = get_fixture_details(fixture_id, usage_callback=update_usage_from_response)
     return data
 
 @app.get("/api/analyze/{fixture_id}")
 async def get_gemini_analysis(fixture_id: int):
-    # Step 1: Gather raw data
-    intelligence = get_fixture_details(fixture_id)
-    
-    # Step 2: Send to Gemini
+    intelligence = get_fixture_details(fixture_id, usage_callback=update_usage_from_response)
     prediction = analyze_match_with_gemini(intelligence)
     
-    # Step 3: AUTO-PLACE BET if valid JSON found
     auto_bet_status = "no_bet"
     try:
         import re
@@ -98,7 +98,7 @@ async def get_gemini_analysis(fixture_id: int):
                 "match": f"{intelligence['fixture']['teams']['home']['name']} vs {intelligence['fixture']['teams']['away']['name']}",
                 **bet_info
             }
-            result = await place_bet(bet_data)
+            result = internal_place_bet(bet_data)
             auto_bet_status = result["status"]
     except Exception as e:
         print(f"Auto-bet error: {e}")
@@ -113,33 +113,50 @@ async def get_gemini_analysis(fixture_id: int):
 
 @app.get("/api/history")
 async def get_history():
-    if os.path.exists(BETS_HISTORY_FILE):
-        with open(BETS_HISTORY_FILE, "r") as f:
-            return json.load(f)
+    with file_lock:
+        if os.path.exists(BETS_HISTORY_FILE):
+            with open(BETS_HISTORY_FILE, "r") as f:
+                return json.load(f)
     return []
+
+def internal_place_bet(bet_data: dict):
+    """Internal function to place a bet, with file locking and consistent types."""
+    with file_lock:
+        history = []
+        if os.path.exists(BETS_HISTORY_FILE):
+            with open(BETS_HISTORY_FILE, "r") as f:
+                try:
+                    history = json.load(f)
+                except:
+                    history = []
+
+        try:
+            f_id = int(bet_data.get("fixture_id", 0))
+        except:
+            f_id = 0
+
+        advice = bet_data.get("advice", "")
+
+        # DUPLICATE CHECK
+        existing = next((b for b in history if int(b.get("fixture_id", 0)) == f_id and b.get("advice") == advice), None)
+        if existing:
+            return {"status": "already_exists", "bet": existing}
+
+        bet_data["id"] = str(len(history) + 1)
+        bet_data["status"] = "pending"
+        bet_data["fixture_id"] = f_id
+        if "timestamp" not in bet_data:
+            bet_data["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+        history.append(bet_data)
+        with open(BETS_HISTORY_FILE, "w") as f:
+            json.dump(history, f, indent=4)
+
+        return {"status": "success", "bet": bet_data}
 
 @app.post("/api/place_bet")
 async def place_bet(bet_data: dict):
-    history = []
-    if os.path.exists(BETS_HISTORY_FILE):
-        with open(BETS_HISTORY_FILE, "r") as f:
-            history = json.load(f)
-    
-    # DUPLICATE CHECK: Don't place the same bet for the same fixture twice
-    existing = next((b for b in history if b["fixture_id"] == bet_data["fixture_id"] and b["advice"] == bet_data["advice"]), None)
-    if existing:
-        return {"status": "already_exists", "bet": existing}
-    
-    # Simple ID generation
-    bet_data["id"] = str(len(history) + 1)
-    bet_data["status"] = "pending"
-    bet_data["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    
-    history.append(bet_data)
-    with open(BETS_HISTORY_FILE, "w") as f:
-        json.dump(history, f, indent=4)
-        
-    return {"status": "success", "bet": bet_data}
+    return internal_place_bet(bet_data)
 
 @app.get("/api/usage")
 async def get_usage():
@@ -153,108 +170,100 @@ def fetch_initial_data():
             response = requests.get(url, headers=HEADERS)
             update_usage_from_response(response)
             data = response.json()
-            with open(TEAMS_FILE, "w") as f:
-                json.dump(data, f)
+            with file_lock:
+                with open(TEAMS_FILE, "w") as f:
+                    json.dump(data, f)
             print("Initial teams data seeded.")
         except Exception as e:
             print(f"Error seeding teams: {e}")
 
 def auto_scanner_logic():
-    print("--- 🤖 BOT SCANNER: Searching for value bets across ALL live matches ---")
+    print("--- 🤖 BOT SCANNER: Searching for value bets ---")
     try:
         if not os.path.exists(LIVE_DATA_FILE): return
-        with open(LIVE_DATA_FILE, "r") as f:
-            data = json.load(f)
+        with file_lock:
+            with open(LIVE_DATA_FILE, "r") as f:
+                data = json.load(f)
         
         matches = data.get("response", [])
         
-        for m in matches:
-            fix_id = m["fixture"]["id"]
-            # SAFETY: Don't start a new analysis if we have less than 15 API calls left
-            if api_usage_info["remaining"] < 15:
-                print("--- 🤖 BOT PAUSED: API Quota too low to continue scanning ---")
-                break
-
-            # Check if recently analyzed to avoid wasting credits
-            history = []
+        # Load history once outside loop
+        history = []
+        with file_lock:
             if os.path.exists(BETS_HISTORY_FILE):
                 with open(BETS_HISTORY_FILE, "r") as f:
-                    history = json.load(f)
-            
-            # Allow re-analysis if 30 minutes have passed since the last bet/analysis for this fixture
-            # OR if no analysis has ever been done for this match
-            # FIX: Using .get() to avoid KeyError if fixture_id is missing in old records
-            recent_bet = next((b for b in reversed(history) if b.get("fixture_id") == fix_id), None)
+                    try:
+                        history = json.load(f)
+                    except:
+                        history = []
+
+        for m in matches:
+            fix_id = int(m["fixture"]["id"])
+            if api_usage_info["remaining"] < 15:
+                print("--- 🤖 BOT PAUSED: API Quota low ---")
+                break
+
+            # CORRECTED TYPE CHECK
+            recent_bet = next((b for b in reversed(history) if int(b.get("fixture_id", 0)) == fix_id), None)
             
             should_analyze = False
             if not recent_bet:
                 should_analyze = True
             else:
-                # Calculate time since last analysis
                 try:
-                    from datetime import datetime
                     last_time = datetime.strptime(recent_bet["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
                     now_time = datetime.utcnow()
                     diff = (now_time - last_time).total_seconds() / 60
-                    if diff > 30 and recent_bet["status"] == "pending": # Re-analyze every 30 mins
+                    if diff > 30 and recent_bet["status"] == "pending":
                         should_analyze = True
                 except:
-                    pass
+                    should_analyze = True
 
             if should_analyze:
-                print(f"🤖 BOT: Automatic Analysis for {m['teams']['home']['name']} vs {m['teams']['away']['name']}")
-                
-                # Intelligence gathering (approx 6-7 calls)
-                intelligence = get_fixture_details(fix_id)
+                # Efficiency: skip matches almost finished (>80 min)
+                elapsed = m.get("fixture", {}).get("status", {}).get("elapsed")
+                if elapsed and elapsed > 80:
+                    continue
+
+                print(f"🤖 BOT: Analyzing {m['teams']['home']['name']} vs {m['teams']['away']['name']}")
+                intelligence = get_fixture_details(fix_id, fixture_data=m, usage_callback=update_usage_from_response)
                 prediction = analyze_match_with_gemini(intelligence)
                 
-                # Auto-place if JSON found
                 import re
                 json_match = re.search(r'```json\n([\s\S]*?)\n```', prediction)
                 if json_match:
                     try:
                         bet_info = json.loads(json_match.group(1))
-                        # Only add if advice is different or situation changed significantly
                         bet_data = {
-                            "id": str(len(history) + 1),
                             "fixture_id": fix_id,
                             "match": f"{m['teams']['home']['name']} vs {m['teams']['away']['name']}",
-                            **bet_info,
-                            "status": "pending",
-                            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                            **bet_info
                         }
-                        history.append(bet_data)
-                        with open(BETS_HISTORY_FILE, "w") as f:
-                            json.dump(history, f, indent=4)
-                        print(f"🤖 BOT: AUTO-BET/UPDATE PLACED for {bet_data['match']}")
+                        res = internal_place_bet(bet_data)
+                        if res["status"] == "success":
+                            print(f"🤖 BOT: AUTO-BET PLACED for {bet_data['match']}")
+                            history.append(res["bet"])
                     except Exception as e:
                         print(f"Error parsing Gemini JSON: {e}")
                 
-                # Respect rate limit
                 time.sleep(1)
                     
     except Exception as e:
         print(f"🤖 BOT ERROR: {e}")
 
 def single_update_loop():
-    """Optimized loop: Sync Live (60s), Settle Bets (5min)."""
     fetch_initial_data()
     cycle_count = 0
     while True:
         try:
             nowStr = time.strftime("%H:%M:%S")
             print(f"[{nowStr}] --- STARTING SYNC CYCLE ---")
-            
-            # 1. Fetch live matches (1 call per 60s)
             fetch_live_data()
             
-            # 2. Check bet results (Every 5 cycles = 5 minutes)
-            # This is the biggest saving!
             if cycle_count % 5 == 0:
-                print(f"[{nowStr}] Running Bet Settlement (Savings Mode)...")
-                check_bets()
+                print(f"[{nowStr}] Running Bet Settlement...")
+                check_bets(usage_callback=update_usage_from_response)
             
-            # 3. Auto-Scanner (Every 2 cycles = 2 minutes)
             if cycle_count % 2 == 0:
                 auto_scanner_logic()
                 
@@ -263,25 +272,14 @@ def single_update_loop():
         except Exception as e:
             msg = f"LOOP ERROR: {e}"
             print(msg)
-            with open("agent_log.txt", "a") as f:
+            log_path = os.path.join(BASE_DIR, "agent_log.txt")
+            with open(log_path, "a") as f:
                 f.write(f"{time.ctime()}: {msg}\n")
         
-        # Sleep 60s instead of 30s to save 50% on live updates
         time.sleep(60)
 
-# Start single clean background thread
+# Start background thread
 Thread(target=single_update_loop, daemon=True).start()
-
-@app.get("/api/logs")
-async def get_logs():
-    try:
-        if os.path.exists("agent_log.txt"):
-            with open("agent_log.txt", "r") as f:
-                lines = f.readlines()
-                return {"logs": lines[-15:]} # Last 15 lines
-        return {"logs": ["Log file empty."]}
-    except:
-        return {"logs": ["Error reading logs."]}
 
 @app.get("/api/health")
 async def health_check():
@@ -295,36 +293,39 @@ async def health_check():
 @app.get("/api/logs")
 async def get_logs():
     try:
-        if os.path.exists("agent_log.txt"):
-            with open("agent_log.txt", "r") as f:
+        log_path = os.path.join(BASE_DIR, "agent_log.txt")
+        if os.path.exists(log_path):
+            with open(log_path, "r") as f:
                 lines = f.readlines()
-                return {"logs": lines[-20:]} # Last 20 lines
-        return {"logs": ["Log file not found yet."]}
+                return {"logs": lines[-20:]}
+        return {"logs": ["Log file empty."]}
     except Exception as e:
         return {"logs": [f"Error reading logs: {e}"]}
 
-
 @app.get("/api/live")
 async def get_live():
-    if os.path.exists(LIVE_DATA_FILE):
-        with open(LIVE_DATA_FILE, "r") as f:
-            data = json.load(f)
-            data["server_time"] = os.path.getmtime(LIVE_DATA_FILE)
-            return data
+    with file_lock:
+        if os.path.exists(LIVE_DATA_FILE):
+            with open(LIVE_DATA_FILE, "r") as f:
+                data = json.load(f)
+                data["server_time"] = os.path.getmtime(LIVE_DATA_FILE)
+                return data
     return {"response": []}
 
 @app.get("/api/teams")
 async def get_teams():
-    if os.path.exists(TEAMS_FILE):
-        with open(TEAMS_FILE, "r") as f:
-            return json.load(f)
+    with file_lock:
+        if os.path.exists(TEAMS_FILE):
+            with open(TEAMS_FILE, "r") as f:
+                return json.load(f)
     return {"response": []}
 
 @app.get("/api/squads")
 async def get_squads():
-    if os.path.exists(SQUADS_FILE):
-        with open(SQUADS_FILE, "r") as f:
-            return json.load(f)
+    with file_lock:
+        if os.path.exists(SQUADS_FILE):
+            with open(SQUADS_FILE, "r") as f:
+                return json.load(f)
     return {}
 
 if __name__ == "__main__":
