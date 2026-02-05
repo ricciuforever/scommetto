@@ -135,11 +135,10 @@ function renderFilters() {
     leagues.forEach(league => {
         const isActive = selectedLeague === league;
         const pill = document.createElement('button');
-        pill.className = `px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-            isActive
-            ? 'bg-accent text-white border-accent shadow-lg shadow-accent/20'
-            : 'bg-white/5 text-slate-500 border-white/5 hover:border-accent/50 hover:text-slate-300 dark:bg-slate-800/50'
-        }`;
+        pill.className = `px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${isActive
+                ? 'bg-accent text-white border-accent shadow-lg shadow-accent/20'
+                : 'bg-white/5 text-slate-500 border-white/5 hover:border-accent/50 hover:text-slate-300 dark:bg-slate-800/50'
+            }`;
         pill.textContent = league === 'all' ? 'Tutti i Campionati' : league;
         pill.onclick = () => {
             selectedLeague = league;
@@ -457,12 +456,12 @@ async function showStandings(leagueId, leagueName) {
                     <td class="py-4 px-3">
                         <div class="flex gap-1">
                             ${(row.form || '').split('').map(f => {
-                                let c = 'bg-slate-500';
-                                if (f === 'W') c = 'bg-success';
-                                if (f === 'L') c = 'bg-danger';
-                                if (f === 'D') c = 'bg-warning';
-                                return `<span class="w-1.5 h-1.5 rounded-full ${c}"></span>`;
-                            }).join('')}
+                let c = 'bg-slate-500';
+                if (f === 'W') c = 'bg-success';
+                if (f === 'L') c = 'bg-danger';
+                if (f === 'D') c = 'bg-warning';
+                return `<span class="w-1.5 h-1.5 rounded-full ${c}"></span>`;
+            }).join('')}
                         </div>
                     </td>
                 </tr>
@@ -695,8 +694,8 @@ async function showIntelligence(id) {
             return;
         }
 
-        const comp = JSON.parse(data.comparison || '{}');
-        const perc = JSON.parse(data.percent || '{}');
+        const comp = data.comparison || {};
+        const perc = data.percent || {};
 
         const metrics = [
             { label: 'Forma', key: 'form' },
