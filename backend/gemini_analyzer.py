@@ -9,7 +9,7 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Using the latest Flash Lite model available in the new SDK
-MODEL_NAME = 'gemini-2.0-flash-lite-preview-02-05'
+MODEL_NAME = 'gemini-flash-lite-latest'
 
 def analyze_match_with_gemini(intelligence_json):
     prompt = f"""
