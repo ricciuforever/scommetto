@@ -1,43 +1,58 @@
-# Scommetto Agente ⚽
+# 🤖 AGENTE SCOMMESSE PRO v2.6
 
-Progetto di monitoraggio scommesse real-time basato su API-Football.
+Sistema di monitoraggio e analisi scommesse live basato su **AI (Google Gemini)** e **API-Football**. Progettato per girare H24 su architettura Plesk/Linux.
 
-## Architettura
-Il progetto è diviso in due parti:
-1. **Backend (Python/FastAPI)**: Gestisce la comunicazione con le API di API-Football, il caching dei dati e l'aggiornamento automatico dei match live.
-2. **Frontend (React/Vite)**: Una dashboard moderna e premium per visualizzare i match live e le statistiche delle squadre.
+## 🚀 Struttura del Progetto
 
-## Configurazione API
-L'API Key è già configurata nel backend (`backend/main.py`).
-- **Piano**: Free (100 richieste/giorno).
-- **Strategia di polling**: Ogni 15 minuti viene interrogato l'endpoint `live=all` per ottenere tutti i match in corso nel mondo (96 richieste/giorno). Questo garantisce una copertura h24 senza superare i limiti.
-
-## Come avviare il progetto
-
-### 1. Avviare il Backend
-```powershell
-cd backend
-python main.py
+```text
+.
+├── frontend/             # React (Vite) + Vanilla CSS
+│   ├── src/App.jsx       # Cuore della Dashboard
+│   └── public_html/      # Cartella di output per il Web Server
+├── backend/              # FastAPI (Python 3.11)
+│   ├── main.py           # Entry point & Background Loop
+│   ├── check_bet_results.py # Logica di liquidazione WIN/LOSS
+│   ├── gemini_analyzer.py   # Integrazione con Google Gemini
+│   └── agent_log.txt     # Log in tempo reale del Bot
+├── deploy.sh             # Script di automazione Build & Deploy
+└── AGENTS.md             # Istruzioni tecniche per Sviluppatori/AI
 ```
-Il backend sarà disponibile su `http://localhost:8000`.
 
-### 2. Avviare il Frontend
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-La dashboard sarà disponibile su `http://localhost:5173`.
+## 🛠️ Come Avviare (Sviluppo Locale)
 
-## Dati Inclusi
-- **Squadre Serie A**: Caricate inizialmente e salvate in `serie_a_teams.json`.
-- **Giocatori (Squads)**: Caricati per le principali squadre di Serie A (stagione 24/25, a causa delle limitazioni del piano Free sulle stagioni correnti).
-- **Match Live**: Aggiornati automaticamente ogni 15 minuti.
+### Backend
+1. `cd backend`
+2. `python -m venv venv`
+3. `source venv/bin/activate` (o `venv\Scripts\activate` su Windows)
+4. `pip install -r requirements.txt`
+5. Crea un `.env` con:
+   - `API_KEY`: Tua chiave API-Football
+   - `GEMINI_API_KEY`: Tua chiave Google AI
+6. `uvicorn main:app --reload`
 
-## Ottimizzazione Richieste
-Per restare sotto le 100 request/day:
-- Squadre e Giocatori vengono scaricati una sola volta (cache).
-- I match live usano un unico endpoint globale (`live=all`) invece di uno per ogni lega.
-- L'aggiornamento avviene 4 volte l'ora (4 * 24 = 96 requests).
+### Frontend
+1. `cd frontend`
+2. `npm install`
+3. `npm run dev`
 
-<!-- Last redeploy trigger: 2026-02-05 01:26 (Testing deploy.sh) -->
+## 🌍 Deployment (Plesk)
+
+Il deployment è automatizzato. Per aggiornare il server:
+1. Carica le modifiche su GitHub.
+2. Accedi via SSH.
+3. Esegui:
+   ```bash
+   cd /var/www/vhosts/emanueletolomei.it/scommetto.emanueletolomei.it
+   git pull origin main
+   chmod +x deploy.sh
+   ./deploy.sh
+   ```
+
+## 📈 Modalità Risparmio Quota
+Il sistema è configurato per non eccedere le 7500 call giornaliere:
+- **Sync Live**: Ogni 60 secondi.
+- **Settlement**: Ogni 5 minuti.
+- **Consumo stimato**: ~1800-2000 call/24h.
+
+---
+*Created with ❤️ for Jules.*
