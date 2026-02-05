@@ -10,6 +10,7 @@ echo "=== Deploy iniziato: $(date) ===" >> "$LOG_FILE"
 
 # 0. UPDATE REPO
 cd "$APP_DIR" || { echo "CRITICAL: Could not cd to $APP_DIR" >> "$LOG_FILE"; exit 1; }
+git config --global --add safe.directory "$APP_DIR"
 echo "Updating Repo..." >> "$LOG_FILE"
 git pull origin main >> "$LOG_FILE" 2>&1
 

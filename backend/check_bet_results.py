@@ -46,8 +46,9 @@ def check_bets(usage_callback=None, lock=None):
         log_message(f"Error loading history: {e}")
         return
 
-    # We want to settle everything that isn't already decided (win/lost/void)
-    targets = [b for b in history if b.get("status") in ["pending", "duplicate", "stale"]]
+    # Only target 'pending' bets for API checking. 
+    # 'stale', 'duplicate', 'manual_check' are already processed and shouldn't be re-checked every cycle.
+    targets = [b for b in history if b.get("status") == "pending"]
 
     if not targets:
         return
