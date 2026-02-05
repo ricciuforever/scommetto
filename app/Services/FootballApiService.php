@@ -58,8 +58,8 @@ class FootballApiService
         }
 
         // Update Usage if headers are present
-        $used = $headers['x-ratelimit-requests-used'] ?? null;
-        $remaining = $headers['x-ratelimit-requests-remaining'] ?? null;
+        $used = $headers['x-ratelimit-requests-used'] ?? $headers['x-ratelimit-used'] ?? $headers['x-ratelimit-requests-limit-used'] ?? null;
+        $remaining = $headers['x-ratelimit-requests-remaining'] ?? $headers['x-ratelimit-remaining'] ?? null;
 
         if ($used !== null && $remaining !== null) {
             (new Usage())->update((int) $used, (int) $remaining);
