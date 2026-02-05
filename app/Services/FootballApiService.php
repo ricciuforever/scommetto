@@ -31,34 +31,40 @@ class FootballApiService
     {
         $url = $this->baseUrl . $endpoint;
         $ch = curl_init($url);
+
+        $headers = [];
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             "x-rapidapi-host: v3.football.api-sports.io",
             "x-rapidapi-key: " . $this->apiKey
         ]);
 
+        // Function to capture headers
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $header) use (&$headers) {
+            $len = strlen($header);
+            $header = explode(':', $header, 2);
+            if (count($header) < 2)
+                return $len;
+            $headers[strtolower(trim($header[0]))] = trim($header[1]);
+            return $len;
+        });
+
         $response = curl_exec($ch);
-        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        // If we needed headers, we'd use curl_setopt($ch, CURLOPT_HEADER, true);
-
         $error = curl_error($ch);
-
-        // Check headers for usage
-        // Note: To get headers properly we might need a slightly more complex curl setup
-        // For now, let's just get the body.
-
         curl_close($ch);
 
         if ($error) {
             return ['error' => $error];
         }
 
-        $data = json_decode($response, true);
+        // Update Usage if headers are present
+        $used = $headers['x-ratelimit-requests-used'] ?? null;
+        $remaining = $headers['x-ratelimit-requests-remaining'] ?? null;
 
-        // In a real scenario, we'd extract usage from headers here.
-        // Assuming we have a way to get them:
-        // (new Usage())->update($used, $remaining);
+        if ($used !== null && $remaining !== null) {
+            (new Usage())->update((int) $used, (int) $remaining);
+        }
 
-        return $data;
+        return json_decode($response, true);
     }
 }
