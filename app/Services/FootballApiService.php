@@ -42,6 +42,11 @@ class FootballApiService
         return $this->request("/coaches?team=$teamId");
     }
 
+    public function fetchSquad($teamId)
+    {
+        return $this->request("/players/squads?team=$teamId");
+    }
+
     private function request($endpoint)
     {
         $url = $this->baseUrl . $endpoint;

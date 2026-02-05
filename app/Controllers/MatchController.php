@@ -112,26 +112,42 @@ class MatchController
         header('Content-Type: application/json');
         $teamModel = new \App\Models\Team();
         $coachModel = new \App\Models\Coach();
+        $playerModel = new \App\Models\Player();
 
         if ($teamModel->needsRefresh((int) $teamId)) {
+            // 1. Team Info
             $data = $this->apiService->fetchTeam($teamId);
             if (isset($data['response'][0])) {
                 $teamModel->save($data['response'][0]['team']);
             }
-        }
 
-        $coach = $coachModel->getByTeam((int) $teamId);
-        if (!$coach) {
+            // 2. Coach
             $coachData = $this->apiService->fetchCoach($teamId);
             if (isset($coachData['response'][0])) {
-                $coachModel->save($coachData['response'][0], $teamId);
-                $coach = $coachModel->getByTeam((int) $teamId);
+                $coachModel->save($coachData['response'][0], (int) $teamId);
+            }
+
+            // 3. Squad & Players
+            $squadData = $this->apiService->fetchSquad($teamId);
+            if (isset($squadData['response'][0]['players'])) {
+                foreach ($squadData['response'][0]['players'] as $p) {
+                    $playerModel->save($p);
+                    $playerModel->linkToSquad((int) $teamId, $p, [
+                        'position' => $p['position'],
+                        'number' => $p['number']
+                    ]);
+                }
             }
         }
 
+        $team = $teamModel->getById((int) $teamId);
+        $coach = $coachModel->getByTeam((int) $teamId);
+        $squad = $playerModel->getByTeam((int) $teamId);
+
         echo json_encode([
-            'team' => $teamModel->getById((int) $teamId),
-            'coach' => $coach
+            'team' => $team,
+            'coach' => $coach,
+            'squad' => $squad
         ]);
     }
 }

@@ -218,6 +218,7 @@ async function showTeamDetails(teamId) {
         const data = await res.json();
         const t = data.team;
         const c = data.coach;
+        const squad = data.squad || [];
 
         title.textContent = t ? t.name : 'Team details';
         if (!t) {
@@ -225,8 +226,37 @@ async function showTeamDetails(teamId) {
             return;
         }
 
+        let squadHtml = '';
+        if (squad.length > 0) {
+            squadHtml = `
+                <div class="glass-panel" style="padding:1rem; margin-top:1rem;">
+                    <h4 style="margin-top:0; color:var(--accent);">Rosa Giocatori</h4>
+                    <div style="max-height: 250px; overflow-y: auto;">
+                        <table style="width:100%; border-collapse: collapse; font-size:0.8rem;">
+                            <thead>
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.1); text-align:left; color:var(--text-secondary);">
+                                    <th style="padding:0.4rem;">#</th>
+                                    <th style="padding:0.4rem;">Nome</th>
+                                    <th style="padding:0.4rem;">Pos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${squad.map(p => `
+                                    <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+                                        <td style="padding:0.4rem; color:var(--accent); font-weight:800;">${p.number || '-'}</td>
+                                        <td style="padding:0.4rem;">${p.name}</td>
+                                        <td style="padding:0.4rem; font-size:0.7rem; color:var(--text-secondary);">${p.position}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
         body.innerHTML = `
-            <div class="analysis-content">
+            <div class="analysis-content" style="max-height: 550px; overflow-y: auto;">
                 <div style="display:flex; gap:2rem; margin-bottom:2rem; align-items:center;">
                     <img src="${t.logo}" style="width:80px;">
                     <div>
@@ -235,23 +265,28 @@ async function showTeamDetails(teamId) {
                     </div>
                 </div>
                 
-                <div class="glass-panel" style="padding:1rem; margin-bottom:1rem;">
-                    <h4 style="margin-top:0; color:var(--accent);">Stadio</h4>
-                    <p style="margin:0;">${t.venue_name || 'N/A'} (Capienza: ${t.venue_capacity || 'N/A'})</p>
-                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-bottom:1rem;">
+                    <div class="glass-panel" style="padding:1rem;">
+                        <h4 style="margin-top:0; color:var(--accent); font-size:0.8rem;">Stadio</h4>
+                        <p style="margin:0; font-size:0.9rem;">${t.venue_name || 'N/A'}</p>
+                        <p style="margin:0; font-size:0.75rem; color:var(--text-secondary);">Posti: ${t.venue_capacity || 'N/A'}</p>
+                    </div>
 
-                ${c ? `
-                <div class="glass-panel" style="padding:1rem;">
-                    <h4 style="margin-top:0; color:var(--accent);">Allenatore</h4>
-                    <div style="display:flex; align-items:center; gap:1rem;">
-                        <img src="${c.photo}" style="width:40px; border-radius:50%;">
-                        <div>
-                            <p style="margin:0; font-weight:600;">${c.name}</p>
-                            <p style="margin:0; font-size:0.8rem; color:var(--text-secondary);">${c.nationality || ''} | Età: ${c.age || 'N/A'}</p>
+                    ${c ? `
+                    <div class="glass-panel" style="padding:1rem;">
+                        <h4 style="margin-top:0; color:var(--accent); font-size:0.8rem;">Allenatore</h4>
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <img src="${c.photo}" style="width:30px; border-radius:50%;">
+                            <div>
+                                <p style="margin:0; font-weight:600; font-size:0.85rem;">${c.name}</p>
+                                <p style="margin:0; font-size:0.7rem; color:var(--text-secondary);">${c.nationality || ''}</p>
+                            </div>
                         </div>
                     </div>
+                    ` : ''}
                 </div>
-                ` : '<p>Allenatore non disponibile.</p>'}
+
+                ${squadHtml}
             </div>
         `;
     } catch (e) {
