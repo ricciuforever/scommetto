@@ -1,58 +1,51 @@
-# 🤖 AGENTE SCOMMESSE PRO v3.0
+# 🤖 SCOMMETTO.AI v4.0 - PHP MVC Edition
 
-Sistema di monitoraggio e analisi scommesse live basato su **AI (Google Gemini)** e **API-Football**. Progettato per girare H24 su architettura Plesk/Linux.
+Sistema di monitoraggio e analisi scommesse live basato su **AI (Google Gemini)** e **API-Football**. 
+Questa versione è interamente scritta in **PHP MVC** per massima velocità, facilità di deploy e stabilità.
 
-## 🚀 Struttura del Progetto
+## 🚀 Nuova Architettura
+Il progetto ora segue lo standard MVC senza dipendenze esterne pesanti:
 
 ```text
 .
-├── frontend/             # React (Vite) + Vanilla CSS
-│   ├── src/App.jsx       # Cuore della Dashboard
-│   └── public_html/      # Cartella di output per il Web Server
-├── backend/              # FastAPI (Python 3.11)
-│   ├── main.py           # Entry point & Background Loop
-│   ├── check_bet_results.py # Logica di liquidazione WIN/LOSS
-│   ├── gemini_analyzer.py   # Integrazione con Google Gemini
-│   └── agent_log.txt     # Log in tempo reale del Bot
-├── deploy.sh             # Script di automazione Build & Deploy
-└── AGENTS.md             # Istruzioni tecniche per Sviluppatori/AI
+├── app/
+│   ├── Config/     # Configurazioni e caricamento .env
+│   ├── Controllers/# Logica delle rotte (Match, Bet, Sync)
+│   ├── Models/      # Interazione con MySQL (Scommesse, Usage)
+│   ├── Services/    # Servizi esterni (API Football, Gemini API)
+│   └── Views/       # Template HTML/PHP (Premium Dashboard)
+├── assets/
+│   ├── css/         # Stili Premium (Glassmorphism)
+│   └── js/          # Logica Frontend Vanilla JS
+├── data/            # Cache locale (JSON) e Log
+├── index.php        # Front Controller (Routing)
+├── bootstrap.php    # Autoloader e Inizializzazione
+├── .htaccess        # Gestione URL amichevoli
+└── deploy.sh        # Automazione per il server
 ```
 
-## 🛠️ Come Avviare (Sviluppo Locale)
+## 🛠️ Requisiti
+- PHP 8.0+
+- MySQL
+- Estensione CURL e PDO abilitate
 
-### Backend
-1. `cd backend`
-2. `python -m venv venv`
-3. `source venv/bin/activate` (o `venv\Scripts\activate` su Windows)
-4. `pip install -r requirements.txt`
-5. Crea un `.env` con:
-   - `API_KEY`: Tua chiave API-Football
-   - `GEMINI_API_KEY`: Tua chiave Google AI
-6. `uvicorn main:app --reload`
-
-### Frontend
-1. `cd frontend`
-2. `npm install`
-3. `npm run dev`
-
-## 🌍 Deployment (Plesk)
-
-Il deployment è automatizzato. Per aggiornare il server:
-1. Carica le modifiche su GitHub.
-2. Accedi via SSH.
-3. Esegui:
-   ```bash
-   cd /var/www/vhosts/emanueletolomei.it/scommetto.emanueletolomei.it
-   git pull origin main
-   chmod +x deploy.sh
-   ./deploy.sh
+## ⚙️ Installazione
+1. Crea un database MySQL (es: `scommetto`).
+2. Esegui le query SQL contenute nel messaggio di ristrutturazione per creare le tabelle `bets` e `api_usage`.
+3. Configura il file `.env` nella root con le tue credenziali:
+   ```env
+   FOOTBALL_API_KEY=tua_chiave
+   GEMINI_API_KEY=tua_chiave
+   DB_HOST=localhost
+   DB_NAME=scommetto
+   DB_USER=root
+   DB_PASS=
    ```
 
-## 📈 Modalità Risparmio Quota
-Il sistema è configurato per non eccedere le 7500 call giornaliere:
-- **Sync Live**: Ogni 60 secondi.
-- **Settlement**: Ogni 5 minuti.
-- **Consumo stimato**: ~1800-2000 call/24h.
+## 🌍 Deployment
+Il deploy ora è istantaneo:
+1. `git pull origin main`
+2. Assicurati che la cartella `data/` sia scrivibile dal server (`chmod 777 data`).
 
 ---
-*Created with ❤️ for Jules.*
+*Powered by PHP MVC & AI Intelligence.*

@@ -1,0 +1,62 @@
+<?php
+// app/Models/Bet.php
+
+namespace App\Models;
+
+use App\Services\Database;
+use PDO;
+
+class Bet
+{
+    protected $db;
+
+    public function __construct()
+    {
+        $this->db = Database::getInstance()->getConnection();
+    }
+
+    public function getAll()
+    {
+        $stmt = $this->db->query("SELECT * FROM bets ORDER BY timestamp DESC");
+        return $stmt->fetchAll();
+    }
+
+    public function create($data): string
+    {
+        $sql = "INSERT INTO bets (fixture_id, match_name, advice, market, odds, stake, urgency, status, timestamp) 
+                VALUES (:fixture_id, :match_name, :advice, :market, :odds, :stake, :urgency, :status, :timestamp)";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            'fixture_id' => $data['fixture_id'],
+            'match_name' => $data['match'] ?? $data['match_name'],
+            'advice' => $data['advice'] ?? '',
+            'market' => $data['market'] ?? '',
+            'odds' => $data['odds'] ?? 0,
+            'stake' => $data['stake'] ?? 0,
+            'urgency' => $data['urgency'] ?? 'Medium',
+            'status' => $data['status'] ?? 'pending',
+            'timestamp' => $data['timestamp'] ?? date('Y-m-d H:i:s')
+        ]);
+
+        return $this->db->lastInsertId();
+    }
+
+    public function isPending($fixture_id)
+    {
+        $stmt = $this->db->prepare("SELECT id FROM bets WHERE fixture_id = ? AND status = 'pending'");
+        $stmt->execute([$fixture_id]);
+        return $stmt->fetch() !== false;
+    }
+
+    public function updateStatus($id, $status, $result = null)
+    {
+        $sql = "UPDATE bets SET status = :status, result = :result WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([
+            'status' => $status,
+            'result' => $result,
+            'id' => $id
+        ]);
+    }
+}
