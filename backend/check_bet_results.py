@@ -29,19 +29,24 @@ def log_message(msg):
     except:
         pass
 
-def check_bets(usage_callback=None):
+def check_bets(usage_callback=None, lock=None):
     if not os.path.exists(BETS_HISTORY_FILE):
         return
 
+    history = []
     try:
-        with open(BETS_HISTORY_FILE, "r") as f:
-            history = json.load(f)
+        if lock:
+            with lock:
+                with open(BETS_HISTORY_FILE, "r") as f:
+                    history = json.load(f)
+        else:
+            with open(BETS_HISTORY_FILE, "r") as f:
+                history = json.load(f)
     except Exception as e:
         log_message(f"Error loading history: {e}")
         return
 
     # We want to settle everything that isn't already decided (win/lost/void)
-    # This includes 'pending', but also 'duplicate' or 'stale' from previous runs
     targets = [b for b in history if b.get("status") in ["pending", "duplicate", "stale"]]
 
     if not targets:
@@ -58,14 +63,20 @@ def check_bets(usage_callback=None):
         chunk = ids_to_check[i:i + 20]
         try:
             ids_param = ",".join(chunk)
-            log_message(f"Settling backlog: Checking batch of {len(chunk)} matches...")
-            # Added timeout
-            res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param}, timeout=10)
+            log_message(f"Settling backlog: Checking batch of {len(chunk)} matches (IDs: {ids_param})")
+            res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param}, timeout=15)
             if usage_callback: usage_callback(res)
 
             data = res.json()
-            for f in data.get("response", []):
-                fixtures_data[f["fixture"]["id"]] = f
+            response_list = data.get("response", [])
+            for f in response_list:
+                fixtures_data[int(f["fixture"]["id"])] = f
+
+            # Diagnostic: check if some IDs were not returned by the API
+            for requested_id in chunk:
+                if int(requested_id) not in fixtures_data:
+                    log_message(f"❓ API Warning: Fixture {requested_id} not returned in response.")
+
             time.sleep(1)
         except Exception as e:
             log_message(f"❌ Batch API Error: {e}")
@@ -76,6 +87,14 @@ def check_bets(usage_callback=None):
             continue
 
         f_id = int(bet.get("fixture_id", 0))
+        match_name = bet.get("match", "Unknown")
+
+        # Determine how long ago the bet was placed
+        try:
+            bet_time = datetime.strptime(bet["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
+            hours_since_bet = (now_utc - bet_time).total_seconds() / 3600
+        except:
+            hours_since_bet = 0
 
         # If we have data for this fixture
         if f_id in fixtures_data:
@@ -85,7 +104,6 @@ def check_bets(usage_callback=None):
             elapsed = status_info["elapsed"] or 0
             goals = fixture["goals"]
             score = fixture.get("score", {})
-            match_name = bet.get("match", "Unknown")
             advice = str(bet.get("advice", "")).lower()
             market = str(bet.get("market", "")).lower()
 
@@ -93,7 +111,9 @@ def check_bets(usage_callback=None):
             away_name = fixture["teams"]["away"]["name"].lower()
 
             # Force FT if match is clearly over but API status is lagging
-            if f_status in ["2H", "90"] and elapsed > 105:
+            # If match started > 3 hours ago, it's definitely over.
+            if f_status not in ["FT", "AET", "PEN"] and (elapsed > 105 or hours_since_bet > 3):
+                log_message(f"⏰ Force-settling {match_name} as FT (Status: {f_status}, Elapsed: {elapsed}, Hours since bet: {hours_since_bet:.1f})")
                 f_status = "FT"
 
             # 1. VOIDED
@@ -101,6 +121,7 @@ def check_bets(usage_callback=None):
                 bet["status"] = "void"
                 bet["result"] = f_status
                 updated = True
+                log_message(f"🚫 {match_name} VOIDED (Status: {f_status})")
                 continue
 
             # 2. SETTLEMENT LOGIC
@@ -123,17 +144,23 @@ def check_bets(usage_callback=None):
 
             if settle_now:
                 is_win = False
+                found_pattern = False
+
                 # Home Win
                 if re.search(r'\b(1|home|vittoria casa|vince casa|casa)\b', advice) or (home_name in advice and any(x in advice for x in ["vince", "vittoria", "segna"])):
+                    found_pattern = True
                     if h > a: is_win = True
                 # Away Win
                 elif re.search(r'\b(2|away|vittoria ospite|vince trasferta|ospite|trasferta)\b', advice) or (away_name in advice and any(x in advice for x in ["vince", "vittoria", "segna"])):
+                    found_pattern = True
                     if a > h: is_win = True
                 # Draw (X)
                 elif re.search(r'\b(x|draw|pareggio|segno x)\b', advice) and not re.search(r'\d', advice.replace('x', '')):
+                    found_pattern = True
                     if h == a: is_win = True
                 # Over
                 elif "over" in advice:
+                    found_pattern = True
                     threshold = 2.5
                     if "0.5" in advice: threshold = 0.5
                     elif "1.5" in advice: threshold = 1.5
@@ -141,35 +168,60 @@ def check_bets(usage_callback=None):
                     if (h + a) > threshold: is_win = True
                 # Under
                 elif "under" in advice:
+                    found_pattern = True
                     threshold = 2.5
                     if "0.5" in advice: threshold = 0.5
                     elif "1.5" in advice: threshold = 1.5
                     elif "3.5" in advice: threshold = 3.5
                     if (h + a) < threshold: is_win = True
                 # Default team win
-                elif home_name in advice and h > a: is_win = True
-                elif away_name in advice and a > h: is_win = True
+                elif home_name in advice:
+                    found_pattern = True
+                    if h > a: is_win = True
+                elif away_name in advice:
+                    found_pattern = True
+                    if a > h: is_win = True
 
-                bet["status"] = "win" if is_win else "lost"
-                bet["result"] = f"{res_prefix}{h}-{a}"
+                if found_pattern:
+                    bet["status"] = "win" if is_win else "lost"
+                    bet["result"] = f"{res_prefix}{h}-{a}"
+                    updated = True
+                    log_message(f"💰 BACKLOG SETTLED: {match_name} -> {bet['status'].upper()} ({bet['result']})")
+                else:
+                    log_message(f"⚠️ Settlement failed for {match_name}: Advice '{advice}' didn't match any known pattern.")
+                    # If match is finished but we can't settle, mark as manual_check to stop retrying
+                    if f_status == "FT":
+                        bet["status"] = "manual_check"
+                        bet["result"] = f"{res_prefix}{h}-{a}"
+                        updated = True
+            else:
+                if hours_since_bet > 2:
+                    log_message(f"⏳ {match_name} still pending after {hours_since_bet:.1f}h (Status: {f_status}, Elapsed: {elapsed})")
+
+        else:
+            # Fixture not found in API response
+            if hours_since_bet > 6:
+                log_message(f"💀 Fixture {f_id} ({match_name}) missing from API for {hours_since_bet:.1f}h. Marking as stale.")
+                bet["status"] = "stale"
                 updated = True
-                log_message(f"💰 BACKLOG SETTLED: {match_name} -> {bet['status'].upper()} ({bet['result']})")
 
         # 3. SECONDARY CLEANUP: If still pending/stale but match is very old (>12h), just close it
         if bet["status"] in ["pending", "duplicate", "stale"]:
-            try:
-                bet_time = datetime.strptime(bet["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
-                if (now_utc - bet_time) > timedelta(hours=12):
-                    bet["status"] = "void"
-                    bet["result"] = "Expired"
-                    updated = True
-            except:
-                pass
+            if hours_since_bet > 12:
+                log_message(f"🧹 Expiring very old bet: {match_name} (Status: {bet['status']})")
+                bet["status"] = "void"
+                bet["result"] = "Expired"
+                updated = True
 
     if updated:
         try:
-            with open(BETS_HISTORY_FILE, "w") as f:
-                json.dump(history, f, indent=4)
+            if lock:
+                with lock:
+                    with open(BETS_HISTORY_FILE, "w") as f:
+                        json.dump(history, f, indent=4)
+            else:
+                with open(BETS_HISTORY_FILE, "w") as f:
+                    json.dump(history, f, indent=4)
         except Exception as e:
             log_message(f"❌ Save Error: {e}")
 

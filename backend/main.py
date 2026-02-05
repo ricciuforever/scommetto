@@ -33,8 +33,14 @@ HEADERS = {
 # Global lock for file operations
 file_lock = threading.Lock()
 
-# Global tracker for API usage
+# Global tracker for API usage and loop health
 api_usage_info = {"used": 0, "remaining": 7500}
+loop_telemetry = {
+    "last_heartbeat": None,
+    "cycle_count": 0,
+    "last_error": None,
+    "status": "initializing"
+}
 
 def update_usage_from_response(response):
     global api_usage_info
@@ -64,8 +70,7 @@ def fetch_live_data():
     print("Updating live data...")
     try:
         url = f"{BASE_URL}/fixtures?live=all"
-        # Added timeout to prevent hanging
-        response = requests.get(url, headers=HEADERS, timeout=10)
+        response = requests.get(url, headers=HEADERS, timeout=15)
         update_usage_from_response(response)
         data = response.json()
         with file_lock:
@@ -74,6 +79,7 @@ def fetch_live_data():
         print("Live data updated.")
     except Exception as e:
         print(f"Error updating live data: {e}")
+        loop_telemetry["last_error"] = f"fetch_live_data: {str(e)}"
 
 from get_match_intelligence import get_fixture_details
 from gemini_analyzer import analyze_match_with_gemini
@@ -140,7 +146,6 @@ def internal_place_bet(bet_data: dict):
         advice = bet_data.get("advice", "")
 
         # Prevent duplicate pending bets for the same fixture.
-        # Using .get() ensures compatibility with historical records.
         existing_pending = next((b for b in history if int(b.get("fixture_id", 0)) == f_id and b.get("status") == "pending"), None)
         if existing_pending:
             return {"status": "already_exists", "bet": existing_pending}
@@ -163,15 +168,14 @@ def place_bet(bet_data: dict):
 
 @app.get("/api/usage")
 async def get_usage():
-    return api_usage_info
+    return {**api_usage_info, "telemetry": loop_telemetry}
 
 def fetch_initial_data():
     if not os.path.exists(TEAMS_FILE):
         print("Seeding initial teams data...")
         try:
             url = f"{BASE_URL}/teams?league=135&season=2024"
-            # Added timeout
-            response = requests.get(url, headers=HEADERS, timeout=10)
+            response = requests.get(url, headers=HEADERS, timeout=15)
             update_usage_from_response(response)
             data = response.json()
             with file_lock:
@@ -207,13 +211,11 @@ def auto_scanner_logic():
                 print("--- 🤖 BOT PAUSED: API Quota low ---")
                 break
 
-            # Check for existing pending bets for this fixture to avoid duplicates.
-            # Using .get() maintains compatibility with older history records.
+            # Check for existing pending bets for this fixture
             existing_bet = next((b for b in history if int(b.get("fixture_id", 0)) == fix_id and b.get("status") == "pending"), None)
             
             should_analyze = False
             if not existing_bet:
-                # Check for recent analysis or non-pending bets for this match to avoid repetition.
                 recent = next((b for b in reversed(history) if int(b.get("fixture_id", 0)) == fix_id), None)
                 if not recent:
                     should_analyze = True
@@ -257,20 +259,26 @@ def auto_scanner_logic():
                     
     except Exception as e:
         print(f"🤖 BOT ERROR: {e}")
+        loop_telemetry["last_error"] = f"auto_scanner: {str(e)}"
 
 def single_update_loop():
+    global loop_telemetry
+    loop_telemetry["status"] = "running"
     fetch_initial_data()
     cycle_count = 0
     while True:
         try:
+            loop_telemetry["last_heartbeat"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            loop_telemetry["cycle_count"] = cycle_count
+
             nowStr = time.strftime("%H:%M:%S")
-            print(f"[{nowStr}] --- STARTING SYNC CYCLE ---")
+            print(f"[{nowStr}] --- STARTING SYNC CYCLE {cycle_count} ---")
             fetch_live_data()
             
             # Settlement run every 3 minutes (cycle 0, 3, 6...)
             if cycle_count % 3 == 0:
                 print(f"[{nowStr}] Running Bet Settlement...")
-                check_bets(usage_callback=update_usage_from_response)
+                check_bets(usage_callback=update_usage_from_response, lock=file_lock)
             
             # Auto-Scanner every 2 minutes
             if cycle_count % 2 == 0:
@@ -281,6 +289,7 @@ def single_update_loop():
         except Exception as e:
             msg = f"LOOP ERROR: {e}"
             print(msg)
+            loop_telemetry["last_error"] = msg
             log_path = os.path.join(BASE_DIR, "agent_log.txt")
             with open(log_path, "a") as f:
                 f.write(f"{time.ctime()}: {msg}\n")
@@ -296,7 +305,8 @@ async def health_check():
     return {
         "status": "alive",
         "last_sync_seconds_ago": int(time.time() - mtime),
-        "usage": api_usage_info
+        "usage": api_usage_info,
+        "telemetry": loop_telemetry
     }
 
 @app.get("/api/logs")
@@ -306,7 +316,7 @@ async def get_logs():
         if os.path.exists(log_path):
             with open(log_path, "r") as f:
                 lines = f.readlines()
-                return {"logs": lines[-20:]}
+                return {"logs": lines[-30:]} # Returned more logs
         return {"logs": ["Log file empty."]}
     except Exception as e:
         return {"logs": [f"Error reading logs: {e}"]}

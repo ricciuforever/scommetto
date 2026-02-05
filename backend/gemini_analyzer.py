@@ -5,8 +5,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialize the new Google Gen AI client
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Initialize the new Google Gen AI client with a timeout (30 seconds)
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY"),
+    http_options=types.HttpOptions(timeout=30000)
+)
 
 # Using the latest Flash Lite model available in the new SDK
 MODEL_NAME = 'gemini-2.0-flash-lite-preview-02-05'
