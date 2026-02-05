@@ -110,41 +110,15 @@ class SyncController
         });
 
         $settledCount = 0;
+        $betSettler = new \App\Services\BetSettler();
+
         foreach ($pending as $bet) {
             // Check if match is finished (fetch details)
             $details = $this->apiService->fetchFixtureDetails($bet['fixture_id']);
             $fixture = $details['response'][0] ?? null;
 
-            if ($fixture && $fixture['fixture']['status']['short'] === 'FT') {
-                $homeGoals = $fixture['goals']['home'];
-                $awayGoals = $fixture['goals']['away'];
-
-                // Simplified result checking based on "market" string
-                // In a real app, you'd need a more robust parser for advice/market
-                $status = 'void'; // Default
-                $market = strtolower($bet['market']);
-
-                if (strpos($market, '1') !== false && $homeGoals > $awayGoals)
-                    $status = 'won';
-                elseif (strpos($market, '2') !== false && $awayGoals > $homeGoals)
-                    $status = 'won';
-                elseif (strpos($market, 'x') !== false && $homeGoals == $awayGoals)
-                    $status = 'won';
-                elseif (strpos($market, 'over') !== false) {
-                    preg_match('/over (\d+\.?\d*)/', $market, $m);
-                    if ($m && ($homeGoals + $awayGoals) > (float) $m[1])
-                        $status = 'won';
-                    else
-                        $status = 'lost';
-                }
-                // Add more logic as needed...
-                else {
-                    // Logic for win/loss if status wasn't set to won
-                    if ($status === 'void')
-                        $status = 'lost';
-                }
-
-                $this->betModel->updateStatus($bet['id'], $status, "$homeGoals-$awayGoals");
+            if ($fixture && in_array($fixture['fixture']['status']['short'], ['FT', 'AET', 'PEN'])) {
+                $betSettler->processSettlement($bet, $fixture);
                 $settledCount++;
             }
         }

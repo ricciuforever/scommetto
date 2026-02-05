@@ -290,6 +290,21 @@ header {
     background: rgba(255, 255, 255, 0.05);
 }
 
+.rotator {
+    animation: rotate 2s linear infinite;
+    display: inline-block;
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .analysis-content::-webkit-scrollbar-thumb {
     background: var(--accent);
     border-radius: 10px;

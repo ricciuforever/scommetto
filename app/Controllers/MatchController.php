@@ -5,17 +5,20 @@ namespace App\Controllers;
 
 use App\Services\FootballApiService;
 use App\Services\GeminiService;
+use App\Services\BetSettler;
 use App\Config\Config;
 
 class MatchController
 {
     private $apiService;
     private $geminiService;
+    private $betSettler;
 
     public function __construct()
     {
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
+        $this->betSettler = new BetSettler();
     }
 
     public function index()
@@ -44,6 +47,8 @@ class MatchController
         $data = $this->apiService->fetchLiveMatches();
         if (!isset($data['error'])) {
             file_put_contents($cacheFile, json_encode($data));
+            // AUTO-SETTLE BETS (Zero API Cost)
+            $this->betSettler->settleFromLive($data['response'] ?? []);
         }
 
         echo json_encode($data);

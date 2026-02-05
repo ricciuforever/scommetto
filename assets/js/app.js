@@ -442,6 +442,30 @@ fetchLive();
 fetchHistory();
 fetchUsage();
 
+// Event Listener for Manual Sync
+const syncBtn = document.getElementById('sync-btn');
+if (syncBtn) {
+    syncBtn.addEventListener('click', async () => {
+        syncBtn.disabled = true;
+        const originalContent = syncBtn.innerHTML;
+        syncBtn.innerHTML = '<i data-lucide="loader" class="rotator"></i> Attendere...';
+        if (window.lucide) lucide.createIcons();
+
+        try {
+            const res = await fetch('/api/sync');
+            const data = await res.json();
+            console.log('Sync completed:', data);
+            await fetchHistory();
+        } catch (e) {
+            console.error('Sync failed', e);
+        } finally {
+            syncBtn.disabled = false;
+            syncBtn.innerHTML = originalContent;
+            if (window.lucide) lucide.createIcons();
+        }
+    });
+}
+
 // Intervals
 setInterval(fetchLive, 20000);    // Refresh full data every 20s
 setInterval(fetchHistory, 40000); // Refresh history every 40s

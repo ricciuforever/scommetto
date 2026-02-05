@@ -48,7 +48,13 @@
             </section>
 
             <aside>
-                <h2 style="margin-bottom: 1.5rem;">Storico Recente</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
+                    <h2 style="margin:0;">Storico Recente</h2>
+                    <button id="sync-btn" class="btn-analyze"
+                        style="padding: 0.4rem 0.8rem; font-size: 0.8rem; display:flex; align-items:center; gap:0.4rem;">
+                        <i data-lucide="refresh-cw" style="width:14px;"></i> Sincronizza
+                    </button>
+                </div>
                 <div class="glass-panel" id="history-container" style="padding: 0.5rem;">
                     <!-- History populated by JS -->
                 </div>
