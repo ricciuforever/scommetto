@@ -7,6 +7,11 @@ use App\Config\Config;
 
 Config::init();
 
+// Enable Error Logging
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ini_set('error_log', Config::LOG_FILE);
+
 // Simple PSR-4 style autoloader
 spl_autoload_register(function ($class) {
     $prefix = 'App\\';
