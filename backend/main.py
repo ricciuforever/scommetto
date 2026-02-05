@@ -120,7 +120,7 @@ async def get_history():
     return []
 
 def internal_place_bet(bet_data: dict):
-    """Internal function to place a bet, with file locking and consistent types."""
+    """Internal function to place a bet, with file locking and strict duplicate prevention."""
     with file_lock:
         history = []
         if os.path.exists(BETS_HISTORY_FILE):
@@ -137,10 +137,11 @@ def internal_place_bet(bet_data: dict):
 
         advice = bet_data.get("advice", "")
 
-        # DUPLICATE CHECK
-        existing = next((b for b in history if int(b.get("fixture_id", 0)) == f_id and b.get("advice") == advice), None)
-        if existing:
-            return {"status": "already_exists", "bet": existing}
+        # STRICT DUPLICATE CHECK: Only 1 pending bet per fixture!
+        # This prevents the accumulation the user is seeing.
+        existing_pending = next((b for b in history if int(b.get("fixture_id", 0)) == f_id and b.get("status") == "pending"), None)
+        if existing_pending:
+            return {"status": "already_exists", "bet": existing_pending}
 
         bet_data["id"] = str(len(history) + 1)
         bet_data["status"] = "pending"
@@ -187,7 +188,7 @@ def auto_scanner_logic():
         
         matches = data.get("response", [])
         
-        # Load history once outside loop
+        # Load history to check for existing bets
         history = []
         with file_lock:
             if os.path.exists(BETS_HISTORY_FILE):
@@ -203,24 +204,26 @@ def auto_scanner_logic():
                 print("--- 🤖 BOT PAUSED: API Quota low ---")
                 break
 
-            # CORRECTED TYPE CHECK
-            recent_bet = next((b for b in reversed(history) if int(b.get("fixture_id", 0)) == fix_id), None)
+            # STRICT CHECK: Don't analyze if we already have a pending bet for this match
+            existing_bet = next((b for b in history if int(b.get("fixture_id", 0)) == fix_id and b.get("status") == "pending"), None)
             
             should_analyze = False
-            if not recent_bet:
-                should_analyze = True
-            else:
-                try:
-                    last_time = datetime.strptime(recent_bet["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
-                    now_time = datetime.utcnow()
-                    diff = (now_time - last_time).total_seconds() / 60
-                    if diff > 30 and recent_bet["status"] == "pending":
-                        should_analyze = True
-                except:
+            if not existing_bet:
+                # Also check for recent analyzed/lost to avoid spamming the same match
+                recent = next((b for b in reversed(history) if int(b.get("fixture_id", 0)) == fix_id), None)
+                if not recent:
                     should_analyze = True
+                else:
+                    try:
+                        last_time = datetime.strptime(recent["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
+                        now_time = datetime.utcnow()
+                        diff = (now_time - last_time).total_seconds() / 60
+                        if diff > 45: # Re-analyze every 45 mins if not pending
+                            should_analyze = True
+                    except:
+                        should_analyze = True
 
             if should_analyze:
-                # Efficiency: skip matches almost finished (>80 min)
                 elapsed = m.get("fixture", {}).get("status", {}).get("elapsed")
                 if elapsed and elapsed > 80:
                     continue
@@ -260,10 +263,12 @@ def single_update_loop():
             print(f"[{nowStr}] --- STARTING SYNC CYCLE ---")
             fetch_live_data()
             
-            if cycle_count % 5 == 0:
+            # Settlement run every 3 minutes (cycle 0, 3, 6...)
+            if cycle_count % 3 == 0:
                 print(f"[{nowStr}] Running Bet Settlement...")
                 check_bets(usage_callback=update_usage_from_response)
             
+            # Auto-Scanner every 2 minutes
             if cycle_count % 2 == 0:
                 auto_scanner_logic()
                 
