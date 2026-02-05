@@ -1,4 +1,5 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi.concurrency import run_in_threadpool
+from fastapi import Response, FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
@@ -113,11 +114,17 @@ async def get_gemini_analysis(fixture_id: int):
 
 @app.get("/api/history")
 async def get_history():
-    with file_lock:
-        if os.path.exists(BETS_HISTORY_FILE):
-            with open(BETS_HISTORY_FILE, "r") as f:
-                return json.load(f)
-    return []
+    def _read_history():
+        content = None
+        with file_lock:
+            if os.path.exists(BETS_HISTORY_FILE):
+                with open(BETS_HISTORY_FILE, "r") as f:
+                    content = f.read()
+        if content:
+            return json.dumps(json.loads(content))
+        return "[]"
+    content = await run_in_threadpool(_read_history)
+    return Response(content=content, media_type="application/json")
 
 def internal_place_bet(bet_data: dict):
     """Internal function to place a bet, with file locking and strict duplicate prevention."""
@@ -297,41 +304,62 @@ async def health_check():
 
 @app.get("/api/logs")
 async def get_logs():
-    try:
-        log_path = os.path.join(BASE_DIR, "agent_log.txt")
-        if os.path.exists(log_path):
-            with open(log_path, "r") as f:
-                lines = f.readlines()
-                return {"logs": lines[-20:]}
-        return {"logs": ["Log file empty."]}
-    except Exception as e:
-        return {"logs": [f"Error reading logs: {e}"]}
+    def _read_logs():
+        try:
+            log_path = os.path.join(BASE_DIR, "agent_log.txt")
+            if os.path.exists(log_path):
+                with open(log_path, "r") as f:
+                    lines = f.readlines()
+                    return json.dumps({"logs": lines[-20:]})
+            return json.dumps({"logs": ["Log file empty."]})
+        except Exception as e:
+            return json.dumps({"logs": [f"Error reading logs: {e}"]})
+    content = await run_in_threadpool(_read_logs)
+    return Response(content=content, media_type="application/json")
 
 @app.get("/api/live")
 async def get_live():
-    with file_lock:
-        if os.path.exists(LIVE_DATA_FILE):
-            with open(LIVE_DATA_FILE, "r") as f:
-                data = json.load(f)
-                data["server_time"] = os.path.getmtime(LIVE_DATA_FILE)
-                return data
-    return {"response": []}
+    def _read_live():
+        content = None
+        with file_lock:
+            if os.path.exists(LIVE_DATA_FILE):
+                with open(LIVE_DATA_FILE, "r") as f:
+                    content = f.read()
+        if content:
+            data = json.loads(content)
+            data["server_time"] = os.path.getmtime(LIVE_DATA_FILE)
+            return json.dumps(data)
+        return json.dumps({"response": []})
+    content = await run_in_threadpool(_read_live)
+    return Response(content=content, media_type="application/json")
 
 @app.get("/api/teams")
 async def get_teams():
-    with file_lock:
-        if os.path.exists(TEAMS_FILE):
-            with open(TEAMS_FILE, "r") as f:
-                return json.load(f)
-    return {"response": []}
+    def _read_teams():
+        content = None
+        with file_lock:
+            if os.path.exists(TEAMS_FILE):
+                with open(TEAMS_FILE, "r") as f:
+                    content = f.read()
+        if content:
+            return json.dumps(json.loads(content))
+        return json.dumps({"response": []})
+    content = await run_in_threadpool(_read_teams)
+    return Response(content=content, media_type="application/json")
 
 @app.get("/api/squads")
 async def get_squads():
-    with file_lock:
-        if os.path.exists(SQUADS_FILE):
-            with open(SQUADS_FILE, "r") as f:
-                return json.load(f)
-    return {}
+    def _read_squads():
+        content = None
+        with file_lock:
+            if os.path.exists(SQUADS_FILE):
+                with open(SQUADS_FILE, "r") as f:
+                    content = f.read()
+        if content:
+            return json.dumps(json.loads(content))
+        return "{}"
+    content = await run_in_threadpool(_read_squads)
+    return Response(content=content, media_type="application/json")
 
 if __name__ == "__main__":
     import uvicorn
