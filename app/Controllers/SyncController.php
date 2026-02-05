@@ -8,6 +8,7 @@ use App\Models\Bet;
 use App\Models\Analysis;
 use App\Services\FootballApiService;
 use App\Services\GeminiService;
+use App\Config\Config;
 
 class SyncController
 {
@@ -47,13 +48,22 @@ class SyncController
             'settled' => 0
         ];
 
-        // 1. Check existing pending bets for results (Settlement)
-        $results['settled'] = $this->checkSettleBets();
-
-        // 2. Scan live matches for new opportunities
+        // 1. Scan live matches
         $live = $this->apiService->fetchLiveMatches();
         $matches = $live['response'] ?? [];
         $results['scanned'] = count($matches);
+
+        // 2. AUTO-SETTLE for FREE using current live data
+        $betSettler = new \App\Services\BetSettler();
+        $results['settled'] = $betSettler->settleFromLive($matches);
+
+        // 3. Occasionally check for orphaned bets (those no longer in live but still pending)
+        // We only do this every 30 mins to save API credits
+        $settleLock = Config::DATA_PATH . 'settlement.lock';
+        if (!file_exists($settleLock) || (time() - filemtime($settleLock) > 1800)) {
+            $results['settled'] += $this->checkSettleBets();
+            touch($settleLock);
+        }
 
         $usage = $this->usageModel->getLatest();
         if ($usage && $usage['requests_remaining'] < 20) {
@@ -62,19 +72,17 @@ class SyncController
             return;
         }
 
+        // 4. Analyze ONLY ONE match per minute as requested
         foreach ($matches as $m) {
             $fid = $m['fixture']['id'];
             $elapsed = $m['fixture']['status']['elapsed'] ?? 0;
 
-            // Only analyze if match is between 10' and 80'
             if ($elapsed < 10 || $elapsed > 80)
                 continue;
 
-            // Don't analyze if already pending
             if ($this->betModel->isPending($fid))
                 continue;
 
-            // Don't analyze if checked in the last 45 mins
             if ($this->analysisModel->wasRecentlyChecked($fid))
                 continue;
 
@@ -83,7 +91,6 @@ class SyncController
             $prediction = $this->geminiService->analyze($m);
             $this->analysisModel->log($fid, $prediction);
 
-            // Extract JSON from prediction
             if (preg_match('/```json\n([\s\S]*?)\n```/', $prediction, $matches_json)) {
                 $betData = json_decode($matches_json[1], true);
                 if ($betData) {
@@ -94,9 +101,8 @@ class SyncController
                 }
             }
 
-            // Limit to 2 analyzes per run to avoid timeout/quota spikes
-            if ($results['analyzed'] >= 2)
-                break;
+            // CRITICAL: Limit to 1 analysis per run
+            break;
         }
 
         $results['bot_status'] = 'completed';

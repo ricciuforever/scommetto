@@ -37,9 +37,9 @@ class MatchController
     {
         header('Content-Type: application/json');
 
-        // Use cache if it's fresh (e.g., 20 seconds)
+        // Use cache if it's fresh (e.g., 60 seconds)
         $cacheFile = Config::LIVE_DATA_FILE;
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 20)) {
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 60)) {
             echo file_get_contents($cacheFile);
             return;
         }
