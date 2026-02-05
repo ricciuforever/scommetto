@@ -136,8 +136,8 @@ function renderFilters() {
         const isActive = selectedLeague === league;
         const pill = document.createElement('button');
         pill.className = `px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${isActive
-                ? 'bg-accent text-white border-accent shadow-lg shadow-accent/20'
-                : 'bg-white/5 text-slate-500 border-white/5 hover:border-accent/50 hover:text-slate-300 dark:bg-slate-800/50'
+            ? 'bg-accent text-white border-accent shadow-lg shadow-accent/20'
+            : 'bg-white/5 text-slate-500 border-white/5 hover:border-accent/50 hover:text-slate-300 dark:bg-slate-800/50'
             }`;
         pill.textContent = league === 'all' ? 'Tutti i Campionati' : league;
         pill.onclick = () => {
@@ -701,7 +701,7 @@ async function showIntelligence(id) {
             { label: 'Forma', key: 'form' },
             { label: 'Attacco', key: 'attaching' },
             { label: 'Difesa', key: 'defensive' },
-            { label: 'Poisson', key: 'poisson_distribution' },
+            { label: 'Probabilità Gol', key: 'poisson_distribution' },
             { label: 'Testa a Testa', key: 'h2h' },
             { label: 'Gol', key: 'goals' }
         ];
