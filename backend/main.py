@@ -33,12 +33,19 @@ api_usage_info = {"used": 0, "remaining": 100}
 def update_usage_from_response(response):
     global api_usage_info
     try:
-        used = response.headers.get("x-ratelimit-requests-used")
-        rem = response.headers.get("x-ratelimit-requests-remaining")
-        if used is not None:
-            api_usage_info["used"] = int(used)
+        # Check various header variants
+        used = response.headers.get("x-ratelimit-requests-used") or response.headers.get("X-RateLimit-Requests-Used")
+        rem = response.headers.get("x-ratelimit-requests-remaining") or response.headers.get("X-RateLimit-Remaining")
+        limit = response.headers.get("x-ratelimit-requests-limit") or response.headers.get("X-RateLimit-Limit")
+        
         if rem is not None:
             api_usage_info["remaining"] = int(rem)
+        if used is not None:
+            api_usage_info["used"] = int(used)
+        elif limit is not None and rem is not None:
+            api_usage_info["used"] = int(limit) - int(rem)
+            
+        print(f"API Usage Updated: {api_usage_info['used']} used, {api_usage_info['remaining']} left")
     except Exception as e:
         print(f"Error updating usage: {e}")
 
@@ -155,8 +162,14 @@ def fetch_initial_data():
 def update_loop():
     fetch_initial_data() # Seed once at startup
     while True:
-        fetch_live_data()
-        check_bets() # Check results for pending bets
+        try:
+            print("--- STARTING UPDATE CYCLE ---")
+            fetch_live_data()
+            print("Checking bet results...")
+            check_bets() 
+            print("--- UPDATE CYCLE COMPLETE ---")
+        except Exception as e:
+            print(f"Error in update loop: {e}")
         time.sleep(900) # Every 15 minutes (96 requests/day)
 
 # Start background thread for updates
