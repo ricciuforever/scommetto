@@ -7,6 +7,12 @@ use App\Services\FootballApiService;
 use App\Services\GeminiService;
 use App\Services\BetSettler;
 use App\Config\Config;
+use App\Models\Prediction;
+use App\Models\Analysis;
+use App\Models\Standing;
+use App\Models\Team;
+use App\Models\Coach;
+use App\Models\Player;
 
 class MatchController
 {
@@ -23,12 +29,10 @@ class MatchController
 
     public function index()
     {
-        // This will serve the frontend (index.html)
         $file = __DIR__ . '/../Views/main.php';
         if (file_exists($file)) {
             require $file;
         } else {
-            // Fallback to a simple message if view doesn't exist yet
             echo "<h1>Scommetto - Area Live</h1><p>Caricamento in corso...</p>";
         }
     }
@@ -36,8 +40,6 @@ class MatchController
     public function getLive()
     {
         header('Content-Type: application/json');
-
-        // Use cache if it's fresh (e.g., 60 seconds)
         $cacheFile = Config::LIVE_DATA_FILE;
         if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 60)) {
             echo file_get_contents($cacheFile);
@@ -47,17 +49,14 @@ class MatchController
         $data = $this->apiService->fetchLiveMatches();
         if (!isset($data['error'])) {
             file_put_contents($cacheFile, json_encode($data));
-            // AUTO-SETTLE BETS (Zero API Cost)
             $this->betSettler->settleFromLive($data['response'] ?? []);
         }
-
         echo json_encode($data);
     }
 
     public function analyze($id)
     {
         header('Content-Type: application/json');
-
         $liveData = json_decode(file_exists(Config::LIVE_DATA_FILE) ? file_get_contents(Config::LIVE_DATA_FILE) : '{"response":[]}', true);
         $match = null;
 
@@ -73,14 +72,22 @@ class MatchController
             return;
         }
 
-        $prediction = $this->geminiService->analyze($match);
+        // Fetch Predictions for AI
+        $predictionModel = new Prediction();
+        if ($predictionModel->needsRefresh((int) $id)) {
+            $predData = $this->apiService->fetchPredictions($id);
+            if (isset($predData['response'][0])) {
+                $predictionModel->save((int) $id, $predData['response'][0]);
+            }
+        }
+        $storedPrediction = $predictionModel->getByFixtureId((int) $id);
 
-        // SAVE ANALYSIS TO DB
+        $prediction = $this->geminiService->analyze($match, $storedPrediction);
+
         try {
-            $analysisModel = new \App\Models\Analysis();
+            $analysisModel = new Analysis();
             $analysisModel->log((int) $id, $prediction);
         } catch (\Exception $e) {
-            // Log error but don't stop the response
             error_log("Error saving analysis: " . $e->getMessage());
         }
 
@@ -91,24 +98,36 @@ class MatchController
         ]);
     }
 
+    public function getPredictions($id)
+    {
+        header('Content-Type: application/json');
+        $predictionModel = new Prediction();
+
+        if ($predictionModel->needsRefresh((int) $id)) {
+            $data = $this->apiService->fetchPredictions($id);
+            if (isset($data['response'][0])) {
+                $predictionModel->save((int) $id, $data['response'][0]);
+            }
+        }
+        echo json_encode($predictionModel->getByFixtureId((int) $id));
+    }
+
     public function getStandings($leagueId)
     {
         header('Content-Type: application/json');
-        $standingModel = new \App\Models\Standing();
-        $season = 2025; // Standard season for now
-
+        $standingModel = new Standing();
+        $season = 2025;
         if ($standingModel->needsRefresh((int) $leagueId)) {
             $data = $this->apiService->fetchStandings($leagueId, $season);
             if (isset($data['response'][0]['league']['standings'][0])) {
                 $rows = $data['response'][0]['league']['standings'][0];
-                $teamModel = new \App\Models\Team();
+                $teamModel = new Team();
                 foreach ($rows as $row) {
-                    $teamModel->save($row['team']); // Minimal save
+                    $teamModel->save($row['team']);
                     $standingModel->save((int) $leagueId, $row);
                 }
             }
         }
-
         echo json_encode($standingModel->getByLeague((int) $leagueId));
     }
 
@@ -116,25 +135,19 @@ class MatchController
     {
         header('Content-Type: application/json');
         try {
-            $teamModel = new \App\Models\Team();
-            $coachModel = new \App\Models\Coach();
-            $playerModel = new \App\Models\Player();
+            $teamModel = new Team();
+            $coachModel = new Coach();
+            $playerModel = new Player();
 
             if ($teamModel->needsRefresh((int) $teamId)) {
-                // 1. Team & Venue Info
                 $data = $this->apiService->fetchTeam($teamId);
                 if (isset($data['response'][0])) {
-                    // Pass the whole object which contains both 'team' and 'venue'
                     $teamModel->save($data['response'][0]);
                 }
-
-                // 2. Coach
                 $coachData = $this->apiService->fetchCoach($teamId);
                 if (isset($coachData['response'][0])) {
                     $coachModel->save($coachData['response'][0], (int) $teamId);
                 }
-
-                // 3. Squad & Players
                 $squadData = $this->apiService->fetchSquad($teamId);
                 if (isset($squadData['response'][0]['players'])) {
                     foreach ($squadData['response'][0]['players'] as $p) {
@@ -169,10 +182,8 @@ class MatchController
     {
         header('Content-Type: application/json');
         try {
-            $playerModel = new \App\Models\Player();
+            $playerModel = new Player();
             $player = $playerModel->getById((int) $playerId);
-
-            // Se non lo abbiamo o è vecchio, aggiorniamo (ma per ora basta averlo)
             if (!$player) {
                 $data = $this->apiService->fetchPlayer($playerId);
                 if (isset($data['response'][0]['player'])) {
@@ -180,7 +191,6 @@ class MatchController
                     $player = $playerModel->getById((int) $playerId);
                 }
             }
-
             echo json_encode($player);
         } catch (\Exception $e) {
             echo json_encode(['error' => $e->getMessage()]);
