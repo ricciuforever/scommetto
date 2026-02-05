@@ -189,18 +189,12 @@ header {
 
 /* Match Events / Highlights */
 .match-events {
-    grid-column: 1 / -1;
     display: flex;
-    gap: 0.5rem;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    gap: 0.4rem;
     padding-top: 0.75rem;
     margin-top: 0.75rem;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
-    scrollbar-width: none;
-}
-
-.match-events::-webkit-scrollbar {
-    display: none;
 }
 
 .event-pill {
