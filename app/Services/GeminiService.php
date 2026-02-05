@@ -20,7 +20,7 @@ class GeminiService
             return "Error: Missing Gemini API Key";
         }
 
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $this->apiKey;
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=" . $this->apiKey;
 
         $prompt = "Sei un analista scommesse PRO. Analizza questi dati live (JSON) e suggerisci una scommessa di valore in ITALIANO.\n\n" .
             "DATI: " . json_encode($matchData) . "\n\n" .
@@ -46,8 +46,8 @@ class GeminiService
                 ]
             ],
             "generationConfig" => [
-                "temperature" => 0.3,
-                "maxOutputTokens" => 2000
+                "temperature" => 0.2,
+                "maxOutputTokens" => 1000
             ]
         ];
 
@@ -61,11 +61,15 @@ class GeminiService
         $error = curl_error($ch);
         curl_close($ch);
 
-        if ($error) {
+        if ($error)
             return "CURL Error: " . $error;
-        }
 
         $result = json_decode($response, true);
-        return $result['candidates'][0]['content']['parts'][0]['text'] ?? "Error parsing Gemini response";
+
+        if (isset($result['error'])) {
+            return "Gemini API Error: " . ($result['error']['message'] ?? 'Unknown Error');
+        }
+
+        return $result['candidates'][0]['content']['parts'][0]['text'] ?? "Error: Nessuna risposta valida dall'AI.";
     }
 }

@@ -1,11 +1,14 @@
 // assets/js/app.js
 
+let liveMatches = [];
+
 async function fetchLive() {
     try {
         const res = await fetch('/api/live');
         const data = await res.json();
-        renderMatches(data.response || []);
-        document.getElementById('active-matches-count').textContent = data.response ? data.response.length : 0;
+        liveMatches = data.response || [];
+        renderMatches();
+        document.getElementById('active-matches-count').textContent = liveMatches.length;
     } catch (e) {
         console.error("Error fetching live data", e);
     }
@@ -16,7 +19,7 @@ async function fetchHistory() {
         const res = await fetch('/api/history');
         const data = await res.json();
         renderHistory(data || []);
-        document.getElementById('pending-bets-count').textContent = data.filter(b => b.status === 'pending').length;
+        document.getElementById('pending-bets-count').textContent = (data || []).filter(b => b.status === 'pending').length;
     } catch (e) {
         console.error("Error fetching history", e);
     }
@@ -34,15 +37,16 @@ async function fetchUsage() {
     }
 }
 
-function renderMatches(matches) {
+function renderMatches() {
     const container = document.getElementById('live-matches-container');
-    container.innerHTML = matches.length === 0 ? '<p>Nessuna partita live disponibile.</p>' : '';
+    container.innerHTML = liveMatches.length === 0 ? '<p>Nessuna partita live disponibile.</p>' : '';
 
-    matches.forEach(m => {
+    liveMatches.forEach(m => {
         const card = document.createElement('div');
         card.className = 'glass-panel match-card';
+        card.dataset.id = m.fixture.id;
         card.innerHTML = `
-            <div class="live-badge">${m.fixture.status.elapsed}'</span></div>
+            <div class="live-badge"><span class="elapsed-time" data-start="${m.fixture.status.elapsed}">${m.fixture.status.elapsed}</span>'</div>
             <div class="team-info">
                 <span>${m.teams.home.name}</span>
                 <span style="color:var(--accent); font-size:1.2rem;">${m.goals.home} - ${m.goals.away}</span>
@@ -51,6 +55,16 @@ function renderMatches(matches) {
             <button class="btn-analyze" onclick="analyzeMatch(${m.fixture.id})">Analizza AI</button>
         `;
         container.appendChild(card);
+    });
+}
+
+function updateMinutes() {
+    const times = document.querySelectorAll('.elapsed-time');
+    times.forEach(el => {
+        let current = parseInt(el.textContent);
+        if (current < 90) {
+            el.textContent = current + 1;
+        }
     });
 }
 
@@ -87,15 +101,46 @@ async function analyzeMatch(id) {
         const res = await fetch(`/api/analyze/${id}`);
         const data = await res.json();
 
-        // Match prediction can be a long text with a JSON block
+        if (data.error) {
+            body.innerHTML = `<div style="color:var(--danger);">${data.error}</div>`;
+            return;
+        }
+
         const prediction = data.prediction;
-        const jsonMatch = prediction.match(/```json\n([\s\S]*?)\n```/);
 
-        let displayHtml = prediction.replace(/```json[\s\S]*?```/, '');
-        body.innerHTML = `<div style="white-space: pre-wrap;">${displayHtml}</div>`;
+        // Robust JSON extraction
+        let betData = null;
+        let displayHtml = prediction;
 
+        const jsonMatch = prediction.match(/```json\n?([\s\S]*?)\n?```/i);
         if (jsonMatch) {
-            const betData = JSON.parse(jsonMatch[1]);
+            try {
+                betData = JSON.parse(jsonMatch[1]);
+                displayHtml = prediction.replace(/```json[\s\S]*?```/i, '');
+            } catch (e) {
+                console.error("JSON Parse Error", e);
+            }
+        }
+
+        body.innerHTML = `
+            <div class="analysis-content" style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
+                <div style="white-space: pre-wrap; margin-bottom: 2rem;">${displayHtml}</div>
+                ${betData ? `
+                    <div class="glass-panel" style="padding: 1rem; border-left: 4px solid var(--accent);">
+                        <div style="font-weight: 800; color: var(--accent); margin-bottom: 0.5rem;">CONSIGLIO AI</div>
+                        <div style="font-size: 1.1rem; margin-bottom: 0.5rem;">${betData.advice}</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.9rem;">
+                            <div><strong>Mercato:</strong> ${betData.market}</div>
+                            <div><strong>Quota:</strong> ${betData.odds}</div>
+                            <div><strong>Urgenza:</strong> ${betData.urgency}</div>
+                            <div><strong>Stake:</strong> ${betData.stake}</div>
+                        </div>
+                    </div>
+                ` : '<div style="color:var(--warning);">Nessun dato scommessa strutturato trovato.</div>'}
+            </div>
+        `;
+
+        if (betData) {
             btn.style.display = 'block';
             btn.onclick = () => placeBet(id, data.match, betData);
         }
@@ -107,11 +152,12 @@ async function analyzeMatch(id) {
 
 async function placeBet(fixture_id, match, betData) {
     try {
+        const matchName = typeof match === 'string' ? match : `${match.teams.home.name} vs ${match.teams.away.name}`;
         const res = await fetch('/api/place_bet', {
             method: 'POST',
             body: JSON.stringify({
                 fixture_id,
-                match: `${match.teams.home.name} vs ${match.teams.away.name}`,
+                match: matchName,
                 ...betData
             })
         });
@@ -136,6 +182,14 @@ fetchLive();
 fetchHistory();
 fetchUsage();
 
-// Refresh live matches every 30s
-setInterval(fetchLive, 30000);
-setInterval(fetchUsage, 60000);
+// Intervals
+setInterval(fetchLive, 30000);   // Refresh full data every 30s
+setInterval(updateMinutes, 60000); // Increment local minutes every 60s
+setInterval(fetchUsage, 60000);   // Refresh usage every 60s
+
+// Close modal on click outside
+window.onclick = (event) => {
+    if (event.target == document.getElementById('analysis-modal')) {
+        closeModal();
+    }
+};
