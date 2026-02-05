@@ -8,6 +8,40 @@ try {
 
   echo "Controllo tabelle mancanti...\n";
 
+  $sql = "CREATE TABLE IF NOT EXISTS `countries` (
+      `name` VARCHAR(100) PRIMARY KEY,
+      `code` VARCHAR(10),
+      `flag` VARCHAR(255),
+      `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+  $db->exec($sql);
+  echo "✅ Tabella 'countries' verificata.\n";
+
+  $db->exec("CREATE TABLE IF NOT EXISTS `seasons` (
+      `year` INT PRIMARY KEY,
+      `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  echo "✅ Tabella 'seasons' verificata.\n";
+
+  $db->exec("CREATE TABLE IF NOT EXISTS `leagues` (
+      `id` INT PRIMARY KEY,
+      `name` VARCHAR(100),
+      `type` VARCHAR(50),
+      `logo` VARCHAR(255),
+      `country_name` VARCHAR(100),
+      `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX (`country_name`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  echo "✅ Tabella 'leagues' verificata.\n";
+
+  $db->exec("CREATE TABLE IF NOT EXISTS `league_seasons` (
+      `league_id` INT,
+      `year` INT,
+      `is_current` BOOLEAN DEFAULT FALSE,
+      PRIMARY KEY (`league_id`, `year`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  echo "✅ Tabella 'league_seasons' verificata.\n";
+
   $sql = "CREATE TABLE IF NOT EXISTS `predictions` (
       `fixture_id` INT PRIMARY KEY,
       `advice` TEXT,

@@ -22,6 +22,21 @@ class FootballApiService
         return $this->request('/fixtures?live=all');
     }
 
+    public function fetchCountries()
+    {
+        return $this->request('/countries');
+    }
+
+    public function fetchSeasons()
+    {
+        return $this->request('/leagues/seasons');
+    }
+
+    public function fetchLeagues()
+    {
+        return $this->request('/leagues');
+    }
+
     public function fetchFixtureDetails($id)
     {
         return $this->request("/fixtures?id=$id");

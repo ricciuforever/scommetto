@@ -45,8 +45,12 @@ class SyncController
             'scanned' => 0,
             'analyzed' => 0,
             'bets_placed' => 0,
-            'settled' => 0
+            'settled' => 0,
+            'scheduled_tasks' => []
         ];
+
+        // 0. Run scheduled tasks (Countries, etc.)
+        $results['scheduled_tasks'] = $this->runScheduledTasks();
 
         // 1. Scan live matches
         $live = $this->apiService->fetchLiveMatches();
@@ -152,6 +156,49 @@ class SyncController
         }
 
         echo json_encode($results);
+    }
+
+    private function runScheduledTasks()
+    {
+        $log = [];
+
+        // SYNC COUNTRIES (Once every 24h)
+        $countryModel = new \App\Models\Country();
+        if ($countryModel->needsRefresh(24)) {
+            $data = $this->apiService->fetchCountries();
+            if (isset($data['response'])) {
+                foreach ($data['response'] as $c) {
+                    $countryModel->save($c);
+                }
+                $log[] = "Countries Synced: " . count($data['response']);
+            }
+        }
+
+        // SYNC SEASONS (Once every 24h)
+        $seasonModel = new \App\Models\Season();
+        if ($seasonModel->needsRefresh(24)) {
+            $data = $this->apiService->fetchSeasons();
+            if (isset($data['response'])) {
+                foreach ($data['response'] as $year) {
+                    $seasonModel->save($year);
+                }
+                $log[] = "Seasons Synced: " . count($data['response']);
+            }
+        }
+
+        // SYNC LEAGUES (Once every 24h)
+        $leagueModel = new \App\Models\League();
+        if ($leagueModel->needsRefresh(24)) {
+            $data = $this->apiService->fetchLeagues();
+            if (isset($data['response'])) {
+                foreach ($data['response'] as $row) {
+                    $leagueModel->save($row);
+                }
+                $log[] = "Leagues Synced: " . count($data['response']);
+            }
+        }
+
+        return $log;
     }
 
     private function checkSettleBets()
