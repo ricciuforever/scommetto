@@ -131,6 +131,21 @@ try {
       `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
   echo "✅ Tabella 'fixtures' verificata.\n";
+  $db->exec("CREATE TABLE IF NOT EXISTS `bets` (
+      `id` INT AUTO_INCREMENT PRIMARY KEY,
+      `fixture_id` INT NOT NULL,
+      `match_name` VARCHAR(255) NOT NULL,
+      `advice` TEXT,
+      `market` VARCHAR(100),
+      `odds` DECIMAL(8,2),
+      `stake` DECIMAL(8,2),
+      `urgency` VARCHAR(50),
+      `status` ENUM('pending','won','lost','void') DEFAULT 'pending',
+      `timestamp` DATETIME DEFAULT CURRENT_TIMESTAMP,
+      `result` VARCHAR(50)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+  echo "✅ Tabella 'bets' verificata.\n";
+
 
   $db->exec("CREATE TABLE IF NOT EXISTS `fixture_statistics` (
       `fixture_id` INT,
@@ -364,6 +379,27 @@ try {
       PRIMARY KEY (`fixture_id`, `bookmaker_id`, `bet_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
   echo "✅ Tabella 'fixture_odds' verificata.\n";
+
+
+  // Patch Fixtures if missing columns
+  $fixturesPatches = [
+      "ALTER TABLE `fixtures` ADD COLUMN `round` VARCHAR(100) AFTER `league_id`;",
+      "ALTER TABLE `fixtures` ADD COLUMN `status_short` VARCHAR(10) AFTER `date`;",
+      "ALTER TABLE `fixtures` ADD COLUMN `status_long` VARCHAR(50) AFTER `status_short`;",
+      "ALTER TABLE `fixtures` ADD COLUMN `elapsed` INT AFTER `status_long`;",
+      "ALTER TABLE `fixtures` ADD COLUMN `venue_id` INT AFTER `score_away`;"
+  ];
+
+  foreach ($fixturesPatches as $patch) {
+      try {
+          $db->exec($patch);
+          echo "✅ Patch fixtures eseguita: " . substr($patch, 0, 40) . "...\n";
+      } catch (\Exception $e) { /* ignore if already exists */ }
+  }
+
+  try {
+      $db->exec("UPDATE fixtures SET status_short = status WHERE status_short IS NULL AND status IS NOT NULL");
+  } catch (\Exception $e) { /* ignore */ }
 
   try {
     $db->exec("ALTER TABLE `bets` ADD COLUMN `confidence` INT DEFAULT 0 AFTER `urgency`;");
