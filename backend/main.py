@@ -182,7 +182,8 @@ def auto_scanner_logic():
             
             # Allow re-analysis if 30 minutes have passed since the last bet/analysis for this fixture
             # OR if no analysis has ever been done for this match
-            recent_bet = next((b for b in reversed(history) if b["fixture_id"] == fix_id), None)
+            # FIX: Using .get() to avoid KeyError if fixture_id is missing in old records
+            recent_bet = next((b for b in reversed(history) if b.get("fixture_id") == fix_id), None)
             
             should_analyze = False
             if not recent_bet:
@@ -214,12 +215,12 @@ def auto_scanner_logic():
                         bet_info = json.loads(json_match.group(1))
                         # Only add if advice is different or situation changed significantly
                         bet_data = {
+                            "id": str(len(history) + 1),
                             "fixture_id": fix_id,
                             "match": f"{m['teams']['home']['name']} vs {m['teams']['away']['name']}",
                             **bet_info,
                             "status": "pending",
-                            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                            "id": str(len(history) + 1)
+                            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                         }
                         history.append(bet_data)
                         with open(BETS_HISTORY_FILE, "w") as f:

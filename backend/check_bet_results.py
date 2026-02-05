@@ -27,8 +27,12 @@ def check_bets():
     for bet in history:
         if bet.get("status") == "pending":
             try:
-                # Ensure fixture_id is an int
-                fixture_id = int(bet.get("fixture_id"))
+                # Ensure fixture_id is valid
+                raw_id = bet.get("fixture_id")
+                if raw_id is None:
+                    print(f"DEBUG: Skipping {bet.get('match')} - Missing Fixture ID")
+                    continue
+                fixture_id = int(raw_id)
                 match_name = bet.get("match", "Unknown")
                 print(f"DEBUG: Processing {match_name} (ID: {fixture_id})")
                 

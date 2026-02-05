@@ -6,6 +6,10 @@ LOG_FILE="$APP_DIR/deploy_log.txt"
 
 echo "=== Deploy iniziato: $(date) ===" >> "$LOG_FILE"
 
+# 0. UPDATE REPO
+echo "Pulling latest changes..." >> "$LOG_FILE"
+git pull origin main >> "$LOG_FILE" 2>&1
+
 # 1. FRONTEND BUILD
 echo "Building Frontend..." >> "$LOG_FILE"
 cd "$APP_DIR/frontend"
