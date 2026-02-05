@@ -146,6 +146,25 @@ function App() {
     return `${ticked}'`;
   };
 
+  const sortedHistory = [...history].sort((a, b) => {
+    // 1. Pending first
+    if (a.status === 'pending' && b.status !== 'pending') return -1;
+    if (a.status !== 'pending' && b.status === 'pending') return 1;
+
+    // 2. If both pending, try to find the match in liveMatches to see progress
+    const matchA = liveMatches.find(m => m.fixture.id === Number(a.fixture_id));
+    const matchB = liveMatches.find(m => m.fixture.id === Number(b.fixture_id));
+
+    if (matchA && matchB) {
+      const elapsedA = matchA.fixture.status.elapsed || 0;
+      const elapsedB = matchB.fixture.status.elapsed || 0;
+      return elapsedB - elapsedA; // Higher minute = more "imminent"
+    }
+
+    // 3. Last fallback: newest first
+    return new Date(b.timestamp) - new Date(a.timestamp);
+  });
+
   const sortedMatches = [...liveMatches].sort((a, b) => {
     // Priority 1: Top Leagues (can add more IDs here)
     const topLeagues = [135, 140, 39, 61, 78]; // Serie A, La Liga, PL, Ligue 1, Bunde
@@ -219,33 +238,40 @@ function App() {
         <section className="stats-section">
           <div className="card">
             <h2>🗒️ Betting Book (Simulator)</h2>
-            <div className="match-list" style={{ maxHeight: '300px', overflow: 'auto' }}>
-              {betHistory.length > 0 ? (
-                betHistory.slice().reverse().map((b) => (
-                  <div key={b.id} className="match-item" style={{ gridTemplateColumns: '1fr 1fr 1fr', padding: '0.8rem' }}>
+            <div className="match-list" style={{ maxHeight: '400px', overflow: 'auto' }}>
+              {sortedHistory.length === 0 ? (
+                <p style={{ color: '#94a3b8', padding: '1rem', textAlign: 'center' }}>Nessuna scommessa nel registro.</p>
+              ) : (
+                sortedHistory.map((bet) => (
+                  <div key={bet.id} className="match-item" style={{
+                    borderLeft: `4px solid ${bet.status === 'win' ? '#22c55e' : (bet.status === 'lost' ? '#ef4444' : '#f59e0b')}`,
+                    padding: '1rem',
+                    marginBottom: '0.5rem',
+                    background: 'rgba(255, 255, 255, 0.02)'
+                  }}>
                     <div style={{ fontSize: '0.8rem' }}>
-                      <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{b.match}</div>
-                      <div style={{ color: 'var(--text-dim)' }}>{b.timestamp}</div>
+                      <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{bet.match}</div>
+                      <div style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>{new Date(bet.timestamp).toLocaleString()}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontWeight: 'bold' }}>{b.advice}</div>
-                      <div style={{ fontSize: '0.7rem' }}>{b.market} @ {b.odds}</div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>{bet.advice}</div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{bet.market} @ {bet.odds}</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <span style={{
-                        padding: '2px 8px',
-                        borderRadius: '10px',
+                        padding: '4px 10px',
+                        borderRadius: '20px',
                         fontSize: '0.7rem',
-                        background: b.status === 'pending' ? 'rgba(255,165,0,0.2)' : 'rgba(0,255,0,0.2)',
-                        color: b.status === 'pending' ? 'orange' : 'green'
+                        fontWeight: 'bold',
+                        background: bet.status === 'pending' ? 'rgba(245, 158, 11, 0.1)' : (bet.status === 'win' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)'),
+                        color: bet.status === 'pending' ? '#f59e0b' : (bet.status === 'win' ? '#22c55e' : '#ef4444'),
+                        border: `1px solid ${bet.status === 'pending' ? '#f59e0b' : (bet.status === 'win' ? '#22c55e' : '#ef4444')}`
                       }}>
-                        {b.status.toUpperCase()}
+                        {bet.status.toUpperCase()} {bet.result ? `- ${bet.result}` : ''}
                       </span>
                     </div>
                   </div>
                 ))
-              ) : (
-                <div className="loading">No bets placed yet.</div>
               )}
             </div>
           </div>
