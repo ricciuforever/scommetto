@@ -73,7 +73,7 @@ class MatchController
         // SAVE ANALYSIS TO DB
         try {
             $analysisModel = new \App\Models\Analysis();
-            $analysisModel->log($id, $prediction);
+            $analysisModel->log((int) $id, $prediction);
         } catch (\Exception $e) {
             // Log error but don't stop the response
             error_log("Error saving analysis: " . $e->getMessage());

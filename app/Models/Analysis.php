@@ -30,9 +30,11 @@ class Analysis
 
     public function log($fixture_id, $prediction)
     {
-        $stmt = $this->db->prepare("INSERT INTO analyses (fixture_id, last_checked, prediction_raw) 
-                                    VALUES (:id, CURRENT_TIMESTAMP, :pred) 
-                                    ON DUPLICATE KEY UPDATE last_checked = CURRENT_TIMESTAMP, prediction_raw = :pred");
+        $sql = "INSERT INTO analyses (fixture_id, prediction_raw) 
+                VALUES (:id, :pred) 
+                ON DUPLICATE KEY UPDATE last_checked = CURRENT_TIMESTAMP, prediction_raw = VALUES(prediction_raw)";
+
+        $stmt = $this->db->prepare($sql);
         return $stmt->execute([
             'id' => $fixture_id,
             'pred' => $prediction

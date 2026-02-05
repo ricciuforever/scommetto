@@ -14,8 +14,8 @@ class Database
 
     private function __construct()
     {
-        $host = Config::get('DB_HOST', 'localhost');
-        $db = Config::get('DB_NAME', 'scommetto');
+        $host = Config::get('DB_HOST', '127.0.0.1');
+        $db = Config::get('DB_NAME', 'scommetto_');
         $user = Config::get('DB_USER', 'root');
         $pass = Config::get('DB_PASS', '');
         $charset = 'utf8mb4';

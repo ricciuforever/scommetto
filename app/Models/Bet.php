@@ -28,7 +28,7 @@ class Bet
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
-            'fixture_id' => $data['fixture_id'],
+            'fixture_id' => (int) $data['fixture_id'],
             'match_name' => $data['match'] ?? $data['match_name'],
             'advice' => $data['advice'] ?? '',
             'market' => $data['market'] ?? '',
