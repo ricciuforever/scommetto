@@ -70,6 +70,15 @@ class MatchController
 
         $prediction = $this->geminiService->analyze($match);
 
+        // SAVE ANALYSIS TO DB
+        try {
+            $analysisModel = new \App\Models\Analysis();
+            $analysisModel->log($id, $prediction);
+        } catch (\Exception $e) {
+            // Log error but don't stop the response
+            error_log("Error saving analysis: " . $e->getMessage());
+        }
+
         echo json_encode([
             'fixture_id' => $id,
             'prediction' => $prediction,
