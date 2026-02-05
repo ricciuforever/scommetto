@@ -64,7 +64,8 @@ def fetch_live_data():
     print("Updating live data...")
     try:
         url = f"{BASE_URL}/fixtures?live=all"
-        response = requests.get(url, headers=HEADERS)
+        # Added timeout to prevent hanging
+        response = requests.get(url, headers=HEADERS, timeout=10)
         update_usage_from_response(response)
         data = response.json()
         with file_lock:
@@ -169,7 +170,8 @@ def fetch_initial_data():
         print("Seeding initial teams data...")
         try:
             url = f"{BASE_URL}/teams?league=135&season=2024"
-            response = requests.get(url, headers=HEADERS)
+            # Added timeout
+            response = requests.get(url, headers=HEADERS, timeout=10)
             update_usage_from_response(response)
             data = response.json()
             with file_lock:

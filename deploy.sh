@@ -48,15 +48,24 @@ fi
 
 # 3. RESTART AGENTE
 echo "Restarting Agent..." >> "$LOG_FILE"
-pkill -9 -f main.py || true
+
+# Clean up any existing process on port 8000 or running main.py
+fuser -k 8000/tcp >> "$LOG_FILE" 2>&1 || true
+pkill -9 -f main.py >> "$LOG_FILE" 2>&1 || true
+
+# Wait for port to be released
+echo "Waiting for port 8000 to be released..." >> "$LOG_FILE"
+sleep 5
 
 # Fix global ownership before start to ensure logs can be written
 chown -R $USER:$GROUP "$APP_DIR"
 chmod -R 755 "$APP_DIR"
 
 # Start
+echo "Starting new instance..." >> "$LOG_FILE"
 setsid ./venv/bin/python3 main.py >> agent_log.txt 2>&1 &
-sleep 2
+sleep 3
+
 if pgrep -f "main.py" > /dev/null; then
     echo "Agent started successfully (PID: $(pgrep -f "main.py"))." >> "$LOG_FILE"
 else
