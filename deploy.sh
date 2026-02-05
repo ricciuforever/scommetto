@@ -18,14 +18,16 @@ npm install >> "$LOG_FILE" 2>&1
 npm run build >> "$LOG_FILE" 2>&1
 
 # 1b. SYNC TO PUBLIC_HTML
-echo "Syncing to public_html..." >> "$LOG_FILE"
-mkdir -p "$APP_DIR/public_html"
-cp -r dist/* "$APP_DIR/public_html/" >> "$LOG_FILE" 2>&1
-# Copy .htaccess for routing
-cp .htaccess "$APP_DIR/public_html/" >> "$LOG_FILE" 2>&1
-# Fix permissions (using whoami to be dynamic)
-chmod -R 755 "$APP_DIR/public_html" >> "$LOG_FILE" 2>&1
-echo "Frontend built and synced to public_html" >> "$LOG_FILE"
+if [ -f "dist/index.html" ]; then
+    echo "Build success, syncing to public_html..." >> "$LOG_FILE"
+    mkdir -p "$APP_DIR/public_html"
+    cp -r dist/* "$APP_DIR/public_html/" >> "$LOG_FILE" 2>&1
+    cp .htaccess "$APP_DIR/public_html/" >> "$LOG_FILE" 2>&1
+    chmod -R 755 "$APP_DIR/public_html" >> "$LOG_FILE" 2>&1
+    echo "Frontend built and synced." >> "$LOG_FILE"
+else
+    echo "ERROR: Build failed, dist/index.html not found!" >> "$LOG_FILE"
+fi
 
 # 2. BACKEND SETUP
 echo "Updating Backend..." >> "$LOG_FILE"
