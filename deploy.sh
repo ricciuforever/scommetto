@@ -9,8 +9,9 @@ GROUP="psacln"
 echo "=== Deploy iniziato: $(date) ===" >> "$LOG_FILE"
 
 # 0. UPDATE REPO
+cd "$APP_DIR" || { echo "CRITICAL: Could not cd to $APP_DIR" >> "$LOG_FILE"; exit 1; }
 echo "Updating Repo..." >> "$LOG_FILE"
-git pull origin main >> "$LOG_FILE" 2>&1 # Commented for sandbox, user has it active
+git pull origin main >> "$LOG_FILE" 2>&1
 
 # 0b. DETECT PLESK NODE
 if [ -d "/opt/plesk/node/24/bin" ]; then
