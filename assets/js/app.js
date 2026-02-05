@@ -65,6 +65,10 @@ function renderMatches() {
         card.className = 'glass-panel match-card';
         card.dataset.id = m.fixture.id;
         card.innerHTML = `
+            <div class="league-header">
+                <img src="${m.league.logo}" class="league-logo" alt="${m.league.name}">
+                <span>${m.league.name} - ${m.league.country}</span>
+            </div>
             <div class="match-main-info">
                 <div class="live-badge"><span class="elapsed-time" data-start="${m.fixture.status.elapsed}">${m.fixture.status.elapsed}</span>'</div>
                 <div class="team-info">
