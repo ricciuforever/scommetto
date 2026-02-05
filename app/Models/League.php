@@ -24,13 +24,14 @@ class League
 
     public function save($data)
     {
-        $sql = "INSERT INTO leagues (id, name, type, logo, country_name) 
-                VALUES (:id, :name, :type, :logo, :country)
+        $sql = "INSERT INTO leagues (id, name, type, logo, country_name, coverage_json) 
+                VALUES (:id, :name, :type, :logo, :country, :coverage)
                 ON DUPLICATE KEY UPDATE 
                     name = VALUES(name), 
                     type = VALUES(type),
                     logo = VALUES(logo), 
                     country_name = VALUES(country_name),
+                    coverage_json = VALUES(coverage_json),
                     last_updated = CURRENT_TIMESTAMP";
 
         $stmt = $this->db->prepare($sql);
@@ -39,7 +40,8 @@ class League
             'name' => $data['league']['name'],
             'type' => $data['league']['type'] ?? 'League',
             'logo' => $data['league']['logo'] ?? null,
-            'country' => $data['country']['name'] ?? null
+            'country' => $data['country']['name'] ?? null,
+            'coverage' => json_encode($data['seasons'][0]['coverage'] ?? [])
         ]);
 
         if (isset($data['seasons'])) {
@@ -51,9 +53,15 @@ class League
 
     private function saveSeasons($league_id, $seasons)
     {
-        $stmt = $this->db->prepare("INSERT INTO league_seasons (league_id, year, is_current) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE is_current = VALUES(is_current)");
+        $stmt = $this->db->prepare("INSERT INTO league_seasons (league_id, year, is_current, start_date, end_date) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE is_current = VALUES(is_current), start_date = VALUES(start_date), end_date = VALUES(end_date)");
         foreach ($seasons as $s) {
-            $stmt->execute([$league_id, $s['year'], $s['current'] ? 1 : 0]);
+            $stmt->execute([
+                $league_id,
+                $s['year'],
+                $s['current'] ? 1 : 0,
+                $s['start'] ?? null,
+                $s['end'] ?? null
+            ]);
         }
     }
 

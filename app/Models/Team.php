@@ -15,51 +15,48 @@ class Team
         $this->db = Database::getInstance()->getConnection();
     }
 
-    public function getById($id)
-    {
-        $stmt = $this->db->prepare("SELECT * FROM teams WHERE id = ?");
-        $stmt->execute([$id]);
-        return $stmt->fetch();
-    }
-
-    public function needsRefresh($id, $days = 7)
-    {
-        $team = $this->getById($id);
-        if (!$team)
-            return true;
-
-        // SE mancano dati fondamentali (es. stadio o anno fondazione), forziamo il refresh
-        // utile quando il team è stato creato con "dati minimi" dalla classifica
-        if (empty($team['founded']) || empty($team['venue_name']) || empty($team['country'])) {
-            return true;
-        }
-
-        $lastUpdated = strtotime($team['last_updated']);
-        return (time() - $lastUpdated) > ($days * 24 * 60 * 60);
-    }
-
     public function save($data)
     {
-        // Detect if we received the wrapper object with 'team' and 'venue'
-        $team = isset($data['team']) ? $data['team'] : $data;
-        $venue = isset($data['venue']) ? $data['venue'] : null;
+        $team = $data['team'];
+        $venue = $data['venue'] ?? null;
 
-        $sql = "INSERT INTO teams (id, name, logo, country, founded, venue_name, venue_capacity) 
-                VALUES (:id, :name, :logo, :country, :founded, :venue_name, :venue_capacity)
+        // Save Venue first if present
+        if ($venue && isset($venue['id'])) {
+            (new Venue())->save($venue);
+        }
+
+        $sql = "INSERT INTO teams (id, name, code, country, founded, national, logo, venue_id) 
+                VALUES (:id, :name, :code, :country, :founded, :national, :logo, :venue_id)
                 ON DUPLICATE KEY UPDATE 
-                name = VALUES(name), logo = VALUES(logo), country = VALUES(country), 
-                founded = VALUES(founded), venue_name = VALUES(venue_name), 
-                venue_capacity = VALUES(venue_capacity), last_updated = CURRENT_TIMESTAMP";
+                    name = VALUES(name), code = VALUES(code), country = VALUES(country),
+                    founded = VALUES(founded), national = VALUES(national), 
+                    logo = VALUES(logo), venue_id = VALUES(venue_id),
+                    last_updated = CURRENT_TIMESTAMP";
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
             'id' => $team['id'],
             'name' => $team['name'],
-            'logo' => $team['logo'] ?? null,
+            'code' => $team['code'] ?? null,
             'country' => $team['country'] ?? null,
             'founded' => $team['founded'] ?? null,
-            'venue_name' => $venue['name'] ?? null,
-            'venue_capacity' => $venue['capacity'] ?? null
+            'national' => ($team['national'] ?? false) ? 1 : 0,
+            'logo' => $team['logo'] ?? null,
+            'venue_id' => $venue['id'] ?? null
         ]);
+    }
+
+    public function linkToLeague($team_id, $league_id, $season)
+    {
+        $sql = "INSERT IGNORE INTO team_leagues (team_id, league_id, season) VALUES (?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([$team_id, $league_id, $season]);
+    }
+
+    public function getById($id)
+    {
+        $stmt = $this->db->prepare("SELECT * FROM teams WHERE id = ?");
+        $stmt->execute([$id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 }

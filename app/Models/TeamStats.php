@@ -17,13 +17,14 @@ class TeamStats
 
     public function save($team_id, $league_id, $season, $data)
     {
-        $sql = "INSERT INTO team_stats (team_id, league_id, season, played, wins, draws, losses, goals_for, goals_against, clean_sheets, failed_to_score, avg_goals_for, avg_goals_against) 
-                VALUES (:tid, :lid, :season, :played, :wins, :draws, :losses, :gf, :ga, :cs, :fts, :avgfc, :avgac) 
+        $sql = "INSERT INTO team_stats (team_id, league_id, season, played, wins, draws, losses, goals_for, goals_against, clean_sheets, failed_to_score, avg_goals_for, avg_goals_against, full_stats_json) 
+                VALUES (:tid, :lid, :season, :played, :wins, :draws, :losses, :gf, :ga, :cs, :fts, :avgfc, :avgac, :full) 
                 ON DUPLICATE KEY UPDATE 
                     played = VALUES(played), wins = VALUES(wins), draws = VALUES(draws), losses = VALUES(losses),
                     goals_for = VALUES(goals_for), goals_against = VALUES(goals_against),
                     clean_sheets = VALUES(clean_sheets), failed_to_score = VALUES(failed_to_score),
                     avg_goals_for = VALUES(avg_goals_for), avg_goals_against = VALUES(avg_goals_against),
+                    full_stats_json = VALUES(full_stats_json),
                     last_updated = CURRENT_TIMESTAMP";
 
         $stmt = $this->db->prepare($sql);
@@ -40,7 +41,8 @@ class TeamStats
             'cs' => $data['clean_sheet']['total'] ?? 0,
             'fts' => $data['failed_to_score']['total'] ?? 0,
             'avgfc' => $data['goals']['for']['average']['total'] ?? 0,
-            'avgac' => $data['goals']['against']['average']['total'] ?? 0
+            'avgac' => $data['goals']['against']['average']['total'] ?? 0,
+            'full' => json_encode($data)
         ]);
     }
 

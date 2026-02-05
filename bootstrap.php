@@ -30,7 +30,10 @@ spl_autoload_register(function ($class) {
     }
 });
 
-// Ensure data directory exists
+// Ensure directories exist
 if (!is_dir(Config::DATA_PATH)) {
     mkdir(Config::DATA_PATH, 0777, true);
+}
+if (!is_dir(Config::LOGS_PATH)) {
+    mkdir(Config::LOGS_PATH, 0777, true);
 }

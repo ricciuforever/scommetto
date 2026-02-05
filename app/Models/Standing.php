@@ -50,11 +50,15 @@ class Standing
 
     public function save($leagueId, $teamData)
     {
-        $sql = "INSERT INTO standings (league_id, team_id, rank, points, goals_diff, form) 
-                VALUES (:league_id, :team_id, :rank, :points, :goals_diff, :form)
+        $sql = "INSERT INTO standings (league_id, team_id, rank, points, goals_diff, form, group_name, description, played, win, draw, lose, goals_for, goals_against, home_stats_json, away_stats_json) 
+                VALUES (:league_id, :team_id, :rank, :points, :goals_diff, :form, :group, :description, :played, :win, :draw, :lose, :gf, :ga, :home, :away)
                 ON DUPLICATE KEY UPDATE 
                 rank = VALUES(rank), points = VALUES(points), 
-                goals_diff = VALUES(goals_diff), form = VALUES(form), 
+                goals_diff = VALUES(goals_diff), form = VALUES(form),
+                group_name = VALUES(group_name), description = VALUES(description),
+                played = VALUES(played), win = VALUES(win), draw = VALUES(draw), lose = VALUES(lose),
+                goals_for = VALUES(goals_for), goals_against = VALUES(goals_against),
+                home_stats_json = VALUES(home_stats_json), away_stats_json = VALUES(away_stats_json),
                 last_updated = CURRENT_TIMESTAMP";
 
         $stmt = $this->db->prepare($sql);
@@ -64,7 +68,17 @@ class Standing
             'rank' => $teamData['rank'],
             'points' => $teamData['points'],
             'goals_diff' => $teamData['goalsDiff'],
-            'form' => $teamData['form'] ?? ''
+            'form' => $teamData['form'] ?? '',
+            'group' => $teamData['group'] ?? null,
+            'description' => $teamData['description'] ?? null,
+            'played' => $teamData['all']['played'] ?? 0,
+            'win' => $teamData['all']['win'] ?? 0,
+            'draw' => $teamData['all']['draw'] ?? 0,
+            'lose' => $teamData['all']['lose'] ?? 0,
+            'gf' => $teamData['all']['goals']['for'] ?? 0,
+            'ga' => $teamData['all']['goals']['against'] ?? 0,
+            'home' => json_encode($teamData['home'] ?? []),
+            'away' => json_encode($teamData['away'] ?? [])
         ]);
     }
 }

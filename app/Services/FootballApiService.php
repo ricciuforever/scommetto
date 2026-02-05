@@ -32,9 +32,61 @@ class FootballApiService
         return $this->request('/leagues/seasons');
     }
 
-    public function fetchLeagues()
+    public function fetchLeagues($params = [])
     {
-        return $this->request('/leagues');
+        $queryString = http_build_query($params);
+        return $this->request("/leagues?$queryString");
+    }
+
+    public function fetchLeaguesRounds($leagueId, $season, $current = false)
+    {
+        $url = "/fixtures/rounds?league=$leagueId&season=$season";
+        if ($current)
+            $url .= "&current=true";
+        return $this->request($url);
+    }
+
+    public function fetchH2H($h2h)
+    {
+        return $this->request("/fixtures/headtohead?h2h=$h2h");
+    }
+
+    public function fetchFixtureStatistics($fixtureId, $teamId = null)
+    {
+        $url = "/fixtures/statistics?fixture=$fixtureId";
+        if ($teamId)
+            $url .= "&team=$teamId";
+        return $this->request($url);
+    }
+
+    public function fetchFixtureEvents($fixtureId, $teamId = null, $playerId = null, $type = null)
+    {
+        $url = "/fixtures/events?fixture=$fixtureId";
+        if ($teamId)
+            $url .= "&team=$teamId";
+        if ($playerId)
+            $url .= "&player=$playerId";
+        if ($type)
+            $url .= "&type=$type";
+        return $this->request($url);
+    }
+
+    public function fetchFixtureLineups($fixtureId, $teamId = null, $playerId = null)
+    {
+        $url = "/fixtures/lineups?fixture=$fixtureId";
+        if ($teamId)
+            $url .= "&team=$teamId";
+        if ($playerId)
+            $url .= "&player=$playerId";
+        return $this->request($url);
+    }
+
+    public function fetchFixturePlayerStatistics($fixtureId, $teamId = null)
+    {
+        $url = "/fixtures/players?fixture=$fixtureId";
+        if ($teamId)
+            $url .= "&team=$teamId";
+        return $this->request($url);
     }
 
     public function fetchFixtureDetails($id)
@@ -62,15 +114,108 @@ class FootballApiService
         return $this->request("/players/squads?team=$teamId");
     }
 
-    public function fetchPlayer($id, $season = 2024)
+    public function fetchTeamSeasons($teamId)
     {
-        return $this->request("/players?id=$id&season=$season");
+        return $this->request("/teams/seasons?team=$teamId");
+    }
+
+    public function fetchTeamCountries()
+    {
+        return $this->request("/teams/countries");
+    }
+
+    public function fetchTeamStatistics($teamId, $leagueId, $season)
+    {
+        return $this->request("/teams/statistics?team=$teamId&league=$leagueId&season=$season");
+    }
+
+    public function fetchVenues($params)
+    {
+        $queryString = http_build_query($params);
+        return $this->request("/venues?$queryString");
+    }
+
+    public function fetchPlayer($params)
+    {
+        $queryString = http_build_query($params);
+        return $this->request("/players?$queryString");
+    }
+
+    public function fetchTopScorers($leagueId, $season)
+    {
+        return $this->request("/players/topscorers?league=$leagueId&season=$season");
+    }
+
+    public function fetchTopAssists($leagueId, $season)
+    {
+        return $this->request("/players/topassists?league=$leagueId&season=$season");
+    }
+
+    public function fetchTopYellowCards($leagueId, $season)
+    {
+        return $this->request("/players/topyellowcards?league=$leagueId&season=$season");
+    }
+
+    public function fetchTopRedCards($leagueId, $season)
+    {
+        return $this->request("/players/topredcards?league=$leagueId&season=$season");
     }
 
 
     public function fetchPredictions($fixtureId)
     {
         return $this->request("/predictions?fixture=$fixtureId");
+    }
+
+    public function fetchTransfers($params)
+    {
+        $queryString = http_build_query($params);
+        return $this->request("/transfers?$queryString");
+    }
+
+    public function fetchTrophies($params)
+    {
+        $queryString = http_build_query($params);
+        return $this->request("/trophies?$queryString");
+    }
+
+    public function fetchSidelined($params)
+    {
+        $queryString = http_build_query($params);
+        return $this->request("/sidelined?$queryString");
+    }
+
+    public function fetchLiveOdds($params = [])
+    {
+        $queryString = http_build_query($params);
+        return $this->request("/odds/live?$queryString");
+    }
+
+    public function fetchLiveOddsBets()
+    {
+        return $this->request("/odds/live/bets");
+    }
+
+    public function fetchOdds($params)
+    {
+        $queryString = http_build_query($params);
+        return $this->request("/odds?$queryString");
+    }
+
+    public function fetchOddsMapping($params = [])
+    {
+        $queryString = http_build_query($params);
+        return $this->request("/odds/mapping?$queryString");
+    }
+
+    public function fetchBookmakers()
+    {
+        return $this->request("/odds/bookmakers");
+    }
+
+    public function fetchBets()
+    {
+        return $this->request("/odds/bets");
     }
 
     public function request($endpoint)
