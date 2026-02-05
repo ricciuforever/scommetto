@@ -11,6 +11,7 @@ function App() {
   const [lastFetchTimestamp, setLastFetchTimestamp] = useState(Date.now());
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [usage, setUsage] = useState({ used: 0, remaining: 7500 });
+  const [serverLastUpdate, setServerLastUpdate] = useState(Date.now());
 
   const fetchHistory = async () => {
     try {
@@ -92,6 +93,9 @@ function App() {
         const liveRes = await fetch(`${apiBase}/api/live?t=${now}`);
         const liveData = await liveRes.json();
         setLiveMatches(liveData.response || []);
+        if (liveData.server_time) {
+          setServerLastUpdate(liveData.server_time * 1000);
+        }
         setLastFetchTimestamp(now);
       } catch (err) { console.error("Live fetch error:", err); }
 
@@ -124,9 +128,9 @@ function App() {
 
   const getTickedMinute = (elapsed) => {
     if (!elapsed) return 0;
-    const diffSeconds = Math.floor((currentTime - lastFetchTimestamp) / 1000);
+    const diffSeconds = Math.floor((currentTime - serverLastUpdate) / 1000);
     const extraMinutes = Math.floor(diffSeconds / 60);
-    return elapsed + extraMinutes;
+    return elapsed + (extraMinutes > 0 ? extraMinutes : 0);
   };
 
   const getMatchTimeDisplay = (m) => {
@@ -176,15 +180,15 @@ function App() {
     <div className="app-container">
       <header>
         <div className="logo">SCOMMETTO_AGENTE</div>
-        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textAlign: 'right' }}>
-            LAST DATA UPDATE<br />
-            <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
-              {Math.floor((currentTime - lastFetchTimestamp) / 1000)}s AGO
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textAlign: 'right', borderRight: '1px solid var(--glass-border)', paddingRight: '15px' }}>
+            SERVER LAST SYNC<br />
+            <span style={{ color: 'var(--primary)', fontWeight: 'bold', fontSize: '0.85rem' }}>
+              {Math.max(0, Math.floor((currentTime - serverLastUpdate) / 1000))}s AGO
             </span>
           </div>
           <div className="live-indicator">
-            <span className="dot">•</span> LIVE NOW
+            <span className="dot" style={{ animation: 'pulse 1s infinite' }}>•</span> LIVE NOW
           </div>
         </div>
       </header>

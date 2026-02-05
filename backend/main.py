@@ -237,28 +237,28 @@ def auto_scanner_logic():
         print(f"🤖 BOT ERROR: {e}")
 
 def fast_update_loop():
-    """Update live data and check bets every 30s. This must be fast!"""
+    """Update live data every 30s. This must be extremely fast!"""
     fetch_initial_data()
     while True:
         try:
-            print("--- ⚡ FAST UPDATE START ---")
+            print("--- ⚡ LIVE DATA SYNC START ---")
             fetch_live_data()
-            check_bets()
-            print("--- ⚡ FAST UPDATE COMPLETE ---")
+            print("--- ⚡ LIVE DATA SYNC COMPLETE ---")
         except Exception as e:
             print(f"Error in fast loop: {e}")
         time.sleep(30)
 
 def slow_scanner_loop():
-    """Run the heavy AI scanner every 5 minutes in the background."""
+    """Check bets and run AI scanner. These tasks are slower."""
     while True:
         try:
-            print("--- 🤖 AI SCANNER START ---")
+            print("--- 🔍 CHECKING BETS & SCANNING ---")
+            check_bets()
             auto_scanner_logic()
-            print("--- 🤖 AI SCANNER COMPLETE ---")
+            print("--- 🔍 SCAN COMPLETE ---")
         except Exception as e:
             print(f"Error in scanner loop: {e}")
-        time.sleep(300) # Every 5 minutes
+        time.sleep(60) # Every minute is enough for bet results
 
 # Start background threads
 Thread(target=fast_update_loop, daemon=True).start()
@@ -269,14 +269,17 @@ async def health_check():
     return {
         "status": "alive",
         "last_live_update": time.ctime(os.path.getmtime(LIVE_DATA_FILE)) if os.path.exists(LIVE_DATA_FILE) else "never",
-        "usage": api_usage_info
+        "usage": api_usage_info,
+        "server_time": time.time()
     }
 
 @app.get("/api/live")
 async def get_live():
     if os.path.exists(LIVE_DATA_FILE):
         with open(LIVE_DATA_FILE, "r") as f:
-            return json.load(f)
+            data = json.load(f)
+            data["server_time"] = os.path.getmtime(LIVE_DATA_FILE)
+            return data
     return {"response": []}
 
 @app.get("/api/teams")
