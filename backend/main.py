@@ -236,42 +236,67 @@ def auto_scanner_logic():
     except Exception as e:
         print(f"🤖 BOT ERROR: {e}")
 
-def fast_update_loop():
-    """Update live data every 30s. This must be extremely fast!"""
+def single_update_loop():
+    """Sequential update: fetch data -> check bets -> scan matches."""
     fetch_initial_data()
     while True:
         try:
-            print("--- ⚡ LIVE DATA SYNC START ---")
+            nowStr = time.strftime("%H:%M:%S")
+            print(f"[{nowStr}] --- STARTING SYNC CYCLE ---")
+            
+            # 1. Fetch live matches
             fetch_live_data()
-            print("--- ⚡ LIVE DATA SYNC COMPLETE ---")
+            
+            # 2. Check bet results (Settle WIN/LOSS)
+            check_bets()
+            
+            # 3. Auto-Scanner (AI analysis)
+            # We run the scanner every 3 cycles (approx every 1.5 mins) to save calls
+            if int(time.time()) % 90 < 31:
+                auto_scanner_logic()
+                
+            print(f"[{nowStr}] --- SYNC CYCLE COMPLETE ---")
         except Exception as e:
-            print(f"Error in fast loop: {e}")
+            msg = f"CRITICAL LOOP ERROR: {e}"
+            print(msg)
+            with open("agent_log.txt", "a") as f:
+                f.write(f"{time.ctime()}: {msg}\n")
         time.sleep(30)
 
-def slow_scanner_loop():
-    """Check bets and run AI scanner. These tasks are slower."""
-    while True:
-        try:
-            print("--- 🔍 CHECKING BETS & SCANNING ---")
-            check_bets()
-            auto_scanner_logic()
-            print("--- 🔍 SCAN COMPLETE ---")
-        except Exception as e:
-            print(f"Error in scanner loop: {e}")
-        time.sleep(60) # Every minute is enough for bet results
+# Start single clean background thread
+Thread(target=single_update_loop, daemon=True).start()
 
-# Start background threads
-Thread(target=fast_update_loop, daemon=True).start()
-Thread(target=slow_scanner_loop, daemon=True).start()
+@app.get("/api/logs")
+async def get_logs():
+    try:
+        if os.path.exists("agent_log.txt"):
+            with open("agent_log.txt", "r") as f:
+                lines = f.readlines()
+                return {"logs": lines[-15:]} # Last 15 lines
+        return {"logs": ["Log file empty."]}
+    except:
+        return {"logs": ["Error reading logs."]}
 
 @app.get("/api/health")
 async def health_check():
+    mtime = os.path.getmtime(LIVE_DATA_FILE) if os.path.exists(LIVE_DATA_FILE) else 0
     return {
         "status": "alive",
-        "last_live_update": time.ctime(os.path.getmtime(LIVE_DATA_FILE)) if os.path.exists(LIVE_DATA_FILE) else "never",
-        "usage": api_usage_info,
-        "server_time": time.time()
+        "last_sync_seconds_ago": int(time.time() - mtime),
+        "usage": api_usage_info
     }
+
+@app.get("/api/logs")
+async def get_logs():
+    try:
+        if os.path.exists("agent_log.txt"):
+            with open("agent_log.txt", "r") as f:
+                lines = f.readlines()
+                return {"logs": lines[-20:]} # Last 20 lines
+        return {"logs": ["Log file not found yet."]}
+    except Exception as e:
+        return {"logs": [f"Error reading logs: {e}"]}
+
 
 @app.get("/api/live")
 async def get_live():
