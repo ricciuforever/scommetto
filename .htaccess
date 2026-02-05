@@ -1,9 +1,14 @@
-RewriteEngine On
+DirectoryIndex index.php
 
-# Prevent directory browsing
-Options -Indexes
-
-# Redirect to index.php
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^ index.php [L]
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    
+    # Se il file o la directory esistono, caricali normalmente
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+    
+    # Altrimenti, manda tutto a index.php
+    RewriteRule ^ index.php [L]
+</IfModule>
