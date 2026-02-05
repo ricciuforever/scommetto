@@ -58,24 +58,38 @@ def check_bets():
                     goals = fixture["goals"]
                     score = fixture.get("score", {})
                     match_name = bet.get("match", "Unknown")
-                    advice = bet.get("advice", "").lower()
-                    market = bet.get("market", "").lower()
+                    advice = str(bet.get("advice", "")).lower()
+                    market = str(bet.get("market", "")).lower()
                     
-                    # 1. Full Time Settlement
+                    home_name = fixture["teams"]["home"]["name"].lower()
+                    away_name = fixture["teams"]["away"]["name"].lower()
+                    
+                    # 1. Full Time Settlement (FT, AET, PEN)
                     if f_status in ["FT", "AET", "PEN"]:
                         h, a = goals["home"], goals["away"]
+                        if h is None or a is None: continue
+                        
                         is_win = False
-                        if any(x in advice for x in ["vittoria", "1", "home", "casa"]) and h > a: is_win = True
-                        elif any(x in advice for x in ["2", "away", "ospite", "trasferta"]) and a > h: is_win = True
-                        elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a: is_win = True
+                        # Logic: Home Win (1)
+                        if (any(x in advice for x in ["vittoria", "1", "home", "casa"]) or home_name in advice) and h > a:
+                            is_win = True
+                        # Logic: Away Win (2)
+                        elif (any(x in advice for x in ["2", "away", "ospite", "trasferta"]) or away_name in advice) and a > h:
+                            is_win = True
+                        # Logic: Draw (X)
+                        elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a:
+                            is_win = True
+                        # Logic: Over/Under
+                        elif "over" in advice and (h + a) > 2.5: is_win = True
+                        elif "under" in advice and (h + a) < 2.5: is_win = True
                         
                         bet["status"] = "win" if is_win else "lost"
                         bet["result"] = f"{h}-{a}"
                         updated = True
                         with open("agent_log.txt", "a") as f:
-                            f.write(f"{time.ctime()}: ✅ SETTLED FT: {match_name} ({h}-{a}) -> {bet['status'].upper()}\n")
+                            f.write(f"{time.ctime()}: 💰 DECISED {match_name}: {h}-{a} ({bet['status'].upper()})\n")
                     
-                    # 2. Half Time Settlement
+                    # 2. HT Settlement (If match is HT or later)
                     elif any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"]):
                         if f_status in ["HT", "2H", "FT", "AET", "PEN"]:
                             ht_score = score.get("halftime", {})
@@ -84,22 +98,22 @@ def check_bets():
                             
                             if h is not None and a is not None:
                                 is_win = False
-                                if any(x in advice for x in ["vittoria", "1", "home", "casa"]) and h > a: is_win = True
-                                elif any(x in advice for x in ["2", "away", "ospite", "trasferta"]) and a > h: is_win = True
-                                elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a: is_win = True
+                                if (any(x in advice for x in ["vittoria", "1", "home", "casa"]) or home_name in advice) and h > a:
+                                    is_win = True
+                                elif (any(x in advice for x in ["2", "away", "ospite", "trasferta"]) or away_name in advice) and a > h:
+                                    is_win = True
+                                elif any(x in advice for x in ["x", "draw", "pareggio", "n"]) and h == a:
+                                    is_win = True
                                 
                                 bet["status"] = "win" if is_win else "lost"
                                 bet["result"] = f"(HT) {h}-{a}"
                                 updated = True
                                 with open("agent_log.txt", "a") as f:
-                                    f.write(f"{time.ctime()}: 🕒 SETTLED HT: {match_name} ({h}-{a}) -> {bet['status'].upper()}\n")
-                    else:
-                        # Log why we are waiting
-                        pass
+                                    f.write(f"{time.ctime()}: 🕒 HT SETTLED: {match_name} ({h}-{a}) -> {bet['status'].upper()}\n")
             time.sleep(1) 
         except Exception as e:
             with open("agent_log.txt", "a") as f:
-                f.write(f"{time.ctime()}: ❌ Error: {e}\n")
+                f.write(f"{time.ctime()}: ❌ Settlement Error: {e}\n")
 
     if updated:
         with open(BETS_HISTORY_FILE, "w") as f:
