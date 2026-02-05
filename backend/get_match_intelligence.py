@@ -1,7 +1,8 @@
 import os
-import requests
+import httpx
 import json
 import time
+import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,12 +21,13 @@ cache = {
     "pre_odds": {}   # fixture_id: {data, timestamp}
 }
 
-def get_fixture_details(fixture_id, fixture_data=None, usage_callback=None):
+async def get_fixture_details(fixture_id, fixture_data=None, usage_callback=None):
     """
     Gathers everything needed for Gemini.
     If fixture_data is provided (e.g. from live_matches.json), saves 1 API call.
+    Uses httpx for concurrent async requests.
     """
-    print(f"Gathering intelligence for fixture {fixture_id}...")
+    print(f"Gathering intelligence for fixture {fixture_id} (async)...")
     
     intelligence = {
         "fixture_id": fixture_id,
@@ -38,61 +40,97 @@ def get_fixture_details(fixture_id, fixture_data=None, usage_callback=None):
         "odds_live": None
     }
 
-    def safe_get(url, params):
-        try:
-            res = requests.get(url, headers=HEADERS, params=params)
-            if usage_callback:
-                usage_callback(res)
-            return res.json().get("response", [])
-        except Exception as e:
-            print(f"API Error in get_fixture_details: {e}")
-            return []
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        async def safe_get(url, params):
+            try:
+                res = await client.get(url, headers=HEADERS, params=params)
+                if usage_callback:
+                    # usage_callback might be sync or async.
+                    # In main.py it is update_usage_from_response (sync)
+                    usage_callback(res)
+                return res.json().get("response", [])
+            except Exception as e:
+                print(f"API Error in get_fixture_details: {e}")
+                return []
 
-    # 1. LIVE STATISTICS & EVENTS (Always fresh)
-    intelligence["stats"] = safe_get(f"{BASE_URL}/fixtures/statistics", {"fixture": fixture_id})
-    intelligence["events"] = safe_get(f"{BASE_URL}/fixtures/events", {"fixture": fixture_id})
+        # 1. MATCH INFO (needed first to get team IDs and league ID)
+        if fixture_data:
+            fixture = fixture_data
+        else:
+            fix_res_data = await safe_get(f"{BASE_URL}/fixtures", {"id": fixture_id})
+            if not fix_res_data:
+                return {"error": "Fixture not found"}
+            fixture = fix_res_data[0]
 
-    # 2. MATCH INFO
-    if fixture_data:
-        fixture = fixture_data
-    else:
-        fix_res_data = safe_get(f"{BASE_URL}/fixtures", {"id": fixture_id})
-        if not fix_res_data:
-            return {"error": "Fixture not found"}
-        fixture = fix_res_data[0]
-    
-    intelligence["fixture"] = fixture
-    home_id = fixture["teams"]["home"]["id"]
-    away_id = fixture["teams"]["away"]["id"]
-    league_id = fixture["league"]["id"]
-    season = fixture["league"]["season"]
+        intelligence["fixture"] = fixture
+        home_id = fixture["teams"]["home"]["id"]
+        away_id = fixture["teams"]["away"]["id"]
+        league_id = fixture["league"]["id"]
+        season = fixture["league"]["season"]
 
-    # 3. HEAD TO HEAD (Cache for 24h)
-    h2h_key = f"{min(home_id, away_id)}_{max(home_id, away_id)}"
-    now = time.time()
-    if h2h_key in cache["h2h"] and (now - cache["h2h"][h2h_key]["timestamp"]) < 86400:
-        intelligence["h2h"] = cache["h2h"][h2h_key]["data"]
-    else:
-        intelligence["h2h"] = safe_get(f"{BASE_URL}/fixtures/headtohead", {"h2h": f"{home_id}-{away_id}", "last": 5})
-        cache["h2h"][h2h_key] = {"data": intelligence["h2h"], "timestamp": now}
+        # Tasks to run concurrently
+        tasks = []
 
-    # 4. STANDINGS (Cache for 1h)
-    stand_key = f"{league_id}_{season}"
-    if stand_key in cache["standings"] and (now - cache["standings"][stand_key]["timestamp"]) < 3600:
-        intelligence["standings"] = cache["standings"][stand_key]["data"]
-    else:
-        intelligence["standings"] = safe_get(f"{BASE_URL}/standings", {"league": league_id, "season": season})
-        cache["standings"][stand_key] = {"data": intelligence["standings"], "timestamp": now}
+        # 2. LIVE STATISTICS & EVENTS
+        tasks.append(safe_get(f"{BASE_URL}/fixtures/statistics", {"fixture": fixture_id}))
+        tasks.append(safe_get(f"{BASE_URL}/fixtures/events", {"fixture": fixture_id}))
 
-    # 5. PRE-MATCH ODDS (Cache forever)
-    if fixture_id in cache["pre_odds"]:
-        intelligence["odds_pre"] = cache["pre_odds"][fixture_id]
-    else:
-        intelligence["odds_pre"] = safe_get(f"{BASE_URL}/odds", {"fixture": fixture_id})
-        cache["pre_odds"][fixture_id] = intelligence["odds_pre"]
+        # 3. HEAD TO HEAD (Cache for 24h)
+        h2h_key = f"{min(home_id, away_id)}_{max(home_id, away_id)}"
+        now = time.time()
+        if h2h_key in cache["h2h"] and (now - cache["h2h"][h2h_key]["timestamp"]) < 86400:
+            intelligence["h2h"] = cache["h2h"][h2h_key]["data"]
+            # Placeholder for results index
+            h2h_task_idx = -1
+        else:
+            tasks.append(safe_get(f"{BASE_URL}/fixtures/headtohead", {"h2h": f"{home_id}-{away_id}", "last": 5}))
+            h2h_task_idx = len(tasks) - 1
 
-    # 6. IN-PLAY ODDS (Always fresh)
-    intelligence["odds_live"] = safe_get(f"{BASE_URL}/odds/live", {"fixture": fixture_id})
+        # 4. STANDINGS (Cache for 1h)
+        stand_key = f"{league_id}_{season}"
+        if stand_key in cache["standings"] and (now - cache["standings"][stand_key]["timestamp"]) < 3600:
+            intelligence["standings"] = cache["standings"][stand_key]["data"]
+            stand_task_idx = -1
+        else:
+            tasks.append(safe_get(f"{BASE_URL}/standings", {"league": league_id, "season": season}))
+            stand_task_idx = len(tasks) - 1
+
+        # 5. PRE-MATCH ODDS (Cache forever)
+        if fixture_id in cache["pre_odds"]:
+            intelligence["odds_pre"] = cache["pre_odds"][fixture_id]
+            pre_odds_task_idx = -1
+        else:
+            tasks.append(safe_get(f"{BASE_URL}/odds", {"fixture": fixture_id}))
+            pre_odds_task_idx = len(tasks) - 1
+
+        # 6. IN-PLAY ODDS
+        tasks.append(safe_get(f"{BASE_URL}/odds/live", {"fixture": fixture_id}))
+        live_odds_task_idx = len(tasks) - 1
+
+        # Execute all tasks concurrently
+        results = await asyncio.gather(*tasks)
+
+        # Mapping results back
+        curr_idx = 0
+        intelligence["stats"] = results[curr_idx]; curr_idx += 1
+        intelligence["events"] = results[curr_idx]; curr_idx += 1
+
+        if h2h_task_idx != -1:
+            intelligence["h2h"] = results[h2h_task_idx]
+            cache["h2h"][h2h_key] = {"data": intelligence["h2h"], "timestamp": now}
+            curr_idx += 1
+
+        if stand_task_idx != -1:
+            intelligence["standings"] = results[stand_task_idx]
+            cache["standings"][stand_key] = {"data": intelligence["standings"], "timestamp": now}
+            curr_idx += 1
+
+        if pre_odds_task_idx != -1:
+            intelligence["odds_pre"] = results[pre_odds_task_idx]
+            cache["pre_odds"][fixture_id] = intelligence["odds_pre"]
+            curr_idx += 1
+
+        intelligence["odds_live"] = results[live_odds_task_idx]
 
     return intelligence
 

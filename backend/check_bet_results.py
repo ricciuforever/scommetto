@@ -1,8 +1,9 @@
 import os
 import json
-import requests
+import httpx
 import time
 import re
+import asyncio
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -29,7 +30,7 @@ def log_message(msg):
     except:
         pass
 
-def check_bets(usage_callback=None):
+async def check_bets(usage_callback=None):
     if not os.path.exists(BETS_HISTORY_FILE):
         return
 
@@ -41,7 +42,6 @@ def check_bets(usage_callback=None):
         return
 
     # We want to settle everything that isn't already decided (win/lost/void)
-    # This includes 'pending', but also 'duplicate' or 'stale' from previous runs
     targets = [b for b in history if b.get("status") in ["pending", "duplicate", "stale"]]
 
     if not targets:
@@ -54,20 +54,21 @@ def check_bets(usage_callback=None):
     ids_to_check = list(set([str(b["fixture_id"]) for b in targets if b.get("fixture_id")]))
 
     fixtures_data = {}
-    for i in range(0, len(ids_to_check), 20):
-        chunk = ids_to_check[i:i + 20]
-        try:
-            ids_param = ",".join(chunk)
-            log_message(f"Settling backlog: Checking batch of {len(chunk)} matches...")
-            res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param})
-            if usage_callback: usage_callback(res)
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for i in range(0, len(ids_to_check), 20):
+            chunk = ids_to_check[i:i + 20]
+            try:
+                ids_param = ",".join(chunk)
+                log_message(f"Settling backlog: Checking batch of {len(chunk)} matches...")
+                res = await client.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param})
+                if usage_callback: usage_callback(res)
 
-            data = res.json()
-            for f in data.get("response", []):
-                fixtures_data[f["fixture"]["id"]] = f
-            time.sleep(1)
-        except Exception as e:
-            log_message(f"❌ Batch API Error: {e}")
+                data = res.json()
+                for f in data.get("response", []):
+                    fixtures_data[f["fixture"]["id"]] = f
+                await asyncio.sleep(1)
+            except Exception as e:
+                log_message(f"❌ Batch API Error: {e}")
 
     for bet in history:
         status = bet.get("status")
@@ -76,7 +77,6 @@ def check_bets(usage_callback=None):
 
         f_id = int(bet.get("fixture_id", 0))
 
-        # If we have data for this fixture
         if f_id in fixtures_data:
             fixture = fixtures_data[f_id]
             status_info = fixture["fixture"]["status"]
@@ -91,18 +91,15 @@ def check_bets(usage_callback=None):
             home_name = fixture["teams"]["home"]["name"].lower()
             away_name = fixture["teams"]["away"]["name"].lower()
 
-            # Force FT if match is clearly over but API status is lagging
             if f_status in ["2H", "90"] and elapsed > 105:
                 f_status = "FT"
 
-            # 1. VOIDED
             if f_status in ["PST", "CANC", "ABD", "WO"]:
                 bet["status"] = "void"
                 bet["result"] = f_status
                 updated = True
                 continue
 
-            # 2. SETTLEMENT LOGIC
             is_ht_market = any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"])
             settle_now = False
             h, a = None, None
@@ -122,30 +119,24 @@ def check_bets(usage_callback=None):
 
             if settle_now:
                 is_win = False
-                # Home Win
                 if re.search(r'\b(1|home|vittoria casa|vince casa|casa)\b', advice) or (home_name in advice and any(x in advice for x in ["vince", "vittoria", "segna"])):
                     if h > a: is_win = True
-                # Away Win
                 elif re.search(r'\b(2|away|vittoria ospite|vince trasferta|ospite|trasferta)\b', advice) or (away_name in advice and any(x in advice for x in ["vince", "vittoria", "segna"])):
                     if a > h: is_win = True
-                # Draw (X)
                 elif re.search(r'\b(x|draw|pareggio|segno x)\b', advice) and not re.search(r'\d', advice.replace('x', '')):
                     if h == a: is_win = True
-                # Over
                 elif "over" in advice:
                     threshold = 2.5
                     if "0.5" in advice: threshold = 0.5
                     elif "1.5" in advice: threshold = 1.5
                     elif "3.5" in advice: threshold = 3.5
                     if (h + a) > threshold: is_win = True
-                # Under
                 elif "under" in advice:
                     threshold = 2.5
                     if "0.5" in advice: threshold = 0.5
                     elif "1.5" in advice: threshold = 1.5
                     elif "3.5" in advice: threshold = 3.5
                     if (h + a) < threshold: is_win = True
-                # Default team win
                 elif home_name in advice and h > a: is_win = True
                 elif away_name in advice and a > h: is_win = True
 
@@ -154,7 +145,6 @@ def check_bets(usage_callback=None):
                 updated = True
                 log_message(f"💰 BACKLOG SETTLED: {match_name} -> {bet['status'].upper()} ({bet['result']})")
 
-        # 3. SECONDARY CLEANUP: If still pending/stale but match is very old (>12h), just close it
         if bet["status"] in ["pending", "duplicate", "stale"]:
             try:
                 bet_time = datetime.strptime(bet["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
@@ -173,4 +163,4 @@ def check_bets(usage_callback=None):
             log_message(f"❌ Save Error: {e}")
 
 if __name__ == "__main__":
-    check_bets()
+    asyncio.run(check_bets())

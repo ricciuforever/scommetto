@@ -2,9 +2,11 @@ from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
-import requests
+import httpx
 import time
 import threading
+import asyncio
+from contextlib import asynccontextmanager
 from threading import Thread
 from datetime import datetime
 from dotenv import load_dotenv
@@ -12,7 +14,19 @@ from dotenv import load_dotenv
 # Load variables from .env file
 load_dotenv()
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start background task
+    bg_task = asyncio.create_task(single_update_loop())
+    yield
+    # Clean up if needed
+    bg_task.cancel()
+    try:
+        await bg_task
+    except asyncio.CancelledError:
+        pass
+
+app = FastAPI(lifespan=lifespan)
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -59,16 +73,17 @@ TEAMS_FILE = os.path.join(BASE_DIR, "serie_a_teams.json")
 SQUADS_FILE = os.path.join(BASE_DIR, "serie_a_squads.json")
 BETS_HISTORY_FILE = os.path.join(BASE_DIR, "bets_history.json")
 
-def fetch_live_data():
+async def fetch_live_data():
     print("Updating live data...")
     try:
         url = f"{BASE_URL}/fixtures?live=all"
-        response = requests.get(url, headers=HEADERS)
-        update_usage_from_response(response)
-        data = response.json()
-        with file_lock:
-            with open(LIVE_DATA_FILE, "w") as f:
-                json.dump(data, f)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=HEADERS)
+            update_usage_from_response(response)
+            data = response.json()
+            with file_lock:
+                with open(LIVE_DATA_FILE, "w") as f:
+                    json.dump(data, f)
         print("Live data updated.")
     except Exception as e:
         print(f"Error updating live data: {e}")
@@ -79,12 +94,12 @@ from check_bet_results import check_bets
 
 @app.get("/api/intelligence/{fixture_id}")
 async def get_intelligence(fixture_id: int):
-    data = get_fixture_details(fixture_id, usage_callback=update_usage_from_response)
+    data = await get_fixture_details(fixture_id, usage_callback=update_usage_from_response)
     return data
 
 @app.get("/api/analyze/{fixture_id}")
 async def get_gemini_analysis(fixture_id: int):
-    intelligence = get_fixture_details(fixture_id, usage_callback=update_usage_from_response)
+    intelligence = await get_fixture_details(fixture_id, usage_callback=update_usage_from_response)
     prediction = analyze_match_with_gemini(intelligence)
     
     auto_bet_status = "no_bet"
@@ -135,10 +150,7 @@ def internal_place_bet(bet_data: dict):
         except:
             f_id = 0
 
-        advice = bet_data.get("advice", "")
-
         # STRICT DUPLICATE CHECK: Only 1 pending bet per fixture!
-        # This prevents the accumulation the user is seeing.
         existing_pending = next((b for b in history if int(b.get("fixture_id", 0)) == f_id and b.get("status") == "pending"), None)
         if existing_pending:
             return {"status": "already_exists", "bet": existing_pending}
@@ -163,22 +175,23 @@ async def place_bet(bet_data: dict):
 async def get_usage():
     return api_usage_info
 
-def fetch_initial_data():
+async def fetch_initial_data():
     if not os.path.exists(TEAMS_FILE):
         print("Seeding initial teams data...")
         try:
             url = f"{BASE_URL}/teams?league=135&season=2024"
-            response = requests.get(url, headers=HEADERS)
-            update_usage_from_response(response)
-            data = response.json()
-            with file_lock:
-                with open(TEAMS_FILE, "w") as f:
-                    json.dump(data, f)
-            print("Initial teams data seeded.")
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, headers=HEADERS)
+                update_usage_from_response(response)
+                data = response.json()
+                with file_lock:
+                    with open(TEAMS_FILE, "w") as f:
+                        json.dump(data, f)
+                print("Initial teams data seeded.")
         except Exception as e:
             print(f"Error seeding teams: {e}")
 
-def auto_scanner_logic():
+async def auto_scanner_logic():
     print("--- 🤖 BOT SCANNER: Searching for value bets ---")
     try:
         if not os.path.exists(LIVE_DATA_FILE): return
@@ -204,12 +217,10 @@ def auto_scanner_logic():
                 print("--- 🤖 BOT PAUSED: API Quota low ---")
                 break
 
-            # STRICT CHECK: Don't analyze if we already have a pending bet for this match
             existing_bet = next((b for b in history if int(b.get("fixture_id", 0)) == fix_id and b.get("status") == "pending"), None)
             
             should_analyze = False
             if not existing_bet:
-                # Also check for recent analyzed/lost to avoid spamming the same match
                 recent = next((b for b in reversed(history) if int(b.get("fixture_id", 0)) == fix_id), None)
                 if not recent:
                     should_analyze = True
@@ -229,7 +240,7 @@ def auto_scanner_logic():
                     continue
 
                 print(f"🤖 BOT: Analyzing {m['teams']['home']['name']} vs {m['teams']['away']['name']}")
-                intelligence = get_fixture_details(fix_id, fixture_data=m, usage_callback=update_usage_from_response)
+                intelligence = await get_fixture_details(fix_id, fixture_data=m, usage_callback=update_usage_from_response)
                 prediction = analyze_match_with_gemini(intelligence)
                 
                 import re
@@ -249,28 +260,28 @@ def auto_scanner_logic():
                     except Exception as e:
                         print(f"Error parsing Gemini JSON: {e}")
                 
-                time.sleep(1)
+                await asyncio.sleep(1)
                     
     except Exception as e:
         print(f"🤖 BOT ERROR: {e}")
 
-def single_update_loop():
-    fetch_initial_data()
+async def single_update_loop():
+    await fetch_initial_data()
     cycle_count = 0
     while True:
         try:
             nowStr = time.strftime("%H:%M:%S")
             print(f"[{nowStr}] --- STARTING SYNC CYCLE ---")
-            fetch_live_data()
+            await fetch_live_data()
             
-            # Settlement run every 3 minutes (cycle 0, 3, 6...)
+            # Settlement run every 3 minutes
             if cycle_count % 3 == 0:
                 print(f"[{nowStr}] Running Bet Settlement...")
-                check_bets(usage_callback=update_usage_from_response)
+                await check_bets(usage_callback=update_usage_from_response)
             
             # Auto-Scanner every 2 minutes
             if cycle_count % 2 == 0:
-                auto_scanner_logic()
+                await auto_scanner_logic()
                 
             cycle_count += 1
             print(f"[{nowStr}] --- SYNC CYCLE COMPLETE ---")
@@ -281,10 +292,7 @@ def single_update_loop():
             with open(log_path, "a") as f:
                 f.write(f"{time.ctime()}: {msg}\n")
         
-        time.sleep(60)
-
-# Start background thread
-Thread(target=single_update_loop, daemon=True).start()
+        await asyncio.sleep(60)
 
 @app.get("/api/health")
 async def health_check():
