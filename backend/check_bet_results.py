@@ -27,7 +27,8 @@ def check_bets():
     for bet in history:
         if bet.get("status") == "pending":
             fixture_id = bet.get("fixture_id")
-            print(f"Checking results for fixture {fixture_id} ({bet.get('match')})...")
+            match_name = bet.get("match", "Unknown")
+            print(f"DEBUG: Checking {match_name} (ID: {fixture_id})...")
             
             try:
                 res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"id": fixture_id})
@@ -35,62 +36,46 @@ def check_bets():
                 
                 if data.get("response"):
                     fixture = data["response"][0]
-                    status = fixture["fixture"]["status"]["short"]
+                    f_status = fixture["fixture"]["status"]["short"]
                     goals = fixture["goals"]
-                    score_half = fixture.get("score", {}).get("halftime", {})
+                    score = fixture.get("score", {})
                     
-                    # Logica per decidere se la scommessa è conclusa
                     market = bet.get("market", "").lower()
                     advice = bet.get("advice", "").lower()
                     
+                    print(f"DEBUG: Status={f_status}, Score={score.get('fulltime')}, HT={score.get('halftime')}")
+
                     # 1. 1X2 (Full Time)
-                    if status == "FT":
-                        home_win = goals["home"] > goals["away"]
-                        away_win = goals["away"] > goals["home"]
-                        draw = goals["home"] == goals["away"]
+                    if f_status == "FT":
+                        h, a = goals["home"], goals["away"]
+                        # Logic for WIN/LOSS
+                        is_win = False
+                        if ("vittoria" in advice or "1" in advice or "home" in advice) and h > a: is_win = True
+                        elif ("2" in advice or "away" in advice) and a > h: is_win = True
+                        elif ("x" in advice or "draw" in advice or "pareggio" in advice) and h == a: is_win = True
                         
-                        outcome = "lost"
-                        if "vittoria" in advice or "1" in advice:
-                            if "casa" in advice or "home" in advice or (not "2" in advice and not "x" in advice):
-                                outcome = "win" if home_win else "lost"
-                        elif "2" in advice or "away" in advice or "ospite" in advice:
-                            outcome = "win" if away_win else "lost"
-                        elif "x" in advice or "draw" in advice or "pareggio" in advice:
-                            outcome = "win" if draw else "lost"
-                            
-                        bet["status"] = outcome
-                        bet["result"] = f"{goals['home']}-{goals['away']}"
+                        bet["status"] = "win" if is_win else "lost"
+                        bet["result"] = f"{h}-{a}"
                         updated = True
 
                     # 2. 1X2 (1st Half)
-                    elif "1st half" in market or "primo tempo" in market:
-                        # Se il primo tempo è finito o la partita è oltre
-                        if status in ["HT", "2H", "FT"]:
-                            h_goals = score_half.get("home")
-                            a_goals = score_half.get("away")
+                    elif ("1st half" in market or "primo tempo" in market) and f_status in ["HT", "2H", "FT"]:
+                        ht_score = score.get("halftime", {})
+                        h, a = ht_score.get("home"), ht_score.get("away")
+                        
+                        if h is not None and a is not None:
+                            is_win = False
+                            if ("vittoria" in advice or "1" in advice or "home" in advice) and h > a: is_win = True
+                            elif ("2" in advice or "away" in advice) and a > h: is_win = True
+                            elif ("x" in advice or "draw" in advice or "pareggio" in advice) and h == a: is_win = True
                             
-                            if h_goals is not None and a_goals is not None:
-                                home_win = h_goals > a_goals
-                                away_win = a_goals > h_goals
-                                draw = h_goals == a_goals
-                                
-                                outcome = "lost"
-                                if "vittoria" in advice or "1" in advice or "home" in advice:
-                                    outcome = "win" if home_win else "lost"
-                                elif "2" in advice or "away" in advice:
-                                    outcome = "win" if away_win else "lost"
-                                elif "x" in advice or "draw" in advice:
-                                    outcome = "win" if draw else "lost"
-                                    
-                                bet["status"] = outcome
-                                bet["result"] = f"(HT) {h_goals}-{a_goals}"
-                                updated = True
+                            bet["status"] = "win" if is_win else "lost"
+                            bet["result"] = f"(HT) {h}-{a}"
+                            updated = True
                 
-                # Rispetta il rate limit (1 call per scommessa è pesante, facciamo piano)
                 time.sleep(1) 
-                
             except Exception as e:
-                print(f"Error checking fixture {fixture_id}: {e}")
+                print(f"DEBUG: Error {fixture_id}: {e}")
 
     if updated:
         with open(BETS_HISTORY_FILE, "w") as f:

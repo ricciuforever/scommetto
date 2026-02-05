@@ -133,6 +133,18 @@ function App() {
     return total;
   };
 
+  const getMatchTimeDisplay = (m) => {
+    const status = m.fixture.status.short;
+    const elapsed = m.fixture.status.elapsed;
+
+    if (status === 'HT') return <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>HT</span>;
+    if (status === 'FT') return 'FT';
+    if (status === 'NS') return 'Scheduled';
+
+    const ticked = getTickedMinute(elapsed);
+    return `${ticked}'`;
+  };
+
   const sortedMatches = [...liveMatches].sort((a, b) => {
     // Priority 1: Top Leagues (can add more IDs here)
     const topLeagues = [135, 140, 39, 61, 78]; // Serie A, La Liga, PL, Ligue 1, Bunde
@@ -166,7 +178,7 @@ function App() {
                   sortedMatches.map((m) => (
                     <div key={m.fixture.id} className="match-item" style={{ position: 'relative' }}>
                       <div className="league-name">{m.league.name} - {m.league.country}</div>
-                      <div className="time">{getTickedMinute(m.fixture.status.elapsed)}'</div>
+                      <div className="time">{getMatchTimeDisplay(m)}</div>
                       <div className="team">
                         <img src={m.teams.home.logo} alt="" />
                         {m.teams.home.name}
