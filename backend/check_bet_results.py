@@ -28,6 +28,31 @@ def log_message(msg):
     except:
         pass
 
+def cleanup_duplicates(history):
+    """Removes duplicate pending bets for the same fixture."""
+    seen_fixtures = set()
+    new_history = []
+    removed_count = 0
+
+    # Process from newest to oldest to keep the most recent analysis
+    for bet in reversed(history):
+        f_id = bet.get("fixture_id")
+        status = bet.get("status")
+
+        if status == "pending" and f_id in seen_fixtures:
+            removed_count += 1
+            continue
+
+        if status == "pending":
+            seen_fixtures.add(f_id)
+
+        new_history.append(bet)
+
+    if removed_count > 0:
+        log_message(f"🧹 CLEANUP: Removed {removed_count} duplicate pending bets.")
+        return list(reversed(new_history)), True
+    return history, False
+
 def check_bets(usage_callback=None):
     if not os.path.exists(BETS_HISTORY_FILE):
         return
@@ -38,12 +63,18 @@ def check_bets(usage_callback=None):
     except:
         return
 
+    # Run cleanup first
+    history, was_cleaned = cleanup_duplicates(history)
+    updated = was_cleaned
+
     pending_bets = [b for b in history if b.get("status") == "pending"]
     if not pending_bets:
+        if was_cleaned:
+            with open(BETS_HISTORY_FILE, "w") as f:
+                json.dump(history, f, indent=4)
         return
 
     ids_to_check = list(set([str(b["fixture_id"]) for b in pending_bets if b.get("fixture_id")]))
-    updated = False
 
     for i in range(0, len(ids_to_check), 20):
         chunk = ids_to_check[i:i + 20]
@@ -74,6 +105,12 @@ def check_bets(usage_callback=None):
                     home_name = fixture["teams"]["home"]["name"].lower()
                     away_name = fixture["teams"]["away"]["name"].lower()
 
+                    # Handle stuck matches (Time > 110 and still in 2H/90min)
+                    elapsed = fixture["fixture"]["status"]["elapsed"] or 0
+                    if f_status in ["2H", "90"] and elapsed > 110:
+                        f_status = "FT" # Treat as finished if stuck
+                        log_message(f"⚠️ Match {match_name} seems stuck at {elapsed}', forcing FT settlement.")
+
                     if f_status in ["PST", "CANC", "ABD", "WO"]:
                         bet["status"] = "void"
                         bet["result"] = f_status
@@ -102,26 +139,31 @@ def check_bets(usage_callback=None):
                         h, a = target_h, target_a
                         is_win = False
 
-                        # IMPROVED LOGIC: Regular expressions for better matching
-                        # 1. Home Win
-                        if re.search(r'\b(1|home|vittoria casa|vince casa|casa)\b', advice) or (home_name in advice and "vince" in advice):
+                        # LOGIC:
+                        # Home Win: matches "1", "home", "casa", or team name if combined with win keywords
+                        if re.search(r'\b(1|home|vittoria casa|vince casa|casa)\b', advice) or (home_name in advice and any(x in advice for x in ["vince", "vittoria", "segna"])):
                             if h > a: is_win = True
-                        # 2. Away Win
-                        elif re.search(r'\b(2|away|vittoria ospite|vince trasferta|ospite|trasferta)\b', advice) or (away_name in advice and "vince" in advice):
+                        # Away Win
+                        elif re.search(r'\b(2|away|vittoria ospite|vince trasferta|ospite|trasferta)\b', advice) or (away_name in advice and any(x in advice for x in ["vince", "vittoria", "segna"])):
                             if a > h: is_win = True
-                        # 3. Draw
-                        elif re.search(r'\b(x|draw|pareggio|segno x)\b', advice):
+                        # Draw
+                        elif re.search(r'\b(x|draw|pareggio|segno x)\b', advice) and not re.search(r'\d', advice.replace('x', '')):
                             if h == a: is_win = True
-                        # 4. Over 2.5
-                        elif "over" in advice and "2.5" in advice:
-                            if (h + a) > 2.5: is_win = True
-                        # 5. Under 2.5
-                        elif "under" in advice and "2.5" in advice:
-                            if (h + a) < 2.5: is_win = True
-                        # 6. Simple Over/Under fallback
-                        elif "over" in advice and (h + a) > 2.5: is_win = True
-                        elif "under" in advice and (h + a) < 2.5: is_win = True
-                        # 7. Fallback simple team name
+                        # Over
+                        elif "over" in advice:
+                            threshold = 2.5
+                            if "0.5" in advice: threshold = 0.5
+                            elif "1.5" in advice: threshold = 1.5
+                            elif "3.5" in advice: threshold = 3.5
+                            if (h + a) > threshold: is_win = True
+                        # Under
+                        elif "under" in advice:
+                            threshold = 2.5
+                            if "0.5" in advice: threshold = 0.5
+                            elif "1.5" in advice: threshold = 1.5
+                            elif "3.5" in advice: threshold = 3.5
+                            if (h + a) < threshold: is_win = True
+                        # Fallback
                         elif home_name in advice and h > a: is_win = True
                         elif away_name in advice and a > h: is_win = True
                         
