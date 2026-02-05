@@ -1,3 +1,4 @@
+from starlette.concurrency import run_in_threadpool
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import json
@@ -78,12 +79,12 @@ from gemini_analyzer import analyze_match_with_gemini
 from check_bet_results import check_bets
 
 @app.get("/api/intelligence/{fixture_id}")
-async def get_intelligence(fixture_id: int):
+def get_intelligence(fixture_id: int):
     data = get_fixture_details(fixture_id, usage_callback=update_usage_from_response)
     return data
 
 @app.get("/api/analyze/{fixture_id}")
-async def get_gemini_analysis(fixture_id: int):
+def get_gemini_analysis(fixture_id: int):
     intelligence = get_fixture_details(fixture_id, usage_callback=update_usage_from_response)
     prediction = analyze_match_with_gemini(intelligence)
     
@@ -112,7 +113,7 @@ async def get_gemini_analysis(fixture_id: int):
     }
 
 @app.get("/api/history")
-async def get_history():
+def get_history():
     with file_lock:
         if os.path.exists(BETS_HISTORY_FILE):
             with open(BETS_HISTORY_FILE, "r") as f:
@@ -156,7 +157,7 @@ def internal_place_bet(bet_data: dict):
         return {"status": "success", "bet": bet_data}
 
 @app.post("/api/place_bet")
-async def place_bet(bet_data: dict):
+def place_bet(bet_data: dict):
     return internal_place_bet(bet_data)
 
 @app.get("/api/usage")
@@ -308,7 +309,7 @@ async def get_logs():
         return {"logs": [f"Error reading logs: {e}"]}
 
 @app.get("/api/live")
-async def get_live():
+def get_live():
     with file_lock:
         if os.path.exists(LIVE_DATA_FILE):
             with open(LIVE_DATA_FILE, "r") as f:
@@ -318,7 +319,7 @@ async def get_live():
     return {"response": []}
 
 @app.get("/api/teams")
-async def get_teams():
+def get_teams():
     with file_lock:
         if os.path.exists(TEAMS_FILE):
             with open(TEAMS_FILE, "r") as f:
@@ -326,7 +327,7 @@ async def get_teams():
     return {"response": []}
 
 @app.get("/api/squads")
-async def get_squads():
+def get_squads():
     with file_lock:
         if os.path.exists(SQUADS_FILE):
             with open(SQUADS_FILE, "r") as f:
