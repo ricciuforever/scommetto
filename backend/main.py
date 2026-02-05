@@ -63,6 +63,7 @@ def fetch_live_data():
 
 from get_match_intelligence import get_fixture_details
 from gemini_analyzer import analyze_match_with_gemini
+from check_bet_results import check_bets
 
 @app.get("/api/intelligence/{fixture_id}")
 async def get_intelligence(fixture_id: int):
@@ -143,6 +144,7 @@ def fetch_initial_data():
         try:
             url = f"{BASE_URL}/teams?league=135&season=2024"
             response = requests.get(url, headers=HEADERS)
+            update_usage_from_response(response)
             data = response.json()
             with open(TEAMS_FILE, "w") as f:
                 json.dump(data, f)
@@ -154,6 +156,7 @@ def update_loop():
     fetch_initial_data() # Seed once at startup
     while True:
         fetch_live_data()
+        check_bets() # Check results for pending bets
         time.sleep(900) # Every 15 minutes (96 requests/day)
 
 # Start background thread for updates
