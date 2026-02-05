@@ -27,6 +27,21 @@ HEADERS = {
     'x-rapidapi-key': API_KEY
 }
 
+# Global tracker for API usage
+api_usage_info = {"used": 0, "remaining": 100}
+
+def update_usage_from_response(response):
+    global api_usage_info
+    try:
+        used = response.headers.get("x-ratelimit-requests-used")
+        rem = response.headers.get("x-ratelimit-requests-remaining")
+        if used is not None:
+            api_usage_info["used"] = int(used)
+        if rem is not None:
+            api_usage_info["remaining"] = int(rem)
+    except Exception as e:
+        print(f"Error updating usage: {e}")
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LIVE_DATA_FILE = os.path.join(BASE_DIR, "live_matches.json")
 TEAMS_FILE = os.path.join(BASE_DIR, "serie_a_teams.json")
@@ -38,6 +53,7 @@ def fetch_live_data():
     try:
         url = f"{BASE_URL}/fixtures?live=all"
         response = requests.get(url, headers=HEADERS)
+        update_usage_from_response(response)
         data = response.json()
         with open(LIVE_DATA_FILE, "w") as f:
             json.dump(data, f)
@@ -116,6 +132,10 @@ async def place_bet(bet_data: dict):
         json.dump(history, f, indent=4)
         
     return {"status": "success", "bet": bet_data}
+
+@app.get("/api/usage")
+async def get_usage():
+    return api_usage_info
 
 def fetch_initial_data():
     if not os.path.exists(TEAMS_FILE):

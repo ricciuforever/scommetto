@@ -10,6 +10,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [lastFetchTimestamp, setLastFetchTimestamp] = useState(Date.now());
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [usage, setUsage] = useState({ used: 0, remaining: 100 });
 
   const fetchHistory = async () => {
     try {
@@ -19,6 +20,17 @@ function App() {
       setBetHistory(data);
     } catch (err) {
       console.error("History error:", err);
+    }
+  };
+
+  const fetchUsage = async () => {
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || '';
+      const res = await fetch(`${apiBase}/api/usage`);
+      const data = await res.json();
+      setUsage(data);
+    } catch (err) {
+      console.error("Usage fetch error:", err);
     }
   };
 
@@ -63,6 +75,7 @@ function App() {
       if (data.auto_bet_status === 'success') {
         fetchHistory();
       }
+      fetchUsage(); // Update usage after analysis
     } catch (err) {
       console.error("Analysis error:", err);
     } finally {
@@ -95,7 +108,11 @@ function App() {
 
     fetchData();
     fetchHistory();
-    const interval = setInterval(fetchData, 60000); // UI poll every minute
+    fetchUsage();
+    const interval = setInterval(() => {
+      fetchData();
+      fetchUsage();
+    }, 60000); // UI poll every minute
 
     // Clock tick every second for smooth minute calculation
     const tick = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -297,7 +314,8 @@ function App() {
             <h2>ℹ️ Agent Status</h2>
             <div style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: '1.6' }}>
               • API Polling: Active (15m interval)<br />
-              • Daily Quota: 18/100 used<br />
+              • Daily Quota: {usage.used} / {usage.used + usage.remaining} used<br />
+              • Remaining: <span style={{ color: usage.remaining < 20 ? 'red' : 'var(--primary)' }}>{usage.remaining} calls</span><br />
               • Strategy: Real-time monitoring<br />
               • Monitoring: {liveMatches.length} events
             </div>
