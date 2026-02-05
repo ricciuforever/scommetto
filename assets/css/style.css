@@ -61,6 +61,12 @@ header {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     padding: 1.5rem;
     margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.match-main-info {
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;
@@ -179,4 +185,67 @@ header {
 .status-lost {
     color: var(--danger);
     border: 1px solid var(--danger);
+}
+
+/* Match Events / Highlights */
+.match-events {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-top: 0.75rem;
+    margin-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    scrollbar-width: none;
+}
+
+.match-events::-webkit-scrollbar {
+    display: none;
+}
+
+.event-pill {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.event-time {
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.event-icon-goal {
+    color: var(--success);
+}
+
+.event-icon-yellow {
+    color: #facc15;
+}
+
+.event-icon-red {
+    color: var(--danger);
+}
+
+.event-icon-var {
+    color: #a855f7;
+}
+
+/* Custom Scrollbar */
+.analysis-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.analysis-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.analysis-content::-webkit-scrollbar-thumb {
+    background: var(--accent);
+    border-radius: 10px;
 }

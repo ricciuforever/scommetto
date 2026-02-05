@@ -42,17 +42,41 @@ function renderMatches() {
     container.innerHTML = liveMatches.length === 0 ? '<p>Nessuna partita live disponibile.</p>' : '';
 
     liveMatches.forEach(m => {
+        const eventsHtml = (m.events || []).map(ev => {
+            let icon = '⚽';
+            let iconClass = 'event-icon-goal';
+
+            if (ev.type === 'Goal') { icon = '⚽'; iconClass = 'event-icon-goal'; }
+            if (ev.type === 'Card' && ev.detail === 'Yellow Card') { icon = '🟨'; iconClass = 'event-icon-yellow'; }
+            if (ev.type === 'Card' && ev.detail === 'Red Card') { icon = '🟥'; iconClass = 'event-icon-red'; }
+            if (ev.type === 'Var') { icon = '🖥️'; iconClass = 'event-icon-var'; }
+            if (ev.type === 'subst') return ''; // Skip substitutions to avoid clutter
+
+            return `
+                <div class="event-pill">
+                    <span class="event-time">${ev.time.elapsed}'</span>
+                    <span class="${iconClass}">${icon}</span>
+                    <span>${ev.player.name || ''}</span>
+                </div>
+            `;
+        }).join('');
+
         const card = document.createElement('div');
         card.className = 'glass-panel match-card';
         card.dataset.id = m.fixture.id;
         card.innerHTML = `
-            <div class="live-badge"><span class="elapsed-time" data-start="${m.fixture.status.elapsed}">${m.fixture.status.elapsed}</span>'</div>
-            <div class="team-info">
-                <span>${m.teams.home.name}</span>
-                <span style="color:var(--accent); font-size:1.2rem;">${m.goals.home} - ${m.goals.away}</span>
-                <span>${m.teams.away.name}</span>
+            <div class="match-main-info">
+                <div class="live-badge"><span class="elapsed-time" data-start="${m.fixture.status.elapsed}">${m.fixture.status.elapsed}</span>'</div>
+                <div class="team-info">
+                    <img src="${m.teams.home.logo}" class="team-logo" alt="${m.teams.home.name}">
+                    <span>${m.teams.home.name}</span>
+                    <span style="color:var(--accent); font-size:1.4rem; font-weight:800; margin:0 10px;">${m.goals.home} - ${m.goals.away}</span>
+                    <span>${m.teams.away.name}</span>
+                    <img src="${m.teams.away.logo}" class="team-logo" alt="${m.teams.away.name}">
+                </div>
+                <button class="btn-analyze" onclick="analyzeMatch(${m.fixture.id})">Analizza AI</button>
             </div>
-            <button class="btn-analyze" onclick="analyzeMatch(${m.fixture.id})">Analizza AI</button>
+            ${eventsHtml ? `<div class="match-events">${eventsHtml}</div>` : ''}
         `;
         container.appendChild(card);
     });
