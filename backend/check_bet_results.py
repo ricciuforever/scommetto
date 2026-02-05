@@ -145,62 +145,56 @@ def check_bets(usage_callback=None, lock=None):
             if settle_now:
                 is_win = False
                 found_pattern = False
+                match_reason = ""
 
-                # Home Win
-                if re.search(r'\b(1|home|vittoria casa|vince casa|casa)\b', advice) or (home_name in advice and any(x in advice for x in ["vince", "vittoria", "segna"])):
+                # 1. Home Win - Stricter pattern
+                if re.search(r'\b(vittoria casa|vince casa|^1$|casa vince|home win)\b', advice) or (home_name in advice and any(x in advice for x in ["vince", "vittoria"])):
                     found_pattern = True
+                    match_reason = "Home Win Pattern"
                     if h > a: is_win = True
-                # Away Win
-                elif re.search(r'\b(2|away|vittoria ospite|vince trasferta|ospite|trasferta)\b', advice) or (away_name in advice and any(x in advice for x in ["vince", "vittoria", "segna"])):
+                # 2. Away Win - Stricter pattern
+                elif re.search(r'\b(vittoria ospite|vince trasferta|^2$|trasferta vince|away win)\b', advice) or (away_name in advice and any(x in advice for x in ["vince", "vittoria"])):
                     found_pattern = True
+                    match_reason = "Away Win Pattern"
                     if a > h: is_win = True
-                # Draw (X)
-                elif re.search(r'\b(x|draw|pareggio|segno x)\b', advice) and not re.search(r'\d', advice.replace('x', '')):
+                # 3. Draw - Stricter pattern (must not have numbers near X)
+                elif re.search(r'\b(x|draw|pareggio)\b', advice) and not re.search(r'\d', advice.replace('x', '')):
                     found_pattern = True
+                    match_reason = "Draw Pattern"
                     if h == a: is_win = True
-                # Over
+                # 4. Over/Under - Standard
                 elif "over" in advice:
                     found_pattern = True
-                    threshold = 2.5
-                    if "0.5" in advice: threshold = 0.5
-                    elif "1.5" in advice: threshold = 1.5
-                    elif "3.5" in advice: threshold = 3.5
+                    threshold = float(re.search(r'(\d+\.\d+)', advice).group(1)) if re.search(r'(\d+\.\d+)', advice) else 2.5
+                    match_reason = f"Over {threshold} Pattern"
                     if (h + a) > threshold: is_win = True
-                # Under
                 elif "under" in advice:
                     found_pattern = True
-                    threshold = 2.5
-                    if "0.5" in advice: threshold = 0.5
-                    elif "1.5" in advice: threshold = 1.5
-                    elif "3.5" in advice: threshold = 3.5
+                    threshold = float(re.search(r'(\d+\.\d+)', advice).group(1)) if re.search(r'(\d+\.\d+)', advice) else 2.5
+                    match_reason = f"Under {threshold} Pattern"
                     if (h + a) < threshold: is_win = True
-                # Default team win
-                elif home_name in advice:
-                    found_pattern = True
-                    if h > a: is_win = True
-                elif away_name in advice:
-                    found_pattern = True
-                    if a > h: is_win = True
 
                 if found_pattern:
                     bet["status"] = "win" if is_win else "lost"
                     bet["result"] = f"{res_prefix}{h}-{a}"
                     updated = True
-                    log_message(f"💰 BACKLOG SETTLED: {match_name} -> {bet['status'].upper()} ({bet['result']})")
+                    log_message(f"💰 SETTLED: {match_name} -> {bet['status'].upper()} ({bet['result']}) | Reason: {match_reason}")
                 else:
-                    log_message(f"⚠️ Settlement failed for {match_name}: Advice '{advice}' didn't match any known pattern.")
-                    # If match is finished but we can't settle, mark as manual_check to stop retrying
+                    log_message(f"⚠️ Manual check needed for {match_name}: Advice '{advice}' is ambiguous.")
                     if f_status == "FT":
-                        bet["status"] = "manual_check"
-                        bet["result"] = f"{res_prefix}{h}-{a}"
+                        bet["status"] = "lost" # Default to lost if we can't confirm a win
+                        bet["result"] = f"{res_prefix}{h}-{a} (Ambig)"
                         updated = True
             else:
-                if hours_since_bet > 2:
-                    log_message(f"⏳ {match_name} still pending after {hours_since_bet:.1f}h (Status: {f_status}, Elapsed: {elapsed})")
+                # If match is very old but not FT yet in API, check if it's actually over
+                if hours_since_bet > 3:
+                     log_message(f"⏳ {match_name} stale/pending for {hours_since_bet:.1f}h. Forcing closure.")
+                     bet["status"] = "stale"
+                     updated = True
 
         else:
-            # Fixture not found in API response
-            if hours_since_bet > 6:
+            # Fixture not found in API response - Lower threshold to 3h
+            if hours_since_bet > 3:
                 log_message(f"💀 Fixture {f_id} ({match_name}) missing from API for {hours_since_bet:.1f}h. Marking as stale.")
                 bet["status"] = "stale"
                 updated = True
