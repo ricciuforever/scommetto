@@ -27,6 +27,14 @@ class Standing
         return $stmt->fetchAll();
     }
 
+    public function getByTeamAndLeague($teamId, $leagueId)
+    {
+        $sql = "SELECT * FROM standings WHERE team_id = ? AND league_id = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$teamId, $leagueId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
     public function needsRefresh($leagueId, $hours = 6)
     {
         $stmt = $this->db->prepare("SELECT MAX(last_updated) as last FROM standings WHERE league_id = ?");

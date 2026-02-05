@@ -109,6 +109,51 @@ class SyncController
         echo json_encode($results);
     }
 
+    public function deepSync($leagueId = 135) // Default Serie A
+    {
+        header('Content-Type: application/json');
+        $season = 2024;
+        $results = ['fixtures' => 0, 'stats' => 0, 'standings' => 0];
+
+        // 1. Sync Standings
+        $standingModel = new \App\Models\Standing();
+        $data = $this->apiService->fetchStandings($leagueId, $season);
+        if (isset($data['response'][0]['league']['standings'][0])) {
+            foreach ($data['response'][0]['league']['standings'][0] as $row) {
+                $standingModel->save($leagueId, $row);
+                $results['standings']++;
+            }
+        }
+
+        // 2. Sync Recent Fixtures (last 50 matches for context)
+        $fixtureModel = new \App\Models\Fixture();
+        $ch = curl_init(Config::FOOTBALL_API_BASE_URL . "/fixtures?league=$leagueId&season=$season&last=50");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ["x-rapidapi-host: v3.football.api-sports.io", "x-rapidapi-key: " . Config::get('FOOTBALL_API_KEY')]);
+        $fixData = json_decode(curl_exec($ch), true);
+        curl_close($ch);
+
+        foreach ($fixData['response'] ?? [] as $f) {
+            $fixtureModel->save($f);
+            $results['fixtures']++;
+        }
+
+        // 3. Sync Team Stats (for teams in standings)
+        $statsModel = new \App\Models\TeamStats();
+        if (isset($data['response'][0]['league']['standings'][0])) {
+            foreach ($data['response'][0]['league']['standings'][0] as $row) {
+                $tid = $row['team']['id'];
+                $sData = $this->apiService->request("/teams/statistics?league=$leagueId&season=$season&team=$tid");
+                if (isset($sData['response'])) {
+                    $statsModel->save($tid, $leagueId, $season, $sData['response']);
+                    $results['stats']++;
+                }
+            }
+        }
+
+        echo json_encode($results);
+    }
+
     private function checkSettleBets()
     {
         $pending = array_filter($this->betModel->getAll(), function ($b) {

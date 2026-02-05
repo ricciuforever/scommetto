@@ -23,8 +23,8 @@ class Bet
 
     public function create($data): string
     {
-        $sql = "INSERT INTO bets (fixture_id, match_name, advice, market, odds, stake, urgency, status, timestamp) 
-                VALUES (:fixture_id, :match_name, :advice, :market, :odds, :stake, :urgency, :status, :timestamp)";
+        $sql = "INSERT INTO bets (fixture_id, match_name, advice, market, odds, stake, urgency, confidence, status, timestamp) 
+                VALUES (:fixture_id, :match_name, :advice, :market, :odds, :stake, :urgency, :confidence, :status, :timestamp)";
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
@@ -35,6 +35,7 @@ class Bet
             'odds' => $data['odds'] ?? 0,
             'stake' => $data['stake'] ?? 0,
             'urgency' => $data['urgency'] ?? 'Medium',
+            'confidence' => (int) ($data['confidence'] ?? 0),
             'status' => $data['status'] ?? 'pending',
             'timestamp' => $data['timestamp'] ?? date('Y-m-d H:i:s')
         ]);

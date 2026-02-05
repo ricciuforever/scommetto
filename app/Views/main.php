@@ -141,8 +141,15 @@
                             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                         </button>
                     </div>
-                    <div class="glass rounded-[32px] border-white/5 divide-y divide-white/5 overflow-hidden"
-                        id="history-container">
+                    <div class="glass rounded-[32px] border-white/5 divide-y divide-white/5 overflow-hidden">
+                        <div id="history-container"></div>
+                        <div class="p-6">
+                            <button id="deep-sync-btn"
+                                class="w-full bg-slate-100 dark:bg-white/5 hover:bg-accent/10 hover:text-accent p-4 rounded-[20px] transition-all border border-transparent hover:border-accent/20 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3">
+                                <i data-lucide="database" class="w-4 h-4 text-accent"></i>
+                                Deep Sync Intelligence
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div
@@ -179,6 +186,18 @@
                 <div class="flex justify-end items-center gap-4">
                     <button onclick="closeModal()"
                         class="px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Chiudi</button>
+                    <div id="confidence-indicator"
+                        class="hidden flex items-center gap-3 bg-accent/10 px-5 py-3 rounded-2xl border border-accent/20">
+                        <div class="flex flex-col">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">AI
+                                Confidence</span>
+                            <span id="confidence-val" class="text-lg font-black text-accent leading-none">90%</span>
+                        </div>
+                        <div class="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                            <div id="confidence-bar" class="h-full bg-accent transition-all duration-1000"
+                                style="width: 90%"></div>
+                        </div>
+                    </div>
                     <button id="place-bet-btn"
                         class="hidden bg-accent hover:bg-sky-500 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-accent/30 hover:scale-105">Conferma
                         Giocata</button>

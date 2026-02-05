@@ -58,7 +58,7 @@ class FootballApiService
         return $this->request("/predictions?fixture=$fixtureId");
     }
 
-    private function request($endpoint)
+    public function request($endpoint)
     {
         $url = $this->baseUrl . $endpoint;
         $ch = curl_init($url);

@@ -406,8 +406,11 @@ function renderHistory(history) {
                     <span class="text-[9px] font-black uppercase tracking-widest">${h.status}</span>
                 </div>
             </div>
-            <div class="text-[11px] text-slate-500 font-bold uppercase tracking-wider">
-                ${h.market} <span class="text-accent">@ ${h.odds}</span> <span class="mx-1 opacity-30">•</span> <span class="text-slate-900 dark:text-white font-black">${h.stake}€</span>
+            <div class="text-[11px] text-slate-500 font-bold uppercase tracking-wider flex items-center justify-between">
+                <div>
+                    ${h.market} <span class="text-accent">@ ${h.odds}</span> <span class="mx-1 opacity-30">•</span> <span class="text-slate-900 dark:text-white font-black">${h.stake}€</span>
+                </div>
+                ${h.confidence ? `<span class="bg-accent/10 text-accent px-1.5 py-0.5 rounded-md border border-accent/20 text-[9px] font-black italic">IA: ${h.confidence}%</span>` : ''}
             </div>
         `;
         container.appendChild(item);
@@ -577,14 +580,15 @@ async function showTeamDetails(teamId) {
 
 async function analyzeMatch(id) {
     const modal = document.getElementById('analysis-modal');
-    const body = document.getElementById('modal-body');
-    const title = document.getElementById('modal-title');
-    const btn = document.getElementById('place-bet-btn');
+    const confInd = document.getElementById('confidence-indicator');
+    const confVal = document.getElementById('confidence-val');
+    const confBar = document.getElementById('confidence-bar');
 
     modal.classList.remove('hidden');
     title.textContent = "Analisi Prossima Giocata";
     body.innerHTML = '<div class="text-center py-12"><div class="inline-flex items-center gap-3 bg-accent text-white px-8 py-4 rounded-[24px] font-black text-xs tracking-widest shadow-xl shadow-accent/30 animate-pulse uppercase"><i data-lucide="brain-circuit" class="w-5 h-5"></i> Analizzando con Gemini AI...</div></div>';
     btn.classList.add('hidden');
+    if (confInd) confInd.classList.add('hidden');
     if (window.lucide) lucide.createIcons();
 
     try {
@@ -638,7 +642,7 @@ async function analyzeMatch(id) {
                             </div>
                         </div>
                     </div>
-                ` : '<div class="text-warning font-bold bg-warning/10 p-4 rounded-xl border border-warning/20">Nessun dato scommessa strutturato trovato.</div>'}
+                ` : '<div class="text-warning font-bold bg-warning/10 p-4 rounded-xl border border-warning/20">L\'IA suggerisce cautela: Fiducia troppo bassa o dati contraddittori.</div>'}
             </div>
         `;
         if (window.lucide) lucide.createIcons();
@@ -646,6 +650,13 @@ async function analyzeMatch(id) {
         if (betData) {
             btn.classList.remove('hidden');
             btn.onclick = () => placeBet(id, data.match, betData);
+
+            if (confInd && betData.confidence) {
+                confInd.classList.remove('hidden');
+                confVal.textContent = betData.confidence + '%';
+                confBar.style.width = '0%';
+                setTimeout(() => { confBar.style.width = betData.confidence + '%'; }, 100);
+            }
         }
 
     } catch (e) {
@@ -790,6 +801,28 @@ if (syncBtn) {
         } finally {
             syncBtn.disabled = false;
             syncBtn.innerHTML = originalContent;
+            if (window.lucide) lucide.createIcons();
+        }
+    });
+}
+
+// Event Listener for Deep Sync Intelligence
+const deepSyncBtn = document.getElementById('deep-sync-btn');
+if (deepSyncBtn) {
+    deepSyncBtn.addEventListener('click', async () => {
+        deepSyncBtn.disabled = true;
+        const org = deepSyncBtn.innerHTML;
+        deepSyncBtn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin text-accent"></i> Ingesting...';
+        if (window.lucide) lucide.createIcons();
+        try {
+            const res = await fetch('/api/deep-sync');
+            const data = await res.json();
+            alert('Deep Sync Completato!');
+        } catch (e) {
+            console.error('Deep sync failed', e);
+        } finally {
+            deepSyncBtn.disabled = false;
+            deepSyncBtn.innerHTML = org;
             if (window.lucide) lucide.createIcons();
         }
     });

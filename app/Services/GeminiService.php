@@ -14,45 +14,43 @@ class GeminiService
         $this->apiKey = Config::get('GEMINI_API_KEY');
     }
 
-    public function analyze($matchData, $externalPredictions = null)
+    public function analyze($matchData)
     {
         if (!$this->apiKey) {
             return "Error: Missing Gemini API Key";
         }
 
+        $fid = $matchData['fixture']['id'];
+        $home_id = $matchData['teams']['home']['id'];
+        $away_id = $matchData['teams']['away']['id'];
+        $league_id = $matchData['league']['id'];
+
+        // Recupero Intelligenza dal DB Locale
+        $intelService = new \App\Services\IntelligenceService();
+        $dbContent = $intelService->getDeepContext($fid, $home_id, $away_id, $league_id);
+
         $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=" . $this->apiKey;
 
-        // Arricchimento del contesto con i dati di API-Football Predictions
-        $predictionContext = "";
-        if ($externalPredictions) {
-            $predictionContext = "DATI PRE-MATCH E ALGORITMICI:\n" .
-                "- Consiglio Algoritmo: " . ($externalPredictions['advice'] ?? 'N/A') . "\n" .
-                "- Probabilità: " . json_encode($externalPredictions['percent'] ?? []) . "\n" .
-                "- Confronto Statistico: " . json_encode($externalPredictions['comparison'] ?? []) . "\n\n";
-        }
-
-        $prompt = "Sei un analista scommesse PROFESSIONALE (Senior Tipster). Il tuo obiettivo è il profitto a lungo termine, non la quantità di giocate.\n\n" .
-            "CONTESTO LIVE:\n" . json_encode($matchData) . "\n\n" .
-            $predictionContext .
+        $prompt = "Sei un analista scommesse PROFESSIONALE (Senior Tipster). Il tuo obiettivo è il profitto a lungo termine.\n\n" .
+            "SITUAZIONE LIVE:\n" . json_encode($matchData) . "\n\n" .
+            "INTELLIGENZA NEL DATABASE (Storico, Classifica, Predictions):\n" . json_encode($dbContent) . "\n\n" .
             "REGOLE FERREE:\n" .
-            "1. Valuta la 'confidence' (fiducia) da 0 a 100 basandoti sulla coerenza tra dati live e predizioni algoritmiche.\n" .
-            "2. Se la fiducia è inferiore a 75, NON CONSIGLIARE la scommessa. Rispondi che il rischio è troppo alto.\n" .
-            "3. Se consigli una giocata, deve avere un valore (EV+) basato sul momento del match.\n\n" .
-            "FORMATO RISPOSTA (Markdown):\n" .
-            "1. Analisi tecnica dettagliata in ITALIANO (Max 3 paragrafi).\n" .
-            "2. Spiegazione del perché la fiducia è alta/bassa.\n" .
-            "3. Se (e solo se) confidence >= 75, aggiungi questo blocco JSON:\n" .
+            "1. Analizza se l'andamento LIVE conferma o smentisce i dati storici.\n" .
+            "2. Valuta la 'confidence' (fiducia) da 0 a 100.\n" .
+            "3. Se la fiducia è < 75, NON CONSIGLIARE la scommessa.\n" .
+            "4. Se confidence >= 75, rispondi con un'analisi e il blocco JSON.\n\n" .
+            "FORMATO RISPOSTA:\n" .
+            "Analisi tecnica in ITALIANO.\n" .
             "```json\n" .
             "{\n" .
-            "  \"advice\": \"IL TUO CONSIGLIO\",\n" .
-            "  \"market\": \"IL MERCATO\",\n" .
+            "  \"advice\": \"Consiglio\",\n" .
+            "  \"market\": \"Mercato\",\n" .
             "  \"odds\": 1.80,\n" .
             "  \"stake\": 3.0,\n" .
             "  \"urgency\": \"High\",\n" .
             "  \"confidence\": 85\n" .
             "}\n" .
-            "```\n\n" .
-            "Se la fiducia è < 75, NON includere il blocco JSON o scrivi solo un'analisi di cautela.";
+            "```";
 
         $data = [
             "contents" => [

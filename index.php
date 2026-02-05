@@ -34,6 +34,9 @@ if ($path === '/' || $path === '/index.php' || $path === '') {
     (new BetController())->placeBet();
 } elseif ($path === '/api/sync') {
     (new SyncController())->sync();
+} elseif ($path === '/api/deep-sync') {
+    $league = $_GET['league'] ?? 135;
+    (new SyncController())->deepSync($league);
 } elseif ($path === '/api/usage') {
     (new SyncController())->getUsage();
 } else {
