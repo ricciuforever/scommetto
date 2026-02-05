@@ -236,15 +236,21 @@ function App() {
         </section>
 
         <section className="stats-section">
+          {/* ACTIVE BETS BLOCK */}
           <div className="card">
-            <h2>🗒️ Betting Book (Simulator)</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ margin: 0 }}>🎯 Active Bets</h2>
+              <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b' }}>
+                {sortedHistory.filter(b => b.status === 'pending').length} PENDING
+              </span>
+            </div>
             <div className="match-list" style={{ maxHeight: '400px', overflow: 'auto' }}>
-              {sortedHistory.length === 0 ? (
-                <p style={{ color: '#94a3b8', padding: '1rem', textAlign: 'center' }}>Nessuna scommessa nel registro.</p>
+              {sortedHistory.filter(b => b.status === 'pending').length === 0 ? (
+                <p style={{ color: '#94a3b8', padding: '1rem', textAlign: 'center' }}>Nessuna scommessa attiva.</p>
               ) : (
-                sortedHistory.map((bet) => (
+                sortedHistory.filter(b => b.status === 'pending').map((bet) => (
                   <div key={bet.id} className="match-item" style={{
-                    borderLeft: `4px solid ${bet.status === 'win' ? '#22c55e' : (bet.status === 'lost' ? '#ef4444' : '#f59e0b')}`,
+                    borderLeft: `4px solid #f59e0b`,
                     padding: '1rem',
                     marginBottom: '0.5rem',
                     background: 'rgba(255, 255, 255, 0.02)'
@@ -263,9 +269,57 @@ function App() {
                         borderRadius: '20px',
                         fontSize: '0.7rem',
                         fontWeight: 'bold',
-                        background: bet.status === 'pending' ? 'rgba(245, 158, 11, 0.1)' : (bet.status === 'win' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)'),
-                        color: bet.status === 'pending' ? '#f59e0b' : (bet.status === 'win' ? '#22c55e' : '#ef4444'),
-                        border: `1px solid ${bet.status === 'pending' ? '#f59e0b' : (bet.status === 'win' ? '#22c55e' : '#ef4444')}`
+                        background: 'rgba(245, 158, 11, 0.1)',
+                        color: '#f59e0b',
+                        border: '1px solid #f59e0b'
+                      }}>
+                        PENDING
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* ENDED STRATEGY BLOCK */}
+          <div className="card" style={{ marginTop: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ margin: 0 }}>🏆 Ended Strategy</h2>
+              <div style={{ fontSize: '0.8rem' }}>
+                <span style={{ color: '#22c55e', marginRight: '10px' }}>WIN: {sortedHistory.filter(b => b.status === 'win').length}</span>
+                <span style={{ color: '#ef4444' }}>LOST: {sortedHistory.filter(b => b.status === 'lost').length}</span>
+              </div>
+            </div>
+            <div className="match-list" style={{ maxHeight: '400px', overflow: 'auto' }}>
+              {sortedHistory.filter(b => b.status !== 'pending').length === 0 ? (
+                <p style={{ color: '#94a3b8', padding: '1rem', textAlign: 'center' }}>Nessun risultato ancora.</p>
+              ) : (
+                sortedHistory.filter(b => b.status !== 'pending').map((bet) => (
+                  <div key={bet.id} className="match-item" style={{
+                    borderLeft: `4px solid ${bet.status === 'win' ? '#22c55e' : '#ef4444'}`,
+                    padding: '1rem',
+                    marginBottom: '0.5rem',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    opacity: 0.8
+                  }}>
+                    <div style={{ fontSize: '0.8rem' }}>
+                      <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{bet.match}</div>
+                      <div style={{ color: 'var(--text-dim)', fontSize: '0.7rem' }}>{new Date(bet.timestamp).toLocaleString()}</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>{bet.advice}</div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{bet.market} @ {bet.odds}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{
+                        padding: '4px 10px',
+                        borderRadius: '20px',
+                        fontSize: '0.7rem',
+                        fontWeight: 'bold',
+                        background: bet.status === 'win' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        color: bet.status === 'win' ? '#22c55e' : '#ef4444',
+                        border: `1px solid ${bet.status === 'win' ? '#22c55e' : '#ef4444'}`
                       }}>
                         {bet.status.toUpperCase()} {bet.result ? `- ${bet.result}` : ''}
                       </span>
