@@ -230,7 +230,7 @@ def update_loop():
             print("--- UPDATE CYCLE COMPLETE ---")
         except Exception as e:
             print(f"Error in update loop: {e}")
-        time.sleep(900) # Every 15 minutes
+        time.sleep(60) # High frequency polling for BASIC plan (1440 calls/day)
 
 # Start background thread for updates
 Thread(target=update_loop, daemon=True).start()
