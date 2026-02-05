@@ -39,6 +39,9 @@
         <div class="dashboard-grid">
             <section>
                 <h2 style="margin-bottom: 1.5rem;">Partite in Diretta</h2>
+                <div id="league-filters" class="league-filters-container">
+                    <!-- Filters populated by JS -->
+                </div>
                 <div id="live-matches-container">
                     <!-- Matches populated by JS -->
                 </div>

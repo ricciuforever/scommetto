@@ -1,12 +1,14 @@
 // assets/js/app.js
 
 let liveMatches = [];
+let selectedLeague = 'all';
 
 async function fetchLive() {
     try {
         const res = await fetch('/api/live');
         const data = await res.json();
         liveMatches = data.response || [];
+        renderFilters();
         renderMatches();
         document.getElementById('active-matches-count').textContent = liveMatches.length;
     } catch (e) {
@@ -37,11 +39,43 @@ async function fetchUsage() {
     }
 }
 
-function renderMatches() {
-    const container = document.getElementById('live-matches-container');
-    container.innerHTML = liveMatches.length === 0 ? '<p>Nessuna partita live disponibile.</p>' : '';
+function renderFilters() {
+    const container = document.getElementById('league-filters');
+    const leagues = ['all'];
 
     liveMatches.forEach(m => {
+        if (!leagues.includes(m.league.name)) {
+            leagues.push(m.league.name);
+        }
+    });
+
+    // Only re-render if count changed or for initial run
+    if (container.children.length === leagues.length) return;
+
+    container.innerHTML = '';
+    leagues.forEach(league => {
+        const pill = document.createElement('div');
+        pill.className = `filter-pill ${selectedLeague === league ? 'active' : ''}`;
+        pill.textContent = league === 'all' ? 'Tutti i Campionati' : league;
+        pill.onclick = () => {
+            selectedLeague = league;
+            document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            renderMatches();
+        };
+        container.appendChild(pill);
+    });
+}
+
+function renderMatches() {
+    const container = document.getElementById('live-matches-container');
+    const filtered = selectedLeague === 'all'
+        ? liveMatches
+        : liveMatches.filter(m => m.league.name === selectedLeague);
+
+    container.innerHTML = filtered.length === 0 ? '<p>Nessuna partita disponibile per questo filtro.</p>' : '';
+
+    filtered.forEach(m => {
         const eventsHtml = (m.events || []).map(ev => {
             let icon = '⚽';
             let iconClass = 'event-icon-goal';
