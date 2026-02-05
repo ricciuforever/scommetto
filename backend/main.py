@@ -138,8 +138,8 @@ def internal_place_bet(bet_data: dict):
 
         advice = bet_data.get("advice", "")
 
-        # STRICT DUPLICATE CHECK: Only 1 pending bet per fixture!
-        # This prevents the accumulation the user is seeing.
+        # Prevent duplicate pending bets for the same fixture.
+        # Using .get() ensures compatibility with historical records.
         existing_pending = next((b for b in history if int(b.get("fixture_id", 0)) == f_id and b.get("status") == "pending"), None)
         if existing_pending:
             return {"status": "already_exists", "bet": existing_pending}
@@ -205,12 +205,13 @@ def auto_scanner_logic():
                 print("--- 🤖 BOT PAUSED: API Quota low ---")
                 break
 
-            # STRICT CHECK: Don't analyze if we already have a pending bet for this match
+            # Check for existing pending bets for this fixture to avoid duplicates.
+            # Using .get() maintains compatibility with older history records.
             existing_bet = next((b for b in history if int(b.get("fixture_id", 0)) == fix_id and b.get("status") == "pending"), None)
             
             should_analyze = False
             if not existing_bet:
-                # Also check for recent analyzed/lost to avoid spamming the same match
+                # Check for recent analysis or non-pending bets for this match to avoid repetition.
                 recent = next((b for b in reversed(history) if int(b.get("fixture_id", 0)) == fix_id), None)
                 if not recent:
                     should_analyze = True
