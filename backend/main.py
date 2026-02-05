@@ -236,23 +236,41 @@ def auto_scanner_logic():
     except Exception as e:
         print(f"🤖 BOT ERROR: {e}")
 
-def update_loop():
-    fetch_initial_data() 
+def fast_update_loop():
+    """Update live data and check bets every 30s. This must be fast!"""
+    fetch_initial_data()
     while True:
         try:
-            print("--- STARTING UPDATE CYCLE ---")
+            print("--- ⚡ FAST UPDATE START ---")
             fetch_live_data()
-            print("Checking bet results...")
             check_bets()
-            print("Running Auto-Scanner...")
-            auto_scanner_logic()
-            print("--- UPDATE CYCLE COMPLETE ---")
+            print("--- ⚡ FAST UPDATE COMPLETE ---")
         except Exception as e:
-            print(f"Error in update loop: {e}")
-        time.sleep(30) # Ultra-high frequency polling for PRO plan (2880 calls/day)
+            print(f"Error in fast loop: {e}")
+        time.sleep(30)
 
-# Start background thread for updates
-Thread(target=update_loop, daemon=True).start()
+def slow_scanner_loop():
+    """Run the heavy AI scanner every 5 minutes in the background."""
+    while True:
+        try:
+            print("--- 🤖 AI SCANNER START ---")
+            auto_scanner_logic()
+            print("--- 🤖 AI SCANNER COMPLETE ---")
+        except Exception as e:
+            print(f"Error in scanner loop: {e}")
+        time.sleep(300) # Every 5 minutes
+
+# Start background threads
+Thread(target=fast_update_loop, daemon=True).start()
+Thread(target=slow_scanner_loop, daemon=True).start()
+
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "alive",
+        "last_live_update": time.ctime(os.path.getmtime(LIVE_DATA_FILE)) if os.path.exists(LIVE_DATA_FILE) else "never",
+        "usage": api_usage_info
+    }
 
 @app.get("/api/live")
 async def get_live():
