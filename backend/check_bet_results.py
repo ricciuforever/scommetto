@@ -3,6 +3,7 @@ import json
 import requests
 import time
 import re
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -28,31 +29,6 @@ def log_message(msg):
     except:
         pass
 
-def cleanup_duplicates(history):
-    """Removes duplicate pending bets for the same fixture."""
-    seen_fixtures = set()
-    new_history = []
-    removed_count = 0
-
-    # Process from newest to oldest to keep the most recent analysis
-    for bet in reversed(history):
-        f_id = bet.get("fixture_id")
-        status = bet.get("status")
-
-        if status == "pending" and f_id in seen_fixtures:
-            removed_count += 1
-            continue
-
-        if status == "pending":
-            seen_fixtures.add(f_id)
-
-        new_history.append(bet)
-
-    if removed_count > 0:
-        log_message(f"🧹 CLEANUP: Removed {removed_count} duplicate pending bets.")
-        return list(reversed(new_history)), True
-    return history, False
-
 def check_bets(usage_callback=None):
     if not os.path.exists(BETS_HISTORY_FILE):
         return
@@ -60,128 +36,150 @@ def check_bets(usage_callback=None):
     try:
         with open(BETS_HISTORY_FILE, "r") as f:
             history = json.load(f)
-    except:
+    except Exception as e:
+        log_message(f"Error loading history: {e}")
         return
-
-    # Run cleanup first
-    history, was_cleaned = cleanup_duplicates(history)
-    updated = was_cleaned
 
     pending_bets = [b for b in history if b.get("status") == "pending"]
     if not pending_bets:
-        if was_cleaned:
-            with open(BETS_HISTORY_FILE, "w") as f:
-                json.dump(history, f, indent=4)
         return
 
-    ids_to_check = list(set([str(b["fixture_id"]) for b in pending_bets if b.get("fixture_id")]))
+    # 1. CLEANUP DUPLICATES & STALE BETS
+    updated = False
+    new_history = []
+    seen_fixtures = {} # fixture_id -> best_pending_bet
 
-    for i in range(0, len(ids_to_check), 20):
-        chunk = ids_to_check[i:i + 20]
-        try:
-            ids_param = ",".join(chunk)
-            log_message(f"Checking batch of {len(chunk)} bets...")
+    now_utc = datetime.utcnow()
 
-            res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param})
-            if usage_callback:
-                usage_callback(res)
-            
-            data = res.json()
-            fixtures_data = {f["fixture"]["id"]: f for f in data.get("response", [])}
+    for bet in history:
+        if bet.get("status") == "pending":
+            f_id = bet.get("fixture_id")
+            # Force settle if older than 5 hours (stale)
+            try:
+                bet_time = datetime.strptime(bet["timestamp"], "%Y-%m-%dT%H:%M:%SZ")
+                if (now_utc - bet_time) > timedelta(hours=5):
+                    bet["status"] = "stale"
+                    bet["result"] = "Timed Out"
+                    updated = True
+                    log_message(f"⌛ STALE: Match {bet.get('match')} pending too long, closing.")
+            except:
+                pass
 
-            for bet in history:
-                if bet.get("status") == "pending":
-                    f_id = int(bet.get("fixture_id", 0))
-                    if f_id not in fixtures_data: continue
-                    
-                    fixture = fixtures_data[f_id]
-                    f_status = fixture["fixture"]["status"]["short"]
-                    goals = fixture["goals"]
-                    score = fixture.get("score", {})
-                    match_name = bet.get("match", "Unknown")
-                    advice = str(bet.get("advice", "")).lower()
-                    market = str(bet.get("market", "")).lower()
-                    
-                    home_name = fixture["teams"]["home"]["name"].lower()
-                    away_name = fixture["teams"]["away"]["name"].lower()
+            # Keep only one pending bet per fixture (the most recent)
+            if bet.get("status") == "pending":
+                if f_id in seen_fixtures:
+                    seen_fixtures[f_id]["status"] = "duplicate"
+                    updated = True
+                seen_fixtures[f_id] = bet
 
-                    # Handle stuck matches (Time > 110 and still in 2H/90min)
-                    elapsed = fixture["fixture"]["status"]["elapsed"] or 0
-                    if f_status in ["2H", "90"] and elapsed > 110:
-                        f_status = "FT" # Treat as finished if stuck
-                        log_message(f"⚠️ Match {match_name} seems stuck at {elapsed}', forcing FT settlement.")
+        new_history.append(bet)
 
-                    if f_status in ["PST", "CANC", "ABD", "WO"]:
-                        bet["status"] = "void"
-                        bet["result"] = f_status
-                        updated = True
-                        log_message(f"🚫 VOIDED {match_name}: {f_status}")
-                        continue
-                    
-                    is_ht_market = any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"])
-                    target_h, target_a = None, None
-                    settle_now = False
-                    res_prefix = ""
+    # 2. FETCH STATUS FOR PENDING
+    ids_to_check = list(set([str(b["fixture_id"]) for b in pending_bets if b.get("fixture_id") and b.get("status") == "pending"]))
 
-                    if is_ht_market:
-                        if f_status in ["HT", "2H", "FT", "AET", "PEN"]:
-                            ht_score = score.get("halftime", {})
-                            target_h = ht_score.get("home") if ht_score.get("home") is not None else goals["home"]
-                            target_a = ht_score.get("away") if ht_score.get("away") is not None else goals["away"]
-                            settle_now = (target_h is not None and target_a is not None)
-                            res_prefix = "(HT) "
-                    else:
-                        if f_status in ["FT", "AET", "PEN"]:
-                            target_h, target_a = goals["home"], goals["away"]
-                            settle_now = (target_h is not None and target_a is not None)
+    if ids_to_check:
+        for i in range(0, len(ids_to_check), 20):
+            chunk = ids_to_check[i:i + 20]
+            try:
+                ids_param = ",".join(chunk)
+                log_message(f"Checking batch of {len(chunk)} bets...")
+                res = requests.get(f"{BASE_URL}/fixtures", headers=HEADERS, params={"ids": ids_param})
+                if usage_callback: usage_callback(res)
 
-                    if settle_now:
-                        h, a = target_h, target_a
-                        is_win = False
+                data = res.json()
+                fixtures_data = {f["fixture"]["id"]: f for f in data.get("response", [])}
 
-                        # LOGIC:
-                        # Home Win: matches "1", "home", "casa", or team name if combined with win keywords
-                        if re.search(r'\b(1|home|vittoria casa|vince casa|casa)\b', advice) or (home_name in advice and any(x in advice for x in ["vince", "vittoria", "segna"])):
-                            if h > a: is_win = True
-                        # Away Win
-                        elif re.search(r'\b(2|away|vittoria ospite|vince trasferta|ospite|trasferta)\b', advice) or (away_name in advice and any(x in advice for x in ["vince", "vittoria", "segna"])):
-                            if a > h: is_win = True
-                        # Draw
-                        elif re.search(r'\b(x|draw|pareggio|segno x)\b', advice) and not re.search(r'\d', advice.replace('x', '')):
-                            if h == a: is_win = True
-                        # Over
-                        elif "over" in advice:
-                            threshold = 2.5
-                            if "0.5" in advice: threshold = 0.5
-                            elif "1.5" in advice: threshold = 1.5
-                            elif "3.5" in advice: threshold = 3.5
-                            if (h + a) > threshold: is_win = True
-                        # Under
-                        elif "under" in advice:
-                            threshold = 2.5
-                            if "0.5" in advice: threshold = 0.5
-                            elif "1.5" in advice: threshold = 1.5
-                            elif "3.5" in advice: threshold = 3.5
-                            if (h + a) < threshold: is_win = True
-                        # Fallback
-                        elif home_name in advice and h > a: is_win = True
-                        elif away_name in advice and a > h: is_win = True
-                        
-                        bet["status"] = "win" if is_win else "lost"
-                        bet["result"] = f"{res_prefix}{h}-{a}"
-                        updated = True
-                        log_message(f"💰 DECIDED {match_name}: {bet['result']} ({bet['status'].upper()}) [Advice: {bet['advice']}]")
+                for bet in new_history:
+                    if bet.get("status") == "pending":
+                        f_id = int(bet.get("fixture_id", 0))
+                        if f_id not in fixtures_data: continue
 
-            time.sleep(1) 
-        except Exception as e:
-            log_message(f"❌ Settlement Error: {e}")
+                        fixture = fixtures_data[f_id]
+                        status_info = fixture["fixture"]["status"]
+                        f_status = status_info["short"]
+                        elapsed = status_info["elapsed"] or 0
+                        goals = fixture["goals"]
+                        score = fixture.get("score", {})
+                        match_name = bet.get("match", "Unknown")
+                        advice = str(bet.get("advice", "")).lower()
+                        market = str(bet.get("market", "")).lower()
+
+                        home_name = fixture["teams"]["home"]["name"].lower()
+                        away_name = fixture["teams"]["away"]["name"].lower()
+
+                        # AUTO-FT: If match is in 2nd half and elapsed is very high, treat as finished
+                        if f_status in ["2H", "90"] and elapsed > 105:
+                            f_status = "FT"
+
+                        # VOIDED
+                        if f_status in ["PST", "CANC", "ABD", "WO"]:
+                            bet["status"] = "void"
+                            bet["result"] = f_status
+                            updated = True
+                            continue
+
+                        # Settlement Logic
+                        is_ht_market = any(x in market for x in ["1st half", "primo tempo", "first half", "1°", "1t"])
+                        settle_now = False
+                        h, a = None, None
+                        res_prefix = ""
+
+                        if is_ht_market:
+                            if f_status in ["HT", "2H", "FT", "AET", "PEN"]:
+                                ht_score = score.get("halftime", {})
+                                h = ht_score.get("home") if ht_score.get("home") is not None else goals["home"]
+                                a = ht_score.get("away") if ht_score.get("away") is not None else goals["away"]
+                                settle_now = (h is not None and a is not None)
+                                res_prefix = "(HT) "
+                        else:
+                            if f_status in ["FT", "AET", "PEN"]:
+                                h, a = goals["home"], goals["away"]
+                                settle_now = (h is not None and a is not None)
+
+                        if settle_now:
+                            is_win = False
+                            # Home
+                            if re.search(r'\b(1|home|vittoria casa|vince casa|casa)\b', advice) or (home_name in advice and "vince" in advice):
+                                if h > a: is_win = True
+                            # Away
+                            elif re.search(r'\b(2|away|vittoria ospite|vince trasferta|ospite|trasferta)\b', advice) or (away_name in advice and "vince" in advice):
+                                if a > h: is_win = True
+                            # Draw (X) - Differentiate from Over 2.5/3.5/etc.
+                            elif re.search(r'\b(x|draw|pareggio|segno x)\b', advice):
+                                if h == a: is_win = True
+                            # Over
+                            elif "over" in advice:
+                                threshold = 2.5
+                                if "0.5" in advice: threshold = 0.5
+                                elif "1.5" in advice: threshold = 1.5
+                                elif "3.5" in advice: threshold = 3.5
+                                if (h + a) > threshold: is_win = True
+                            # Under
+                            elif "under" in advice:
+                                threshold = 2.5
+                                if "0.5" in advice: threshold = 0.5
+                                elif "1.5" in advice: threshold = 1.5
+                                elif "3.5" in advice: threshold = 3.5
+                                if (h + a) < threshold: is_win = True
+                            # Default team win
+                            elif home_name in advice and h > a: is_win = True
+                            elif away_name in advice and a > h: is_win = True
+
+                            bet["status"] = "win" if is_win else "lost"
+                            bet["result"] = f"{res_prefix}{h}-{a}"
+                            updated = True
+                            log_message(f"💰 DECIDED: {match_name} -> {bet['status'].upper()} ({bet['result']})")
+
+                time.sleep(1)
+            except Exception as e:
+                log_message(f"❌ Batch Error: {e}")
 
     if updated:
         try:
             with open(BETS_HISTORY_FILE, "w") as f:
-                json.dump(history, f, indent=4)
+                json.dump(new_history, f, indent=4)
         except Exception as e:
-            log_message(f"❌ Error saving history: {e}")
+            log_message(f"❌ Save Error: {e}")
 
 if __name__ == "__main__":
     check_bets()

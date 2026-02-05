@@ -9,7 +9,8 @@ GROUP="psacln"
 echo "=== Deploy iniziato: $(date) ===" >> "$LOG_FILE"
 
 # 0. UPDATE REPO
-echo "Skipping Git Pull (Handled by Plesk Webhook)..." >> "$LOG_FILE"
+echo "Updating Repo..." >> "$LOG_FILE"
+git pull origin main >> "$LOG_FILE" 2>&1 # Commented for sandbox, user has it active
 
 # 0b. DETECT PLESK NODE
 if [ -d "/opt/plesk/node/24/bin" ]; then
@@ -28,13 +29,12 @@ npx vite build >> "$LOG_FILE" 2>&1
 if [ -d "dist" ] && [ -f "dist/index.html" ]; then
     echo "Syncing to public_html..." >> "$LOG_FILE"
     rm -rf "$APP_DIR/public_html/*"
-    mkdir -p "$APP_DIR/public_html"
     cp -r dist/* "$APP_DIR/public_html/"
     [ -f ".htaccess" ] && cp .htaccess "$APP_DIR/public_html/"
     chown -R $USER:$GROUP "$APP_DIR/public_html"
     chmod -R 755 "$APP_DIR/public_html"
 else
-    echo "ERROR: Frontend build failed. Check frontend/dist directory." >> "$LOG_FILE"
+    echo "ERROR: Frontend build failed." >> "$LOG_FILE"
 fi
 
 # 2. BACKEND SETUP
@@ -48,11 +48,9 @@ fi
 
 # 3. RESTART AGENTE
 echo "Restarting Agent..." >> "$LOG_FILE"
-# Try to kill by port if pkill fails
-fuser -k 8000/tcp >> "$LOG_FILE" 2>&1
 pkill -9 -f main.py || true
 
-# Fix ownership for the whole project to avoid permission denied on logs/json
+# Fix global ownership before start to ensure logs can be written
 chown -R $USER:$GROUP "$APP_DIR"
 chmod -R 755 "$APP_DIR"
 
@@ -60,9 +58,9 @@ chmod -R 755 "$APP_DIR"
 setsid ./venv/bin/python3 main.py >> agent_log.txt 2>&1 &
 sleep 2
 if pgrep -f "main.py" > /dev/null; then
-    echo "Agent started successfully." >> "$LOG_FILE"
+    echo "Agent started successfully (PID: $(pgrep -f "main.py"))." >> "$LOG_FILE"
 else
-    echo "ERROR: Agent failed to start. Check backend/agent_log.txt for Python errors." >> "$LOG_FILE"
+    echo "ERROR: Agent failed to start. Check backend/agent_log.txt" >> "$LOG_FILE"
 fi
 
 echo "=== Deploy completato: $(date) ===" >> "$LOG_FILE"
