@@ -34,12 +34,7 @@ class FixtureOdds
 
     public function getByFixture($fixture_id)
     {
-        $sql = "SELECT fo.*, b.name as bookmaker_name, bt.name as bet_name
-                FROM fixture_odds fo
-                LEFT JOIN bookmakers b ON fo.bookmaker_id = b.id
-                LEFT JOIN bet_types bt ON fo.bet_id = bt.id
-                WHERE fo.fixture_id = ?";
-        $stmt = $this->db->prepare($sql);
+        $stmt = $this->db->prepare("SELECT * FROM fixture_odds WHERE fixture_id = ?");
         $stmt->execute([$fixture_id]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
