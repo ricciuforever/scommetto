@@ -1,5 +1,5 @@
 <?php
-// fix_db.php - Scommetto DB Migration & Repair Script v6.0
+// fix_db.php - Scommetto DB Migration & Repair Script v8.2
 require_once __DIR__ . '/bootstrap.php';
 use App\Services\Database;
 
@@ -7,9 +7,9 @@ try {
   $db = Database::getInstance()->getConnection();
   $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-  echo "🚀 Inizio riparazione e migrazione database...\n";
+  echo "🚀 Inizio riparazione e migrazione database (v8.2)...\n";
 
-  // --- 1. CREAZIONE TABELLE BASE (Se non esistono) ---
+  // --- 1. CREAZIONE TABELLE BASE (Consolidate) ---
 
   $tables = [
       "countries" => "CREATE TABLE IF NOT EXISTS `countries` (
@@ -43,6 +43,14 @@ try {
           PRIMARY KEY (`league_id`, `year`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
+      "rounds" => "CREATE TABLE IF NOT EXISTS `rounds` (
+          `league_id` INT,
+          `season` INT,
+          `round_name` VARCHAR(100),
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`league_id`, `season`, `round_name`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
       "teams" => "CREATE TABLE IF NOT EXISTS `teams` (
           `id` INT PRIMARY KEY,
           `name` VARCHAR(100),
@@ -53,6 +61,13 @@ try {
           `logo` VARCHAR(255),
           `venue_id` INT,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+      "team_leagues" => "CREATE TABLE IF NOT EXISTS `team_leagues` (
+          `team_id` INT,
+          `league_id` INT,
+          `season` INT,
+          PRIMARY KEY (`team_id`, `league_id`, `season`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
       "venues" => "CREATE TABLE IF NOT EXISTS `venues` (
@@ -75,12 +90,12 @@ try {
           `form` VARCHAR(50),
           `group_name` VARCHAR(100),
           `description` TEXT,
-          `played` INT,
-          `win` INT,
-          `draw` INT,
-          `lose` INT,
-          `goals_for` INT,
-          `goals_against` INT,
+          `played` INT DEFAULT 0,
+          `win` INT DEFAULT 0,
+          `draw` INT DEFAULT 0,
+          `lose` INT DEFAULT 0,
+          `goals_for` INT DEFAULT 0,
+          `goals_against` INT DEFAULT 0,
           `home_stats_json` TEXT,
           `away_stats_json` TEXT,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -118,6 +133,25 @@ try {
           `h2h_json` LONGTEXT,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (`team1_id`, `team2_id`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+      "team_stats" => "CREATE TABLE IF NOT EXISTS `team_stats` (
+          `team_id` INT,
+          `league_id` INT,
+          `season` INT,
+          `played` INT,
+          `wins` INT,
+          `draws` INT,
+          `losses` INT,
+          `goals_for` INT,
+          `goals_against` INT,
+          `clean_sheets` INT,
+          `failed_to_score` INT,
+          `avg_goals_for` DECIMAL(8,2),
+          `avg_goals_against` DECIMAL(8,2),
+          `full_stats_json` LONGTEXT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`team_id`, `league_id`, `season`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
       "bets" => "CREATE TABLE IF NOT EXISTS `bets` (
@@ -197,6 +231,92 @@ try {
           `number` INT,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (`team_id`, `player_id`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+      "bookmakers" => "CREATE TABLE IF NOT EXISTS `bookmakers` (
+          `id` INT PRIMARY KEY,
+          `name` VARCHAR(100),
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+      "bet_types" => "CREATE TABLE IF NOT EXISTS `bet_types` (
+          `id` INT PRIMARY KEY,
+          `name` VARCHAR(100),
+          `type` ENUM('pre-match', 'live') DEFAULT 'pre-match',
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+      "fixture_odds" => "CREATE TABLE IF NOT EXISTS `fixture_odds` (
+          `fixture_id` INT,
+          `bookmaker_id` INT,
+          `bet_id` INT,
+          `odds_json` LONGTEXT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`fixture_id`, `bookmaker_id`, `bet_id`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+      "fixture_events" => "CREATE TABLE IF NOT EXISTS `fixture_events` (
+          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `fixture_id` INT,
+          `team_id` INT,
+          `player_id` INT,
+          `assist_id` INT,
+          `time_elapsed` INT,
+          `time_extra` INT,
+          `type` VARCHAR(50),
+          `detail` VARCHAR(100),
+          `comments` TEXT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX (`fixture_id`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+      "fixture_lineups" => "CREATE TABLE IF NOT EXISTS `fixture_lineups` (
+          `fixture_id` INT,
+          `team_id` INT,
+          `formation` VARCHAR(20),
+          `coach_id` INT,
+          `start_xi_json` LONGTEXT,
+          `substitutes_json` LONGTEXT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`fixture_id`, `team_id`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+      "fixture_injuries" => "CREATE TABLE IF NOT EXISTS `fixture_injuries` (
+          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `fixture_id` INT,
+          `team_id` INT,
+          `player_id` INT,
+          `player_name` VARCHAR(100),
+          `type` VARCHAR(50),
+          `reason` VARCHAR(255),
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX (`fixture_id`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+      "transfers" => "CREATE TABLE IF NOT EXISTS `transfers` (
+          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `player_id` INT,
+          `transfer_date` DATE,
+          `type` VARCHAR(100),
+          `team_out_id` INT,
+          `team_in_id` INT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX (`player_id`),
+          INDEX (`team_in_id`),
+          INDEX (`team_out_id`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+      "trophies" => "CREATE TABLE IF NOT EXISTS `trophies` (
+          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `player_id` INT DEFAULT NULL,
+          `coach_id` INT DEFAULT NULL,
+          `league` VARCHAR(100),
+          `country` VARCHAR(100),
+          `season` VARCHAR(20),
+          `place` VARCHAR(50),
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX (`player_id`),
+          INDEX (`coach_id`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
   ];
 
@@ -205,7 +325,7 @@ try {
       echo "✅ Tabella '$name' verificata/creata.\n";
   }
 
-  // --- 2. PATCHING COLONNE MANCANTI ---
+  // --- 2. PATCHING COLONNE MANCANTI (Sempre utile per DB esistenti) ---
 
   $patches = [
       "leagues" => [
@@ -213,11 +333,6 @@ try {
           "ALTER TABLE leagues ADD COLUMN logo VARCHAR(255) AFTER type",
           "ALTER TABLE leagues ADD COLUMN country_name VARCHAR(100) AFTER logo",
           "ALTER TABLE leagues ADD COLUMN coverage_json TEXT AFTER country_name"
-      ],
-      "league_seasons" => [
-          "ALTER TABLE league_seasons ADD COLUMN is_current BOOLEAN DEFAULT 0 AFTER year",
-          "ALTER TABLE league_seasons ADD COLUMN start_date DATE AFTER is_current",
-          "ALTER TABLE league_seasons ADD COLUMN end_date DATE AFTER start_date"
       ],
       "teams" => [
           "ALTER TABLE teams ADD COLUMN code VARCHAR(10) AFTER name",
@@ -239,17 +354,14 @@ try {
       "standings" => [
           "ALTER TABLE standings ADD COLUMN group_name VARCHAR(100) AFTER form",
           "ALTER TABLE standings ADD COLUMN description TEXT AFTER group_name",
-          "ALTER TABLE standings ADD COLUMN played INT AFTER description",
-          "ALTER TABLE standings ADD COLUMN win INT AFTER played",
-          "ALTER TABLE standings ADD COLUMN draw INT AFTER win",
-          "ALTER TABLE standings ADD COLUMN lose INT AFTER draw",
-          "ALTER TABLE standings ADD COLUMN goals_for INT AFTER lose",
-          "ALTER TABLE standings ADD COLUMN goals_against INT AFTER goals_for",
+          "ALTER TABLE standings ADD COLUMN played INT DEFAULT 0 AFTER description",
+          "ALTER TABLE standings ADD COLUMN win INT DEFAULT 0 AFTER played",
+          "ALTER TABLE standings ADD COLUMN draw INT DEFAULT 0 AFTER win",
+          "ALTER TABLE standings ADD COLUMN lose INT DEFAULT 0 AFTER draw",
+          "ALTER TABLE standings ADD COLUMN goals_for INT DEFAULT 0 AFTER lose",
+          "ALTER TABLE standings ADD COLUMN goals_against INT DEFAULT 0 AFTER goals_for",
           "ALTER TABLE standings ADD COLUMN home_stats_json TEXT AFTER goals_against",
           "ALTER TABLE standings ADD COLUMN away_stats_json TEXT AFTER home_stats_json"
-      ],
-      "bets" => [
-          "ALTER TABLE bets ADD COLUMN confidence INT DEFAULT 0 AFTER urgency"
       ]
   ];
 
@@ -264,13 +376,7 @@ try {
       }
   }
 
-  // Migrazione dati status -> status_short se necessario
-  try {
-      $db->exec("UPDATE fixtures SET status_short = status WHERE status_short IS NULL AND status IS NOT NULL");
-      echo "✅ Migrazione fixtures status completata.\n";
-  } catch (\Exception $e) {}
-
-  echo "\n✨ Database sincronizzato con successo. Ora puoi eliminare questo file.\n";
+  echo "\n✨ Database sincronizzato con successo v8.2.\n";
 
 } catch (\Throwable $e) {
   echo "❌ Errore critico: " . $e->getMessage() . "\n";

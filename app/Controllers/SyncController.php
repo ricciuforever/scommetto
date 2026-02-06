@@ -127,6 +127,8 @@ class SyncController
                 'overview' => $this->syncLeagueOverview($leagueId, $season),
                 'top_stats' => $this->syncLeagueTopStats($leagueId, $season),
                 'fixtures' => $this->syncLeagueFixtures($leagueId, $season),
+                'details' => $this->syncLeagueDetails($leagueId, $season),
+                'match_details' => $this->syncLeagueMatchDetails($leagueId, $season),
                 'status' => 'success'
             ];
 
@@ -181,6 +183,92 @@ class SyncController
             foreach ($data['response'] as $f) {
                 $fixtureModel->save($f);
                 $results['fixtures']++;
+            }
+        }
+        return $results;
+    }
+
+    public function syncLeagueDetails($leagueId, $season)
+    {
+        $results = ['team_stats' => 0, 'coaches' => 0, 'squads' => 0];
+        $teamModel = new \App\Models\Team();
+        $coachModel = new \App\Models\Coach();
+        $playerModel = new \App\Models\Player();
+        $teamStatsModel = new \App\Models\TeamStats();
+
+        // Get teams for this league
+        $standingModel = new \App\Models\Standing();
+        $standings = $standingModel->getByLeague($leagueId);
+
+        foreach ($standings as $row) {
+            $tid = $row['team_id'];
+
+            // 1. Team Stats
+            if ($teamStatsModel->get($tid, $leagueId, $season) === false) {
+                $statsData = $this->apiService->fetchTeamStatistics($tid, $leagueId, $season);
+                if (isset($statsData['response'])) {
+                    $teamStatsModel->save($tid, $leagueId, $season, $statsData['response']);
+                    $results['team_stats']++;
+                }
+            }
+
+            // 2. Coach
+            if ($coachModel->needsRefresh($tid)) {
+                $coachData = $this->apiService->fetchCoach($tid);
+                if (isset($coachData['response'][0])) {
+                    $coachModel->save($coachData['response'][0], $tid);
+                    $results['coaches']++;
+                }
+            }
+
+            // 3. Squad
+            $squadData = $this->apiService->fetchSquad($tid);
+            if (isset($squadData['response'][0]['players'])) {
+                foreach ($squadData['response'][0]['players'] as $p) {
+                    $playerModel->save($p);
+                    $playerModel->linkToSquad($tid, $p, $p);
+                    $results['squads']++;
+                }
+            }
+        }
+        return $results;
+    }
+
+    public function syncLeagueMatchDetails($leagueId, $season)
+    {
+        $results = ['predictions' => 0, 'h2h' => 0];
+        $fixtureModel = new \App\Models\Fixture();
+        $predictionModel = new \App\Models\Prediction();
+        $h2hModel = new \App\Models\H2H();
+
+        // Fetch upcoming fixtures (next 7 days)
+        $from = date('Y-m-d');
+        $to = date('Y-m-d', strtotime('+7 days'));
+        $data = $this->apiService->request("/fixtures?league=$leagueId&season=$season&from=$from&to=$to");
+
+        if (isset($data['response'])) {
+            foreach ($data['response'] as $f) {
+                $fid = $f['fixture']['id'];
+                $h1 = $f['teams']['home']['id'];
+                $a1 = $f['teams']['away']['id'];
+
+                // 1. Predictions
+                if ($predictionModel->needsRefresh($fid)) {
+                    $predData = $this->apiService->fetchPredictions($fid);
+                    if (isset($predData['response'][0])) {
+                        $predictionModel->save($fid, $predData['response'][0]);
+                        $results['predictions']++;
+                    }
+                }
+
+                // 2. H2H
+                if ($h2hModel->get($h1, $a1) === false) {
+                    $h2hData = $this->apiService->fetchH2H("$h1-$a1");
+                    if (isset($h2hData['response'])) {
+                        $h2hModel->save($h1, $a1, $h2hData['response']);
+                        $results['h2h']++;
+                    }
+                }
             }
         }
         return $results;
@@ -267,13 +355,29 @@ class SyncController
                 }
 
                 // Fixtures (24h)
-                // We could implement a Fixture::needsRefresh(league_id, 24)
-                // For now let's use a simpler lock file per league fixtures
                 $fixtureLock = Config::DATA_PATH . "fixtures_sync_$lId.lock";
                 if (!file_exists($fixtureLock) || (time() - filemtime($fixtureLock) > 86400)) {
                     $res = $this->syncLeagueFixtures($lId, $season);
                     touch($fixtureLock);
                     $log[] = "League $lId Fixtures Synced: " . json_encode($res);
+                    return $log;
+                }
+
+                // League Details (Coaches, Squads, Team Stats) - Weekly (7 days)
+                $detailsLock = Config::DATA_PATH . "details_sync_$lId.lock";
+                if (!file_exists($detailsLock) || (time() - filemtime($detailsLock) > 604800)) {
+                    $res = $this->syncLeagueDetails($lId, $season);
+                    touch($detailsLock);
+                    $log[] = "League $lId Details Synced: " . json_encode($res);
+                    return $log;
+                }
+
+                // Match Details (Predictions, H2H) - Daily (24h)
+                $matchLock = Config::DATA_PATH . "matches_sync_$lId.lock";
+                if (!file_exists($matchLock) || (time() - filemtime($matchLock) > 86400)) {
+                    $res = $this->syncLeagueMatchDetails($lId, $season);
+                    touch($matchLock);
+                    $log[] = "League $lId Match Details Synced: " . json_encode($res);
                     return $log;
                 }
             }
