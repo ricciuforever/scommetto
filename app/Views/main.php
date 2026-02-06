@@ -136,20 +136,9 @@
                 <div>
                     <div class="flex justify-between items-center mb-6">
                         <h2 class="text-xl font-black tracking-tight">Attività Recente</h2>
-                        <button id="sync-btn"
-                            class="text-accent hover:text-white hover:bg-accent p-2 rounded-xl transition-all border border-accent/20">
-                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                        </button>
                     </div>
                     <div class="glass rounded-[32px] border-white/5 divide-y divide-white/5 overflow-hidden">
                         <div id="history-container"></div>
-                        <div class="p-6">
-                            <button id="deep-sync-btn"
-                                class="w-full bg-slate-100 dark:bg-white/5 hover:bg-accent/10 hover:text-accent p-4 rounded-[20px] transition-all border border-transparent hover:border-accent/20 font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3">
-                                <i data-lucide="database" class="w-4 h-4 text-accent"></i>
-                                Deep Sync Intelligence
-                            </button>
-                        </div>
                     </div>
                 </div>
                 <div

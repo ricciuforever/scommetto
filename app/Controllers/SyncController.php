@@ -69,6 +69,10 @@ class SyncController
 
             // 1. Scan live matches
             $live = $this->apiService->fetchLiveMatches();
+            if (!isset($live['error'])) {
+                file_put_contents(Config::LIVE_DATA_FILE, json_encode($live));
+            }
+
             $matches = $live['response'] ?? [];
             $results['scanned'] = count($matches);
 
@@ -402,7 +406,7 @@ class SyncController
             $lId = $leagues[$minute % count($leagues)];
 
             // Every minute we do something for ONE league
-            $taskType = $minute % 5;
+            $taskType = $minute % 6;
 
             switch($taskType) {
                 case 0: // Standings & Overview
@@ -420,6 +424,9 @@ class SyncController
                 case 4: // Odds & Injuries
                     $log[] = "L$lId: Odds: " . json_encode($this->syncLeagueOdds($lId, $season));
                     $log[] = "L$lId: Injuries: " . json_encode($this->syncLeagueInjuries($lId, $season));
+                    break;
+                case 5: // League Details (Squads, Coaches, Team Stats)
+                    $log[] = "L$lId: Deep Details Refreshed: " . json_encode($this->syncLeagueDetails($lId, $season));
                     break;
             }
 
@@ -447,7 +454,7 @@ class SyncController
                 $betSettler->processSettlement($bet, $fixture);
                 $settledCount++;
             }
-            usleep(200000);
+            usleep(250000);
         }
         return $settledCount;
     }
