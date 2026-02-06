@@ -130,28 +130,30 @@ async function fetchUsage() {
 }
 
 function renderFilters() {
-    const container = document.getElementById('league-filters');
+    const select = document.getElementById('league-filters');
+    if (!select) return;
+
     const leagues = ['all'];
     liveMatches.forEach(m => {
         if (!leagues.includes(m.league.name)) { leagues.push(m.league.name); }
     });
-    if (container.children.length === leagues.length) return;
-    container.innerHTML = '';
+
+    // Solo aggiorna se il numero di campionati è cambiato o non è popolato
+    if (select.options.length === leagues.length) return;
+
+    select.innerHTML = '';
     leagues.forEach(league => {
-        const isActive = selectedLeague === league;
-        const pill = document.createElement('button');
-        pill.className = `px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${isActive
-            ? 'bg-accent text-white border-accent shadow-lg shadow-accent/20'
-            : 'bg-white/5 text-slate-500 border-white/5 hover:border-accent/50 hover:text-slate-300 dark:bg-slate-800/50'
-            }`;
-        pill.textContent = league === 'all' ? 'Tutti i Campionati' : league;
-        pill.onclick = () => {
-            selectedLeague = league;
-            renderFilters();
-            renderMatches();
-        };
-        container.appendChild(pill);
+        const option = document.createElement('option');
+        option.value = league;
+        option.textContent = league === 'all' ? 'Tutti i Campionati' : league;
+        option.selected = selectedLeague === league;
+        select.appendChild(option);
     });
+
+    select.onchange = (e) => {
+        selectedLeague = e.target.value;
+        renderMatches();
+    };
 }
 
 function renderMatches() {

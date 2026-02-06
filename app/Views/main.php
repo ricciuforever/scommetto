@@ -126,7 +126,13 @@
                         <span class="w-2 h-8 bg-accent rounded-full"></span>
                         Eventi in Diretta
                     </h2>
-                    <div id="league-filters" class="flex flex-wrap gap-2">
+                    <div class="relative min-w-[240px]">
+                        <select id="league-filters" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-300 appearance-none focus:outline-none focus:border-accent transition-all cursor-pointer">
+                            <option value="all">Tutti i Campionati</option>
+                        </select>
+                        <div class="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        </div>
                     </div>
                 </div>
                 <div id="live-matches-container" class="space-y-6">

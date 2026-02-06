@@ -1,5 +1,5 @@
 <?php
-// fix_db.php - Scommetto DB Migration & Repair Script v8.5
+// fix_db.php - Scommetto DB Migration & Repair Script v8.6
 require_once __DIR__ . '/bootstrap.php';
 use App\Services\Database;
 
@@ -7,7 +7,7 @@ try {
   $db = Database::getInstance()->getConnection();
   $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-  echo "🚀 Inizio riparazione e migrazione database (v8.5)...\n";
+  echo "🚀 Inizio riparazione e migrazione database (v8.6)...\n";
 
   // --- 0. PULIZIA VECCHIE TABELLE DEPRECATE ---
   $deprecated = ["team_squads"];
@@ -259,6 +259,11 @@ try {
           `prediction_raw` TEXT
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
+      "player_seasons" => "CREATE TABLE IF NOT EXISTS `player_seasons` (
+          `year` INT PRIMARY KEY,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
       "predictions" => "CREATE TABLE IF NOT EXISTS `predictions` (
           `fixture_id` INT PRIMARY KEY,
           `advice` TEXT,
@@ -470,7 +475,7 @@ try {
       }
   }
 
-  echo "\n✨ Database sincronizzato con successo v8.5.\n";
+  echo "\n✨ Database sincronizzato con successo v8.6.\n";
 
 } catch (\Throwable $e) {
   echo "❌ Errore critico: " . $e->getMessage() . "\n";
