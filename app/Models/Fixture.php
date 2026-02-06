@@ -47,6 +47,7 @@ class Fixture
 
     public function getTeamRecent($team_id, $limit = 5)
     {
+        $limit = (int) $limit;
         $sql = "SELECT f.*, 
                 th.name as home_name, ta.name as away_name
                 FROM fixtures f
@@ -54,11 +55,10 @@ class Fixture
                 JOIN teams ta ON f.team_away_id = ta.id
                 WHERE (f.team_home_id = ? OR f.team_away_id = ?)
                 AND f.status_short IN ('FT', 'AET', 'PEN') 
-                ORDER BY f.date DESC LIMIT ?";
+                ORDER BY f.date DESC LIMIT $limit";
 
         $stmt = $this->db->prepare($sql);
-        // Using execute with array is often more reliable than bindValue for positional params
-        $stmt->execute([$team_id, $team_id, (int)$limit]);
+        $stmt->execute([$team_id, $team_id]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
