@@ -79,14 +79,26 @@ class MatchController
     {
         header('Content-Type: application/json');
         try {
-            $db = \App\Services\Database::getInstance()->getConnection();
-
             // Basic Info
-            $fixture = (new \App\Models\Fixture())->getById((int)$id);
+            $fixtureModel = new \App\Models\Fixture();
+            $fixture = $fixtureModel->getById((int)$id);
             if (!$fixture) {
                 echo json_encode(['error' => 'Partita non trovata.']);
                 return;
             }
+
+            // Normalization for frontend
+            $fixture['home_id'] = $fixture['team_home_id'];
+            $fixture['away_id'] = $fixture['team_away_id'];
+            $fixture['home_name'] = $fixture['team_home_name'];
+            $fixture['home_logo'] = $fixture['team_home_logo'];
+            $fixture['away_name'] = $fixture['team_away_name'];
+            $fixture['away_logo'] = $fixture['team_away_logo'];
+            $fixture['goals_home'] = $fixture['score_home'];
+            $fixture['goals_away'] = $fixture['score_away'];
+
+            // Analysis
+            $analysis = (new \App\Models\Analysis())->get((int)$id);
 
             // Events
             $events = (new \App\Models\FixtureEvent())->getByFixture((int)$id);
@@ -101,19 +113,24 @@ class MatchController
             $injuries = (new \App\Models\FixtureInjury())->getByFixture((int)$id);
 
             // H2H
-            $h2h = (new \App\Models\H2H())->get($fixture['team_home_id'], $fixture['team_away_id']);
+            $h2h = (new \App\Models\H2H())->getByFixture((int)$id);
 
             // Odds
             $odds = (new \App\Models\FixtureOdds())->getByFixture((int)$id);
 
+            // Predictions
+            $predictions = (new \App\Models\Prediction())->get((int)$id);
+
             echo json_encode([
                 'fixture' => $fixture,
+                'analysis' => $analysis,
                 'events' => $events,
-                'statistics' => $stats,
+                'stats' => $stats,
                 'lineups' => $lineups,
                 'injuries' => $injuries,
                 'h2h' => $h2h,
-                'odds' => $odds
+                'odds' => $odds,
+                'predictions' => $predictions
             ]);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);

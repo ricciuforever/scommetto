@@ -35,6 +35,19 @@ class FixtureStatistics
     {
         $stmt = $this->db->prepare("SELECT * FROM fixture_statistics WHERE fixture_id = ?");
         $stmt->execute([$fixture_id]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $flattened = [];
+        foreach ($rows as $row) {
+            $stats = json_decode($row['stats_json'], true);
+            foreach ($stats as $s) {
+                $flattened[] = [
+                    'team_id' => $row['team_id'],
+                    'type' => $s['type'],
+                    'value' => $s['value']
+                ];
+            }
+        }
+        return $flattened;
     }
 }

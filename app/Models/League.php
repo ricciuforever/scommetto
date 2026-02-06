@@ -22,6 +22,12 @@ class League
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
+    public function getAll()
+    {
+        $stmt = $this->db->query("SELECT * FROM leagues ORDER BY name ASC");
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function supportsPredictions($id)
     {
         $league = $this->getById($id);
