@@ -33,9 +33,7 @@ class SyncController
 
     private function getCurrentSeason()
     {
-    // Se siamo da Gennaio a Giugno, la stagione API è l'anno precedente (es. a Febbraio 2026 la stagione è 2025)
-    // Se siamo da Luglio a Dicembre, la stagione API è l'anno corrente (es. a Settembre 2026 la stagione è 2026)
-    return (int)date('m') <= 6 ? (int)date('Y') - 1 : (int)date('Y');
+        return Config::getCurrentSeason();
     }
 
     private function sendJsonHeader()

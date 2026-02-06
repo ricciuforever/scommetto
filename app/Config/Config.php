@@ -31,6 +31,13 @@ class Config
         return self::$env[$key] ?? $_ENV[$key] ?? getenv($key) ?: $default;
     }
 
+    public static function getCurrentSeason()
+    {
+        // Se siamo tra Gennaio (01) e Giugno (06), la stagione API è l'anno precedente.
+        // Esempio: Febbraio 2026 -> Stagione 2025
+        return (int)date('m') <= 6 ? (int)date('Y') - 1 : (int)date('Y');
+    }
+
     public const FOOTBALL_API_BASE_URL = 'https://v3.football.api-sports.io';
     public const LOGS_PATH = __DIR__ . '/../../logs/';
     public const LOG_FILE = self::LOGS_PATH . 'app_error.log';

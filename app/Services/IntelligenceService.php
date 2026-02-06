@@ -30,8 +30,12 @@ class IntelligenceService
     /**
      * Gathers all local data for a match to provide deep context to Gemini
      */
-    public function getDeepContext($fixture_id, $home_id, $away_id, $league_id, $season = 2024)
+    public function getDeepContext($fixture_id, $home_id, $away_id, $league_id, $season = null)
     {
+        if ($season === null) {
+            $season = \App\Config\Config::getCurrentSeason();
+        }
+
         $context = [
             'home' => [
                 'recent_matches' => $this->fixtureModel->getTeamRecent($home_id),
