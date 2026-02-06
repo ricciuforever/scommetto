@@ -60,6 +60,25 @@ class SyncController
         }
     }
 
+    private function handleException(\Throwable $e)
+    {
+        echo json_encode([
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ]);
+    }
+
+    public function getUsage()
+    {
+        $this->sendJsonHeader();
+        try {
+            echo json_encode($this->usageModel->getLatest());
+        } catch (\Throwable $e) {
+            $this->handleException($e);
+        }
+    }
+
     /**
      * CRON LIVE - Ogni minuto
      * Gestisce match live, eventi, statistiche, quote live e Gemini
@@ -100,7 +119,7 @@ class SyncController
                 return;
             }
 
-            // 4. Fetch ALL live odds (bulk call - risparmia molti crediti!)
+            // 4. Fetch ALL live odds (bulk call)
             $liveOddsData = $this->apiService->fetchLiveOdds();
             $liveOddsModel = new LiveOdds();
             if (isset($liveOddsData['response'])) {
@@ -117,29 +136,26 @@ class SyncController
                 $fid = $m['fixture']['id'];
                 $oldFixture = $this->fixtureModel->getById($fid);
 
-                // Salviamo lo stato base
                 $this->fixtureModel->save($m);
 
-                // Throttling: Aggiorna dettagli solo se il punteggio è cambiato
-                // o se sono passati più di 5 minuti dall'ultimo aggiornamento dettagliato
                 $scoreChanged = ($oldFixture && ($oldFixture['score_home'] !== $m['goals']['home'] || $oldFixture['score_away'] !== $m['goals']['away']));
                 $needsUpdate = !$oldFixture || $scoreChanged || (time() - strtotime($oldFixture['last_detailed_update'] ?? '2000-01-01')) > 300;
 
                 if ($needsUpdate) {
                     echo "Updating details for fixture $fid...\n";
 
-                    // Eventi
                     $eventsData = $this->apiService->fetchFixtureEvents($fid);
                     if (isset($eventsData['response'])) {
                         $eventModel->deleteByFixture($fid);
-                        foreach ($eventsData['response'] as $ev) $eventModel->save($fid, $ev);
+                        foreach ($eventsData['response'] as $ev) {
+                            if (isset($ev['team']['id'])) $eventModel->save($fid, $ev);
+                        }
                     }
 
-                    // Statistiche
                     $statsData = $this->apiService->fetchFixtureStatistics($fid);
                     if (isset($statsData['response'])) {
                         foreach ($statsData['response'] as $st) {
-                            $statModel->save($fid, $st['team']['id'], $st['statistics']);
+                            if (isset($st['team']['id'])) $statModel->save($fid, $st['team']['id'], $st['statistics']);
                         }
                     }
 
@@ -173,12 +189,12 @@ class SyncController
                         $results['bets_placed']++;
                     }
                 }
-                break; // Analizza solo uno per ciclo per non saturare Gemini/API
+                break;
             }
 
             echo json_encode($results);
         } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
+            $this->handleException($e);
         }
     }
 
@@ -195,7 +211,6 @@ class SyncController
         try {
             $db = Database::getInstance()->getConnection();
 
-            // 1. Sync Leagues (Bulk - 1 call)
             $leagueModel = new League();
             $leaguesData = $this->apiService->fetchLeagues();
             if (isset($leaguesData['response'])) {
@@ -205,7 +220,6 @@ class SyncController
                 }
             }
 
-            // 2. Sync Today's Fixtures (Bulk - 1 call per all leagues!)
             $today = date('Y-m-d');
             $fixturesData = $this->apiService->request("/fixtures?date=$today");
             if (isset($fixturesData['response'])) {
@@ -215,27 +229,30 @@ class SyncController
                 }
             }
 
-            // 3. Standings & Injuries (Purtroppo questi richiedono league-id)
-            // Ottimizzazione: solo per leghe che hanno partite oggi
             $activeLeagues = $db->query("SELECT DISTINCT league_id FROM fixtures WHERE DATE(date) = '$today'")->fetchAll(PDO::FETCH_COLUMN);
 
             $standingModel = new Standing();
             $injuryModel = new FixtureInjury();
 
             foreach ($activeLeagues as $lId) {
-                // Standings
+                if (!$lId) continue;
                 $stData = $this->apiService->fetchStandings($lId, $season);
                 if (isset($stData['response'][0]['league']['standings'])) {
                     foreach ($stData['response'][0]['league']['standings'] as $group) {
-                        foreach ($group as $row) $standingModel->save($lId, $row);
+                        foreach ($group as $row) {
+                            if (isset($row['team']['id'])) $standingModel->save($lId, $row);
+                        }
                     }
                     $results['standings']++;
                 }
 
-                // Injuries (per league)
                 $injData = $this->apiService->request("/injuries?league=$lId&season=$season");
                 if (isset($injData['response'])) {
-                    foreach ($injData['response'] as $row) $injuryModel->save($row['fixture']['id'], $row);
+                    foreach ($injData['response'] as $row) {
+                        if (isset($row['fixture']['id']) && isset($row['team']['id'])) {
+                            $injuryModel->save($row['fixture']['id'], $row);
+                        }
+                    }
                     $results['injuries']++;
                 }
                 usleep(250000);
@@ -243,7 +260,7 @@ class SyncController
 
             echo json_encode($results);
         } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
+            $this->handleException($e);
         }
     }
 
@@ -259,7 +276,6 @@ class SyncController
             $db = Database::getInstance()->getConnection();
             $oddsModel = new FixtureOdds();
 
-            // Sync quote per i match dei prossimi 3 giorni che non hanno ancora quote o sono vecchie
             $fixtures = $db->query("SELECT id FROM fixtures
                                     WHERE date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 3 DAY)
                                     AND status_short = 'NS'
@@ -281,7 +297,7 @@ class SyncController
             }
             echo json_encode($results);
         } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
+            $this->handleException($e);
         }
     }
 
@@ -298,23 +314,17 @@ class SyncController
         try {
             $db = Database::getInstance()->getConnection();
 
-            // 1. Countries (1 call)
             $countryModel = new Country();
             $cData = $this->apiService->fetchCountries();
             if (isset($cData['response'])) {
                 foreach ($cData['response'] as $c) { $countryModel->save($c); $results['countries']++; }
             }
 
-            // 2. Sync Teams by League (Bulk per lega)
-            // Ottimizzazione: Consideriamo solo le leghe che hanno avuto match nell'ultimo mese o ne hanno in futuro
             $relevantLeagues = $db->query("SELECT DISTINCT league_id FROM fixtures
                                            WHERE date BETWEEN DATE_SUB(NOW(), INTERVAL 30 DAY) AND DATE_ADD(NOW(), INTERVAL 30 DAY)")
                                   ->fetchAll(PDO::FETCH_COLUMN);
 
-            if (empty($relevantLeagues)) {
-                // Fallback alle leghe premium se DB è vuoto
-                $relevantLeagues = Config::PREMIUM_LEAGUES;
-            }
+            if (empty($relevantLeagues)) $relevantLeagues = Config::PREMIUM_LEAGUES;
 
             $teamModel = new Team();
             $coachModel = new Coach();
@@ -322,7 +332,7 @@ class SyncController
             $predictionModel = new Prediction();
 
             foreach ($relevantLeagues as $lId) {
-                // Teams (1 call per lega)
+                if (!$lId) continue;
                 $tData = $this->apiService->fetchTeams(['league' => $lId, 'season' => $season]);
                 if (isset($tData['response'])) {
                     foreach ($tData['response'] as $row) {
@@ -330,13 +340,11 @@ class SyncController
                         $results['teams']++;
                         $tid = $row['team']['id'];
 
-                        // Coach & Squad: Solo se non aggiornati di recente (Throttling interno al Model o qui)
                         if ($coachModel->needsRefresh($tid)) {
                             $coData = $this->apiService->fetchCoach($tid);
                             if (isset($coData['response'][0])) { $coachModel->save($coData['response'][0], $tid); $results['coaches']++; }
                         }
 
-                        // Squad (Giocatori)
                         $sqData = $this->apiService->fetchSquad($tid);
                         if (isset($sqData['response'][0]['players'])) {
                             foreach ($sqData['response'][0]['players'] as $p) {
@@ -349,10 +357,8 @@ class SyncController
                     }
                 }
 
-                // Top Stats (4 calls per lega)
                 $this->syncLeagueTopStats($lId, $season);
 
-                // Predictions per i match imminenti (1 call per fixture)
                 $upcomingFixtures = $db->query("SELECT id FROM fixtures WHERE league_id = $lId AND date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 2 DAY) AND status_short = 'NS' LIMIT 20")->fetchAll(PDO::FETCH_COLUMN);
                 foreach ($upcomingFixtures as $fid) {
                     $predData = $this->apiService->fetchPredictions($fid);
@@ -366,7 +372,7 @@ class SyncController
 
             echo json_encode($results);
         } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
+            $this->handleException($e);
         }
     }
 
@@ -379,10 +385,10 @@ class SyncController
         $results = ['players_updated' => 0];
         try {
             $db = Database::getInstance()->getConnection();
-            // Aggiorna profili giocatori a rotazione
             $players = $db->query("SELECT id FROM players ORDER BY last_updated ASC LIMIT 50")->fetchAll(PDO::FETCH_COLUMN);
 
             foreach ($players as $pid) {
+                if (!$pid) continue;
                 $pData = $this->apiService->fetchPlayers(['id' => $pid, 'season' => $this->getCurrentSeason()]);
                 if (isset($pData['response'][0])) {
                     (new Player())->save($pData['response'][0]['player']);
@@ -392,7 +398,7 @@ class SyncController
             }
             echo json_encode($results);
         } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
+            $this->handleException($e);
         }
     }
 
@@ -427,7 +433,7 @@ class SyncController
             ];
             echo json_encode($results);
         } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
+            $this->handleException($e);
         }
     }
 
@@ -439,8 +445,10 @@ class SyncController
         if (isset($data['response'][0]['league']['standings'])) {
             foreach ($data['response'][0]['league']['standings'] as $group) {
                 foreach ($group as $row) {
-                    $teamModel->save(['team' => $row['team']]);
-                    $standingModel->save($leagueId, $row);
+                    if (isset($row['team']['id'])) {
+                        $teamModel->save(['team' => $row['team']]);
+                        $standingModel->save($leagueId, $row);
+                    }
                 }
             }
         }

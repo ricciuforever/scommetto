@@ -50,6 +50,8 @@ class Standing
 
     public function save($leagueId, $teamData)
     {
+        if (!isset($teamData['team']['id'])) return false;
+
         $sql = "INSERT INTO standings (league_id, team_id, rank, points, goals_diff, form, group_name, description, played, win, draw, lose, goals_for, goals_against, home_stats_json, away_stats_json) 
                 VALUES (:league_id, :team_id, :rank, :points, :goals_diff, :form, :group, :description, :played, :win, :draw, :lose, :gf, :ga, :home, :away)
                 ON DUPLICATE KEY UPDATE 
@@ -65,9 +67,9 @@ class Standing
         return $stmt->execute([
             'league_id' => $leagueId,
             'team_id' => $teamData['team']['id'],
-            'rank' => $teamData['rank'],
-            'points' => $teamData['points'],
-            'goals_diff' => $teamData['goalsDiff'],
+            'rank' => $teamData['rank'] ?? 0,
+            'points' => $teamData['points'] ?? 0,
+            'goals_diff' => $teamData['goalsDiff'] ?? 0,
             'form' => $teamData['form'] ?? '',
             'group' => $teamData['group'] ?? null,
             'description' => $teamData['description'] ?? null,
