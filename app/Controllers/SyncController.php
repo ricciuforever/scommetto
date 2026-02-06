@@ -26,6 +26,7 @@ use App\Models\H2H;
 use App\Models\Trophy;
 use App\Models\Transfer;
 use App\Models\Sidelined;
+use App\Models\PlayerStatistics;
 use App\Services\FootballApiService;
 use App\Services\GeminiService;
 use App\Config\Config;
@@ -51,6 +52,7 @@ class SyncController
     private $trophyModel;
     private $transferModel;
     private $sidelinedModel;
+    private $playerStatModel;
     private $apiService;
     private $geminiService;
 
@@ -73,6 +75,7 @@ class SyncController
         $this->trophyModel = new Trophy();
         $this->transferModel = new Transfer();
         $this->sidelinedModel = new Sidelined();
+        $this->playerStatModel = new PlayerStatistics();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
     }
@@ -331,7 +334,7 @@ class SyncController
     {
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
-        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0, 'trophies' => 0, 'transfers' => 0, 'sidelined' => 0];
+        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0, 'trophies' => 0, 'transfers' => 0, 'sidelined' => 0, 'player_stats' => 0];
 
         try {
             $db = Database::getInstance()->getConnection();
@@ -390,37 +393,58 @@ class SyncController
                                 $this->playerModel->save($p);
                                 $this->playerModel->linkToSquad($tid, $p, $p);
                                 $results['squads']++;
-
-                                // Sync trophies for players, but with a stricter limit to save credits
-                                // Only 1 player per squad or those missing trophies
-                                // Sync trophies and transfers for players
-                                if ($results['trophies'] < 50 && $this->trophyModel->needsRefresh($p['id'], 'player', 90)) {
-                                    $trData = $this->apiService->fetchTrophies(['player' => $p['id']]);
-                                    if (isset($trData['response'])) {
-                                        $this->trophyModel->saveForPlayer($p['id'], $trData['response']);
-                                        $results['trophies']++;
-                                    }
-                                    usleep(200000);
-                                }
-
-                                if ($results['sidelined'] < 50 && $this->sidelinedModel->needsRefresh($p['id'], 'player', 90)) {
-                                    $sdData = $this->apiService->fetchSidelined(['player' => $p['id']]);
-                                    if (isset($sdData['response'])) {
-                                        $this->sidelinedModel->saveForPlayer($p['id'], $sdData['response']);
-                                        $results['sidelined']++;
-                                    }
-                                    usleep(200000);
-                                }
-
-                                if ($results['transfers'] < 50 && $this->transferModel->needsRefresh($p['id'], 90)) {
-                                    $transData = $this->apiService->fetchTransfers(['player' => $p['id']]);
-                                    if (isset($transData['response'][0]['transfers'])) {
-                                        $this->transferModel->saveForPlayer($p['id'], $transData['response'][0]['transfers']);
-                                        $results['transfers']++;
-                                    }
-                                    usleep(200000);
-                                }
                             }
+                        }
+
+                        // Sync Player Statistics for the team
+                        if ($this->playerStatModel->needsRefresh($tid, $season)) {
+                            $page = 1;
+                            do {
+                                $psData = $this->apiService->fetchPlayers(['team' => $tid, 'season' => $season, 'page' => $page]);
+                                if (isset($psData['response'])) {
+                                    foreach ($psData['response'] as $row) {
+                                        if (isset($row['player']['id']) && isset($row['statistics'][0])) {
+                                            $this->playerStatModel->save(
+                                                $row['player']['id'],
+                                                $tid,
+                                                $row['statistics'][0]['league']['id'] ?? $lId,
+                                                $season,
+                                                $row['statistics']
+                                            );
+                                            $results['player_stats']++;
+
+                                            $pid = $row['player']['id'];
+                                            // Sync trophies, sidelined, and transfers only for players with stats (key players)
+                                            if ($results['trophies'] < 50 && $this->trophyModel->needsRefresh($pid, 'player', 90)) {
+                                                $trData = $this->apiService->fetchTrophies(['player' => $pid]);
+                                                if (isset($trData['response'])) {
+                                                    $this->trophyModel->saveForPlayer($pid, $trData['response']);
+                                                    $results['trophies']++;
+                                                }
+                                                usleep(150000);
+                                            }
+                                            if ($results['sidelined'] < 50 && $this->sidelinedModel->needsRefresh($pid, 'player', 90)) {
+                                                $sdData = $this->apiService->fetchSidelined(['player' => $pid]);
+                                                if (isset($sdData['response'])) {
+                                                    $this->sidelinedModel->saveForPlayer($pid, $sdData['response']);
+                                                    $results['sidelined']++;
+                                                }
+                                                usleep(150000);
+                                            }
+                                            if ($results['transfers'] < 50 && $this->transferModel->needsRefresh($pid, 90)) {
+                                                $transData = $this->apiService->fetchTransfers(['player' => $pid]);
+                                                if (isset($transData['response'][0]['transfers'])) {
+                                                    $this->transferModel->saveForPlayer($pid, $transData['response'][0]['transfers']);
+                                                    $results['transfers']++;
+                                                }
+                                                usleep(150000);
+                                            }
+                                        }
+                                    }
+                                    $page++;
+                                } else { $page = 0; }
+                            } while ($page > 1 && $page <= ($psData['paging']['total'] ?? 1));
+                            usleep(250000);
                         }
                         usleep(250000);
                     }
