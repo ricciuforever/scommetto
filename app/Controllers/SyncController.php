@@ -25,6 +25,7 @@ use App\Models\Round;
 use App\Models\H2H;
 use App\Models\Trophy;
 use App\Models\Transfer;
+use App\Models\Sidelined;
 use App\Services\FootballApiService;
 use App\Services\GeminiService;
 use App\Config\Config;
@@ -49,6 +50,7 @@ class SyncController
     private $liveOddsModel;
     private $trophyModel;
     private $transferModel;
+    private $sidelinedModel;
     private $apiService;
     private $geminiService;
 
@@ -70,6 +72,7 @@ class SyncController
         $this->liveOddsModel = new LiveOdds();
         $this->trophyModel = new Trophy();
         $this->transferModel = new Transfer();
+        $this->sidelinedModel = new Sidelined();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
     }
@@ -328,7 +331,7 @@ class SyncController
     {
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
-        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0, 'trophies' => 0, 'transfers' => 0];
+        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0, 'trophies' => 0, 'transfers' => 0, 'sidelined' => 0];
 
         try {
             $db = Database::getInstance()->getConnection();
@@ -369,6 +372,15 @@ class SyncController
                                     }
                                     usleep(200000);
                                 }
+
+                                if (isset($coach['id']) && $this->sidelinedModel->needsRefresh($coach['id'], 'coach')) {
+                                    $sdData = $this->apiService->fetchSidelined(['coach' => $coach['id']]);
+                                    if (isset($sdData['response'])) {
+                                        $this->sidelinedModel->saveForCoach($coach['id'], $sdData['response']);
+                                        $results['sidelined']++;
+                                    }
+                                    usleep(200000);
+                                }
                             }
                         }
 
@@ -387,6 +399,15 @@ class SyncController
                                     if (isset($trData['response'])) {
                                         $this->trophyModel->saveForPlayer($p['id'], $trData['response']);
                                         $results['trophies']++;
+                                    }
+                                    usleep(200000);
+                                }
+
+                                if ($results['sidelined'] < 50 && $this->sidelinedModel->needsRefresh($p['id'], 'player', 90)) {
+                                    $sdData = $this->apiService->fetchSidelined(['player' => $p['id']]);
+                                    if (isset($sdData['response'])) {
+                                        $this->sidelinedModel->saveForPlayer($p['id'], $sdData['response']);
+                                        $results['sidelined']++;
                                     }
                                     usleep(200000);
                                 }
