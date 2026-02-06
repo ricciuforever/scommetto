@@ -29,6 +29,8 @@ use App\Models\Sidelined;
 use App\Models\PlayerStatistics;
 use App\Models\PlayerSeason;
 use App\Models\FixturePlayerStatistics;
+use App\Models\Bookmaker;
+use App\Models\BetType;
 use App\Services\FootballApiService;
 use App\Services\GeminiService;
 use App\Config\Config;
@@ -57,6 +59,8 @@ class SyncController
     private $playerStatModel;
     private $playerSeasonModel;
     private $fixturePlayerStatModel;
+    private $bookmakerModel;
+    private $betTypeModel;
     private $apiService;
     private $geminiService;
 
@@ -82,6 +86,8 @@ class SyncController
         $this->playerStatModel = new PlayerStatistics();
         $this->playerSeasonModel = new PlayerSeason();
         $this->fixturePlayerStatModel = new FixturePlayerStatistics();
+        $this->bookmakerModel = new Bookmaker();
+        $this->betTypeModel = new BetType();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
     }
@@ -352,10 +358,33 @@ class SyncController
     {
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
-        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0, 'trophies' => 0, 'transfers' => 0, 'sidelined' => 0, 'player_stats' => 0, 'player_seasons' => 0];
+        $results = [
+            'countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0,
+            'predictions' => 0, 'trophies' => 0, 'transfers' => 0,
+            'sidelined' => 0, 'player_stats' => 0, 'player_seasons' => 0,
+            'bookmakers' => 0, 'bet_types' => 0
+        ];
 
         try {
             $db = Database::getInstance()->getConnection();
+
+            // Bookmakers
+            $bmData = $this->apiService->fetchBookmakers();
+            if (isset($bmData['response'])) {
+                foreach ($bmData['response'] as $row) {
+                    $this->bookmakerModel->save($row);
+                    $results['bookmakers']++;
+                }
+            }
+
+            // Bet Types (Markets)
+            $btData = $this->apiService->fetchBets();
+            if (isset($btData['response'])) {
+                foreach ($btData['response'] as $row) {
+                    $this->betTypeModel->save($row);
+                    $results['bet_types']++;
+                }
+            }
 
             $psData = $this->apiService->fetchSeasons();
             if (isset($psData['response'])) {
