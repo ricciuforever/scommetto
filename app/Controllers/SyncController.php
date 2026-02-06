@@ -190,7 +190,7 @@ class SyncController
 
     public function syncLeagueDetails($leagueId, $season)
     {
-        $results = ['team_stats' => 0, 'coaches' => 0, 'squads' => 0];
+        $results = ['team_stats' => 0, 'coaches' => 0, 'squads' => 0, 'errors' => []];
         $teamModel = new \App\Models\Team();
         $coachModel = new \App\Models\Coach();
         $playerModel = new \App\Models\Player();
@@ -200,35 +200,55 @@ class SyncController
         $standingModel = new \App\Models\Standing();
         $standings = $standingModel->getByLeague($leagueId);
 
+        if (empty($standings)) {
+            $results['errors'][] = "No standings found for league $leagueId. Teams might be missing.";
+            return $results;
+        }
+
         foreach ($standings as $row) {
             $tid = $row['team_id'];
+            usleep(200000); // 200ms delay to avoid rate limiting
 
             // 1. Team Stats
-            if ($teamStatsModel->get($tid, $leagueId, $season) === false) {
-                $statsData = $this->apiService->fetchTeamStatistics($tid, $leagueId, $season);
-                if (isset($statsData['response'])) {
-                    $teamStatsModel->save($tid, $leagueId, $season, $statsData['response']);
-                    $results['team_stats']++;
+            try {
+                if ($teamStatsModel->get($tid, $leagueId, $season) === false) {
+                    $statsData = $this->apiService->fetchTeamStatistics($tid, $leagueId, $season);
+                    if (isset($statsData['response']) && !empty($statsData['response'])) {
+                        $teamStatsModel->save($tid, $leagueId, $season, $statsData['response']);
+                        $results['team_stats']++;
+                    } elseif (isset($statsData['error'])) {
+                        $results['errors'][] = "Team $tid Stats Error: " . json_encode($statsData['error']);
+                    }
                 }
+            } catch (\Throwable $e) {
+                $results['errors'][] = "Team $tid Stats Exception: " . $e->getMessage();
             }
 
             // 2. Coach
-            if ($coachModel->needsRefresh($tid)) {
-                $coachData = $this->apiService->fetchCoach($tid);
-                if (isset($coachData['response'][0])) {
-                    $coachModel->save($coachData['response'][0], $tid);
-                    $results['coaches']++;
+            try {
+                if ($coachModel->needsRefresh($tid)) {
+                    $coachData = $this->apiService->fetchCoach($tid);
+                    if (isset($coachData['response'][0])) {
+                        $coachModel->save($coachData['response'][0], $tid);
+                        $results['coaches']++;
+                    }
                 }
+            } catch (\Throwable $e) {
+                $results['errors'][] = "Team $tid Coach Exception: " . $e->getMessage();
             }
 
             // 3. Squad
-            $squadData = $this->apiService->fetchSquad($tid);
-            if (isset($squadData['response'][0]['players'])) {
-                foreach ($squadData['response'][0]['players'] as $p) {
-                    $playerModel->save($p);
-                    $playerModel->linkToSquad($tid, $p, $p);
-                    $results['squads']++;
+            try {
+                $squadData = $this->apiService->fetchSquad($tid);
+                if (isset($squadData['response'][0]['players'])) {
+                    foreach ($squadData['response'][0]['players'] as $p) {
+                        $playerModel->save($p);
+                        $playerModel->linkToSquad($tid, $p, $p);
+                        $results['squads']++;
+                    }
                 }
+            } catch (\Throwable $e) {
+                $results['errors'][] = "Team $tid Squad Exception: " . $e->getMessage();
             }
         }
         return $results;
@@ -236,7 +256,7 @@ class SyncController
 
     public function syncLeagueMatchDetails($leagueId, $season)
     {
-        $results = ['predictions' => 0, 'h2h' => 0];
+        $results = ['predictions' => 0, 'h2h' => 0, 'errors' => []];
         $fixtureModel = new \App\Models\Fixture();
         $predictionModel = new \App\Models\Prediction();
         $h2hModel = new \App\Models\H2H();
@@ -251,23 +271,32 @@ class SyncController
                 $fid = $f['fixture']['id'];
                 $h1 = $f['teams']['home']['id'];
                 $a1 = $f['teams']['away']['id'];
+                usleep(200000); // 200ms delay
 
                 // 1. Predictions
-                if ($predictionModel->needsRefresh($fid)) {
-                    $predData = $this->apiService->fetchPredictions($fid);
-                    if (isset($predData['response'][0])) {
-                        $predictionModel->save($fid, $predData['response'][0]);
-                        $results['predictions']++;
+                try {
+                    if ($predictionModel->needsRefresh($fid)) {
+                        $predData = $this->apiService->fetchPredictions($fid);
+                        if (isset($predData['response'][0])) {
+                            $predictionModel->save($fid, $predData['response'][0]);
+                            $results['predictions']++;
+                        }
                     }
+                } catch (\Throwable $e) {
+                    $results['errors'][] = "Fixture $fid Prediction Exception: " . $e->getMessage();
                 }
 
                 // 2. H2H
-                if ($h2hModel->get($h1, $a1) === false) {
-                    $h2hData = $this->apiService->fetchH2H("$h1-$a1");
-                    if (isset($h2hData['response'])) {
-                        $h2hModel->save($h1, $a1, $h2hData['response']);
-                        $results['h2h']++;
+                try {
+                    if ($h2hModel->get($h1, $a1) === false) {
+                        $h2hData = $this->apiService->fetchH2H("$h1-$a1");
+                        if (isset($h2hData['response'])) {
+                            $h2hModel->save($h1, $a1, $h2hData['response']);
+                            $results['h2h']++;
+                        }
                     }
+                } catch (\Throwable $e) {
+                    $results['errors'][] = "H2H $h1-$a1 Exception: " . $e->getMessage();
                 }
             }
         }

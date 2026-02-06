@@ -14,13 +14,27 @@ echo "🚀 Inizio popolamento database...\n";
 foreach (Config::PREMIUM_LEAGUES as $leagueId) {
     echo "📦 Sincronizzazione Lega ID: $leagueId...\n";
     try {
+        // Obfuscate output to stay clean but show keys
+        ob_start();
         $sync->deepSync($leagueId, $season);
-        echo "✅ Completato.\n";
+        $output = ob_get_clean();
+
+        $data = json_decode($output, true);
+        if ($data && isset($data['status']) && $data['status'] === 'success') {
+            echo "   ✅ Panoramica: " . json_encode($data['overview']) . "\n";
+            echo "   ✅ Top Stats: " . json_encode($data['top_stats']) . "\n";
+            echo "   ✅ Fixtures: " . json_encode($data['fixtures']) . "\n";
+            echo "   ✅ Dettagli Team: " . json_encode($data['details']) . "\n";
+            echo "   ✅ Dettagli Match: " . json_encode($data['match_details']) . "\n";
+        } else {
+            echo "   ⚠️ Risposta inattesa: $output\n";
+        }
     } catch (\Throwable $e) {
-        echo "❌ Errore: " . $e->getMessage() . "\n";
+        echo "   ❌ Errore Critico: " . $e->getMessage() . "\n";
     }
-    // Sleep to avoid hitting rate limits too fast if needed
-    sleep(1);
+    // Sleep to avoid hitting rate limits too fast
+    echo "   ⏳ Attesa per rate limit...\n";
+    sleep(2);
 }
 
 echo "\n✨ Operazione completata. Il database è ora popolato con i dati base.\n";
