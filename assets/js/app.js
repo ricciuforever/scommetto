@@ -33,7 +33,7 @@ function updateNavLinks(activeView) {
         } else {
             link.classList.remove('active-nav');
             if (link.tagName === 'A' && !link.classList.contains('nav-link')) {
-                 link.classList.add('text-slate-500');
+                link.classList.add('text-slate-500');
             }
         }
     });
@@ -43,7 +43,7 @@ async function renderView(view, id) {
     showLoader(true);
     viewContainer.innerHTML = '';
 
-    switch(view) {
+    switch (view) {
         case 'dashboard':
             viewTitle.textContent = 'Dashboard Intelligence';
             await renderDashboard();
@@ -228,7 +228,7 @@ async function renderLeagueTopStats(leagueId) {
                     ${list.slice(0, 5).map((p, i) => `
                         <div class="flex items-center justify-between group cursor-pointer" onclick="window.location.hash = 'player/${p.player.id}'">
                             <div class="flex items-center gap-3">
-                                <span class="text-[10px] font-black text-slate-500">${i+1}</span>
+                                <span class="text-[10px] font-black text-slate-500">${i + 1}</span>
                                 <span class="text-xs font-black uppercase italic group-hover:text-accent transition-colors">${p.player.name}</span>
                             </div>
                             <span class="text-xs font-black tabular-nums text-white">${p.statistics[0].goals.total || p.statistics[0].cards.yellow || p.statistics[0].cards.red || 0}</span>
@@ -378,8 +378,8 @@ async function renderPredictions() {
     const predictions = await res.json();
 
     if (predictions.error || !predictions.length) {
-         viewContainer.innerHTML = `<div class="glass p-20 rounded-[40px] text-center font-black uppercase text-slate-500 italic">Nessun pronostico generato recentemente.</div>`;
-         return;
+        viewContainer.innerHTML = `<div class="glass p-20 rounded-[40px] text-center font-black uppercase text-slate-500 italic">Nessun pronostico generato recentemente.</div>`;
+        return;
     }
 
     let html = `<div class="grid grid-cols-1 md:grid-cols-2 gap-8">`;
@@ -526,7 +526,7 @@ async function renderMatchTab(tab, fixtureId, matchData) {
     container.innerHTML = '<div class="flex justify-center py-20"><i data-lucide="loader-2" class="w-8 h-8 text-accent rotator"></i></div>';
     if (window.lucide) lucide.createIcons();
 
-    switch(tab) {
+    switch (tab) {
         case 'analysis':
             await renderMatchAnalysis(fixtureId);
             break;
@@ -766,7 +766,7 @@ function renderMatchStats(stats) {
                 </div>
                 <div class="h-1.5 bg-white/5 rounded-full overflow-hidden flex">
                     <div class="h-full bg-accent" style="width: ${p1}%"></div>
-                    <div class="h-full bg-white/10" style="width: ${100-p1}%"></div>
+                    <div class="h-full bg-white/10" style="width: ${100 - p1}%"></div>
                 </div>
             </div>
         `;
@@ -1075,7 +1075,7 @@ async function fetchLive() {
                 const goalsChanged = m.goals.home !== prevState.goals.home || m.goals.away !== prevState.goals.away;
                 if (goalsChanged) {
                     pinnedMatches.add(id);
-                    notificationSound.play().catch(() => {});
+                    notificationSound.play().catch(() => { });
                     setTimeout(() => pinnedMatches.delete(id), 10000);
                 }
             }
@@ -1356,7 +1356,7 @@ async function analyzeMatch(id) {
         const prediction = data.prediction;
         let betData = null; let displayHtml = prediction;
         const jsonMatch = prediction.match(/```json\n?([\s\S]*?)\n?```/i);
-        if (jsonMatch) { try { betData = JSON.parse(jsonMatch[1]); displayHtml = prediction.replace(/```json[\s\S]*?```/i, ''); } catch (e) {} }
+        if (jsonMatch) { try { betData = JSON.parse(jsonMatch[1]); displayHtml = prediction.replace(/```json[\s\S]*?```/i, ''); } catch (e) { } }
 
         body.innerHTML = `
             <div class="max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
@@ -1416,6 +1416,19 @@ async function placeBet(fixture_id, match, betData) {
 }
 
 function closeModal() { document.getElementById('analysis-modal').classList.add('hidden'); }
+
+async function fetchUsage() {
+    try {
+        const res = await fetch('/api/usage');
+        const data = await res.json();
+        if (data) {
+            const usageVal = document.getElementById('usage-val');
+            const limitVal = document.getElementById('limit-val');
+            if (usageVal) usageVal.textContent = data.requests_used || 0;
+            if (limitVal) limitVal.textContent = data.requests_limit || 75000;
+        }
+    } catch (e) { console.error("Error fetching API usage", e); }
+}
 
 // --- TRACKER SPECIFIC RENDERERS ---
 
