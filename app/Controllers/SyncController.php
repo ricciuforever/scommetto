@@ -23,6 +23,7 @@ use App\Models\TopStats;
 use App\Models\Prediction;
 use App\Models\Round;
 use App\Models\H2H;
+use App\Models\Trophy;
 use App\Services\FootballApiService;
 use App\Services\GeminiService;
 use App\Config\Config;
@@ -45,6 +46,7 @@ class SyncController
     private $eventModel;
     private $statModel;
     private $liveOddsModel;
+    private $trophyModel;
     private $apiService;
     private $geminiService;
 
@@ -64,6 +66,7 @@ class SyncController
         $this->eventModel = new FixtureEvent();
         $this->statModel = new FixtureStatistics();
         $this->liveOddsModel = new LiveOdds();
+        $this->trophyModel = new Trophy();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
     }
@@ -322,7 +325,7 @@ class SyncController
     {
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
-        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0];
+        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0, 'trophies' => 0];
 
         try {
             $db = Database::getInstance()->getConnection();
@@ -349,7 +352,21 @@ class SyncController
 
                         if ($this->coachModel->needsRefresh($tid)) {
                             $coData = $this->apiService->fetchCoach($tid);
-                            if (isset($coData['response'][0])) { $this->coachModel->save($coData['response'][0], $tid); $results['coaches']++; }
+                            if (isset($coData['response'][0])) {
+                                $coach = $coData['response'][0];
+                                $this->coachModel->save($coach, $tid);
+                                $results['coaches']++;
+
+                                // Sync trophies for the coach (highly relevant data)
+                                if (isset($coach['id']) && $this->trophyModel->needsRefresh($coach['id'], 'coach')) {
+                                    $trData = $this->apiService->fetchTrophies(['coach' => $coach['id']]);
+                                    if (isset($trData['response'])) {
+                                        $this->trophyModel->saveForCoach($coach['id'], $trData['response']);
+                                        $results['trophies']++;
+                                    }
+                                    usleep(200000);
+                                }
+                            }
                         }
 
                         $sqData = $this->apiService->fetchSquad($tid);
@@ -358,6 +375,17 @@ class SyncController
                                 $this->playerModel->save($p);
                                 $this->playerModel->linkToSquad($tid, $p, $p);
                                 $results['squads']++;
+
+                                // Sync trophies for players, but with a stricter limit to save credits
+                                // Only 1 player per squad or those missing trophies
+                                if ($results['trophies'] < 100 && $this->trophyModel->needsRefresh($p['id'], 'player', 90)) {
+                                    $trData = $this->apiService->fetchTrophies(['player' => $p['id']]);
+                                    if (isset($trData['response'])) {
+                                        $this->trophyModel->saveForPlayer($p['id'], $trData['response']);
+                                        $results['trophies']++;
+                                    }
+                                    usleep(200000);
+                                }
                             }
                         }
                         usleep(250000);
