@@ -92,7 +92,14 @@ class League
 
     public function getAll()
     {
-        $stmt = $this->db->query("SELECT * FROM leagues ORDER BY country_name ASC, name ASC");
+        $premiumIds = implode(',', \App\Config\Config::PREMIUM_LEAGUES);
+        $sql = "SELECT * FROM leagues 
+                ORDER BY 
+                    CASE WHEN id IN ($premiumIds) THEN 0 ELSE 1 END,
+                    country_name ASC,
+                    CASE WHEN type = 'League' THEN 0 ELSE 1 END,
+                    name ASC";
+        $stmt = $this->db->query($sql);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
