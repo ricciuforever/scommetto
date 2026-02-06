@@ -23,6 +23,7 @@ use App\Models\TopStats;
 use App\Models\Prediction;
 use App\Models\Round;
 use App\Models\H2H;
+use App\Models\Trophy;
 use App\Services\FootballApiService;
 use App\Services\GeminiService;
 use App\Config\Config;
@@ -45,6 +46,7 @@ class SyncController
     private $eventModel;
     private $statModel;
     private $liveOddsModel;
+    private $trophyModel;
     private $apiService;
     private $geminiService;
 
@@ -64,6 +66,7 @@ class SyncController
         $this->eventModel = new FixtureEvent();
         $this->statModel = new FixtureStatistics();
         $this->liveOddsModel = new LiveOdds();
+        $this->trophyModel = new Trophy();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
     }
@@ -150,7 +153,8 @@ class SyncController
                 $this->fixtureModel->save($m);
 
                 $scoreChanged = ($oldFixture && ($oldFixture['score_home'] !== $m['goals']['home'] || $oldFixture['score_away'] !== $m['goals']['away']));
-                $needsUpdate = !$oldFixture || $scoreChanged || (time() - strtotime($oldFixture['last_detailed_update'] ?? '2000-01-01')) > 300;
+                $justFinished = ($oldFixture && $oldFixture['status_short'] !== 'FT' && $m['fixture']['status']['short'] === 'FT');
+                $needsUpdate = !$oldFixture || $scoreChanged || $justFinished || (time() - strtotime($oldFixture['last_detailed_update'] ?? '2000-01-01')) > 300;
 
                 if ($needsUpdate) {
                     echo "Updating details for fixture $fid...\n";
@@ -221,11 +225,14 @@ class SyncController
     {
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
-        $results = ['leagues' => 0, 'standings' => 0, 'fixtures' => 0, 'injuries' => 0, 'orphans_checked' => 0];
+        $results = ['leagues' => 0, 'standings' => 0, 'fixtures' => 0, 'injuries' => 0, 'orphans_checked' => 0, 'stats_updated' => 0];
 
         try {
             // Check for long-pending bets first
             $results['orphans_checked'] = $this->checkOrphanBets();
+
+            // Sync missing stats for recently finished matches
+            $results['stats_updated'] = $this->syncRecentFinishedStats();
 
             $db = Database::getInstance()->getConnection();
             $leaguesData = $this->apiService->fetchLeagues();
@@ -318,7 +325,7 @@ class SyncController
     {
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
-        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0];
+        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0, 'trophies' => 0];
 
         try {
             $db = Database::getInstance()->getConnection();
@@ -345,7 +352,21 @@ class SyncController
 
                         if ($this->coachModel->needsRefresh($tid)) {
                             $coData = $this->apiService->fetchCoach($tid);
-                            if (isset($coData['response'][0])) { $this->coachModel->save($coData['response'][0], $tid); $results['coaches']++; }
+                            if (isset($coData['response'][0])) {
+                                $coach = $coData['response'][0];
+                                $this->coachModel->save($coach, $tid);
+                                $results['coaches']++;
+
+                                // Sync trophies for the coach (highly relevant data)
+                                if (isset($coach['id']) && $this->trophyModel->needsRefresh($coach['id'], 'coach')) {
+                                    $trData = $this->apiService->fetchTrophies(['coach' => $coach['id']]);
+                                    if (isset($trData['response'])) {
+                                        $this->trophyModel->saveForCoach($coach['id'], $trData['response']);
+                                        $results['trophies']++;
+                                    }
+                                    usleep(200000);
+                                }
+                            }
                         }
 
                         $sqData = $this->apiService->fetchSquad($tid);
@@ -354,6 +375,17 @@ class SyncController
                                 $this->playerModel->save($p);
                                 $this->playerModel->linkToSquad($tid, $p, $p);
                                 $results['squads']++;
+
+                                // Sync trophies for players, but with a stricter limit to save credits
+                                // Only 1 player per squad or those missing trophies
+                                if ($results['trophies'] < 100 && $this->trophyModel->needsRefresh($p['id'], 'player', 90)) {
+                                    $trData = $this->apiService->fetchTrophies(['player' => $p['id']]);
+                                    if (isset($trData['response'])) {
+                                        $this->trophyModel->saveForPlayer($p['id'], $trData['response']);
+                                        $results['trophies']++;
+                                    }
+                                    usleep(200000);
+                                }
                             }
                         }
                         usleep(250000);
@@ -405,6 +437,37 @@ class SyncController
     }
 
     public function sync() { $this->syncLive(); }
+
+    private function syncRecentFinishedStats()
+    {
+        $db = Database::getInstance()->getConnection();
+        $today = date('Y-m-d');
+
+        // Trova i match finiti oggi che non hanno statistiche nel DB
+        $sql = "SELECT DISTINCT f.id FROM fixtures f
+                LEFT JOIN fixture_statistics s ON f.id = s.fixture_id
+                WHERE f.date > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                AND f.status_short IN ('FT', 'AET', 'PEN')
+                AND s.fixture_id IS NULL
+                LIMIT 30";
+
+        $fixtures = $db->query($sql)->fetchAll(PDO::FETCH_COLUMN);
+        $count = 0;
+
+        foreach ($fixtures as $fid) {
+            $statsData = $this->apiService->fetchFixtureStatistics($fid);
+            if (isset($statsData['response'])) {
+                foreach ($statsData['response'] as $st) {
+                    if (isset($st['team']['id'])) {
+                        $this->statModel->save($fid, $st['team']['id'], $st['statistics']);
+                        $count++;
+                    }
+                }
+            }
+            usleep(250000);
+        }
+        return $count;
+    }
 
     private function checkOrphanBets()
     {
