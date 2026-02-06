@@ -1,5 +1,5 @@
 <?php
-// fix_db.php - Scommetto DB Migration & Repair Script v8.3
+// fix_db.php - Scommetto DB Migration & Repair Script v8.4
 require_once __DIR__ . '/bootstrap.php';
 use App\Services\Database;
 
@@ -7,9 +7,9 @@ try {
   $db = Database::getInstance()->getConnection();
   $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-  echo "🚀 Inizio riparazione e migrazione database (v8.3)...\n";
+  echo "🚀 Inizio riparazione e migrazione database (v8.4)...\n";
 
-  // --- 1. CREAZIONE TABELLE BASE (Consolidate dal dump di produzione) ---
+  // --- 1. CREAZIONE TABELLE BASE (Consolidate) ---
 
   $tables = [
       "countries" => "CREATE TABLE IF NOT EXISTS `countries` (
@@ -73,13 +73,6 @@ try {
           `league_id` INT,
           `season` INT,
           PRIMARY KEY (`team_id`, `league_id`, `season`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-
-      "team_squads" => "CREATE TABLE IF NOT EXISTS `team_squads` (
-          `team_id` INT,
-          `player_id` INT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (`team_id`, `player_id`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
       "venues" => "CREATE TABLE IF NOT EXISTS `venues` (
@@ -263,9 +256,9 @@ try {
 
       "players" => "CREATE TABLE IF NOT EXISTS `players` (
           `id` INT PRIMARY KEY,
-          `name` VARCHAR(255),
-          `firstname` VARCHAR(255),
-          `lastname` VARCHAR(255),
+          `name` VARCHAR(100),
+          `firstname` VARCHAR(100),
+          `lastname` VARCHAR(100),
           `age` INT,
           `birth_date` DATE,
           `birth_place` VARCHAR(100),
@@ -291,15 +284,15 @@ try {
 
       "coaches" => "CREATE TABLE IF NOT EXISTS `coaches` (
           `id` INT PRIMARY KEY,
-          `name` VARCHAR(255),
-          `firstname` VARCHAR(255),
-          `lastname` VARCHAR(255),
+          `name` VARCHAR(100),
+          `firstname` VARCHAR(100),
+          `lastname` VARCHAR(100),
           `age` INT,
           `birth_date` DATE,
           `birth_country` VARCHAR(100),
           `nationality` VARCHAR(100),
-          `photo` VARCHAR(255),
           `team_id` INT,
+          `photo` VARCHAR(255),
           `career_json` LONGTEXT,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
@@ -333,6 +326,7 @@ try {
           `odds_json` LONGTEXT,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (`fixture_id`, `bookmaker_id`, `bet_id`)
+          -- INDEX (`fixture_id`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
       "live_odds" => "CREATE TABLE IF NOT EXISTS `live_odds` (
@@ -457,7 +451,7 @@ try {
       }
   }
 
-  echo "\n✨ Database sincronizzato con successo v8.3.\n";
+  echo "\n✨ Database sincronizzato con successo v8.4.\n";
 
 } catch (\Throwable $e) {
   echo "❌ Errore critico: " . $e->getMessage() . "\n";
