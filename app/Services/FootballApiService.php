@@ -198,8 +198,12 @@ class FootballApiService
 
     public function fetchLiveOdds($params = [])
     {
-        $queryString = http_build_query($params);
-        return $this->request("/odds/live?$queryString");
+        $endpoint = "/odds/live";
+        if (!empty($params)) {
+            $queryString = http_build_query($params);
+            $endpoint .= "?$queryString";
+        }
+        return $this->request($endpoint);
     }
 
     public function fetchLiveOddsBets()

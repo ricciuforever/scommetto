@@ -122,6 +122,7 @@ try {
           `score_home` INT,
           `score_away` INT,
           `venue_id` INT,
+          `last_detailed_update` TIMESTAMP NULL,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
