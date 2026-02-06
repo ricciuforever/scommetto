@@ -36,6 +36,15 @@ class SyncController
     private $analysisModel;
     private $fixtureModel;
     private $predictionModel;
+    private $leagueModel;
+    private $teamModel;
+    private $coachModel;
+    private $playerModel;
+    private $standingModel;
+    private $injuryModel;
+    private $eventModel;
+    private $statModel;
+    private $liveOddsModel;
     private $apiService;
     private $geminiService;
 
@@ -46,6 +55,15 @@ class SyncController
         $this->analysisModel = new Analysis();
         $this->fixtureModel = new Fixture();
         $this->predictionModel = new Prediction();
+        $this->leagueModel = new League();
+        $this->teamModel = new Team();
+        $this->coachModel = new Coach();
+        $this->playerModel = new Player();
+        $this->standingModel = new Standing();
+        $this->injuryModel = new FixtureInjury();
+        $this->eventModel = new FixtureEvent();
+        $this->statModel = new FixtureStatistics();
+        $this->liveOddsModel = new LiveOdds();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
     }
@@ -83,32 +101,27 @@ class SyncController
 
     /**
      * CRON LIVE - Ogni minuto
-     * Gestisce match live, eventi, statistiche, quote live e Gemini
      */
     public function syncLive()
     {
         $this->sendJsonHeader();
         try {
             $db = Database::getInstance()->getConnection();
-
-            // 1. Controlla se abbiamo match programmati oggi nel DB
             $today = date('Y-m-d');
             $hasToday = $db->query("SELECT COUNT(*) FROM fixtures WHERE DATE(date) = '$today'")->fetchColumn();
 
             if (!$hasToday) {
-                echo "DB empty for today. Forcing fixture sync for $today...\n";
-                $this->syncHourly(); // Chiama hourly per popolare oggi
+                echo "DB empty for today. Forcing fixture sync...\n";
+                $this->syncHourly();
             }
 
-            // 2. Logica "Stay Idle"
             if (!$this->fixtureModel->hasActiveOrUpcoming()) {
                 echo "Idle: No active or upcoming fixtures.\n";
                 return;
             }
 
-            $results = ['scanned' => 0, 'analyzed' => 0, 'bets_placed' => 0, 'settled' => 0];
+            $results = ['scanned' => 0, 'analyzed' => 0, 'bets_placed' => 0, 'settled' => 0, 'predictions' => 0];
 
-            // 3. Fetch ALL live matches (bulk call)
             $live = $this->apiService->fetchLiveMatches();
             if (isset($live['error'])) throw new \Exception($live['error']);
 
@@ -121,23 +134,16 @@ class SyncController
                 return;
             }
 
-            // 4. Fetch ALL live odds (bulk call)
             $liveOddsData = $this->apiService->fetchLiveOdds();
-            $liveOddsModel = new LiveOdds();
             if (isset($liveOddsData['response'])) {
                 foreach ($liveOddsData['response'] as $lo) {
-                    $liveOddsModel->save($lo['fixture']['id'], $lo);
+                    $this->liveOddsModel->save($lo['fixture']['id'], $lo);
                 }
             }
-
-            // 5. Aggiornamento selettivo dettagli (Events, Stats, Predictions)
-            $eventModel = new FixtureEvent();
-            $statModel = new FixtureStatistics();
 
             foreach ($matches as $m) {
                 $fid = $m['fixture']['id'];
                 $oldFixture = $this->fixtureModel->getById($fid);
-
                 $this->fixtureModel->save($m);
 
                 $scoreChanged = ($oldFixture && ($oldFixture['score_home'] !== $m['goals']['home'] || $oldFixture['score_away'] !== $m['goals']['away']));
@@ -148,41 +154,40 @@ class SyncController
 
                     $eventsData = $this->apiService->fetchFixtureEvents($fid);
                     if (isset($eventsData['response'])) {
-                        $eventModel->deleteByFixture($fid);
+                        $this->eventModel->deleteByFixture($fid);
                         foreach ($eventsData['response'] as $ev) {
-                            if (isset($ev['team']['id'])) $eventModel->save($fid, $ev);
+                            if (isset($ev['team']['id'])) $this->eventModel->save($fid, $ev);
                         }
                     }
 
                     $statsData = $this->apiService->fetchFixtureStatistics($fid);
                     if (isset($statsData['response'])) {
                         foreach ($statsData['response'] as $st) {
-                            if (isset($st['team']['id'])) $statModel->save($fid, $st['team']['id'], $st['statistics']);
+                            if (isset($st['team']['id'])) $this->statModel->save($fid, $st['team']['id'], $st['statistics']);
                         }
                     }
 
-                    // Predictions (1 call per hour for fixtures in progress)
-                    if ($this->predictionModel->needsRefresh($fid, 1)) {
-                        $predData = $this->apiService->fetchPredictions($fid);
-                        if (isset($predData['response'][0])) {
-                            $this->predictionModel->save($fid, $predData['response'][0]);
+                    if ($this->leagueModel->supportsPredictions($m['league']['id'] ?? 0)) {
+                        if ($this->predictionModel->needsRefresh($fid, 1)) {
+                            $predData = $this->apiService->fetchPredictions($fid);
+                            if (isset($predData['response'][0])) {
+                                $this->predictionModel->save($fid, $predData['response'][0]);
+                                $results['predictions']++;
+                            } else { echo "Fixture $fid: No predictions found.\n"; }
                         }
-                    }
+                    } else { echo "Fixture $fid: League coverage doesn't support predictions.\n"; }
 
                     $this->fixtureModel->updateDetailedTimestamp($fid);
                     usleep(250000);
                 }
             }
 
-            // 6. AUTO-SETTLE scommesse
             $betSettler = new \App\Services\BetSettler();
             $results['settled'] = $betSettler->settleFromLive($matches);
 
-            // 7. Analisi Gemini
             foreach ($matches as $m) {
                 $fid = $m['fixture']['id'];
                 $elapsed = $m['fixture']['status']['elapsed'] ?? 0;
-
                 if ($elapsed < 10 || $elapsed > 80) continue;
                 if ($this->betModel->isPending($fid)) continue;
                 if ($this->analysisModel->wasRecentlyChecked($fid)) continue;
@@ -201,16 +206,12 @@ class SyncController
                 }
                 break;
             }
-
             echo json_encode($results);
-        } catch (\Throwable $e) {
-            $this->handleException($e);
-        }
+        } catch (\Throwable $e) { $this->handleException($e); }
     }
 
     /**
      * CRON HOURLY - Ogni ora
-     * Leghe, Classifiche, Calendario del giorno, Infortuni
      */
     public function syncHourly()
     {
@@ -220,12 +221,10 @@ class SyncController
 
         try {
             $db = Database::getInstance()->getConnection();
-
-            $leagueModel = new League();
             $leaguesData = $this->apiService->fetchLeagues();
             if (isset($leaguesData['response'])) {
                 foreach ($leaguesData['response'] as $row) {
-                    $leagueModel->save($row);
+                    $this->leagueModel->save($row);
                     $results['leagues']++;
                 }
             }
@@ -241,16 +240,13 @@ class SyncController
 
             $activeLeagues = $db->query("SELECT DISTINCT league_id FROM fixtures WHERE DATE(date) = '$today'")->fetchAll(PDO::FETCH_COLUMN);
 
-            $standingModel = new Standing();
-            $injuryModel = new FixtureInjury();
-
             foreach ($activeLeagues as $lId) {
                 if (!$lId) continue;
                 $stData = $this->apiService->fetchStandings($lId, $season);
                 if (isset($stData['response'][0]['league']['standings'])) {
                     foreach ($stData['response'][0]['league']['standings'] as $group) {
                         foreach ($group as $row) {
-                            if (isset($row['team']['id'])) $standingModel->save($lId, $row);
+                            if (isset($row['team']['id'])) $this->standingModel->save($lId, $row);
                         }
                     }
                     $results['standings']++;
@@ -260,23 +256,19 @@ class SyncController
                 if (isset($injData['response'])) {
                     foreach ($injData['response'] as $row) {
                         if (isset($row['fixture']['id']) && isset($row['team']['id'])) {
-                            $injuryModel->save($row['fixture']['id'], $row);
+                            $this->injuryModel->save($row['fixture']['id'], $row);
                         }
                     }
                     $results['injuries']++;
                 }
                 usleep(250000);
             }
-
             echo json_encode($results);
-        } catch (\Throwable $e) {
-            $this->handleException($e);
-        }
+        } catch (\Throwable $e) { $this->handleException($e); }
     }
 
     /**
      * CRON 3 HOURS - Ogni 3 ore
-     * Quote Pre-match
      */
     public function sync3Hours()
     {
@@ -284,8 +276,6 @@ class SyncController
         $results = ['fixtures_processed' => 0];
         try {
             $db = Database::getInstance()->getConnection();
-            $oddsModel = new FixtureOdds();
-
             $fixtures = $db->query("SELECT id FROM fixtures
                                     WHERE date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 3 DAY)
                                     AND status_short = 'NS'
@@ -297,7 +287,7 @@ class SyncController
                     foreach ($oddsData['response'] as $row) {
                         foreach ($row['bookmakers'] as $bm) {
                             foreach ($bm['bets'] as $bet) {
-                                $oddsModel->save($fid, $bm['id'], $bet['id'], $bet['values']);
+                                (new FixtureOdds())->save($fid, $bm['id'], $bet['id'], $bet['values']);
                             }
                         }
                     }
@@ -306,14 +296,11 @@ class SyncController
                 usleep(250000);
             }
             echo json_encode($results);
-        } catch (\Throwable $e) {
-            $this->handleException($e);
-        }
+        } catch (\Throwable $e) { $this->handleException($e); }
     }
 
     /**
      * CRON DAILY - Ogni giorno
-     * Countries, Seasons, Team Info, Coaches, Squads, Marcatori, Predictions
      */
     public function syncDaily()
     {
@@ -323,7 +310,6 @@ class SyncController
 
         try {
             $db = Database::getInstance()->getConnection();
-
             $countryModel = new Country();
             $cData = $this->apiService->fetchCountries();
             if (isset($cData['response'])) {
@@ -336,29 +322,25 @@ class SyncController
 
             if (empty($relevantLeagues)) $relevantLeagues = Config::PREMIUM_LEAGUES;
 
-            $teamModel = new Team();
-            $coachModel = new Coach();
-            $playerModel = new Player();
-
             foreach ($relevantLeagues as $lId) {
                 if (!$lId) continue;
                 $tData = $this->apiService->fetchTeams(['league' => $lId, 'season' => $season]);
                 if (isset($tData['response'])) {
                     foreach ($tData['response'] as $row) {
-                        $teamModel->save($row);
+                        $this->teamModel->save($row);
                         $results['teams']++;
                         $tid = $row['team']['id'];
 
-                        if ($coachModel->needsRefresh($tid)) {
+                        if ($this->coachModel->needsRefresh($tid)) {
                             $coData = $this->apiService->fetchCoach($tid);
-                            if (isset($coData['response'][0])) { $coachModel->save($coData['response'][0], $tid); $results['coaches']++; }
+                            if (isset($coData['response'][0])) { $this->coachModel->save($coData['response'][0], $tid); $results['coaches']++; }
                         }
 
                         $sqData = $this->apiService->fetchSquad($tid);
                         if (isset($sqData['response'][0]['players'])) {
                             foreach ($sqData['response'][0]['players'] as $p) {
-                                $playerModel->save($p);
-                                $playerModel->linkToSquad($tid, $p, $p);
+                                $this->playerModel->save($p);
+                                $this->playerModel->linkToSquad($tid, $p, $p);
                                 $results['squads']++;
                             }
                         }
@@ -368,24 +350,22 @@ class SyncController
 
                 $this->syncLeagueTopStats($lId, $season);
 
-                // Predictions for upcoming fixtures in this league (1 call per day)
-                $upcomingFixtures = $db->query("SELECT id FROM fixtures WHERE league_id = $lId AND date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 2 DAY) AND status_short = 'NS' LIMIT 20")->fetchAll(PDO::FETCH_COLUMN);
-                foreach ($upcomingFixtures as $fid) {
-                    if ($this->predictionModel->needsRefresh($fid, 24)) {
-                        $predData = $this->apiService->fetchPredictions($fid);
-                        if (isset($predData['response'][0])) {
-                            $this->predictionModel->save($fid, $predData['response'][0]);
-                            $results['predictions']++;
+                if ($this->leagueModel->supportsPredictions($lId)) {
+                    $upcomingFixtures = $db->query("SELECT id FROM fixtures WHERE league_id = $lId AND date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 2 DAY) AND status_short = 'NS' LIMIT 20")->fetchAll(PDO::FETCH_COLUMN);
+                    foreach ($upcomingFixtures as $fid) {
+                        if ($this->predictionModel->needsRefresh($fid, 24)) {
+                            $predData = $this->apiService->fetchPredictions($fid);
+                            if (isset($predData['response'][0])) {
+                                $this->predictionModel->save($fid, $predData['response'][0]);
+                                $results['predictions']++;
+                            }
+                            usleep(250000);
                         }
-                        usleep(250000);
                     }
                 }
             }
-
             echo json_encode($results);
-        } catch (\Throwable $e) {
-            $this->handleException($e);
-        }
+        } catch (\Throwable $e) { $this->handleException($e); }
     }
 
     /**
@@ -403,15 +383,13 @@ class SyncController
                 if (!$pid) continue;
                 $pData = $this->apiService->fetchPlayers(['id' => $pid, 'season' => $this->getCurrentSeason()]);
                 if (isset($pData['response'][0])) {
-                    (new Player())->save($pData['response'][0]['player']);
+                    $this->playerModel->save($pData['response'][0]['player']);
                     $results['players_updated']++;
                 }
                 usleep(250000);
             }
             echo json_encode($results);
-        } catch (\Throwable $e) {
-            $this->handleException($e);
-        }
+        } catch (\Throwable $e) { $this->handleException($e); }
     }
 
     public function sync() { $this->syncLive(); }
@@ -444,22 +422,18 @@ class SyncController
                 'status' => 'success'
             ];
             echo json_encode($results);
-        } catch (\Throwable $e) {
-            $this->handleException($e);
-        }
+        } catch (\Throwable $e) { $this->handleException($e); }
     }
 
     public function syncLeagueOverview($leagueId, $season)
     {
-        $standingModel = new Standing();
-        $teamModel = new Team();
         $data = $this->apiService->fetchStandings($leagueId, $season);
         if (isset($data['response'][0]['league']['standings'])) {
             foreach ($data['response'][0]['league']['standings'] as $group) {
                 foreach ($group as $row) {
                     if (isset($row['team']['id'])) {
-                        $teamModel->save(['team' => $row['team']]);
-                        $standingModel->save($leagueId, $row);
+                        $this->teamModel->save(['team' => $row['team']]);
+                        $this->standingModel->save($leagueId, $row);
                     }
                 }
             }

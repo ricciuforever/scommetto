@@ -22,6 +22,14 @@ class League
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
+    public function supportsPredictions($id)
+    {
+        $league = $this->getById($id);
+        if (!$league || !$league['coverage_json']) return true; // Assume true if unknown
+        $coverage = json_decode($league['coverage_json'], true);
+        return $coverage['predictions'] ?? false;
+    }
+
     public function save($data)
     {
         $sql = "INSERT INTO leagues (id, name, type, logo, country_name, coverage_json) 
