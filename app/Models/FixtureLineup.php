@@ -43,20 +43,4 @@ class FixtureLineup
         $stmt->execute([$fixture_id, $team_id]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
-
-    public function getByFixture($fixture_id)
-    {
-        $sql = "SELECT fl.*, t.name as team_name, t.logo as team_logo
-                FROM fixture_lineups fl
-                JOIN teams t ON fl.team_id = t.id
-                WHERE fl.fixture_id = ?";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([$fixture_id]);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($rows as &$row) {
-            $row['start_xi_json'] = json_decode($row['start_xi_json'], true);
-            $row['substitutes_json'] = json_decode($row['substitutes_json'], true);
-        }
-        return $rows;
-    }
 }
