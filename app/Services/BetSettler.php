@@ -110,14 +110,16 @@ class BetSettler
         // 2. Full Time Markets
         else {
             if (!$isFinished) {
-                // Can we settle "Live" if the result is already guaranteed?
-                // e.g. "Over 0.5" and score is 1-0.
-                $potentialStatus = $this->calculateResult($market, $homeGoals, $awayGoals);
-                if ($potentialStatus === 'won') {
-                    $settlementStatus = 'won';
-                } else {
-                    return false; // Match not finished and not yet won
+                // Only settle if the result is guaranteed and cannot change
+                if (strpos($market, 'over') !== false) {
+                    preg_match('/over (\d+\.?\d*)/', $market, $matches);
+                    $threshold = (float)($matches[1] ?? 0.5);
+                    if (($homeGoals + $awayGoals) > $threshold) $settlementStatus = 'won';
+                } elseif ($market == 'gg' || strpos($market, 'both teams to score') !== false || strpos($market, 'goal/goal') !== false) {
+                    if ($homeGoals > 0 && $awayGoals > 0) $settlementStatus = 'won';
                 }
+
+                if ($settlementStatus === 'pending') return false;
             } else {
                 $settlementStatus = $this->calculateResult($market, $homeGoals, $awayGoals);
             }
