@@ -133,7 +133,7 @@ class SyncController
         }
     }
 
-    public function deepSync($leagueId = 135, $season = 2024)
+    public function deepSync($leagueId = 135, $season = 2026)
     {
         $this->sendJsonHeader();
         try {
@@ -375,7 +375,7 @@ class SyncController
     {
         $log = [];
         try {
-            $season = 2024;
+            $season = 2026;
 
             // Task rotation based on minutes of the hour
             $minute = (int)date('i');
