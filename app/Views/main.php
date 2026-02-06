@@ -34,7 +34,7 @@
 </head>
 
 <body
-    class="bg-slate-50 dark:bg-darkbg text-slate-900 dark:text-slate-100 min-h-screen transition-colors duration-300 font-sans">
+    class="bg-slate-50 dark:bg-darkbg text-slate-900 dark:text-slate-100 min-h-screen transition-colors duration-300 font-sans flex">
 
     <div class="fixed inset-0 pointer-events-none overflow-hidden -z-10">
         <div class="absolute -top-[10%] -right-[10%] w-[40%] h-[40%] bg-accent/10 blur-[120px] rounded-full"></div>
@@ -42,9 +42,9 @@
         </div>
     </div>
 
-    <header
-        class="sticky top-0 z-50 glass border-b border-white/10 px-6 py-4 flex justify-between items-center mb-8 text-white">
-        <div class="flex items-center gap-3">
+    <!-- Sidebar Desktop -->
+    <aside class="hidden lg:flex flex-col w-64 h-screen sticky top-0 border-r border-white/10 glass z-50">
+        <div class="p-6 flex items-center gap-3">
             <div class="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/20">
                 <i data-lucide="layout-dashboard" class="text-white w-6 h-6"></i>
             </div>
@@ -52,143 +52,136 @@
                 Scommetto<span class="text-accent">.AI</span>
             </div>
         </div>
-        <div class="flex items-center gap-4">
-            <div class="hidden md:flex flex-col items-end">
+
+        <nav class="flex-1 px-4 py-4 space-y-2">
+            <a href="#dashboard" class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm active-nav" data-view="dashboard">
+                <i data-lucide="home" class="w-5 h-5"></i> Dashboard
+            </a>
+            <a href="#leagues" class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm" data-view="leagues">
+                <i data-lucide="trophy" class="w-5 h-5"></i> Competizioni
+            </a>
+            <a href="#predictions" class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm" data-view="predictions">
+                <i data-lucide="brain-circuit" class="w-5 h-5"></i> Pronostici
+            </a>
+            <a href="#tracker" class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm" data-view="tracker">
+                <i data-lucide="line-chart" class="w-5 h-5"></i> Tracker
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-white/10">
+            <div class="flex flex-col gap-1 p-4 rounded-2xl bg-white/5 border border-white/5">
                 <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">API Status</span>
-                <div class="text-sm font-black"><span id="usage-val" class="text-accent">...</span> / <span id="limit-val">7500</span> <span
-                        class="text-slate-500">Credits</span></div>
-            </div>
-            <button id="theme-toggle"
-                class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all border border-white/5">
-                <i data-lucide="sun" class="hidden dark:block w-5 h-5 text-yellow-400"></i>
-                <i data-lucide="moon" class="block dark:hidden w-5 h-5 text-slate-600"></i>
-            </button>
-            <div
-                class="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center relative">
-                <i data-lucide="bell" class="w-5 h-5 text-accent"></i>
-                <span
-                    class="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full ring-2 ring-darkbg animate-pulse"></span>
+                <div class="text-sm font-black"><span id="usage-val" class="text-accent">...</span> / <span id="limit-val">75000</span></div>
             </div>
         </div>
-    </header>
+    </aside>
 
-    <main class="max-w-7xl mx-auto p-6">
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-10">
-            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i data-lucide="wallet" class="w-10 h-10"></i>
+    <div class="flex-1 flex flex-col min-h-screen">
+        <!-- Header Mobile / Top Bar -->
+        <header class="sticky top-0 z-40 glass border-b border-white/10 px-6 py-4 flex justify-between items-center lg:mb-0">
+            <div class="flex lg:hidden items-center gap-3">
+                <div class="text-xl font-black tracking-tighter uppercase italic">
+                    Scommetto<span class="text-accent">.AI</span>
                 </div>
-                <span class="block text-2xl font-black mb-1" id="portfolio-val">100€</span>
-                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Portafoglio</span>
             </div>
-            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i data-lucide="swords" class="w-10 h-10"></i>
+            <div class="hidden lg:block">
+                <!-- Breadcrumbs or Search could go here -->
+                <div id="view-title" class="text-xl font-black tracking-tight uppercase tracking-widest text-slate-500 text-[10px]">Dashboard</div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="theme-toggle"
+                    class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all border border-white/5">
+                    <i data-lucide="sun" class="hidden dark:block w-5 h-5 text-yellow-400"></i>
+                    <i data-lucide="moon" class="block dark:hidden w-5 h-5 text-slate-600"></i>
+                </button>
+                <div class="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center relative">
+                    <i data-lucide="bell" class="w-5 h-5 text-accent"></i>
+                    <span class="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full ring-2 ring-darkbg animate-pulse"></span>
                 </div>
-                <span class="block text-2xl font-black mb-1" id="win-loss-count">0W - 0L</span>
-                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Performance</span>
             </div>
-            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i data-lucide="trending-up" class="w-10 h-10"></i>
-                </div>
-                <span class="block text-2xl font-black mb-1" id="profit-val">+0.00€</span>
-                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Profitto Netto</span>
-            </div>
-            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i data-lucide="radio" class="w-10 h-10 text-danger"></i>
-                </div>
-                <span class="block text-2xl font-black mb-1" id="active-matches-count">0</span>
-                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Live Now</span>
-            </div>
-            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i data-lucide="timer" class="w-10 h-10 text-warning"></i>
-                </div>
-                <span class="block text-2xl font-black mb-1" id="pending-bets-count">0</span>
-                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">In Sospeso</span>
-            </div>
-            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-                <div
-                    class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity text-success">
-                    <i data-lucide="bar-chart-3" class="w-10 h-10"></i>
-                </div>
-                <span class="block text-2xl font-black mb-1 text-success" id="roi-val">0%</span>
-                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">ROI Stimato</span>
-            </div>
-        </div>
+        </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-10">
-            <div class="lg:col-span-3">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-                    <h2 class="text-2xl font-black tracking-tight flex items-center gap-3">
-                        <span class="w-2 h-8 bg-accent rounded-full"></span>
-                        Eventi in Diretta
-                    </h2>
-                    <div class="relative min-w-[240px]">
-                        <select id="league-filters" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-300 appearance-none focus:outline-none focus:border-accent transition-all cursor-pointer">
-                            <option value="all">Tutti i Campionati</option>
-                        </select>
-                        <div class="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
-                        </div>
-                    </div>
-                </div>
-                <div id="live-matches-container" class="space-y-6">
-                </div>
+        <!-- Main Content Area -->
+        <main id="main-content" class="flex-1 p-6 pb-24 lg:pb-6 max-w-7xl mx-auto w-full">
+            <!-- Loader -->
+            <div id="view-loader" class="flex items-center justify-center h-full py-20 hidden">
+                <i data-lucide="loader-2" class="w-10 h-10 text-accent rotator"></i>
             </div>
-            <aside class="space-y-8">
-                <div>
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-xl font-black tracking-tight">Attività Recente</h2>
-                    </div>
-                    <div class="glass rounded-[32px] border-white/5 divide-y divide-white/5 overflow-hidden">
-                        <div id="history-container"></div>
-                    </div>
-                </div>
-            </aside>
-        </div>
-    </main>
+            <!-- Dynamic Content -->
+            <div id="view-container"></div>
+        </main>
+    </div>
 
+    <!-- Bottom Navigation Mobile -->
+    <nav class="lg:hidden fixed bottom-0 left-0 right-0 glass border-t border-white/10 px-6 py-3 flex justify-between items-center z-50">
+        <a href="#dashboard" class="flex flex-col items-center gap-1 text-accent" data-view="dashboard">
+            <i data-lucide="home" class="w-6 h-6"></i>
+            <span class="text-[10px] font-bold uppercase tracking-widest">Home</span>
+        </a>
+        <a href="#leagues" class="flex flex-col items-center gap-1 text-slate-500" data-view="leagues">
+            <i data-lucide="trophy" class="w-6 h-6"></i>
+            <span class="text-[10px] font-bold uppercase tracking-widest">Leghe</span>
+        </a>
+        <a href="#predictions" class="flex flex-col items-center gap-1 text-slate-500" data-view="predictions">
+            <i data-lucide="brain-circuit" class="w-6 h-6"></i>
+            <span class="text-[10px] font-bold uppercase tracking-widest">AI Tips</span>
+        </a>
+        <a href="#tracker" class="flex flex-col items-center gap-1 text-slate-500" data-view="tracker">
+            <i data-lucide="line-chart" class="w-6 h-6"></i>
+            <span class="text-[10px] font-bold uppercase tracking-widest">Tracker</span>
+        </a>
+    </nav>
+
+    <!-- Analysis Modal (Global) -->
     <div id="analysis-modal"
         class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
-        <div
-            class="bg-slate-900 w-full max-w-2xl rounded-[40px] border border-white/10 shadow-2xl overflow-hidden relative">
+        <div class="bg-slate-900 w-full max-w-2xl rounded-[40px] border border-white/10 shadow-2xl overflow-hidden relative">
             <button onclick="closeModal()"
                 class="absolute top-6 right-6 w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all text-white">
                 <i data-lucide="x" class="w-6 h-6"></i>
             </button>
             <div class="p-10">
-                <h3 id="modal-title" class="text-3xl font-black mb-8 tracking-tight text-white">Analisi Prossima Giocata
-                </h3>
-                <div id="modal-body" class="mb-10 text-slate-400 leading-relaxed font-medium">
+                <h3 id="modal-title" class="text-3xl font-black mb-8 tracking-tight text-white uppercase italic">Scommetto<span class="text-accent">.AI</span> Intelligence</h3>
+                <div id="modal-body" class="mb-10 text-slate-400 leading-relaxed font-medium text-sm">
                     Auto-Generating intelligence...
                 </div>
-                <div class="flex justify-end items-center gap-4">
-                    <button onclick="closeModal()"
-                        class="px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Chiudi</button>
-                    <div id="confidence-indicator"
-                        class="hidden flex items-center gap-3 bg-accent/10 px-5 py-3 rounded-2xl border border-accent/20">
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-6">
+                    <div id="confidence-indicator" class="hidden flex items-center gap-3 bg-accent/10 px-5 py-3 rounded-2xl border border-accent/20 w-full sm:w-auto">
                         <div class="flex flex-col">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">AI
-                                Confidence</span>
+                            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">AI Confidence</span>
                             <span id="confidence-val" class="text-lg font-black text-accent leading-none">90%</span>
                         </div>
-                        <div class="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
-                            <div id="confidence-bar" class="h-full bg-accent transition-all duration-1000"
-                                style="width: 90%"></div>
+                        <div class="flex-1 h-2 bg-white/10 rounded-full overflow-hidden min-w-[80px]">
+                            <div id="confidence-bar" class="h-full bg-accent transition-all duration-1000" style="width: 90%"></div>
                         </div>
                     </div>
-                    <button id="place-bet-btn"
-                        class="hidden bg-accent hover:bg-sky-500 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-accent/30 hover:scale-105">Conferma
-                        Giocata</button>
+                    <div class="flex items-center gap-4 w-full sm:w-auto justify-end">
+                        <button onclick="closeModal()" class="px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Chiudi</button>
+                        <button id="place-bet-btn" class="hidden bg-accent hover:bg-sky-500 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-accent/30 hover:scale-105">Conferma Giocata</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <style>
+        .active-nav {
+            @apply bg-accent text-white shadow-lg shadow-accent/20 !important;
+        }
+        .nav-link:hover:not(.active-nav) {
+            @apply translate-x-1;
+        }
+        .glass {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+        }
+    </style>
+
     <script src="/assets/js/app.js"></script>
+    <script>
+        // Init Lucide
+        lucide.createIcons();
+    </script>
 </body>
 
 </html>
