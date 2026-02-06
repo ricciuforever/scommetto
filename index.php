@@ -44,7 +44,7 @@ try {
         http_response_code(404);
         echo json_encode(['error' => 'Not Found', 'path' => $path]);
     }
-} catch (\Exception $e) {
+} catch (\Throwable $e) {
     header('Content-Type: application/json');
     echo json_encode([
         'error' => 'Server Error',
