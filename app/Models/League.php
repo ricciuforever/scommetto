@@ -25,7 +25,8 @@ class League
     public function supportsPredictions($id)
     {
         $league = $this->getById($id);
-        if (!$league || !$league['coverage_json']) return true; // Assume true if unknown
+        if (!$league || !$league['coverage_json'])
+            return true; // Assume true if unknown
         $coverage = json_decode($league['coverage_json'], true);
         return $coverage['predictions'] ?? false;
     }
@@ -33,11 +34,14 @@ class League
     public function isBettable($id)
     {
         // Premium leagues are always bettable
-        if (in_array($id, \App\Config\Config::PREMIUM_LEAGUES)) return true;
+        if (in_array($id, \App\Config\Config::PREMIUM_LEAGUES))
+            return true;
 
         $league = $this->getById($id);
-        if (!$league) return false;
-        if (!$league['coverage_json']) return false;
+        if (!$league)
+            return false;
+        if (!$league['coverage_json'])
+            return false;
 
         $coverage = json_decode($league['coverage_json'], true);
         return $coverage['odds'] ?? false;
@@ -84,6 +88,12 @@ class League
                 $s['end'] ?? null
             ]);
         }
+    }
+
+    public function getAll()
+    {
+        $stmt = $this->db->query("SELECT * FROM leagues ORDER BY country_name ASC, name ASC");
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function needsRefresh($hours = 24)
