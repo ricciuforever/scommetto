@@ -15,6 +15,19 @@ class TopStats
         $this->db = Database::getInstance()->getConnection();
     }
 
+    public function needsRefresh($leagueId, $season, $type, $hours = 24)
+    {
+        $stmt = $this->db->prepare("SELECT last_updated FROM top_stats WHERE league_id = ? AND season = ? AND type = ?");
+        $stmt->execute([$leagueId, $season, $type]);
+        $row = $stmt->fetch();
+
+        if (!$row)
+            return true;
+
+        $lastUpdated = strtotime($row['last_updated']);
+        return (time() - $lastUpdated) > ($hours * 3600);
+    }
+
     public function save($leagueId, $season, $type, $statsData)
     {
         $sql = "INSERT INTO top_stats (league_id, season, type, stats_json) 
