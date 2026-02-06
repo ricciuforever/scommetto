@@ -27,6 +27,8 @@ use App\Models\Trophy;
 use App\Models\Transfer;
 use App\Models\Sidelined;
 use App\Models\PlayerStatistics;
+use App\Models\PlayerSeason;
+use App\Models\FixturePlayerStatistics;
 use App\Services\FootballApiService;
 use App\Services\GeminiService;
 use App\Config\Config;
@@ -53,6 +55,8 @@ class SyncController
     private $transferModel;
     private $sidelinedModel;
     private $playerStatModel;
+    private $playerSeasonModel;
+    private $fixturePlayerStatModel;
     private $apiService;
     private $geminiService;
 
@@ -76,6 +80,8 @@ class SyncController
         $this->transferModel = new Transfer();
         $this->sidelinedModel = new Sidelined();
         $this->playerStatModel = new PlayerStatistics();
+        $this->playerSeasonModel = new PlayerSeason();
+        $this->fixturePlayerStatModel = new FixturePlayerStatistics();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
     }
@@ -180,6 +186,18 @@ class SyncController
                     if (isset($statsData['response'])) {
                         foreach ($statsData['response'] as $st) {
                             if (isset($st['team']['id'])) $this->statModel->save($fid, $st['team']['id'], $st['statistics']);
+                        }
+                    }
+
+                    if ($m['fixture']['status']['short'] === 'FT') {
+                        $pStatsData = $this->apiService->fetchFixturePlayerStatistics($fid);
+                        if (isset($pStatsData['response'])) {
+                            foreach ($pStatsData['response'] as $teamRow) {
+                                $tid = $teamRow['team']['id'];
+                                foreach ($teamRow['players'] as $pRow) {
+                                    $this->fixturePlayerStatModel->save($fid, $tid, $pRow['player']['id'], $pRow['statistics']);
+                                }
+                            }
                         }
                     }
 
@@ -334,10 +352,19 @@ class SyncController
     {
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
-        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0, 'trophies' => 0, 'transfers' => 0, 'sidelined' => 0, 'player_stats' => 0];
+        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0, 'trophies' => 0, 'transfers' => 0, 'sidelined' => 0, 'player_stats' => 0, 'player_seasons' => 0];
 
         try {
             $db = Database::getInstance()->getConnection();
+
+            $psData = $this->apiService->fetchSeasons();
+            if (isset($psData['response'])) {
+                foreach ($psData['response'] as $yr) {
+                    $this->playerSeasonModel->save($yr);
+                    $results['player_seasons']++;
+                }
+            }
+
             $countryModel = new Country();
             $cData = $this->apiService->fetchCountries();
             if (isset($cData['response'])) {
@@ -519,6 +546,16 @@ class SyncController
                     if (isset($st['team']['id'])) {
                         $this->statModel->save($fid, $st['team']['id'], $st['statistics']);
                         $count++;
+                    }
+                }
+            }
+
+            $pStatsData = $this->apiService->fetchFixturePlayerStatistics($fid);
+            if (isset($pStatsData['response'])) {
+                foreach ($pStatsData['response'] as $teamRow) {
+                    $tid = $teamRow['team']['id'];
+                    foreach ($teamRow['players'] as $pRow) {
+                        $this->fixturePlayerStatModel->save($fid, $tid, $pRow['player']['id'], $pRow['statistics']);
                     }
                 }
             }
