@@ -130,7 +130,10 @@ class SyncController
             $results['scanned'] = count($matches);
 
             if (empty($matches)) {
-                echo "No matches currently live according to API.\n";
+                echo "No matches currently live according to API. Checking DB for settlement...\n";
+                $betSettler = new \App\Services\BetSettler();
+                $results['settled'] = $betSettler->settleFromDatabase();
+                echo json_encode($results);
                 return;
             }
 
@@ -184,6 +187,7 @@ class SyncController
 
             $betSettler = new \App\Services\BetSettler();
             $results['settled'] = $betSettler->settleFromLive($matches);
+            $results['settled'] += $betSettler->settleFromDatabase();
 
             foreach ($matches as $m) {
                 $fid = $m['fixture']['id'];
@@ -217,9 +221,12 @@ class SyncController
     {
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
-        $results = ['leagues' => 0, 'standings' => 0, 'fixtures' => 0, 'injuries' => 0];
+        $results = ['leagues' => 0, 'standings' => 0, 'fixtures' => 0, 'injuries' => 0, 'orphans_checked' => 0];
 
         try {
+            // Check for long-pending bets first
+            $results['orphans_checked'] = $this->checkOrphanBets();
+
             $db = Database::getInstance()->getConnection();
             $leaguesData = $this->apiService->fetchLeagues();
             if (isset($leaguesData['response'])) {
@@ -263,6 +270,11 @@ class SyncController
                 }
                 usleep(250000);
             }
+
+            // Settle bets after updating standings and fixtures
+            $betSettler = new \App\Services\BetSettler();
+            $results['settled'] = $betSettler->settleFromDatabase();
+
             echo json_encode($results);
         } catch (\Throwable $e) { $this->handleException($e); }
     }
@@ -393,6 +405,32 @@ class SyncController
     }
 
     public function sync() { $this->syncLive(); }
+
+    private function checkOrphanBets()
+    {
+        $pending = array_filter($this->betModel->getAll(), function ($b) {
+            // Pending for more than 2 hours
+            return $b['status'] === 'pending' && (time() - strtotime($b['timestamp'])) > 7200;
+        });
+
+        if (empty($pending)) return 0;
+
+        $count = 0;
+        $betSettler = new \App\Services\BetSettler();
+
+        foreach ($pending as $bet) {
+            $fid = $bet['fixture_id'];
+            $data = $this->apiService->fetchFixtureDetails($fid);
+            if (isset($data['response'][0])) {
+                $this->fixtureModel->save($data['response'][0]);
+                if ($betSettler->processSettlement($bet, $data['response'][0])) {
+                    $count++;
+                }
+            }
+            usleep(250000);
+        }
+        return $count;
+    }
 
     public function syncLeagueTopStats($leagueId, $season)
     {

@@ -121,6 +121,8 @@ try {
           `status` VARCHAR(20),
           `score_home` INT,
           `score_away` INT,
+          `score_home_ht` INT,
+          `score_away_ht` INT,
           `venue_id` INT,
           `last_detailed_update` TIMESTAMP NULL,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -412,7 +414,9 @@ try {
           "ALTER TABLE fixtures ADD COLUMN status VARCHAR(20) AFTER elapsed",
           "ALTER TABLE fixtures ADD COLUMN score_home INT AFTER status",
           "ALTER TABLE fixtures ADD COLUMN score_away INT AFTER score_home",
-          "ALTER TABLE fixtures ADD COLUMN venue_id INT AFTER score_away",
+          "ALTER TABLE fixtures ADD COLUMN score_home_ht INT AFTER score_away",
+          "ALTER TABLE fixtures ADD COLUMN score_away_ht INT AFTER score_home_ht",
+          "ALTER TABLE fixtures ADD COLUMN venue_id INT AFTER score_away_ht",
           "ALTER TABLE fixtures ADD COLUMN last_detailed_update TIMESTAMP NULL"
       ],
       "standings" => [
