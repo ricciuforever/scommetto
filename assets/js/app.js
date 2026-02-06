@@ -1,13 +1,11 @@
 // assets/js/app.js
 
-// Global State
 let liveMatches = [];
 let matchStates = {};
 let pinnedMatches = new Set();
 const notificationSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
 notificationSound.volume = 0.5;
-let currentView = 'dashboard';
-let historyData = [];
+let selectedLeague = 'all';
 
 // UI Elements (Initialized in init)
 let viewContainer, viewTitle, viewLoader;
@@ -371,8 +369,9 @@ async function renderLeagueTopStats(leagueId) {
     const container = document.getElementById('league-top-stats');
     if (!container) return;
     try {
-        const res = await fetch(`/api/leagues/stats/${leagueId}`);
+        const res = await fetch('/api/live');
         const data = await res.json();
+        const newMatches = data.response || [];
 
         const categories = [
             { title: 'Marcatori', key: 'scorers', icon: 'zap' },
@@ -1282,17 +1281,18 @@ async function init() {
     }, 60000);
 }
 
-// Theme Toggle
-const themeToggle = document.getElementById('theme-toggle');
-const htmlElement = document.documentElement;
 if (themeToggle) {
-    themeToggle.onclick = () => {
-        const isDark = htmlElement.classList.toggle('dark');
-        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    themeToggle.addEventListener('click', () => {
+        if (htmlElement.classList.contains('dark')) {
+            htmlElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+        } else {
+            htmlElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        }
         if (window.lucide) lucide.createIcons();
-    };
+    });
 }
-if (localStorage.getItem('theme') === 'light') htmlElement.classList.remove('dark');
 
 // Start
 if (document.readyState === 'loading') {

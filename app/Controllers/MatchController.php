@@ -12,10 +12,6 @@ use App\Models\Standing;
 use App\Models\Team;
 use App\Models\Coach;
 use App\Models\Player;
-use App\Models\League;
-use App\Models\Fixture;
-use App\Models\Prediction as PredictionModel;
-use App\Models\Analysis as AnalysisModel;
 
 class MatchController
 {
@@ -230,19 +226,10 @@ class MatchController
             $teamModel = new Team();
             $coachModel = new Coach();
             $playerModel = new Player();
-            $statsModel = new \App\Models\TeamStats();
 
             $team = $teamModel->getById((int) $teamId);
             $coach = $coachModel->getByTeam((int) $teamId);
             $squad = $playerModel->getByTeam((int) $teamId);
-
-            // Get stats for the most recent league/season
-            $db = \App\Services\Database::getInstance()->getConnection();
-            $latest = $db->query("SELECT league_id, season FROM team_stats WHERE team_id = " . (int)$teamId . " ORDER BY season DESC LIMIT 1")->fetch();
-            $stats = null;
-            if ($latest) {
-                $stats = $statsModel->get((int)$teamId, (int)$latest['league_id'], (int)$latest['season']);
-            }
 
             if (!$team) {
                 echo json_encode(['error' => 'Dati squadra non presenti nel database. Attendi il cron sync.']);
@@ -252,8 +239,7 @@ class MatchController
             echo json_encode([
                 'team' => $team,
                 'coach' => $coach,
-                'squad' => $squad,
-                'statistics' => $stats
+                'squad' => $squad
             ]);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
@@ -268,61 +254,13 @@ class MatchController
         header('Content-Type: application/json');
         try {
             $playerModel = new Player();
-            $statsModel = new \App\Models\PlayerStatistics();
-            $trophyModel = new \App\Models\Trophy();
-            $transferModel = new \App\Models\Transfer();
-
             $player = $playerModel->getById((int) $playerId);
-            $season = Config::getCurrentSeason();
-            $stats = $statsModel->get((int)$playerId, $season);
-            $trophies = $trophyModel->getByPlayer((int)$playerId);
-            $transfers = $transferModel->getByPlayer((int)$playerId);
 
             if (!$player) {
                 echo json_encode(['error' => 'Dettagli giocatore non presenti nel database.']);
                 return;
             }
-
-            echo json_encode([
-                'player' => $player,
-                'statistics' => $stats,
-                'trophies' => $trophies,
-                'transfers' => $transfers
-            ]);
-        } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
-        }
-    }
-
-    public function getLeagues()
-    {
-        header('Content-Type: application/json');
-        try {
-            $leagueModel = new League();
-            echo json_encode($leagueModel->getAll());
-        } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
-        }
-    }
-
-    public function getPredictionsAll()
-    {
-        header('Content-Type: application/json');
-        try {
-            $db = \App\Services\Database::getInstance()->getConnection();
-            $sql = "SELECT p.*, f.date, f.status_short,
-                           t1.name as home_name, t1.logo as home_logo,
-                           t2.name as away_name, t2.logo as away_logo,
-                           l.name as league_name
-                    FROM predictions p
-                    JOIN fixtures f ON p.fixture_id = f.id
-                    JOIN teams t1 ON f.team_home_id = t1.id
-                    JOIN teams t2 ON f.team_away_id = t2.id
-                    JOIN leagues l ON f.league_id = l.id
-                    WHERE f.date >= NOW()
-                    ORDER BY f.date ASC LIMIT 20";
-            $data = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
-            echo json_encode($data);
+            echo json_encode($player);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
