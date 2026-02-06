@@ -41,11 +41,11 @@ class Standing
         $stmt->execute([$leagueId]);
         $row = $stmt->fetch();
 
-        if (!$row['last'])
+        if (!$row || !$row['last'])
             return true;
 
         $lastUpdated = strtotime($row['last']);
-        return (time() - $lastUpdated) > ($hours * 60 * 60);
+        return (time() - $lastUpdated) > ($hours * 3600);
     }
 
     public function save($leagueId, $teamData)

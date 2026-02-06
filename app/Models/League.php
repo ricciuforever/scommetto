@@ -40,7 +40,7 @@ class League
             'name' => $data['league']['name'],
             'type' => $data['league']['type'] ?? 'League',
             'logo' => $data['league']['logo'] ?? null,
-            'country' => $data['country']['name'] ?? null,
+            'country' => $data['country']['name'] ?? $data['league']['country'] ?? null,
             'coverage' => json_encode($data['seasons'][0]['coverage'] ?? [])
         ]);
 
@@ -69,7 +69,7 @@ class League
     {
         $stmt = $this->db->query("SELECT MAX(last_updated) as last FROM leagues");
         $row = $stmt->fetch();
-        if (!$row['last'])
+        if (!$row || !$row['last'])
             return true;
         return (time() - strtotime($row['last'])) > ($hours * 3600);
     }

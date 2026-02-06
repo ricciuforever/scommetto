@@ -57,10 +57,8 @@ class Fixture
                 ORDER BY f.date DESC LIMIT ?";
 
         $stmt = $this->db->prepare($sql);
-        $stmt->bindValue(1, $team_id, PDO::PARAM_INT);
-        $stmt->bindValue(2, $team_id, PDO::PARAM_INT);
-        $stmt->bindValue(3, (int) $limit, PDO::PARAM_INT);
-        $stmt->execute();
+        // Using execute with array is often more reliable than bindValue for positional params
+        $stmt->execute([$team_id, $team_id, (int)$limit]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
