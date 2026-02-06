@@ -150,7 +150,8 @@ class SyncController
                 $this->fixtureModel->save($m);
 
                 $scoreChanged = ($oldFixture && ($oldFixture['score_home'] !== $m['goals']['home'] || $oldFixture['score_away'] !== $m['goals']['away']));
-                $needsUpdate = !$oldFixture || $scoreChanged || (time() - strtotime($oldFixture['last_detailed_update'] ?? '2000-01-01')) > 300;
+                $justFinished = ($oldFixture && $oldFixture['status_short'] !== 'FT' && $m['fixture']['status']['short'] === 'FT');
+                $needsUpdate = !$oldFixture || $scoreChanged || $justFinished || (time() - strtotime($oldFixture['last_detailed_update'] ?? '2000-01-01')) > 300;
 
                 if ($needsUpdate) {
                     echo "Updating details for fixture $fid...\n";
@@ -221,11 +222,14 @@ class SyncController
     {
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
-        $results = ['leagues' => 0, 'standings' => 0, 'fixtures' => 0, 'injuries' => 0, 'orphans_checked' => 0];
+        $results = ['leagues' => 0, 'standings' => 0, 'fixtures' => 0, 'injuries' => 0, 'orphans_checked' => 0, 'stats_updated' => 0];
 
         try {
             // Check for long-pending bets first
             $results['orphans_checked'] = $this->checkOrphanBets();
+
+            // Sync missing stats for recently finished matches
+            $results['stats_updated'] = $this->syncRecentFinishedStats();
 
             $db = Database::getInstance()->getConnection();
             $leaguesData = $this->apiService->fetchLeagues();
@@ -405,6 +409,37 @@ class SyncController
     }
 
     public function sync() { $this->syncLive(); }
+
+    private function syncRecentFinishedStats()
+    {
+        $db = Database::getInstance()->getConnection();
+        $today = date('Y-m-d');
+
+        // Trova i match finiti oggi che non hanno statistiche nel DB
+        $sql = "SELECT DISTINCT f.id FROM fixtures f
+                LEFT JOIN fixture_statistics s ON f.id = s.fixture_id
+                WHERE f.date > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                AND f.status_short IN ('FT', 'AET', 'PEN')
+                AND s.fixture_id IS NULL
+                LIMIT 30";
+
+        $fixtures = $db->query($sql)->fetchAll(PDO::FETCH_COLUMN);
+        $count = 0;
+
+        foreach ($fixtures as $fid) {
+            $statsData = $this->apiService->fetchFixtureStatistics($fid);
+            if (isset($statsData['response'])) {
+                foreach ($statsData['response'] as $st) {
+                    if (isset($st['team']['id'])) {
+                        $this->statModel->save($fid, $st['team']['id'], $st['statistics']);
+                        $count++;
+                    }
+                }
+            }
+            usleep(250000);
+        }
+        return $count;
+    }
 
     private function checkOrphanBets()
     {
