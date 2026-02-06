@@ -31,6 +31,8 @@ use App\Models\PlayerSeason;
 use App\Models\FixturePlayerStatistics;
 use App\Models\Bookmaker;
 use App\Models\BetType;
+use App\Models\Venue;
+use App\Models\TeamStats;
 use App\Services\FootballApiService;
 use App\Services\GeminiService;
 use App\Config\Config;
@@ -61,6 +63,10 @@ class SyncController
     private $fixturePlayerStatModel;
     private $bookmakerModel;
     private $betTypeModel;
+    private $countryModel;
+    private $h2hModel;
+    private $teamStatsModel;
+    private $venueModel;
     private $apiService;
     private $geminiService;
 
@@ -88,6 +94,10 @@ class SyncController
         $this->fixturePlayerStatModel = new FixturePlayerStatistics();
         $this->bookmakerModel = new Bookmaker();
         $this->betTypeModel = new BetType();
+        $this->countryModel = new Country();
+        $this->h2hModel = new H2H();
+        $this->teamStatsModel = new TeamStats();
+        $this->venueModel = new Venue();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
     }
@@ -173,13 +183,15 @@ class SyncController
                 $oldFixture = $this->fixtureModel->getById($fid);
                 $this->fixtureModel->save($m);
 
+                // Optimization: Update details only if score changed, just finished, or every 10 minutes
                 $scoreChanged = ($oldFixture && ($oldFixture['score_home'] !== $m['goals']['home'] || $oldFixture['score_away'] !== $m['goals']['away']));
-                $justFinished = ($oldFixture && $oldFixture['status_short'] !== 'FT' && $m['fixture']['status']['short'] === 'FT');
-                $needsUpdate = !$oldFixture || $scoreChanged || $justFinished || (time() - strtotime($oldFixture['last_detailed_update'] ?? '2000-01-01')) > 300;
+                $justFinished = ($oldFixture && !in_array($oldFixture['status_short'], ['FT', 'AET', 'PEN']) && in_array($m['fixture']['status']['short'], ['FT', 'AET', 'PEN']));
+                $needsUpdate = !$oldFixture || $scoreChanged || $justFinished || (time() - strtotime($oldFixture['last_detailed_update'] ?? '2000-01-01')) > 600;
 
                 if ($needsUpdate) {
-                    echo "Updating details for fixture $fid...\n";
+                    echo "Updating details for live fixture $fid...\n";
 
+                    // 1. Events (Cards, Goals, Subs)
                     $eventsData = $this->apiService->fetchFixtureEvents($fid);
                     if (isset($eventsData['response'])) {
                         $this->eventModel->deleteByFixture($fid);
@@ -188,6 +200,7 @@ class SyncController
                         }
                     }
 
+                    // 2. Statistics (Possession, Shots, etc.)
                     $statsData = $this->apiService->fetchFixtureStatistics($fid);
                     if (isset($statsData['response'])) {
                         foreach ($statsData['response'] as $st) {
@@ -195,7 +208,8 @@ class SyncController
                         }
                     }
 
-                    if ($m['fixture']['status']['short'] === 'FT') {
+                    // 3. Player Stats (only at full time)
+                    if (in_array($m['fixture']['status']['short'], ['FT', 'AET', 'PEN'])) {
                         $pStatsData = $this->apiService->fetchFixturePlayerStatistics($fid);
                         if (isset($pStatsData['response'])) {
                             foreach ($pStatsData['response'] as $teamRow) {
@@ -207,18 +221,10 @@ class SyncController
                         }
                     }
 
-                    if ($this->leagueModel->supportsPredictions($m['league']['id'] ?? 0)) {
-                        if ($this->predictionModel->needsRefresh($fid, 1)) {
-                            $predData = $this->apiService->fetchPredictions($fid);
-                            if (isset($predData['response'][0])) {
-                                $this->predictionModel->save($fid, $predData['response'][0]);
-                                $results['predictions']++;
-                            } else { echo "Fixture $fid: No predictions found.\n"; }
-                        }
-                    } else { echo "Fixture $fid: League coverage doesn't support predictions.\n"; }
+                    // Note: Predictions removed from live sync to save credits. Fetched in Daily/3H.
 
                     $this->fixtureModel->updateDetailedTimestamp($fid);
-                    usleep(250000);
+                    usleep(200000); // Throttling
                 }
             }
 
@@ -258,16 +264,15 @@ class SyncController
     {
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
-        $results = ['leagues' => 0, 'standings' => 0, 'fixtures' => 0, 'injuries' => 0, 'orphans_checked' => 0, 'stats_updated' => 0];
+        $results = ['leagues' => 0, 'standings' => 0, 'fixtures' => 0, 'injuries' => 0, 'stats_updated' => 0, 'h2h' => 0];
 
         try {
-            // Check for long-pending bets first
-            $results['orphans_checked'] = $this->checkOrphanBets();
-
-            // Sync missing stats for recently finished matches
+            // Sync missing stats for recently finished matches (Batch fetch)
             $results['stats_updated'] = $this->syncRecentFinishedStats();
 
             $db = Database::getInstance()->getConnection();
+
+            // Leagues: doc recommends 1/hour or 1/day.
             $leaguesData = $this->apiService->fetchLeagues();
             if (isset($leaguesData['response'])) {
                 foreach ($leaguesData['response'] as $row) {
@@ -276,12 +281,29 @@ class SyncController
                 }
             }
 
+            // Today's Fixtures
             $today = date('Y-m-d');
             $fixturesData = $this->apiService->request("/fixtures?date=$today");
             if (isset($fixturesData['response'])) {
                 foreach ($fixturesData['response'] as $f) {
                     $this->fixtureModel->save($f);
                     $results['fixtures']++;
+                }
+            }
+
+            // H2H for matches starting in the next 4 hours
+            $upcoming = $db->query("SELECT id, team_home_id, team_away_id FROM fixtures
+                                    WHERE date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 4 HOUR)
+                                    AND status_short = 'NS'")->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($upcoming as $match) {
+                $h2hKey = min($match['team_home_id'], $match['team_away_id']) . "-" . max($match['team_home_id'], $match['team_away_id']);
+                if ($this->h2hModel->needsRefresh($match['team_home_id'], $match['team_away_id'], 24)) {
+                    $h2hData = $this->apiService->fetchH2H($h2hKey);
+                    if (isset($h2hData['response'])) {
+                        $this->h2hModel->save($match['team_home_id'], $match['team_away_id'], $h2hData['response']);
+                        $results['h2h']++;
+                        usleep(200000);
+                    }
                 }
             }
 
@@ -325,15 +347,19 @@ class SyncController
     public function sync3Hours()
     {
         $this->sendJsonHeader();
-        $results = ['fixtures_processed' => 0];
+        $results = ['fixtures_processed' => 0, 'predictions' => 0];
         try {
             $db = Database::getInstance()->getConnection();
-            $fixtures = $db->query("SELECT id FROM fixtures
+            $fixtures = $db->query("SELECT id, league_id FROM fixtures
                                     WHERE date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 3 DAY)
                                     AND status_short = 'NS'
-                                    ORDER BY date ASC LIMIT 50")->fetchAll(PDO::FETCH_COLUMN);
+                                    ORDER BY date ASC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
 
-            foreach ($fixtures as $fid) {
+            foreach ($fixtures as $f) {
+                $fid = $f['id'];
+                $lId = $f['league_id'];
+
+                // 1. Odds Pre-match
                 $oddsData = $this->apiService->fetchOdds(['fixture' => $fid]);
                 if (isset($oddsData['response'])) {
                     foreach ($oddsData['response'] as $row) {
@@ -345,6 +371,18 @@ class SyncController
                     }
                     $results['fixtures_processed']++;
                 }
+
+                // 2. Predictions (Pre-match context for Gemini)
+                if ($this->leagueModel->supportsPredictions($lId)) {
+                    if ($this->predictionModel->needsRefresh($fid, 24)) {
+                        $predData = $this->apiService->fetchPredictions($fid);
+                        if (isset($predData['response'][0])) {
+                            $this->predictionModel->save($fid, $predData['response'][0]);
+                            $results['predictions']++;
+                        }
+                    }
+                }
+
                 usleep(250000);
             }
             echo json_encode($results);
@@ -362,13 +400,14 @@ class SyncController
             'countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0,
             'predictions' => 0, 'trophies' => 0, 'transfers' => 0,
             'sidelined' => 0, 'player_stats' => 0, 'player_seasons' => 0,
-            'bookmakers' => 0, 'bet_types' => 0
+            'bookmakers' => 0, 'bet_types' => 0, 'venues' => 0, 'team_stats' => 0, 'h2h' => 0
         ];
 
         try {
             $db = Database::getInstance()->getConnection();
+            $today = date('Y-m-d');
 
-            // Bookmakers
+            // 1. Static Metadata (Bookmakers, Bets, Seasons, Countries)
             $bmData = $this->apiService->fetchBookmakers();
             if (isset($bmData['response'])) {
                 foreach ($bmData['response'] as $row) {
@@ -377,7 +416,6 @@ class SyncController
                 }
             }
 
-            // Bet Types (Markets)
             $btData = $this->apiService->fetchBets();
             if (isset($btData['response'])) {
                 foreach ($btData['response'] as $row) {
@@ -394,12 +432,12 @@ class SyncController
                 }
             }
 
-            $countryModel = new Country();
             $cData = $this->apiService->fetchCountries();
             if (isset($cData['response'])) {
-                foreach ($cData['response'] as $c) { $countryModel->save($c); $results['countries']++; }
+                foreach ($cData['response'] as $c) { $this->countryModel->save($c); $results['countries']++; }
             }
 
+            // 2. League-Specific Data
             $relevantLeagues = $db->query("SELECT DISTINCT league_id FROM fixtures
                                            WHERE date BETWEEN DATE_SUB(NOW(), INTERVAL 30 DAY) AND DATE_ADD(NOW(), INTERVAL 30 DAY)")
                                   ->fetchAll(PDO::FETCH_COLUMN);
@@ -414,6 +452,19 @@ class SyncController
                         $this->teamModel->save($row);
                         $results['teams']++;
                         $tid = $row['team']['id'];
+
+                        // Venue sync
+                        if (isset($row['venue']['id'])) {
+                            $this->venueModel->save($row['venue']);
+                            $results['venues']++;
+                        }
+
+                        // Team Statistics sync (Crucial for Gemini)
+                        $tsData = $this->apiService->fetchTeamStatistics($tid, $lId, $season);
+                        if (isset($tsData['response'])) {
+                            $this->teamStatsModel->save($tid, $lId, $season, $tsData['response']);
+                            $results['team_stats']++;
+                        }
 
                         if ($this->coachModel->needsRefresh($tid)) {
                             $coData = $this->apiService->fetchCoach($tid);
@@ -508,6 +559,7 @@ class SyncController
 
                 $this->syncLeagueTopStats($lId, $season);
 
+                // Predictions for next 2 days
                 if ($this->leagueModel->supportsPredictions($lId)) {
                     $upcomingFixtures = $db->query("SELECT id FROM fixtures WHERE league_id = $lId AND date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 2 DAY) AND status_short = 'NS' LIMIT 20")->fetchAll(PDO::FETCH_COLUMN);
                     foreach ($upcomingFixtures as $fid) {
@@ -522,6 +574,21 @@ class SyncController
                     }
                 }
             }
+
+            // 3. H2H for all today's matches
+            $todayFixtures = $db->query("SELECT team_home_id, team_away_id FROM fixtures WHERE DATE(date) = '$today'")->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($todayFixtures as $match) {
+                if ($this->h2hModel->needsRefresh($match['team_home_id'], $match['team_away_id'], 168)) {
+                    $h2hKey = min($match['team_home_id'], $match['team_away_id']) . "-" . max($match['team_home_id'], $match['team_away_id']);
+                    $h2hData = $this->apiService->fetchH2H($h2hKey);
+                    if (isset($h2hData['response'])) {
+                        $this->h2hModel->save($match['team_home_id'], $match['team_away_id'], $h2hData['response']);
+                        $results['h2h']++;
+                        usleep(200000);
+                    }
+                }
+            }
+
             echo json_encode($results);
         } catch (\Throwable $e) { $this->handleException($e); }
     }
@@ -593,30 +660,13 @@ class SyncController
         return $count;
     }
 
+    /**
+     * Re-check pending bets from DB only (No API cost)
+     */
     private function checkOrphanBets()
     {
-        $pending = array_filter($this->betModel->getAll(), function ($b) {
-            // Pending for more than 2 hours
-            return $b['status'] === 'pending' && (time() - strtotime($b['timestamp'])) > 7200;
-        });
-
-        if (empty($pending)) return 0;
-
-        $count = 0;
         $betSettler = new \App\Services\BetSettler();
-
-        foreach ($pending as $bet) {
-            $fid = $bet['fixture_id'];
-            $data = $this->apiService->fetchFixtureDetails($fid);
-            if (isset($data['response'][0])) {
-                $this->fixtureModel->save($data['response'][0]);
-                if ($betSettler->processSettlement($bet, $data['response'][0])) {
-                    $count++;
-                }
-            }
-            usleep(250000);
-        }
-        return $count;
+        return $betSettler->settleFromDatabase();
     }
 
     public function syncLeagueTopStats($leagueId, $season)

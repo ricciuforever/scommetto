@@ -47,4 +47,16 @@ class H2H
         }
         return $row;
     }
+
+    public function needsRefresh($team1_id, $team2_id, $hours = 168)
+    {
+        $t1 = min($team1_id, $team2_id);
+        $t2 = max($team1_id, $team2_id);
+
+        $stmt = $this->db->prepare("SELECT last_updated FROM h2h_records WHERE team1_id = ? AND team2_id = ?");
+        $stmt->execute([$t1, $t2]);
+        $row = $stmt->fetch();
+        if (!$row) return true;
+        return (time() - strtotime($row['last_updated'])) > ($hours * 3600);
+    }
 }
