@@ -30,7 +30,11 @@ class SyncController
     public function getUsage()
     {
         header('Content-Type: application/json');
-        echo json_encode($this->usageModel->getLatest());
+        try {
+            echo json_encode($this->usageModel->getLatest());
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
     }
 
     /**
@@ -39,91 +43,97 @@ class SyncController
     public function sync()
     {
         header('Content-Type: application/json');
+        try {
+            $results = [
+                'bot_status' => 'idle',
+                'scanned' => 0,
+                'analyzed' => 0,
+                'bets_placed' => 0,
+                'settled' => 0,
+                'scheduled_tasks' => []
+            ];
 
-        $results = [
-            'bot_status' => 'idle',
-            'scanned' => 0,
-            'analyzed' => 0,
-            'bets_placed' => 0,
-            'settled' => 0,
-            'scheduled_tasks' => []
-        ];
+            // 0. Run scheduled tasks (Countries, etc.)
+            $results['scheduled_tasks'] = $this->runScheduledTasks();
 
-        // 0. Run scheduled tasks (Countries, etc.)
-        $results['scheduled_tasks'] = $this->runScheduledTasks();
+            // 1. Scan live matches
+            $live = $this->apiService->fetchLiveMatches();
+            $matches = $live['response'] ?? [];
+            $results['scanned'] = count($matches);
 
-        // 1. Scan live matches
-        $live = $this->apiService->fetchLiveMatches();
-        $matches = $live['response'] ?? [];
-        $results['scanned'] = count($matches);
+            // 2. AUTO-SETTLE for FREE using current live data
+            $betSettler = new \App\Services\BetSettler();
+            $results['settled'] = $betSettler->settleFromLive($matches);
 
-        // 2. AUTO-SETTLE for FREE using current live data
-        $betSettler = new \App\Services\BetSettler();
-        $results['settled'] = $betSettler->settleFromLive($matches);
-
-        // 3. Occasionally check for orphaned bets (those no longer in live but still pending)
-        // We only do this every 30 mins to save API credits
-        $settleLock = Config::DATA_PATH . 'settlement.lock';
-        if (!file_exists($settleLock) || (time() - filemtime($settleLock) > 1800)) {
-            $results['settled'] += $this->checkSettleBets();
-            touch($settleLock);
-        }
-
-        $usage = $this->usageModel->getLatest();
-        if ($usage && $usage['requests_remaining'] < 20) {
-            $results['bot_status'] = 'paused_low_quota';
-            echo json_encode($results);
-            return;
-        }
-
-        // 4. Analyze ONLY ONE match per minute as requested
-        foreach ($matches as $m) {
-            $fid = $m['fixture']['id'];
-            $elapsed = $m['fixture']['status']['elapsed'] ?? 0;
-
-            if ($elapsed < 10 || $elapsed > 80)
-                continue;
-
-            if ($this->betModel->isPending($fid))
-                continue;
-
-            if ($this->analysisModel->wasRecentlyChecked($fid))
-                continue;
-
-            // ANALYZE!
-            $results['analyzed']++;
-            $prediction = $this->geminiService->analyze($m);
-            $this->analysisModel->log($fid, $prediction);
-
-            if (preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches_json)) {
-                $betData = json_decode($matches_json[1], true);
-                if ($betData) {
-                    $betData['fixture_id'] = $fid;
-                    $betData['match'] = $m['teams']['home']['name'] . ' vs ' . $m['teams']['away']['name'];
-                    $this->betModel->create($betData);
-                    $results['bets_placed']++;
-                }
+            // 3. Occasionally check for orphaned bets (those no longer in live but still pending)
+            // We only do this every 30 mins to save API credits
+            $settleLock = Config::DATA_PATH . 'settlement.lock';
+            if (!file_exists($settleLock) || (time() - filemtime($settleLock) > 1800)) {
+                $results['settled'] += $this->checkSettleBets();
+                touch($settleLock);
             }
 
-            // CRITICAL: Limit to 1 analysis per run
-            break;
-        }
+            $usage = $this->usageModel->getLatest();
+            if ($usage && $usage['requests_remaining'] < 20) {
+                $results['bot_status'] = 'paused_low_quota';
+                echo json_encode($results);
+                return;
+            }
 
-        $results['bot_status'] = 'completed';
-        echo json_encode($results);
+            // 4. Analyze ONLY ONE match per minute as requested
+            foreach ($matches as $m) {
+                $fid = $m['fixture']['id'];
+                $elapsed = $m['fixture']['status']['elapsed'] ?? 0;
+
+                if ($elapsed < 10 || $elapsed > 80)
+                    continue;
+
+                if ($this->betModel->isPending($fid))
+                    continue;
+
+                if ($this->analysisModel->wasRecentlyChecked($fid))
+                    continue;
+
+                // ANALYZE!
+                $results['analyzed']++;
+                $prediction = $this->geminiService->analyze($m);
+                $this->analysisModel->log($fid, $prediction);
+
+                if (preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches_json)) {
+                    $betData = json_decode($matches_json[1], true);
+                    if ($betData) {
+                        $betData['fixture_id'] = $fid;
+                        $betData['match'] = $m['teams']['home']['name'] . ' vs ' . $m['teams']['away']['name'];
+                        $this->betModel->create($betData);
+                        $results['bets_placed']++;
+                    }
+                }
+
+                // CRITICAL: Limit to 1 analysis per run
+                break;
+            }
+
+            $results['bot_status'] = 'completed';
+            echo json_encode($results);
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
     }
 
     public function deepSync($leagueId = 135, $season = 2024)
     {
         header('Content-Type: application/json');
+        try {
+            $results = [
+                'overview' => $this->syncLeagueOverview($leagueId, $season),
+                'top_stats' => $this->syncLeagueTopStats($leagueId, $season),
+                'status' => 'success'
+            ];
 
-        $results = [
-            'overview' => $this->syncLeagueOverview($leagueId, $season),
-            'top_stats' => $this->syncLeagueTopStats($leagueId, $season),
-            'status' => 'success'
-        ];
-
-        echo json_encode($results);
+            echo json_encode($results);
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
     }
 
     public function syncLeagueOverview($leagueId, $season)
@@ -185,8 +195,6 @@ class SyncController
         $results = [];
 
         foreach ($types as $type) {
-            $method = 'fetchTop' . str_replace('_', '', ucwords($type, '_'));
-            // Standardize method names in service if needed, or use a switch
             switch ($type) {
                 case 'scorers':
                     $data = $this->apiService->fetchTopScorers($leagueId, $season);
@@ -239,7 +247,7 @@ class SyncController
         if (isset($sqData['response'][0]['players'])) {
             foreach ($sqData['response'][0]['players'] as $p) {
                 $playerModel->save($p);
-                $playerModel->linkToSquad($teamId, $p, $p); // Passing $p as squadInfo too since it contains position/number
+                $playerModel->linkToSquad($teamId, $p, $p);
                 $results['squad']++;
             }
         }
@@ -296,7 +304,7 @@ class SyncController
                     $log[] = "League $lId Overview Refreshed: " . json_encode($res);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $log[] = "Task Error: " . $e->getMessage();
         }
 
@@ -313,7 +321,6 @@ class SyncController
         $betSettler = new \App\Services\BetSettler();
 
         foreach ($pending as $bet) {
-            // Check if match is finished (fetch details)
             $details = $this->apiService->fetchFixtureDetails($bet['fixture_id']);
             $fixture = $details['response'][0] ?? null;
 

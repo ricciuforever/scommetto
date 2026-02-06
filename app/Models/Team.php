@@ -15,9 +15,22 @@ class Team
         $this->db = Database::getInstance()->getConnection();
     }
 
+    public function needsRefresh($id, $hours = 24)
+    {
+        $stmt = $this->db->prepare("SELECT last_updated FROM teams WHERE id = ?");
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+
+        if (!$row)
+            return true;
+
+        $lastUpdated = strtotime($row['last_updated']);
+        return (time() - $lastUpdated) > ($hours * 3600);
+    }
+
     public function save($data)
     {
-        $team = $data['team'];
+        $team = $data['team'] ?? $data;
         $venue = $data['venue'] ?? null;
 
         // Save Venue first if present

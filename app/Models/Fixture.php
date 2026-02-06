@@ -52,13 +52,14 @@ class Fixture
                 FROM fixtures f
                 JOIN teams th ON f.team_home_id = th.id
                 JOIN teams ta ON f.team_away_id = ta.id
-                WHERE (f.team_home_id = :tid OR f.team_away_id = :tid) 
+                WHERE (f.team_home_id = ? OR f.team_away_id = ?)
                 AND f.status_short IN ('FT', 'AET', 'PEN') 
-                ORDER BY f.date DESC LIMIT :limit";
+                ORDER BY f.date DESC LIMIT ?";
 
         $stmt = $this->db->prepare($sql);
-        $stmt->bindValue(':tid', $team_id, PDO::PARAM_INT);
-        $stmt->bindValue(':limit', (int) $limit, PDO::PARAM_INT);
+        $stmt->bindValue(1, $team_id, PDO::PARAM_INT);
+        $stmt->bindValue(2, $team_id, PDO::PARAM_INT);
+        $stmt->bindValue(3, (int) $limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }

@@ -53,7 +53,7 @@ class MatchController
                 $this->betSettler->settleFromLive($data['response'] ?? []);
             }
             echo json_encode($data);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
@@ -85,14 +85,13 @@ class MatchController
                     $predictionModel->save((int) $id, $predData['response'][0]);
                 }
             }
-            $storedPrediction = $predictionModel->getByFixtureId((int) $id);
 
-            $prediction = $this->geminiService->analyze($match, $storedPrediction);
+            $prediction = $this->geminiService->analyze($match);
 
             try {
                 $analysisModel = new Analysis();
                 $analysisModel->log((int) $id, $prediction);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 error_log("Error saving analysis: " . $e->getMessage());
             }
 
@@ -101,7 +100,7 @@ class MatchController
                 'prediction' => $prediction,
                 'match' => $match
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
@@ -119,7 +118,7 @@ class MatchController
                 }
             }
             echo json_encode($predictionModel->getByFixtureId((int) $id));
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
@@ -142,7 +141,7 @@ class MatchController
                 }
             }
             echo json_encode($standingModel->getByLeague((int) $leagueId));
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
@@ -185,7 +184,7 @@ class MatchController
                 'coach' => $coach,
                 'squad' => $squad
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             error_log("Error in getTeamDetails: " . $e->getMessage());
             echo json_encode([
                 'error' => 'Si è verificato un errore nel recupero dei dati.',
@@ -201,14 +200,14 @@ class MatchController
             $playerModel = new Player();
             $player = $playerModel->getById((int) $playerId);
             if (!$player) {
-                $data = $this->apiService->fetchPlayer($playerId);
+                $data = $this->apiService->fetchPlayer(['id' => (int)$playerId]);
                 if (isset($data['response'][0]['player'])) {
                     $playerModel->save($data['response'][0]['player']);
                     $player = $playerModel->getById((int) $playerId);
                 }
             }
             echo json_encode($player);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
