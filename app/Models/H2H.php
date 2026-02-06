@@ -48,6 +48,34 @@ class H2H
         return $row;
     }
 
+    public function getByFixture($fixture_id)
+    {
+        $stmt = $this->db->prepare("SELECT team_home_id, team_away_id FROM fixtures WHERE id = ?");
+        $stmt->execute([$fixture_id]);
+        $fixture = $stmt->fetch();
+        if (!$fixture) return [];
+
+        $data = $this->get($fixture['team_home_id'], $fixture['team_away_id']);
+        if (!$data || !isset($data['h2h_json'])) return [];
+
+        // Normalize for frontend
+        $results = [];
+        foreach ($data['h2h_json'] as $m) {
+            $results[] = [
+                'id' => $m['fixture']['id'],
+                'date' => $m['fixture']['date'],
+                'home_name' => $m['teams']['home']['name'],
+                'home_logo' => $m['teams']['home']['logo'],
+                'away_name' => $m['teams']['away']['name'],
+                'away_logo' => $m['teams']['away']['logo'],
+                'goals_home' => $m['goals']['home'],
+                'goals_away' => $m['goals']['away'],
+                'league_name' => $m['league']['name']
+            ];
+        }
+        return $results;
+    }
+
     public function needsRefresh($team1_id, $team2_id, $hours = 168)
     {
         $t1 = min($team1_id, $team2_id);

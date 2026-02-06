@@ -36,6 +36,20 @@ class FixtureOdds
     {
         $stmt = $this->db->prepare("SELECT * FROM fixture_odds WHERE fixture_id = ?");
         $stmt->execute([$fixture_id]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $flattened = [];
+        foreach ($rows as $row) {
+            $values = json_decode($row['odds_json'], true);
+            foreach ($values as $v) {
+                $flattened[] = [
+                    'bet_name' => $row['bet_name'],
+                    'bookmaker_name' => $row['bookmaker_name'],
+                    'value_name' => $v['value'],
+                    'odd' => $v['odd']
+                ];
+            }
+        }
+        return $flattened;
     }
 }

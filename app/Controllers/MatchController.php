@@ -54,6 +54,85 @@ class MatchController
         }
     }
 
+    public function getLeagueStats($leagueId)
+    {
+        header('Content-Type: application/json');
+        try {
+            $topStatsModel = new \App\Models\TopStats();
+            $season = Config::getCurrentSeason();
+            $types = ['scorers', 'assists', 'yellow_cards', 'red_cards'];
+            $results = [];
+            foreach ($types as $type) {
+                $results[$type] = $topStatsModel->get((int)$leagueId, $season, $type);
+            }
+            echo json_encode($results);
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function getMatch($id)
+    {
+        header('Content-Type: application/json');
+        try {
+            // Basic Info
+            $fixtureModel = new \App\Models\Fixture();
+            $fixture = $fixtureModel->getById((int)$id);
+            if (!$fixture) {
+                echo json_encode(['error' => 'Partita non trovata.']);
+                return;
+            }
+
+            // Normalization for frontend
+            $fixture['home_id'] = $fixture['team_home_id'];
+            $fixture['away_id'] = $fixture['team_away_id'];
+            $fixture['home_name'] = $fixture['team_home_name'];
+            $fixture['home_logo'] = $fixture['team_home_logo'];
+            $fixture['away_name'] = $fixture['team_away_name'];
+            $fixture['away_logo'] = $fixture['team_away_logo'];
+            $fixture['goals_home'] = $fixture['score_home'];
+            $fixture['goals_away'] = $fixture['score_away'];
+
+            // Analysis
+            $analysis = (new \App\Models\Analysis())->get((int)$id);
+
+            // Events
+            $events = (new \App\Models\FixtureEvent())->getByFixture((int)$id);
+
+            // Stats
+            $stats = (new \App\Models\FixtureStatistics())->getByFixture((int)$id);
+
+            // Lineups
+            $lineups = (new \App\Models\FixtureLineup())->getByFixture((int)$id);
+
+            // Injuries
+            $injuries = (new \App\Models\FixtureInjury())->getByFixture((int)$id);
+
+            // H2H
+            $h2h = (new \App\Models\H2H())->getByFixture((int)$id);
+
+            // Odds
+            $odds = (new \App\Models\FixtureOdds())->getByFixture((int)$id);
+
+            // Predictions
+            $predictions = (new \App\Models\Prediction())->get((int)$id);
+
+            echo json_encode([
+                'fixture' => $fixture,
+                'analysis' => $analysis,
+                'events' => $events,
+                'stats' => $stats,
+                'lineups' => $lineups,
+                'injuries' => $injuries,
+                'h2h' => $h2h,
+                'odds' => $odds,
+                'predictions' => $predictions
+            ]);
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
     /**
      * Performs AI analysis using strictly local DB data.
      */
