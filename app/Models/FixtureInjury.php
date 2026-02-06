@@ -23,9 +23,9 @@ class FixtureInjury
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
             'fid' => $fixture_id,
-            'tid' => $data['team']['id'],
-            'pid' => $data['player']['id'],
-            'pname' => $data['player']['name'],
+            'tid' => $data['team']['id'] ?? null,
+            'pid' => $data['player']['id'] ?? null,
+            'pname' => $data['player']['name'] ?? 'Unknown',
             'type' => $data['player']['type'] ?? 'Injury',
             'reason' => $data['player']['reason'] ?? 'N/A'
         ]);
