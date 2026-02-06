@@ -17,14 +17,16 @@ class Fixture
 
     public function save($data)
     {
-        $sql = "INSERT INTO fixtures (id, league_id, round, team_home_id, team_away_id, date, status_short, status_long, elapsed, score_home, score_away, venue_id) 
-                VALUES (:id, :league_id, :round, :home_id, :away_id, :date, :status_short, :status_long, :elapsed, :score_home, :score_away, :venue_id) 
+        $sql = "INSERT INTO fixtures (id, league_id, round, team_home_id, team_away_id, date, status_short, status_long, elapsed, score_home, score_away, score_home_ht, score_away_ht, venue_id)
+                VALUES (:id, :league_id, :round, :home_id, :away_id, :date, :status_short, :status_long, :elapsed, :score_home, :score_away, :score_home_ht, :score_away_ht, :venue_id)
                 ON DUPLICATE KEY UPDATE 
                     status_short = VALUES(status_short), 
                     status_long = VALUES(status_long),
                     elapsed = VALUES(elapsed),
                     score_home = VALUES(score_home), 
                     score_away = VALUES(score_away),
+                    score_home_ht = VALUES(score_home_ht),
+                    score_away_ht = VALUES(score_away_ht),
                     round = VALUES(round),
                     last_updated = CURRENT_TIMESTAMP";
 
@@ -41,6 +43,8 @@ class Fixture
             'elapsed' => $data['fixture']['status']['elapsed'] ?? null,
             'score_home' => $data['goals']['home'],
             'score_away' => $data['goals']['away'],
+            'score_home_ht' => $data['score']['halftime']['home'] ?? null,
+            'score_away_ht' => $data['score']['halftime']['away'] ?? null,
             'venue_id' => $data['fixture']['venue']['id'] ?? null
         ]);
     }
