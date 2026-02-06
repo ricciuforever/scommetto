@@ -31,6 +31,13 @@ class SyncController
         $this->geminiService = new GeminiService();
     }
 
+    private function getCurrentSeason()
+    {
+    // Se siamo da Gennaio a Giugno, la stagione API è l'anno precedente (es. a Febbraio 2026 la stagione è 2025)
+    // Se siamo da Luglio a Dicembre, la stagione API è l'anno corrente (es. a Settembre 2026 la stagione è 2026)
+    return (int)date('m') <= 6 ? (int)date('Y') - 1 : (int)date('Y');
+    }
+
     private function sendJsonHeader()
     {
         if (PHP_SAPI !== 'cli' && !headers_sent()) {
@@ -133,9 +140,11 @@ class SyncController
         }
     }
 
-    public function deepSync($leagueId = 135, $season = 2026)
+    public function deepSync($leagueId = 135, $season = null)
     {
-        $this->sendJsonHeader();
+    if ($season === null) $season = $this->getCurrentSeason();
+    
+    $this->sendJsonHeader();
         try {
             $results = [
                 'overview' => $this->syncLeagueOverview($leagueId, $season),
@@ -373,12 +382,11 @@ class SyncController
 
     private function runScheduledTasks()
     {
-        $log = [];
-        try {
-            $season = 2026;
-
-            // Task rotation based on minutes of the hour
-            $minute = (int)date('i');
+    $log = [];
+    try {
+        $season = $this->getCurrentSeason(); // Diventa dinamico qui
+        
+        $minute = (int)date('i');
 
             // 1. GLOBAL SYNC (Once every 24h)
             $countryModel = new \App\Models\Country();
