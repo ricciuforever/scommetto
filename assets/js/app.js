@@ -215,21 +215,32 @@ async function renderLeagues(leagueId) {
     viewContainer.innerHTML = html;
     if (window.lucide) lucide.createIcons();
 
-    // Gestione dinamica del filtro senza ricaricare la pagina
     const filter = document.getElementById('country-filter');
+
+    // Funzione per applicare il filtro
+    const applyFilter = (val) => {
+        const cards = document.querySelectorAll('.league-card');
+        cards.forEach(card => {
+            if (val === 'all' || card.getAttribute('data-country') === val) {
+                card.classList.remove('hidden');
+                card.classList.add('active-card');
+            } else {
+                card.classList.add('hidden');
+                card.classList.remove('active-card');
+            }
+        });
+    };
+
+    // Recupera e applica filtro salvato
+    const savedCountry = localStorage.getItem('selected_country') || 'all';
     if (filter) {
+        filter.value = savedCountry;
+        applyFilter(savedCountry);
+
         filter.onchange = (e) => {
             const val = e.target.value;
-            const cards = document.querySelectorAll('.league-card');
-            cards.forEach(card => {
-                if (val === 'all' || card.getAttribute('data-country') === val) {
-                    card.classList.remove('hidden');
-                    card.classList.add('active-card');
-                } else {
-                    card.classList.add('hidden');
-                    card.classList.remove('active-card');
-                }
-            });
+            localStorage.setItem('selected_country', val);
+            applyFilter(val);
         };
     }
 }
