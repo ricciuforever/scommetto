@@ -55,7 +55,7 @@
         <div class="flex items-center gap-4">
             <div class="hidden md:flex flex-col items-end">
                 <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">API Status</span>
-                <div class="text-sm font-black"><span id="usage-val" class="text-accent">...</span> / 7500 <span
+                <div class="text-sm font-black"><span id="usage-val" class="text-accent">...</span> / <span id="limit-val">7500</span> <span
                         class="text-slate-500">Credits</span></div>
             </div>
             <button id="theme-toggle"

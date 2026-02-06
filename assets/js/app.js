@@ -116,8 +116,13 @@ async function fetchUsage() {
     try {
         const res = await fetch('/api/usage');
         const data = await res.json();
-        if (data && data.requests_used !== undefined) {
-            document.getElementById('usage-val').textContent = data.requests_used;
+        if (data) {
+            if (data.requests_remaining !== undefined) {
+                document.getElementById('usage-val').textContent = data.requests_remaining;
+            }
+            if (data.requests_limit !== undefined) {
+                document.getElementById('limit-val').textContent = data.requests_limit;
+            }
         }
     } catch (e) {
         console.error("Error fetching usage", e);
