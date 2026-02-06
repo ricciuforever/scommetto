@@ -37,11 +37,17 @@ class Coach
 
     public function save($data, $teamId)
     {
-        $sql = "INSERT INTO coaches (id, name, firstname, lastname, age, nationality, photo, team_id) 
-                VALUES (:id, :name, :firstname, :lastname, :age, :nationality, :photo, :team_id)
+        $sql = "INSERT INTO coaches (id, name, firstname, lastname, age, birth_date, birth_country, nationality, photo, team_id, career_json)
+                VALUES (:id, :name, :firstname, :lastname, :age, :birth_date, :birth_country, :nationality, :photo, :team_id, :career)
                 ON DUPLICATE KEY UPDATE 
-                name = VALUES(name), age = VALUES(age), photo = VALUES(photo), 
-                team_id = VALUES(team_id), last_updated = CURRENT_TIMESTAMP";
+                name = VALUES(name),
+                age = VALUES(age),
+                photo = VALUES(photo),
+                team_id = VALUES(team_id),
+                birth_date = VALUES(birth_date),
+                birth_country = VALUES(birth_country),
+                career_json = VALUES(career_json),
+                last_updated = CURRENT_TIMESTAMP";
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
@@ -50,9 +56,12 @@ class Coach
             'firstname' => $data['firstname'] ?? '',
             'lastname' => $data['lastname'] ?? '',
             'age' => $data['age'] ?? null,
+            'birth_date' => $data['birth']['date'] ?? null,
+            'birth_country' => $data['birth']['country'] ?? null,
             'nationality' => $data['nationality'] ?? '',
             'photo' => $data['photo'] ?? null,
-            'team_id' => $teamId
+            'team_id' => $teamId,
+            'career' => isset($data['career']) ? json_encode($data['career']) : null
         ]);
     }
 }
