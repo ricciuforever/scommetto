@@ -9,10 +9,8 @@ $sync = new SyncController();
 
 /**
  * LOGICA DINAMICA PER LA STAGIONE
- * Se siamo tra Gennaio (01) e Giugno (06), la stagione API è l'anno precedente.
- * Esempio: Febbraio 2026 -> Stagione 2025
  */
-$season = (int)date('m') <= 6 ? (int)date('Y') - 1 : (int)date('Y');
+$season = Config::getCurrentSeason();
 
 set_time_limit(0);
 
