@@ -30,6 +30,19 @@ class League
         return $coverage['predictions'] ?? false;
     }
 
+    public function isBettable($id)
+    {
+        // Premium leagues are always bettable
+        if (in_array($id, \App\Config\Config::PREMIUM_LEAGUES)) return true;
+
+        $league = $this->getById($id);
+        if (!$league) return false;
+        if (!$league['coverage_json']) return false;
+
+        $coverage = json_decode($league['coverage_json'], true);
+        return $coverage['odds'] ?? false;
+    }
+
     public function save($data)
     {
         $sql = "INSERT INTO leagues (id, name, type, logo, country_name, coverage_json) 

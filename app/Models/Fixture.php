@@ -57,7 +57,18 @@ class Fixture
 
     public function getById($id)
     {
-        $stmt = $this->db->prepare("SELECT * FROM fixtures WHERE id = ?");
+        $sql = "SELECT f.*,
+                       t1.name as team_home_name, t1.logo as team_home_logo,
+                       t2.name as team_away_name, t2.logo as team_away_logo,
+                       l.name as league_name, l.logo as league_logo,
+                       v.name as venue_name, v.city as venue_city
+                FROM fixtures f
+                JOIN teams t1 ON f.team_home_id = t1.id
+                JOIN teams t2 ON f.team_away_id = t2.id
+                JOIN leagues l ON f.league_id = l.id
+                LEFT JOIN venues v ON f.venue_id = v.id
+                WHERE f.id = ?";
+        $stmt = $this->db->prepare($sql);
         $stmt->execute([$id]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }

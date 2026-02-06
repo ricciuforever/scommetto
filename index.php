@@ -21,16 +21,24 @@ try {
         (new MatchController())->getLive();
     } elseif ($path === '/api/history') {
         (new BetController())->getHistory();
+    } elseif (preg_match('#^/api/match/(\d+)$#', $path, $matches)) {
+        (new MatchController())->getMatch($matches[1]);
     } elseif (preg_match('#^/api/analyze/(\d+)$#', $path, $matches)) {
         (new MatchController())->analyze($matches[1]);
     } elseif (preg_match('#^/api/predictions/(\d+)$#', $path, $matches)) {
         (new MatchController())->getPredictions($matches[1]);
     } elseif (preg_match('#^/api/standings/(\d+)$#', $path, $matches)) {
         (new MatchController())->getStandings($matches[1]);
+    } elseif (preg_match('#^/api/leagues/stats/(\d+)$#', $path, $matches)) {
+        (new MatchController())->getLeagueStats($matches[1]);
     } elseif (preg_match('#^/api/team/(\d+)$#', $path, $matches)) {
         (new MatchController())->getTeamDetails($matches[1]);
     } elseif (preg_match('#^/api/player/(\d+)$#', $path, $matches)) {
         (new MatchController())->getPlayerDetails($matches[1]);
+    } elseif ($path === '/api/leagues') {
+        (new MatchController())->getLeagues();
+    } elseif ($path === '/api/predictions/all') {
+        (new MatchController())->getPredictionsAll();
     } elseif ($path === '/api/place_bet' && $method === 'POST') {
         (new BetController())->placeBet();
     } elseif ($path === '/api/sync') {
