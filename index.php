@@ -37,7 +37,14 @@ try {
         (new SyncController())->sync();
     } elseif ($path === '/api/deep-sync') {
         $league = $_GET['league'] ?? 135;
-        (new SyncController())->deepSync($league);
+        
+        // Calcolo dinamico: se siamo a inizio anno (<= giugno), la stagione API è l'anno precedente
+        $defaultSeason = (int)date('m') <= 6 ? (int)date('Y') - 1 : (int)date('Y');
+        
+        // Prende la stagione dall'URL se presente (?season=2025), altrimenti usa quella dinamica
+        $season = isset($_GET['season']) ? (int)$_GET['season'] : $defaultSeason;
+        
+        (new SyncController())->deepSync($league, $season);
     } elseif ($path === '/api/usage') {
         (new SyncController())->getUsage();
     } else {
