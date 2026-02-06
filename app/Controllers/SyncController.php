@@ -24,6 +24,7 @@ use App\Models\Prediction;
 use App\Models\Round;
 use App\Models\H2H;
 use App\Models\Trophy;
+use App\Models\Transfer;
 use App\Services\FootballApiService;
 use App\Services\GeminiService;
 use App\Config\Config;
@@ -47,6 +48,7 @@ class SyncController
     private $statModel;
     private $liveOddsModel;
     private $trophyModel;
+    private $transferModel;
     private $apiService;
     private $geminiService;
 
@@ -67,6 +69,7 @@ class SyncController
         $this->statModel = new FixtureStatistics();
         $this->liveOddsModel = new LiveOdds();
         $this->trophyModel = new Trophy();
+        $this->transferModel = new Transfer();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
     }
@@ -325,7 +328,7 @@ class SyncController
     {
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
-        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0, 'trophies' => 0];
+        $results = ['countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0, 'predictions' => 0, 'trophies' => 0, 'transfers' => 0];
 
         try {
             $db = Database::getInstance()->getConnection();
@@ -378,11 +381,21 @@ class SyncController
 
                                 // Sync trophies for players, but with a stricter limit to save credits
                                 // Only 1 player per squad or those missing trophies
-                                if ($results['trophies'] < 100 && $this->trophyModel->needsRefresh($p['id'], 'player', 90)) {
+                                // Sync trophies and transfers for players
+                                if ($results['trophies'] < 50 && $this->trophyModel->needsRefresh($p['id'], 'player', 90)) {
                                     $trData = $this->apiService->fetchTrophies(['player' => $p['id']]);
                                     if (isset($trData['response'])) {
                                         $this->trophyModel->saveForPlayer($p['id'], $trData['response']);
                                         $results['trophies']++;
+                                    }
+                                    usleep(200000);
+                                }
+
+                                if ($results['transfers'] < 50 && $this->transferModel->needsRefresh($p['id'], 90)) {
+                                    $transData = $this->apiService->fetchTransfers(['player' => $p['id']]);
+                                    if (isset($transData['response'][0]['transfers'])) {
+                                        $this->transferModel->saveForPlayer($p['id'], $transData['response'][0]['transfers']);
+                                        $results['transfers']++;
                                     }
                                     usleep(200000);
                                 }
