@@ -61,7 +61,6 @@ class SyncController
     private $playerStatModel;
     private $playerSeasonModel;
     private $fixturePlayerStatModel;
-    private $fixtureLineupModel;
     private $bookmakerModel;
     private $betTypeModel;
     private $countryModel;
@@ -93,7 +92,6 @@ class SyncController
         $this->playerStatModel = new PlayerStatistics();
         $this->playerSeasonModel = new PlayerSeason();
         $this->fixturePlayerStatModel = new FixturePlayerStatistics();
-        $this->fixtureLineupModel = new FixtureLineup();
         $this->bookmakerModel = new Bookmaker();
         $this->betTypeModel = new BetType();
         $this->countryModel = new Country();
@@ -161,17 +159,8 @@ class SyncController
             $live = $this->apiService->fetchLiveMatches();
             if (isset($live['error'])) throw new \Exception($live['error']);
 
-            $allLiveMatches = $live['response'] ?? [];
-
-            // FILTER: Only keep matches from bettable leagues
-            $matches = array_filter($allLiveMatches, function($m) {
-                return $this->leagueModel->isBettable($m['league']['id'] ?? 0);
-            });
-
-            // Update live data file with filtered matches
-            $live['response'] = array_values($matches);
             file_put_contents(Config::LIVE_DATA_FILE, json_encode($live));
-
+            $matches = $live['response'] ?? [];
             $results['scanned'] = count($matches);
 
             if (empty($matches)) {
@@ -219,25 +208,15 @@ class SyncController
                         }
                     }
 
-                    // 3. Lineups (Recommended 1/15 min)
-                    // Sync if live or within 45 min of start
-                    $startTime = strtotime($m['fixture']['date']);
-                    if (time() >= $startTime - 2700 && !in_array($m['fixture']['status']['short'], ['FT', 'AET', 'PEN'])) {
-                        $lineupsData = $this->apiService->fetchFixtureLineups($fid);
-                        if (isset($lineupsData['response'])) {
-                            foreach ($lineupsData['response'] as $l) {
-                                if (isset($l['team']['id'])) $this->fixtureLineupModel->save($fid, $l['team']['id'], $l);
-                            }
-                        }
-                    }
-
-                    // 4. Player Stats (Recommended 1/min for live, here synced every 10 min or score change)
-                    $pStatsData = $this->apiService->fetchFixturePlayerStatistics($fid);
-                    if (isset($pStatsData['response'])) {
-                        foreach ($pStatsData['response'] as $teamRow) {
-                            $tid = $teamRow['team']['id'];
-                            foreach ($teamRow['players'] as $pRow) {
-                                $this->fixturePlayerStatModel->save($fid, $tid, $pRow['player']['id'], $pRow['statistics']);
+                    // 3. Player Stats (only at full time)
+                    if (in_array($m['fixture']['status']['short'], ['FT', 'AET', 'PEN'])) {
+                        $pStatsData = $this->apiService->fetchFixturePlayerStatistics($fid);
+                        if (isset($pStatsData['response'])) {
+                            foreach ($pStatsData['response'] as $teamRow) {
+                                $tid = $teamRow['team']['id'];
+                                foreach ($teamRow['players'] as $pRow) {
+                                    $this->fixturePlayerStatModel->save($fid, $tid, $pRow['player']['id'], $pRow['statistics']);
+                                }
                             }
                         }
                     }
@@ -252,32 +231,6 @@ class SyncController
             $betSettler = new \App\Services\BetSettler();
             $results['settled'] = $betSettler->settleFromLive($matches);
             $results['settled'] += $betSettler->settleFromDatabase();
-
-            // 5. Lineups for upcoming matches (starting within 45 min)
-            // This is outside the $matches loop because these matches are NOT YET live.
-            $upcomingForLineups = $db->query("SELECT id, league_id, team_home_id, team_away_id, date FROM fixtures
-                                              WHERE date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 45 MINUTE)
-                                              AND status_short = 'NS'")->fetchAll(PDO::FETCH_ASSOC);
-
-            foreach ($upcomingForLineups as $u) {
-                if (!$this->leagueModel->isBettable($u['league_id'] ?? 0)) continue;
-
-                // Fetch lineups if not recently fetched (every 15 min)
-                // We use a simple check: if we already have it in DB and last_updated is < 15 min, skip
-                // Actually, let's just check if start_xi_json is NULL for either team
-                $hasLineup = $db->query("SELECT COUNT(*) FROM fixture_lineups WHERE fixture_id = {$u['id']}")->fetchColumn();
-                if (!$hasLineup) {
-                    echo "Fetching pre-match lineups for fixture {$u['id']}...\n";
-                    $lineupsData = $this->apiService->fetchFixtureLineups($u['id']);
-                    if (isset($lineupsData['response'])) {
-                        foreach ($lineupsData['response'] as $l) {
-                            if (isset($l['team']['id'])) $this->fixtureLineupModel->save($u['id'], $l['team']['id'], $l);
-                        }
-                        $results['lineups'] = ($results['lineups'] ?? 0) + 1;
-                    }
-                    usleep(200000);
-                }
-            }
 
             foreach ($matches as $m) {
                 $fid = $m['fixture']['id'];
@@ -323,21 +276,8 @@ class SyncController
             $leaguesData = $this->apiService->fetchLeagues();
             if (isset($leaguesData['response'])) {
                 foreach ($leaguesData['response'] as $row) {
-                    // FILTER: Only sync leagues with odds coverage (Bettable)
-                    // unless they are explicitly in the PREMIUM_LEAGUES list
-                    $isPremium = in_array($row['league']['id'], Config::PREMIUM_LEAGUES);
-                    $hasOdds = false;
-                    foreach ($row['seasons'] as $s) {
-                        if ($s['year'] == $season && ($s['coverage']['odds'] ?? false)) {
-                            $hasOdds = true;
-                            break;
-                        }
-                    }
-
-                    if ($isPremium || $hasOdds) {
-                        $this->leagueModel->save($row);
-                        $results['leagues']++;
-                    }
+                    $this->leagueModel->save($row);
+                    $results['leagues']++;
                 }
             }
 
@@ -497,12 +437,9 @@ class SyncController
                 foreach ($cData['response'] as $c) { $this->countryModel->save($c); $results['countries']++; }
             }
 
-            // 2. League-Specific Data (Filter by Bettable only)
-            $relevantLeagues = $db->query("SELECT DISTINCT f.league_id
-                                           FROM fixtures f
-                                           JOIN leagues l ON f.league_id = l.id
-                                           WHERE f.date BETWEEN DATE_SUB(NOW(), INTERVAL 7 DAY) AND DATE_ADD(NOW(), INTERVAL 14 DAY)
-                                           AND (l.coverage_json LIKE '%\"odds\":true%' OR l.id IN (".implode(',', Config::PREMIUM_LEAGUES)."))")
+            // 2. League-Specific Data
+            $relevantLeagues = $db->query("SELECT DISTINCT league_id FROM fixtures
+                                           WHERE date BETWEEN DATE_SUB(NOW(), INTERVAL 30 DAY) AND DATE_ADD(NOW(), INTERVAL 30 DAY)")
                                   ->fetchAll(PDO::FETCH_COLUMN);
 
             if (empty($relevantLeagues)) $relevantLeagues = Config::PREMIUM_LEAGUES;
@@ -687,13 +624,12 @@ class SyncController
         $db = Database::getInstance()->getConnection();
         $today = date('Y-m-d');
 
-        // Trova i match finiti oggi che non hanno statistiche o formazioni nel DB
+        // Trova i match finiti oggi che non hanno statistiche nel DB
         $sql = "SELECT DISTINCT f.id FROM fixtures f
                 LEFT JOIN fixture_statistics s ON f.id = s.fixture_id
-                LEFT JOIN fixture_lineups l ON f.id = l.fixture_id
                 WHERE f.date > DATE_SUB(NOW(), INTERVAL 24 HOUR)
                 AND f.status_short IN ('FT', 'AET', 'PEN')
-                AND (s.fixture_id IS NULL OR l.fixture_id IS NULL)
+                AND s.fixture_id IS NULL
                 LIMIT 30";
 
         $fixtures = $db->query($sql)->fetchAll(PDO::FETCH_COLUMN);
@@ -707,13 +643,6 @@ class SyncController
                         $this->statModel->save($fid, $st['team']['id'], $st['statistics']);
                         $count++;
                     }
-                }
-            }
-
-            $lineupsData = $this->apiService->fetchFixtureLineups($fid);
-            if (isset($lineupsData['response'])) {
-                foreach ($lineupsData['response'] as $l) {
-                    if (isset($l['team']['id'])) $this->fixtureLineupModel->save($fid, $l['team']['id'], $l);
                 }
             }
 
