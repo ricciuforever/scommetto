@@ -5,6 +5,31 @@ namespace App\Config;
 
 class Config
 {
+    const FOOTBALL_API_BASE_URL = 'https://v3.football.api-sports.io';
+    const LOGS_PATH = __DIR__ . '/../../logs/';
+    const LOG_FILE = self::LOGS_PATH . 'app_error.log';
+    const DATA_PATH = __DIR__ . '/../../data/';
+    const LIVE_DATA_FILE = self::DATA_PATH . 'live_matches.json';
+    const BETS_HISTORY_FILE = self::DATA_PATH . 'bets_history.json';
+    const USAGE_FILE = self::DATA_PATH . 'usage.json';
+
+    // Popular League IDs
+    const LEAGUE_SERIE_A = 135;
+    const LEAGUE_PREMIER = 39;
+    const LEAGUE_LA_LIGA = 140;
+    const LEAGUE_BUNDESLIGA = 78;
+    const LEAGUE_LIGUE_1 = 61;
+    const LEAGUE_CHAMPIONS = 2;
+    const LEAGUE_EUROPA = 3;
+
+    const PREMIUM_LEAGUES = [
+        135, // Serie A
+        39,  // Premier
+        140, // La Liga
+        78,  // Bundesliga
+        61   // Ligue 1
+    ];
+
     private static $env = [];
 
     public static function init()
@@ -33,33 +58,6 @@ class Config
 
     public static function getCurrentSeason()
     {
-        // Se siamo tra Gennaio (01) e Giugno (06), la stagione API è l'anno precedente.
-        // Esempio: Febbraio 2026 -> Stagione 2025
         return (int)date('m') <= 6 ? (int)date('Y') - 1 : (int)date('Y');
     }
-
-    const FOOTBALL_API_BASE_URL = 'https://v3.football.api-sports.io';
-    const LOGS_PATH = __DIR__ . '/../../logs/';
-    const LOG_FILE = self::LOGS_PATH . 'app_error.log';
-    const DATA_PATH = __DIR__ . '/../../data/';
-    const LIVE_DATA_FILE = self::DATA_PATH . 'live_matches.json';
-    const BETS_HISTORY_FILE = self::DATA_PATH . 'bets_history.json';
-    const USAGE_FILE = self::DATA_PATH . 'usage.json';
-
-    // Popular League IDs
-    const LEAGUE_SERIE_A = 135;
-    const LEAGUE_PREMIER = 39;
-    const LEAGUE_LA_LIGA = 140;
-    const LEAGUE_BUNDESLIGA = 78;
-    const LEAGUE_LIGUE_1 = 61;
-    const LEAGUE_CHAMPIONS = 2;
-    const LEAGUE_EUROPA = 3;
-
-    const PREMIUM_LEAGUES = [
-        self::LEAGUE_SERIE_A,
-        self::LEAGUE_PREMIER,
-        self::LEAGUE_LA_LIGA,
-        self::LEAGUE_BUNDESLIGA,
-        self::LEAGUE_LIGUE_1
-    ];
 }
