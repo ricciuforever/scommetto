@@ -15,6 +15,19 @@ class Coach
         $this->db = Database::getInstance()->getConnection();
     }
 
+    public function needsRefresh($teamId, $hours = 24)
+    {
+        $stmt = $this->db->prepare("SELECT last_updated FROM coaches WHERE team_id = ?");
+        $stmt->execute([$teamId]);
+        $row = $stmt->fetch();
+
+        if (!$row)
+            return true;
+
+        $lastUpdated = strtotime($row['last_updated']);
+        return (time() - $lastUpdated) > ($hours * 3600);
+    }
+
     public function getByTeam($teamId)
     {
         $stmt = $this->db->prepare("SELECT * FROM coaches WHERE team_id = ?");

@@ -53,7 +53,8 @@ class SyncController
                 'scheduled_tasks' => []
             ];
 
-            // 0. Run scheduled tasks (Countries, etc.)
+            // 0. Run scheduled tasks (Countries, Leagues, Standings, etc.)
+            // We only run ONE major task per minute to distribute API load
             $results['scheduled_tasks'] = $this->runScheduledTasks();
 
             // 1. Scan live matches
@@ -66,7 +67,6 @@ class SyncController
             $results['settled'] = $betSettler->settleFromLive($matches);
 
             // 3. Occasionally check for orphaned bets (those no longer in live but still pending)
-            // We only do this every 30 mins to save API credits
             $settleLock = Config::DATA_PATH . 'settlement.lock';
             if (!file_exists($settleLock) || (time() - filemtime($settleLock) > 1800)) {
                 $results['settled'] += $this->checkSettleBets();
@@ -109,7 +109,6 @@ class SyncController
                     }
                 }
 
-                // CRITICAL: Limit to 1 analysis per run
                 break;
             }
 
@@ -127,6 +126,7 @@ class SyncController
             $results = [
                 'overview' => $this->syncLeagueOverview($leagueId, $season),
                 'top_stats' => $this->syncLeagueTopStats($leagueId, $season),
+                'fixtures' => $this->syncLeagueFixtures($leagueId, $season),
                 'status' => 'success'
             ];
 
@@ -140,7 +140,7 @@ class SyncController
     {
         $results = ['teams' => 0, 'standings' => 0, 'rounds' => 0];
 
-        // 1. Sync Standings & Teams (Standings API provides team basic info)
+        // 1. Sync Standings & Teams
         $standingModel = new \App\Models\Standing();
         $teamModel = new \App\Models\Team();
         $data = $this->apiService->fetchStandings($leagueId, $season);
@@ -148,12 +148,10 @@ class SyncController
         if (isset($data['response'][0]['league']['standings'])) {
             foreach ($data['response'][0]['league']['standings'] as $group) {
                 foreach ($group as $row) {
-                    // Save Team Info
                     $teamModel->save(['team' => $row['team']]);
                     $teamModel->linkToLeague($row['team']['id'], $leagueId, $season);
                     $results['teams']++;
 
-                    // Save Standing
                     $standingModel->save($leagueId, $row);
                     $results['standings']++;
                 }
@@ -195,21 +193,12 @@ class SyncController
         $results = [];
 
         foreach ($types as $type) {
+            $data = null;
             switch ($type) {
-                case 'scorers':
-                    $data = $this->apiService->fetchTopScorers($leagueId, $season);
-                    break;
-                case 'assists':
-                    $data = $this->apiService->fetchTopAssists($leagueId, $season);
-                    break;
-                case 'yellow_cards':
-                    $data = $this->apiService->fetchTopYellowCards($leagueId, $season);
-                    break;
-                case 'red_cards':
-                    $data = $this->apiService->fetchTopRedCards($leagueId, $season);
-                    break;
-                default:
-                    $data = null;
+                case 'scorers': $data = $this->apiService->fetchTopScorers($leagueId, $season); break;
+                case 'assists': $data = $this->apiService->fetchTopAssists($leagueId, $season); break;
+                case 'yellow_cards': $data = $this->apiService->fetchTopYellowCards($leagueId, $season); break;
+                case 'red_cards': $data = $this->apiService->fetchTopRedCards($leagueId, $season); break;
             }
 
             if ($data && isset($data['response'])) {
@@ -220,90 +209,80 @@ class SyncController
         return $results;
     }
 
-    public function syncTeamDetails($teamId, $leagueId, $season)
-    {
-        $teamModel = new \App\Models\Team();
-        $statsModel = new \App\Models\TeamStats();
-        $playerModel = new \App\Models\Player();
-
-        $results = ['team' => false, 'stats' => false, 'squad' => 0];
-
-        // 1. Full Team & Venue Details
-        $tData = $this->apiService->fetchTeam($teamId);
-        if (isset($tData['response'][0])) {
-            $teamModel->save($tData['response'][0]);
-            $results['team'] = true;
-        }
-
-        // 2. Team Stats
-        $tsData = $this->apiService->fetchTeamStatistics($teamId, $leagueId, $season);
-        if (isset($tsData['response'])) {
-            $statsModel->save($teamId, $leagueId, $season, $tsData['response']);
-            $results['stats'] = true;
-        }
-
-        // 3. Squad
-        $sqData = $this->apiService->fetchSquad($teamId);
-        if (isset($sqData['response'][0]['players'])) {
-            foreach ($sqData['response'][0]['players'] as $p) {
-                $playerModel->save($p);
-                $playerModel->linkToSquad($teamId, $p, $p);
-                $results['squad']++;
-            }
-        }
-
-        return $results;
-    }
-
     private function runScheduledTasks()
     {
         $log = [];
         try {
-            // SYNC COUNTRIES (Once every 24h)
+            $season = 2024;
+
+            // 1. GLOBAL SYNC (Once every 24h)
             $countryModel = new \App\Models\Country();
             if ($countryModel->needsRefresh(24)) {
                 $data = $this->apiService->fetchCountries();
-                if (isset($data['response']) && is_array($data['response'])) {
-                    foreach ($data['response'] as $c) {
-                        $countryModel->save($c);
-                    }
+                if (isset($data['response'])) {
+                    foreach ($data['response'] as $c) $countryModel->save($c);
                     $log[] = "Countries Synced: " . count($data['response']);
+                    return $log; // Limit to one major task
                 }
             }
 
-            // SYNC SEASONS (Once every 24h)
             $seasonModel = new \App\Models\Season();
             if ($seasonModel->needsRefresh(24)) {
                 $data = $this->apiService->fetchSeasons();
-                if (isset($data['response']) && is_array($data['response'])) {
-                    foreach ($data['response'] as $year) {
-                        $seasonModel->save($year);
-                    }
+                if (isset($data['response'])) {
+                    foreach ($data['response'] as $year) $seasonModel->save($year);
                     $log[] = "Seasons Synced: " . count($data['response']);
+                    return $log;
                 }
             }
 
-            // SYNC LEAGUES (Once every 24h)
             $leagueModel = new \App\Models\League();
-            if ($leagueModel->needsRefresh(24)) {
+            if ($leagueModel->needsRefresh(1)) { // Documentation says 1h
                 $data = $this->apiService->fetchLeagues();
-                if (isset($data['response']) && is_array($data['response'])) {
-                    foreach ($data['response'] as $row) {
-                        $leagueModel->save($row);
-                    }
+                if (isset($data['response'])) {
+                    foreach ($data['response'] as $row) $leagueModel->save($row);
                     $log[] = "Leagues Synced: " . count($data['response']);
+                    return $log;
                 }
             }
 
-            // SYNC PREMIUM LEAGUES STANDINGS & ROUNDS (Every 12h)
+            // 2. LEAGUE SPECIFIC SYNC (Standings 1h, others 24h)
             $standingModel = new \App\Models\Standing();
-            $season = 2024; // Could be dynamic
+            $topStatsModel = new \App\Models\TopStats();
+            $roundModel = new \App\Models\Round();
+
             foreach (Config::PREMIUM_LEAGUES as $lId) {
-                if ($standingModel->needsRefresh($lId, 12)) {
+                // Standings (1h)
+                if ($standingModel->needsRefresh($lId, 1)) {
                     $res = $this->syncLeagueOverview($lId, $season);
-                    $log[] = "League $lId Overview Refreshed: " . json_encode($res);
+                    $log[] = "League $lId Standings Refreshed: " . json_encode($res);
+                    return $log;
+                }
+
+                // Top Stats (24h)
+                if ($topStatsModel->needsRefresh($lId, $season, 'scorers', 24)) {
+                    $res = $this->syncLeagueTopStats($lId, $season);
+                    $log[] = "League $lId Top Stats Refreshed: " . json_encode($res);
+                    return $log;
+                }
+
+                // Fixtures (24h)
+                // We could implement a Fixture::needsRefresh(league_id, 24)
+                // For now let's use a simpler lock file per league fixtures
+                $fixtureLock = Config::DATA_PATH . "fixtures_sync_$lId.lock";
+                if (!file_exists($fixtureLock) || (time() - filemtime($fixtureLock) > 86400)) {
+                    $res = $this->syncLeagueFixtures($lId, $season);
+                    touch($fixtureLock);
+                    $log[] = "League $lId Fixtures Synced: " . json_encode($res);
+                    return $log;
                 }
             }
+
+            // 3. TEAM SPECIFIC SYNC (Details & Coaches 24h)
+            // This is harder to loop efficiently without exhausting quota if we have many teams
+            // We'll sync teams that are in upcoming or live matches primarily
+            // (Handled partially by syncLeagueOverview which saves teams from standings)
+
         } catch (\Throwable $e) {
             $log[] = "Task Error: " . $e->getMessage();
         }
