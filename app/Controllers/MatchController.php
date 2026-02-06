@@ -3,7 +3,6 @@
 
 namespace App\Controllers;
 
-use App\Services\FootballApiService;
 use App\Services\GeminiService;
 use App\Services\BetSettler;
 use App\Config\Config;
@@ -16,13 +15,12 @@ use App\Models\Player;
 
 class MatchController
 {
-    private $apiService;
     private $geminiService;
     private $betSettler;
 
     public function __construct()
     {
-        $this->apiService = new FootballApiService();
+        // Strictly no FootballApiService here anymore
         $this->geminiService = new GeminiService();
         $this->betSettler = new BetSettler();
     }
@@ -37,32 +35,34 @@ class MatchController
         }
     }
 
+    /**
+     * Reads live matches from local cache only.
+     * The Cron job is responsible for updating this file.
+     */
     public function getLive()
     {
         header('Content-Type: application/json');
         try {
             $cacheFile = Config::LIVE_DATA_FILE;
-            if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < 60)) {
+            if (file_exists($cacheFile)) {
                 echo file_get_contents($cacheFile);
-                return;
+            } else {
+                echo json_encode(['response' => [], 'status' => 'waiting_for_sync']);
             }
-
-            $data = $this->apiService->fetchLiveMatches();
-            if (!isset($data['error'])) {
-                file_put_contents($cacheFile, json_encode($data));
-                $this->betSettler->settleFromLive($data['response'] ?? []);
-            }
-            echo json_encode($data);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
+    /**
+     * Performs AI analysis using strictly local DB data.
+     */
     public function analyze($id)
     {
         header('Content-Type: application/json');
         try {
-            $liveData = json_decode(file_exists(Config::LIVE_DATA_FILE) ? file_get_contents(Config::LIVE_DATA_FILE) : '{"response":[]}', true);
+            $cacheFile = Config::LIVE_DATA_FILE;
+            $liveData = json_decode(file_exists($cacheFile) ? file_get_contents($cacheFile) : '{"response":[]}', true);
             $match = null;
 
             foreach ($liveData['response'] ?? [] as $m) {
@@ -73,19 +73,11 @@ class MatchController
             }
 
             if (!$match) {
-                echo json_encode(['error' => 'Match not found in live data']);
+                echo json_encode(['error' => 'Partita non trovata nei dati live locali. Attendi sincronizzazione.']);
                 return;
             }
 
-            // Fetch Predictions for AI
-            $predictionModel = new Prediction();
-            if ($predictionModel->needsRefresh((int) $id)) {
-                $predData = $this->apiService->fetchPredictions($id);
-                if (isset($predData['response'][0])) {
-                    $predictionModel->save((int) $id, $predData['response'][0]);
-                }
-            }
-
+            // Gemini analysis uses IntelligenceService which is already DB-only
             $prediction = $this->geminiService->analyze($match);
 
             try {
@@ -105,47 +97,49 @@ class MatchController
         }
     }
 
+    /**
+     * Gets predictions from DB only.
+     */
     public function getPredictions($id)
     {
         header('Content-Type: application/json');
         try {
             $predictionModel = new Prediction();
+            $data = $predictionModel->getByFixtureId((int) $id);
 
-            if ($predictionModel->needsRefresh((int) $id)) {
-                $data = $this->apiService->fetchPredictions($id);
-                if (isset($data['response'][0])) {
-                    $predictionModel->save((int) $id, $data['response'][0]);
-                }
+            if (!$data) {
+                echo json_encode(['error' => 'Pronostico non ancora disponibile nel database.']);
+                return;
             }
-            echo json_encode($predictionModel->getByFixtureId((int) $id));
+            echo json_encode($data);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
+    /**
+     * Gets standings from DB only.
+     */
     public function getStandings($leagueId)
     {
         header('Content-Type: application/json');
         try {
             $standingModel = new Standing();
-            $season = 2025;
-            if ($standingModel->needsRefresh((int) $leagueId)) {
-                $data = $this->apiService->fetchStandings($leagueId, $season);
-                if (isset($data['response'][0]['league']['standings'][0])) {
-                    $rows = $data['response'][0]['league']['standings'][0];
-                    $teamModel = new Team();
-                    foreach ($rows as $row) {
-                        $teamModel->save($row['team']);
-                        $standingModel->save((int) $leagueId, $row);
-                    }
-                }
+            $data = $standingModel->getByLeague((int) $leagueId);
+
+            if (empty($data)) {
+                echo json_encode(['error' => 'Classifica non ancora sincronizzata nel database.']);
+                return;
             }
-            echo json_encode($standingModel->getByLeague((int) $leagueId));
+            echo json_encode($data);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
+    /**
+     * Gets team, coach and squad from DB only.
+     */
     public function getTeamDetails($teamId)
     {
         header('Content-Type: application/json');
@@ -154,30 +148,14 @@ class MatchController
             $coachModel = new Coach();
             $playerModel = new Player();
 
-            if ($teamModel->needsRefresh((int) $teamId)) {
-                $data = $this->apiService->fetchTeam($teamId);
-                if (isset($data['response'][0])) {
-                    $teamModel->save($data['response'][0]);
-                }
-                $coachData = $this->apiService->fetchCoach($teamId);
-                if (isset($coachData['response'][0])) {
-                    $coachModel->save($coachData['response'][0], (int) $teamId);
-                }
-                $squadData = $this->apiService->fetchSquad($teamId);
-                if (isset($squadData['response'][0]['players'])) {
-                    foreach ($squadData['response'][0]['players'] as $p) {
-                        $playerModel->save($p);
-                        $playerModel->linkToSquad((int) $teamId, $p, [
-                            'position' => $p['position'],
-                            'number' => $p['number']
-                        ]);
-                    }
-                }
-            }
-
             $team = $teamModel->getById((int) $teamId);
             $coach = $coachModel->getByTeam((int) $teamId);
             $squad = $playerModel->getByTeam((int) $teamId);
+
+            if (!$team) {
+                echo json_encode(['error' => 'Dati squadra non presenti nel database. Attendi il cron sync.']);
+                return;
+            }
 
             echo json_encode([
                 'team' => $team,
@@ -185,26 +163,23 @@ class MatchController
                 'squad' => $squad
             ]);
         } catch (\Throwable $e) {
-            error_log("Error in getTeamDetails: " . $e->getMessage());
-            echo json_encode([
-                'error' => 'Si è verificato un errore nel recupero dei dati.',
-                'details' => $e->getMessage()
-            ]);
+            echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
+    /**
+     * Gets player details from DB only.
+     */
     public function getPlayerDetails($playerId)
     {
         header('Content-Type: application/json');
         try {
             $playerModel = new Player();
             $player = $playerModel->getById((int) $playerId);
+
             if (!$player) {
-                $data = $this->apiService->fetchPlayer(['id' => (int)$playerId]);
-                if (isset($data['response'][0]['player'])) {
-                    $playerModel->save($data['response'][0]['player']);
-                    $player = $playerModel->getById((int) $playerId);
-                }
+                echo json_encode(['error' => 'Dettagli giocatore non presenti nel database.']);
+                return;
             }
             echo json_encode($player);
         } catch (\Throwable $e) {

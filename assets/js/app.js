@@ -161,7 +161,7 @@ function renderMatches() {
         return bPinned - aPinned;
     });
 
-    container.innerHTML = filtered.length === 0 ? '<div class="glass p-10 rounded-[32px] text-center text-slate-500 font-bold">Nessun evento live disponibile al momento.</div>' : '';
+    container.innerHTML = filtered.length === 0 ? '<div class="glass p-10 rounded-[32px] text-center text-slate-500 font-bold italic uppercase tracking-widest">Nessun evento live sincronizzato.</div>' : '';
 
     filtered.forEach(m => {
         const isPinned = pinnedMatches.has(m.fixture.id);
@@ -249,7 +249,7 @@ async function showPlayerDetails(playerId, playerName = 'Giocatore') {
 
     modal.classList.remove('hidden');
     title.textContent = playerName;
-    body.innerHTML = '<div class="text-center py-12 text-slate-500 font-bold uppercase tracking-widest animate-pulse">Caricamento dettagli giocatore...</div>';
+    body.innerHTML = '<div class="text-center py-12 text-slate-500 font-bold uppercase tracking-widest animate-pulse">Recupero dal database...</div>';
     btn.classList.add('hidden');
 
     try {
@@ -257,7 +257,7 @@ async function showPlayerDetails(playerId, playerName = 'Giocatore') {
         const p = await res.json();
 
         if (!p || p.error) {
-            body.innerHTML = "Dati giocatore non disponibili.";
+            body.innerHTML = `<div class="text-center py-12 text-slate-500 font-bold">${p.error || "Dati giocatore non disponibili nel DB."}</div>`;
             return;
         }
 
@@ -433,6 +433,11 @@ async function showStandings(leagueId, leagueName) {
         const res = await fetch(`/api/standings/${leagueId}`);
         const data = await res.json();
 
+        if (data.error) {
+            body.innerHTML = `<div class="text-center py-12 text-slate-500 font-bold italic">${data.error}</div>`;
+            return;
+        }
+
         let html = `
             <div class="overflow-x-auto">
                 <table class="w-full text-xs text-left">
@@ -486,21 +491,23 @@ async function showTeamDetails(teamId) {
 
     modal.classList.remove('hidden');
     title.textContent = `Dettagli Squadra`;
-    body.innerHTML = '<div class="text-center py-12 text-slate-500 font-bold uppercase tracking-widest animate-pulse">Caricamento dettagli...</div>';
+    body.innerHTML = '<div class="text-center py-12 text-slate-500 font-bold uppercase tracking-widest animate-pulse">Recupero dal database...</div>';
     btn.classList.add('hidden');
 
     try {
         const res = await fetch(`/api/team/${teamId}`);
         const data = await res.json();
+
+        if (data.error) {
+            body.innerHTML = `<div class="text-center py-12 text-slate-500 font-bold italic">${data.error}</div>`;
+            return;
+        }
+
         const t = data.team;
         const c = data.coach;
         const squad = data.squad || [];
 
         title.textContent = t ? t.name : 'Team details';
-        if (!t) {
-            body.innerHTML = "Dati squadra non trovati.";
-            return;
-        }
 
         let squadHtml = '';
         if (squad.length > 0) {
@@ -599,7 +606,7 @@ async function analyzeMatch(id) {
         const data = await res.json();
 
         if (data.error) {
-            body.innerHTML = `<div class="text-danger font-bold">${data.error}</div>`;
+            body.innerHTML = `<div class="text-danger font-bold text-center py-12 uppercase tracking-widest italic">${data.error}</div>`;
             return;
         }
 
@@ -695,7 +702,7 @@ async function showIntelligence(id) {
 
     modal.classList.remove('hidden');
     title.textContent = "Intelligence & Predizioni";
-    body.innerHTML = '<div class="text-center py-12"><div class="inline-flex items-center gap-3 bg-white/5 text-slate-500 px-8 py-4 rounded-[24px] font-black text-xs tracking-widest animate-pulse uppercase border border-white/5"><i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Loading Intelligence...</div></div>';
+    body.innerHTML = '<div class="text-center py-12"><div class="inline-flex items-center gap-3 bg-white/5 text-slate-500 px-8 py-4 rounded-[24px] font-black text-xs tracking-widest animate-pulse uppercase border border-white/5"><i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Reading DB...</div></div>';
     btn.classList.add('hidden');
     if (window.lucide) lucide.createIcons();
 
@@ -704,7 +711,7 @@ async function showIntelligence(id) {
         const data = await res.json();
 
         if (!data || data.error) {
-            body.innerHTML = '<div class="text-center py-12 text-slate-500 font-bold">Dati non disponibili per questo match.</div>';
+            body.innerHTML = `<div class="text-center py-12 text-slate-500 font-bold italic">${data.error || "Dati non disponibili nel database."}</div>`;
             return;
         }
 
@@ -785,65 +792,6 @@ fetchLive();
 fetchHistory();
 fetchUsage();
 
-// Event Listener for Manual Sync
-const syncBtn = document.getElementById('sync-btn');
-if (syncBtn) {
-    syncBtn.addEventListener('click', async () => {
-        syncBtn.disabled = true;
-        const originalContent = syncBtn.innerHTML;
-        syncBtn.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4 rotator"></i>';
-        if (window.lucide) lucide.createIcons();
-
-        try {
-            const res = await fetch('/api/sync');
-            const data = await res.json();
-            console.log('Sync completed:', data);
-            await fetchHistory();
-        } catch (e) {
-            console.error('Sync failed', e);
-        } finally {
-            syncBtn.disabled = false;
-            syncBtn.innerHTML = originalContent;
-            if (window.lucide) lucide.createIcons();
-        }
-    });
-}
-
-// Event Listener for Deep Sync Intelligence
-const deepSyncBtn = document.getElementById('deep-sync-btn');
-if (deepSyncBtn) {
-    deepSyncBtn.addEventListener('click', async () => {
-        deepSyncBtn.disabled = true;
-        const org = deepSyncBtn.innerHTML;
-        deepSyncBtn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin text-accent"></i> Ingesting...';
-        if (window.lucide) lucide.createIcons();
-        try {
-            const res = await fetch('/api/deep-sync');
-            const data = await res.json();
-            alert('Deep Sync Completato!');
-        } catch (e) {
-            console.error('Deep sync failed', e);
-        } finally {
-            deepSyncBtn.disabled = false;
-            deepSyncBtn.innerHTML = org;
-            if (window.lucide) lucide.createIcons();
-        }
-    });
-}
-
-// Intervals
-setInterval(fetchLive, 60000);    // Refresh full data every 60s
-setInterval(fetchHistory, 40000); // Refresh history every 40s
-setInterval(updateMinutes, 60000); // Increment local minutes every 60s
-setInterval(fetchUsage, 60000);   // Refresh usage every 60s
-
-// Close modal on click outside
-window.onclick = (event) => {
-    if (event.target == document.getElementById('analysis-modal')) {
-        closeModal();
-    }
-};
-
 // Theme Toggle Logic
 const themeToggle = document.getElementById('theme-toggle');
 const htmlElement = document.documentElement;
@@ -869,5 +817,18 @@ if (themeToggle) {
         if (window.lucide) lucide.createIcons();
     });
 }
+
+// Intervals
+setInterval(fetchLive, 60000);    // Refresh data from local cache every 60s
+setInterval(fetchHistory, 40000); // Refresh history every 40s
+setInterval(updateMinutes, 60000); // Increment local minutes every 60s
+setInterval(fetchUsage, 60000);   // Refresh usage every 60s
+
+// Close modal on click outside
+window.onclick = (event) => {
+    if (event.target == document.getElementById('analysis-modal')) {
+        closeModal();
+    }
+};
 
 initTheme();
