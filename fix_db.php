@@ -247,9 +247,9 @@ try {
 
       "api_usage" => "CREATE TABLE IF NOT EXISTS `api_usage` (
           `id` INT PRIMARY KEY DEFAULT 1,
-          `requests_limit` INT DEFAULT 7500,
+          `requests_limit` INT DEFAULT 75000,
           `requests_used` INT DEFAULT 0,
-          `requests_remaining` INT DEFAULT 7500,
+          `requests_remaining` INT DEFAULT 75000,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
@@ -460,7 +460,7 @@ try {
           "ALTER TABLE fixture_odds ADD COLUMN odds_json LONGTEXT AFTER bet_id"
       ],
       "api_usage" => [
-          "ALTER TABLE api_usage ADD COLUMN requests_limit INT DEFAULT 7500 AFTER id"
+          "ALTER TABLE api_usage ADD COLUMN requests_limit INT DEFAULT 75000 AFTER id"
       ]
   ];
 
