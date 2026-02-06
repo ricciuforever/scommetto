@@ -141,19 +141,6 @@
                         <div id="history-container"></div>
                     </div>
                 </div>
-                <div
-                    class="bg-gradient-to-br from-indigo-600 to-accent p-6 rounded-[32px] text-white shadow-xl shadow-indigo-500/20">
-                    <div
-                        class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4 backdrop-blur-md">
-                        <i data-lucide="zap" class="w-6 h-6 text-white"></i>
-                    </div>
-                    <h3 class="font-black text-lg mb-2 tracking-tight">Potenza AI</h3>
-                    <p class="text-white/80 text-sm leading-relaxed mb-4 font-medium">L'algoritmo analizza migliaia di
-                        dati per darti i consigli migliori in tempo reale.</p>
-                    <button
-                        class="w-full bg-white text-indigo-600 font-black py-3 rounded-2xl text-xs uppercase tracking-widest hover:scale-105 transition-transform">Scopri
-                        di più</button>
-                </div>
             </aside>
         </div>
     </main>
