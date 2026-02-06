@@ -410,7 +410,8 @@ try {
           "ALTER TABLE fixtures ADD COLUMN status VARCHAR(20) AFTER elapsed",
           "ALTER TABLE fixtures ADD COLUMN score_home INT AFTER status",
           "ALTER TABLE fixtures ADD COLUMN score_away INT AFTER score_home",
-          "ALTER TABLE fixtures ADD COLUMN venue_id INT AFTER score_away"
+          "ALTER TABLE fixtures ADD COLUMN venue_id INT AFTER score_away",
+          "ALTER TABLE fixtures ADD COLUMN last_detailed_update TIMESTAMP NULL"
       ],
       "standings" => [
           "ALTER TABLE standings ADD COLUMN group_name VARCHAR(100) AFTER form",

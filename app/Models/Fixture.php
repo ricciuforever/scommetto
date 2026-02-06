@@ -45,6 +45,19 @@ class Fixture
         ]);
     }
 
+    public function updateDetailedTimestamp($id)
+    {
+        $stmt = $this->db->prepare("UPDATE fixtures SET last_detailed_update = CURRENT_TIMESTAMP WHERE id = ?");
+        return $stmt->execute([$id]);
+    }
+
+    public function getById($id)
+    {
+        $stmt = $this->db->prepare("SELECT * FROM fixtures WHERE id = ?");
+        $stmt->execute([$id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
     public function getTeamRecent($team_id, $limit = 5)
     {
         $limit = (int) $limit;
@@ -60,5 +73,28 @@ class Fixture
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$team_id, $team_id]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Controlla se ci sono match in corso o che inizieranno a breve
+     */
+    public function hasActiveOrUpcoming($bufferHours = 2)
+    {
+        // Match iniziati nelle ultime 3 ore (potrebbero essere ancora live)
+        // o che inizieranno nelle prossime $bufferHours ore
+        $sql = "SELECT COUNT(*) as count FROM fixtures
+                WHERE (date BETWEEN DATE_SUB(NOW(), INTERVAL 3 HOUR) AND DATE_ADD(NOW(), INTERVAL ? HOUR))
+                OR status_short NOT IN ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD')";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$bufferHours]);
+        $row = $stmt->fetch();
+        return ($row['count'] > 0);
+    }
+
+    public function getActiveFixtures()
+    {
+        $sql = "SELECT * FROM fixtures WHERE status_short NOT IN ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD')";
+        return $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
     }
 }

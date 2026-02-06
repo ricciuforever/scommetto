@@ -17,9 +17,14 @@ class FootballApiService
         $this->baseUrl = Config::FOOTBALL_API_BASE_URL;
     }
 
-    public function fetchLiveMatches()
+    public function fetchLiveMatches($params = [])
     {
-        return $this->request('/fixtures?live=all');
+        $endpoint = '/fixtures?live=all';
+        if (!empty($params)) {
+            $queryString = http_build_query($params);
+            $endpoint .= "&$queryString";
+        }
+        return $this->request($endpoint);
     }
 
     public function fetchCountries()
@@ -102,6 +107,12 @@ class FootballApiService
     public function fetchTeam($id)
     {
         return $this->request("/teams?id=$id");
+    }
+
+    public function fetchTeams($params)
+    {
+        $queryString = http_build_query($params);
+        return $this->request("/teams?$queryString");
     }
 
     public function fetchCoach($teamId)
@@ -216,6 +227,23 @@ class FootballApiService
     public function fetchBets()
     {
         return $this->request("/odds/bets");
+    }
+
+    public function fetchPlayerProfiles($params)
+    {
+        $queryString = http_build_query($params);
+        return $this->request("/players/profiles?$queryString");
+    }
+
+    public function fetchPlayers($params)
+    {
+        $queryString = http_build_query($params);
+        return $this->request("/players?$queryString");
+    }
+
+    public function fetchStatus()
+    {
+        return $this->request("/status");
     }
 
     public function request($endpoint)
