@@ -1,5 +1,5 @@
 <?php
-// fix_db.php - Scommetto DB Migration & Repair Script v8.4
+// fix_db.php - Scommetto DB Migration & Repair Script v8.5
 require_once __DIR__ . '/bootstrap.php';
 use App\Services\Database;
 
@@ -7,7 +7,16 @@ try {
   $db = Database::getInstance()->getConnection();
   $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-  echo "🚀 Inizio riparazione e migrazione database (v8.4)...\n";
+  echo "🚀 Inizio riparazione e migrazione database (v8.5)...\n";
+
+  // --- 0. PULIZIA VECCHIE TABELLE DEPRECATE ---
+  $deprecated = ["team_squads"];
+  foreach ($deprecated as $oldTable) {
+      try {
+          $db->exec("DROP TABLE IF EXISTS `$oldTable` ");
+          echo "🧹 Tabella deprecata `$oldTable` rimossa.\n";
+      } catch (\Exception $e) {}
+  }
 
   // --- 1. CREAZIONE TABELLE BASE (Consolidate) ---
 
@@ -461,7 +470,7 @@ try {
       }
   }
 
-  echo "\n✨ Database sincronizzato con successo v8.4.\n";
+  echo "\n✨ Database sincronizzato con successo v8.5.\n";
 
 } catch (\Throwable $e) {
   echo "❌ Errore critico: " . $e->getMessage() . "\n";
