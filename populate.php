@@ -7,6 +7,7 @@ use App\Config\Config;
 
 $sync = new SyncController();
 $season = 2024;
+set_time_limit(0);
 
 echo "🚀 Inizio popolamento database...\n";
 
