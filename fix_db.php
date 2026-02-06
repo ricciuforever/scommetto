@@ -461,8 +461,41 @@ try {
       ],
       "api_usage" => [
           "ALTER TABLE api_usage ADD COLUMN requests_limit INT DEFAULT 75000 AFTER id"
+      ],
+      "fixtures" => [
+          "CREATE INDEX IF NOT EXISTS idx_fixtures_date ON fixtures(date)",
+          "CREATE INDEX IF NOT EXISTS idx_fixtures_status ON fixtures(status_short)",
+          "CREATE INDEX IF NOT EXISTS idx_fixtures_teams ON fixtures(team_home_id, team_away_id)"
+      ],
+      "players" => [
+          "CREATE INDEX IF NOT EXISTS idx_players_name ON players(name)"
+      ],
+      "leagues" => [
+          "CREATE INDEX IF NOT EXISTS idx_leagues_country ON leagues(country_name)"
+      ],
+      "squads" => [
+          "CREATE INDEX IF NOT EXISTS idx_squads_player ON squads(player_id)"
       ]
   ];
+
+  // --- 3. CREAZIONE VIEW ANALITICHE ---
+
+  $views = [
+      "v_match_summary" => "CREATE OR REPLACE VIEW v_match_summary AS
+          SELECT f.id, f.date, f.status_short,
+                 t1.name as home_name, t1.logo as home_logo, f.score_home,
+                 t2.name as away_name, t2.logo as away_logo, f.score_away,
+                 l.name as league_name, l.country_name
+          FROM fixtures f
+          JOIN teams t1 ON f.team_home_id = t1.id
+          JOIN teams t2 ON f.team_away_id = t2.id
+          JOIN leagues l ON f.league_id = l.id"
+  ];
+
+  foreach ($views as $name => $sql) {
+      $db->exec($sql);
+      echo "✅ View '$name' creata/aggiornata.\n";
+  }
 
   foreach ($patches as $table => $sqlList) {
       foreach ($sqlList as $sql) {

@@ -77,3 +77,21 @@
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+
+/* Sidebar & Navigation Styles */
+.nav-link.active-nav {
+    @apply bg-accent text-white shadow-lg shadow-accent/20;
+}
+
+.nav-link:hover:not(.active-nav) {
+    @apply translate-x-1 bg-white/5;
+}
+
+#main-content {
+    animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
