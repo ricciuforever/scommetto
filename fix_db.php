@@ -1,5 +1,5 @@
 <?php
-// fix_db.php - Scommetto DB Migration & Repair Script v5.0
+// fix_db.php - Scommetto DB Migration & Repair Script v6.0
 require_once __DIR__ . '/bootstrap.php';
 use App\Services\Database;
 
@@ -210,8 +210,14 @@ try {
   $patches = [
       "leagues" => [
           "ALTER TABLE leagues ADD COLUMN type VARCHAR(50) AFTER name",
+          "ALTER TABLE leagues ADD COLUMN logo VARCHAR(255) AFTER type",
           "ALTER TABLE leagues ADD COLUMN country_name VARCHAR(100) AFTER logo",
           "ALTER TABLE leagues ADD COLUMN coverage_json TEXT AFTER country_name"
+      ],
+      "league_seasons" => [
+          "ALTER TABLE league_seasons ADD COLUMN is_current BOOLEAN DEFAULT 0 AFTER year",
+          "ALTER TABLE league_seasons ADD COLUMN start_date DATE AFTER is_current",
+          "ALTER TABLE league_seasons ADD COLUMN end_date DATE AFTER start_date"
       ],
       "teams" => [
           "ALTER TABLE teams ADD COLUMN code VARCHAR(10) AFTER name",
@@ -226,6 +232,8 @@ try {
           "ALTER TABLE fixtures ADD COLUMN status_short VARCHAR(10) AFTER date",
           "ALTER TABLE fixtures ADD COLUMN status_long VARCHAR(50) AFTER status_short",
           "ALTER TABLE fixtures ADD COLUMN elapsed INT AFTER status_long",
+          "ALTER TABLE fixtures ADD COLUMN score_home INT AFTER elapsed",
+          "ALTER TABLE fixtures ADD COLUMN score_away INT AFTER score_home",
           "ALTER TABLE fixtures ADD COLUMN venue_id INT AFTER score_away"
       ],
       "standings" => [
