@@ -281,13 +281,19 @@ class FootballApiService
         }
 
         // Update Usage if headers are present
+        $limit = $headers['x-ratelimit-requests-limit'] ?? null;
         $used = $headers['x-ratelimit-requests-used'] ?? $headers['x-ratelimit-used'] ?? $headers['x-ratelimit-requests-limit-used'] ?? null;
         $remaining = $headers['x-ratelimit-requests-remaining'] ?? $headers['x-ratelimit-remaining'] ?? null;
 
-        if ($used !== null || $remaining !== null) {
-            $currentUsed = $used ?? (7500 - (int) $remaining);
-            $currentRem = $remaining ?? (7500 - (int) $used);
-            (new Usage())->update((int) $currentUsed, (int) $currentRem);
+        if ($remaining !== null || $used !== null) {
+            $usageModel = new Usage();
+            $currentUsage = $usageModel->getLatest();
+
+            $currentLimit = (int)($limit ?? $currentUsage['requests_limit'] ?? 7500);
+            $currentRem = (int)($remaining ?? ($currentLimit - (int)$used));
+            $currentUsed = (int)($used ?? ($currentLimit - $currentRem));
+
+            $usageModel->update($currentUsed, $currentRem, $limit !== null ? (int)$limit : null);
         }
 
         return json_decode($response, true);

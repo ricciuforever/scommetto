@@ -21,13 +21,21 @@ class Usage
         return $stmt->fetch();
     }
 
-    public function update($used, $remaining)
+    public function update($used, $remaining, $limit = null)
     {
-        $sql = "UPDATE api_usage SET requests_used = :used, requests_remaining = :rem, last_updated = CURRENT_TIMESTAMP WHERE id = 1";
-        $stmt = $this->db->prepare($sql);
-        return $stmt->execute([
+        $sql = "UPDATE api_usage SET requests_used = :used, requests_remaining = :rem";
+        $params = [
             'used' => $used,
             'rem' => $remaining
-        ]);
+        ];
+
+        if ($limit !== null) {
+            $sql .= ", requests_limit = :limit";
+            $params['limit'] = $limit;
+        }
+
+        $sql .= ", last_updated = CURRENT_TIMESTAMP WHERE id = 1";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute($params);
     }
 }
