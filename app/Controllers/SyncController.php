@@ -35,6 +35,7 @@ class SyncController
     private $betModel;
     private $analysisModel;
     private $fixtureModel;
+    private $predictionModel;
     private $apiService;
     private $geminiService;
 
@@ -44,6 +45,7 @@ class SyncController
         $this->betModel = new Bet();
         $this->analysisModel = new Analysis();
         $this->fixtureModel = new Fixture();
+        $this->predictionModel = new Prediction();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
     }
@@ -128,7 +130,7 @@ class SyncController
                 }
             }
 
-            // 5. Aggiornamento selettivo dettagli (Events, Stats)
+            // 5. Aggiornamento selettivo dettagli (Events, Stats, Predictions)
             $eventModel = new FixtureEvent();
             $statModel = new FixtureStatistics();
 
@@ -156,6 +158,14 @@ class SyncController
                     if (isset($statsData['response'])) {
                         foreach ($statsData['response'] as $st) {
                             if (isset($st['team']['id'])) $statModel->save($fid, $st['team']['id'], $st['statistics']);
+                        }
+                    }
+
+                    // Predictions (1 call per hour for fixtures in progress)
+                    if ($this->predictionModel->needsRefresh($fid, 1)) {
+                        $predData = $this->apiService->fetchPredictions($fid);
+                        if (isset($predData['response'][0])) {
+                            $this->predictionModel->save($fid, $predData['response'][0]);
                         }
                     }
 
@@ -329,7 +339,6 @@ class SyncController
             $teamModel = new Team();
             $coachModel = new Coach();
             $playerModel = new Player();
-            $predictionModel = new Prediction();
 
             foreach ($relevantLeagues as $lId) {
                 if (!$lId) continue;
@@ -359,14 +368,17 @@ class SyncController
 
                 $this->syncLeagueTopStats($lId, $season);
 
+                // Predictions for upcoming fixtures in this league (1 call per day)
                 $upcomingFixtures = $db->query("SELECT id FROM fixtures WHERE league_id = $lId AND date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 2 DAY) AND status_short = 'NS' LIMIT 20")->fetchAll(PDO::FETCH_COLUMN);
                 foreach ($upcomingFixtures as $fid) {
-                    $predData = $this->apiService->fetchPredictions($fid);
-                    if (isset($predData['response'][0])) {
-                        $predictionModel->save($fid, $predData['response'][0]);
-                        $results['predictions']++;
+                    if ($this->predictionModel->needsRefresh($fid, 24)) {
+                        $predData = $this->apiService->fetchPredictions($fid);
+                        if (isset($predData['response'][0])) {
+                            $this->predictionModel->save($fid, $predData['response'][0]);
+                            $results['predictions']++;
+                        }
+                        usleep(250000);
                     }
-                    usleep(250000);
                 }
             }
 
