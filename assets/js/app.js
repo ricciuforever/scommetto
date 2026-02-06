@@ -173,31 +173,65 @@ async function renderLeagues(leagueId) {
     const res = await fetch('/api/leagues');
     const leagues = await res.json();
 
+    // Estrai nazioni uniche per il filtro
+    const countries = [...new Set(leagues.map(l => l.country_name || l.country || 'International'))].sort();
+
     let html = `
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-    `;
-
-    leagues.forEach(l => {
-        html += `
-            <div class="glass p-6 rounded-[32px] border-white/5 hover:border-accent/30 transition-all cursor-pointer group" onclick="window.location.hash = 'leagues/${l.id}'">
-                <div class="flex items-center gap-4">
-                    <img src="${l.logo}" class="w-12 h-12 object-contain group-hover:scale-110 transition-transform">
-                    <div>
-                        <h3 class="font-black uppercase italic">${l.name}</h3>
-                        <p class="text-[10px] font-bold text-slate-500 tracking-widest uppercase">${l.country}</p>
-                    </div>
-                    <i data-lucide="chevron-right" class="w-5 h-5 ml-auto text-slate-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></i>
-                </div>
+        <div class="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+                <h1 class="text-4xl font-black italic uppercase tracking-tighter mb-2">Competizioni</h1>
+                <p class="text-slate-500 font-bold uppercase tracking-widest text-xs italic">Esplora le leghe sincronizzate nel database di Scommetto.AI</p>
             </div>
-        `;
-    });
+            
+            <div class="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/10 group focus-within:border-accent/80 transition-all min-w-[240px]">
+                <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-500 group-focus-within:text-accent transition-colors">
+                    <i data-lucide="filter" class="w-5 h-5"></i>
+                </div>
+                <select id="country-filter" class="flex-1 bg-transparent border-none text-sm font-black uppercase italic text-white focus:ring-0 cursor-pointer pr-10 appearance-none">
+                    <option value="all" class="bg-slate-900">Tutte le Nazioni</option>
+                    ${countries.map(c => `<option value="${c}" class="bg-slate-900">${c}</option>`).join('')}
+                </select>
+            </div>
+        </div>
 
-    html += `</tbody></table></div></div>
-
-    <div id="league-top-stats" class="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+        <div id="leagues-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            ${leagues.map(l => `
+                <div class="glass p-6 rounded-[32px] border-white/5 hover:border-accent/30 transition-all cursor-pointer group league-card active-card" data-country="${l.country_name || l.country || 'International'}" onclick="window.location.hash = 'leagues/${l.id}'">
+                    <div class="flex items-center gap-4">
+                        <div class="w-14 h-14 bg-white rounded-2xl p-2 flex items-center justify-center shadow-lg border border-white/10 overflow-hidden">
+                            <img src="${l.logo}" class="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-black uppercase italic text-white group-hover:text-accent transition-colors truncate">${l.name}</h3>
+                            <p class="text-[10px] font-bold text-slate-500 tracking-widest uppercase">${l.country_name || l.country || 'International'}</p>
+                        </div>
+                        <i data-lucide="chevron-right" class="w-5 h-5 ml-auto text-slate-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></i>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
     `;
+
     viewContainer.innerHTML = html;
-    renderLeagueTopStats(leagueId);
+    if (window.lucide) lucide.createIcons();
+
+    // Gestione dinamica del filtro senza ricaricare la pagina
+    const filter = document.getElementById('country-filter');
+    if (filter) {
+        filter.onchange = (e) => {
+            const val = e.target.value;
+            const cards = document.querySelectorAll('.league-card');
+            cards.forEach(card => {
+                if (val === 'all' || card.getAttribute('data-country') === val) {
+                    card.classList.remove('hidden');
+                    card.classList.add('active-card');
+                } else {
+                    card.classList.add('hidden');
+                    card.classList.remove('active-card');
+                }
+            });
+        };
+    }
 }
 
 async function renderLeagueTopStats(leagueId) {
