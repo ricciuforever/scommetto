@@ -12,6 +12,7 @@ let historyData = [];
 // Global Filter State
 let selectedCountry = localStorage.getItem('selected_country') || 'all';
 let selectedBookmaker = localStorage.getItem('selected_bookmaker') || 'all';
+let selectedLeague = 'all'; // New League Filter State
 let allFilterData = { countries: [], bookmakers: [] };
 
 const countryFlags = {
@@ -1357,52 +1358,122 @@ function calculateStats() {
 function renderDashboardMatches() {
     const container = document.getElementById('live-matches-list');
     if (!container) return;
+
+    // Debug filtering issues
+    console.log(`Live sync: ${liveMatches.length} matches found. Filters: Country=${selectedCountry}, Bookie=${selectedBookmaker}, League=${selectedLeague}`);
+
     container.innerHTML = '';
 
-    const filteredMatches = liveMatches.filter(m => {
-        const countryName = m.league.country || m.league.country_name;
+    // 1. Extract Leagues for Filter (From visible live matches matching country/bookie)
+    // We want to filter leagues based on current country/bookie selection to avoid empty options
+    const preFiltered = liveMatches.filter(m => {
+        const league = m.league || {};
+        const countryName = league.country || league.country_name || '';
         const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
         const matchesBookie = selectedBookmaker === 'all' || (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
         return matchesCountry && matchesBookie;
     });
 
+    const leagues = [...new Set(preFiltered.map(m => m.league.name))].sort();
+
+    // 2. Render League Filter Dropdown (Only if we have matches)
+    if (preFiltered.length > 0) {
+        const filterWrapper = document.createElement('div');
+        filterWrapper.className = "flex justify-end mb-6";
+        filterWrapper.innerHTML = `
+            <div class="relative group">
+                <select onchange="updateLeagueFilter(this.value)" class="appearance-none bg-white/5 border border-white/10 text-slate-300 text-[10px] font-bold uppercase tracking-widest pl-4 pr-10 py-3 rounded-2xl focus:outline-none focus:border-accent cursor-pointer hover:bg-white/10 transition-all">
+                    <option value="all" ${selectedLeague === 'all' ? 'selected' : ''}>Tutte le Leghe (${leagues.length})</option>
+                    ${leagues.map(l => `<option value="${l}" ${selectedLeague === l ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+                <div class="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-slate-500">
+                    <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                </div>
+            </div>
+        `;
+        container.appendChild(filterWrapper);
+    }
+
+    // 3. Final Filter
+    const finalMatches = preFiltered.filter(m => {
+        return selectedLeague === 'all' || m.league.name === selectedLeague;
+    });
+
+    console.log(`Rendering ${finalMatches.length} matches after league filter.`);
+
     // Render Live Matches
-    filteredMatches.forEach(m => {
+    if (finalMatches.length === 0 && preFiltered.length > 0) {
+        const noMatch = document.createElement('div');
+        noMatch.className = "glass p-8 rounded-[32px] text-center text-slate-500 font-bold uppercase tracking-widest italic";
+        noMatch.innerText = "Nessun match live per questa lega.";
+        container.appendChild(noMatch);
+    }
+
+    finalMatches.forEach(m => {
         const card = document.createElement('div');
-        card.className = "glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer";
+        card.className = "glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer relative overflow-hidden mb-6";
         card.onclick = () => window.location.hash = `match/${m.fixture.id}`;
+
+        const homeName = m.teams.home.name;
+        const awayName = m.teams.away.name;
+        const scoreHome = m.goals.home;
+        const scoreAway = m.goals.away;
+
         card.innerHTML = `
             <div class="flex items-center justify-between mb-8">
                 <div class="flex items-center gap-3 opacity-60">
-                    <img src="${m.league.logo}" class="w-5 h-5 object-contain">
-                    <span class="text-[10px] font-black uppercase tracking-[0.2em] italic">${m.league.name}</span>
+                    <img src="${m.league.logo}" class="w-5 h-5 object-contain" onerror="this.src='https://media.api-sports.io/football/leagues/1.png'">
+                    <span class="text-[10px] font-black uppercase tracking-[0.2em] italic truncate max-w-[150px]">${m.league.name}</span>
                 </div>
                 <div class="flex items-center gap-2">
                     <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">${m.fixture.status.elapsed}'</span>
                     <div class="w-2 h-2 bg-danger rounded-full animate-ping"></div>
                 </div>
             </div>
-            <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-8 mb-4 text-center">
-                <div class="flex flex-col items-center gap-3">
-                    <img src="${m.teams.home.logo}" class="w-16 h-16 object-contain">
-                    <span class="text-sm font-black uppercase tracking-tight">${m.teams.home.name}</span>
+            
+            <div class="flex items-center justify-between gap-4 mb-6">
+                <!-- Home -->
+                <div class="flex flex-col items-center gap-4 flex-1">
+                    <img src="${m.teams.home.logo}" class="w-16 h-16 object-contain drop-shadow-2xl" onerror="this.style.display='none'">
+                    <span class="text-xs font-black uppercase tracking-tight text-center leading-tight">${homeName}</span>
                 </div>
-                <div class="text-5xl font-black italic tracking-tighter text-white">
-                    ${m.goals.home} - ${m.goals.away}
+
+                <!-- Score -->
+                <div class="text-5xl font-black italic tracking-tighter text-white tabular-nums">
+                    ${scoreHome} - ${scoreAway}
                 </div>
-                <div class="flex flex-col items-center gap-3">
-                    <img src="${m.teams.away.logo}" class="w-16 h-16 object-contain">
-                    <span class="text-sm font-black uppercase tracking-tight">${m.teams.away.name}</span>
+
+                <!-- Away -->
+                <div class="flex flex-col items-center gap-4 flex-1">
+                    <img src="${m.teams.away.logo}" class="w-16 h-16 object-contain drop-shadow-2xl" onerror="this.style.display='none'">
+                    <span class="text-xs font-black uppercase tracking-tight text-center leading-tight">${awayName}</span>
                 </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-2 gap-3 mt-6 pt-6 border-t border-white/5">
+                <button onclick="event.stopPropagation(); analyzeMatch(${m.fixture.id})" class="py-3 rounded-2xl bg-accent/10 hover:bg-accent text-accent hover:text-white border border-accent/20 transition-all font-black uppercase text-[9px] tracking-widest flex items-center justify-center gap-2 group/btn">
+                    <i data-lucide="zap" class="w-3 h-3 group-hover/btn:fill-current"></i> AI Analysis
+                </button>
+                <button onclick="event.stopPropagation(); window.location.hash='match/${m.fixture.id}'" class="py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 transition-all font-black uppercase text-[9px] tracking-widest flex items-center justify-center gap-2">
+                    <i data-lucide="bar-chart-2" class="w-3 h-3"></i> Stats
+                </button>
             </div>
         `;
         container.appendChild(card);
     });
 
-    // If few live matches, show upcoming
-    if (filteredMatches.length < 5) {
-        fetchAndRenderUpcoming(container, 8 - filteredMatches.length);
+    // If few live matches TOTAL (not filtered), show upcoming
+    if (liveMatches.length < 5) {
+        fetchAndRenderUpcoming(container, 8 - liveMatches.length);
     }
+
+    if (window.lucide) lucide.createIcons();
+}
+
+function updateLeagueFilter(val) {
+    selectedLeague = val;
+    renderDashboardMatches();
 }
 
 async function fetchAndRenderUpcoming(container, limit) {

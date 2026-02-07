@@ -233,9 +233,38 @@ class MatchController
                         'score' => ['halftime' => [], 'fulltime' => [], 'extratime' => [], 'penalty' => []]
                     ];
 
-                    // Try to get score/events/stats from DB if available (e.g. if match is finished or live but not in json)
-                    $stats = (new \App\Models\FixtureStatistics())->getByFixture($id);
-                    // Add other details if needed, but this base object is enough for Gemini to run pre-match analysis
+                    // Try to get score/events/stats from DB if available
+                    $eventModel = new \App\Models\FixtureEvent();
+                    $match['events'] = $eventModel->getByFixture($id);
+
+                    $statModel = new \App\Models\FixtureStatistics();
+                    $stats = $statModel->getByFixture($id);
+                    $match['statistics'] = [];
+                    foreach ($stats as $s) {
+                        $match['statistics'][] = [
+                            'team' => ['id' => $s['team_id'], 'name' => ($s['team_id'] == $fix['home_id'] ? $fix['home_name'] : $fix['away_name']), 'logo' => ($s['team_id'] == $fix['home_id'] ? $fix['home_logo'] : $fix['away_logo'])],
+                            'statistics' => json_decode($s['statistics'], true)
+                        ];
+                    }
+
+                    $lineupModel = new \App\Models\FixtureLineup();
+                    $lineups = $lineupModel->getByFixture($id);
+                    $match['lineups'] = [];
+                    foreach ($lineups as $l) {
+                        $match['lineups'][] = [
+                            'team' => ['id' => $l['team_id'], 'name' => ($l['team_id'] == $fix['home_id'] ? $fix['home_name'] : $fix['away_name'])],
+                            'startXI' => json_decode($l['start_xi_json'] ?? '[]', true),
+                            'substitutes' => json_decode($l['subs_json'] ?? '[]', true),
+                            'formation' => $l['formation'] ?? ''
+                        ];
+                    }
+
+                    // We also need goals because frontend uses match.goals
+                    $match['goals'] = [
+                        'home' => $fix['score_home'] ?? 0,
+                        'away' => $fix['score_away'] ?? 0
+                    ];
+
                 } else {
                     echo json_encode(['error' => 'Partita non trovata nel database.']);
                     return;
