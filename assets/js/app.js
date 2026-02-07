@@ -2245,3 +2245,15 @@ async function openStatsModal(fixtureId) {
         body.innerHTML = '<div class="text-danger font-bold text-center py-10 uppercase italic">Errore caricamento statistiche.</div>';
     }
 }
+// --- INITIALIZATION ---
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Initial Route
+    handleRouting();
+
+    // Listen to hash changes
+    window.addEventListener('hashchange', handleRouting);
+
+    // Re-init icons
+    if (window.lucide) lucide.createIcons();
+});
