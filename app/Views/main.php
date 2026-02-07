@@ -210,26 +210,33 @@
     </div>
 
     <!-- Country Selection Modal -->
-    <div id="country-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
-        <div class="bg-slate-900 w-full max-w-4xl rounded-[40px] border border-white/10 shadow-2xl overflow-hidden relative max-h-[90vh] flex flex-col">
+    <div id="country-modal"
+        class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
+        <div
+            class="bg-slate-900 w-full max-w-4xl rounded-[40px] border border-white/10 shadow-2xl overflow-hidden relative max-h-[90vh] flex flex-col">
             <div class="p-8 border-b border-white/5 flex justify-between items-center">
                 <h3 class="text-2xl font-black tracking-tight text-white uppercase italic">Seleziona Nazione</h3>
-                <button onclick="closeCountryModal()" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all text-white">
+                <button onclick="closeCountryModal()"
+                    class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all text-white">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div id="country-list" class="p-8 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            <div id="country-list"
+                class="p-8 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 <!-- Data injected by JS -->
             </div>
         </div>
     </div>
 
     <!-- Bookmaker Selection Modal -->
-    <div id="bookmaker-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
-        <div class="bg-slate-900 w-full max-w-2xl rounded-[40px] border border-white/10 shadow-2xl overflow-hidden relative max-h-[90vh] flex flex-col">
+    <div id="bookmaker-modal"
+        class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
+        <div
+            class="bg-slate-900 w-full max-w-2xl rounded-[40px] border border-white/10 shadow-2xl overflow-hidden relative max-h-[90vh] flex flex-col">
             <div class="p-8 border-b border-white/5 flex justify-between items-center">
                 <h3 class="text-2xl font-black tracking-tight text-white uppercase italic">Filtra per Bookmaker</h3>
-                <button onclick="closeBookmakerModal()" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all text-white">
+                <button onclick="closeBookmakerModal()"
+                    class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all text-white">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -254,7 +261,7 @@
         }
     </style>
 
-    <script src="/assets/js/app.js"></script>
+    <script src="/assets/js/app.js?v=<?php echo time(); ?>"></script>
     <script>
         // Init Lucide
         lucide.createIcons();

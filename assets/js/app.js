@@ -1717,46 +1717,6 @@ async function renderTracker() {
 
 function updateTrackerSummary() {
     const summary = calculateStats();
-    const container = document.getElementById('tracker-stats-summary');
-    if (!container) return;
-
-    container.innerHTML = `
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Net Balance</span>
-            <div class="text-4xl font-black italic tracking-tighter ${summary.netProfit >= 0 ? 'text-success' : 'text-danger'}">${summary.netProfit >= 0 ? '+' : ''}${summary.netProfit.toFixed(2)}€</div>
-        </div>
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">ROI</span>
-            <div class="text-4xl font-black italic tracking-tighter text-accent">${summary.roi.toFixed(1)}%</div>
-        </div>
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Success Rate</span>
-            <div class="text-4xl font-black italic tracking-tighter text-white">${summary.winCount + summary.lossCount > 0 ? ((summary.winCount / (summary.winCount + summary.lossCount)) * 100).toFixed(0) : 0}%</div>
-        </div>
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Bankroll</span>
-            <div class="text-4xl font-black italic tracking-tighter text-white">${summary.currentPortfolio.toFixed(2)}€</div>
-        </div>
-    `;
-}
-
-function renderFullHistory() {
-    const container = document.getElementById('tracker-history');
-    if (!container) return;
-
-    const data = Array.isArray(historyData) ? historyData : [];
-    const filtered = data.filter(bet => {
-        const matchesCountry = selectedCountry === 'all' || bet.country === selectedCountry;
-        const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
-        const matchesStatus = trackerStatusFilter === 'all' || (bet.status || '').toLowerCase() === trackerStatusFilter;
-        return matchesCountry && matchesBookie && matchesStatus;
-    });
-
-    if (filtered.length === 0) {
-        container.innerHTML = '<div class="p-20 text-center text-slate-500 font-black uppercase italic">Nessuna scommessa trovata per i filtri selezionati.</div>';
-        return;
-    }
-
     filtered.forEach(h => {
         const item = document.createElement('div');
         item.className = "p-8 hover:bg-white/5 cursor-pointer transition-all flex items-center justify-between group";
@@ -1854,3 +1814,43 @@ if (themeToggle) {
 if (localStorage.getItem('theme') === 'light') htmlElement.classList.remove('dark');
 
 init();
+const container = document.getElementById('tracker-stats-summary');
+if (!container) return;
+
+container.innerHTML = `
+        <div class="glass p-8 rounded-[40px] border-white/5">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Net Balance</span>
+            <div class="text-4xl font-black italic tracking-tighter ${summary.netProfit >= 0 ? 'text-success' : 'text-danger'}">${summary.netProfit >= 0 ? '+' : ''}${summary.netProfit.toFixed(2)}€</div>
+        </div>
+        <div class="glass p-8 rounded-[40px] border-white/5">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">ROI</span>
+            <div class="text-4xl font-black italic tracking-tighter text-accent">${summary.roi.toFixed(1)}%</div>
+        </div>
+        <div class="glass p-8 rounded-[40px] border-white/5">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Success Rate</span>
+            <div class="text-4xl font-black italic tracking-tighter text-white">${summary.winCount + summary.lossCount > 0 ? ((summary.winCount / (summary.winCount + summary.lossCount)) * 100).toFixed(0) : 0}%</div>
+        </div>
+        <div class="glass p-8 rounded-[40px] border-white/5">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Bankroll</span>
+            <div class="text-4xl font-black italic tracking-tighter text-white">${summary.currentPortfolio.toFixed(2)}€</div>
+        </div>
+    `;
+}
+
+function renderFullHistory() {
+    const container = document.getElementById('tracker-history');
+    if (!container) return;
+
+    const data = Array.isArray(historyData) ? historyData : [];
+    const filtered = data.filter(bet => {
+        const matchesCountry = selectedCountry === 'all' || bet.country === selectedCountry;
+        const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
+        const matchesStatus = trackerStatusFilter === 'all' || (bet.status || '').toLowerCase().trim() === trackerStatusFilter;
+        return matchesCountry && matchesBookie && matchesStatus;
+    });
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="p-20 text-center text-slate-500 font-black uppercase italic">Nessuna scommessa trovata per i filtri selezionati.</div>';
+        return;
+    }
+
