@@ -30,10 +30,10 @@ class FixtureLineup
         return $stmt->execute([
             'fid' => $fixture_id,
             'tid' => $team_id,
-            'formation' => $data['formation'],
+            'formation' => $data['formation'] ?? null,
             'coach_id' => $data['coach']['id'] ?? null,
-            'start_xi' => json_encode($data['startXI']),
-            'subs' => json_encode($data['substitutes'])
+            'start_xi' => json_encode($data['startXI'] ?? []),
+            'subs' => json_encode($data['substitutes'] ?? [])
         ]);
     }
 

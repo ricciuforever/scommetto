@@ -252,8 +252,11 @@ class FootballApiService
 
     public function request($endpoint)
     {
-        $url = $this->baseUrl . $endpoint;
-        $ch = curl_init($url);
+        // Ensure endpoint starts with / if not present (though usually is) and baseUrl doesn't end with /
+        $url = rtrim($this->baseUrl, '/') . '/' . ltrim($endpoint, '/');
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
 
         $headers = [];
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -289,11 +292,11 @@ class FootballApiService
             $usageModel = new Usage();
             $currentUsage = $usageModel->getLatest();
 
-            $currentLimit = (int)($limit ?? $currentUsage['requests_limit'] ?? 7500);
-            $currentRem = (int)($remaining ?? ($currentLimit - (int)$used));
-            $currentUsed = (int)($used ?? ($currentLimit - $currentRem));
+            $currentLimit = (int) ($limit ?? $currentUsage['requests_limit'] ?? 7500);
+            $currentRem = (int) ($remaining ?? ($currentLimit - (int) $used));
+            $currentUsed = (int) ($used ?? ($currentLimit - $currentRem));
 
-            $usageModel->update($currentUsed, $currentRem, $limit !== null ? (int)$limit : null);
+            $usageModel->update($currentUsed, $currentRem, $limit !== null ? (int) $limit : null);
         }
 
         return json_decode($response, true);

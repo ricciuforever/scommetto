@@ -34,11 +34,11 @@ class GeminiService
         $prompt = "Sei un analista scommesse PROFESSIONALE (Senior Tipster). Il tuo obiettivo è il profitto a lungo termine.\n\n" .
             "SITUAZIONE LIVE:\n" . json_encode($matchData) . "\n\n" .
             "INTELLIGENZA NEL DATABASE (Storico, Classifica, Predictions):\n" . json_encode($dbContent) . "\n\n" .
-            "REGOLE FERREE:\n" .
+            "REGOLE AGGIORNATE (CARTA BIANCA):\n" .
             "1. Analizza se l'andamento LIVE conferma o smentisce i dati storici.\n" .
             "2. Valuta la 'confidence' (fiducia) da 0 a 100.\n" .
-            "3. Se la fiducia è < 75, NON CONSIGLIARE la scommessa.\n" .
-            "4. Se confidence >= 75, rispondi con un'analisi e il blocco JSON.\n\n" .
+            "3. HAI CARTA BIANCA. Il portafoglio è pieno. Rimuovi limiti conservativi. Sii aggressivo se c'è valore.\n" .
+            "4. Se confidence >= 60 (o c'è valore statistico), rispondi con un'analisi e il blocco JSON.\n\n" .
             "VOCABOLARIO JSON CONTROLLATO (OBBLIGATORIO):\n" .
             "- Market: USA SOLO: '1X2', 'Double Chance', 'Over/Under', 'Both Teams to Score', 'Correct Score'.\n" .
             "- Advice (1X2): '1', 'X', '2'\n" .
