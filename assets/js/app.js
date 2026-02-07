@@ -562,6 +562,7 @@ async function renderMatchCenter(fixtureId) {
 
             <nav class="flex border-t border-white/5 overflow-x-auto no-scrollbar">
                 <button class="flex-1 py-6 px-4 text-[10px] font-black uppercase tracking-[0.2em] italic border-r border-white/5 hover:bg-white/5 transition-all text-accent border-b-2 border-accent" data-tab="analysis">Intelligence</button>
+                <button class="flex-1 py-6 px-4 text-[10px] font-black uppercase tracking-[0.2em] italic border-r border-white/5 hover:bg-white/5 transition-all text-slate-500" data-tab="events">Eventi</button>
                 <button class="flex-1 py-6 px-4 text-[10px] font-black uppercase tracking-[0.2em] italic border-r border-white/5 hover:bg-white/5 transition-all text-slate-500" data-tab="info">Info</button>
                 <button class="flex-1 py-6 px-4 text-[10px] font-black uppercase tracking-[0.2em] italic border-r border-white/5 hover:bg-white/5 transition-all text-slate-500" data-tab="odds">Quote</button>
                 <button class="flex-1 py-6 px-4 text-[10px] font-black uppercase tracking-[0.2em] italic border-r border-white/5 hover:bg-white/5 transition-all text-slate-500" data-tab="lineups">Formazioni</button>
@@ -600,6 +601,9 @@ async function renderMatchTab(tab, fixtureId, matchData) {
     switch (tab) {
         case 'analysis':
             await renderMatchAnalysis(fixtureId);
+            break;
+        case 'events':
+            renderMatchEvents(matchData.events, matchData.fixture.team_home_id);
             break;
         case 'lineups':
             renderMatchLineups(matchData.lineups, matchData.injuries);
@@ -877,6 +881,63 @@ function renderMatchH2H(h2h) {
 
     html += `</div>`;
     container.innerHTML = html;
+}
+
+
+function renderMatchEvents(events, homeId) {
+    const container = document.getElementById('match-view-content');
+    if (!events || !events.length) {
+        container.innerHTML = '<div class="glass p-20 rounded-[40px] text-center font-black uppercase text-slate-500 italic">Nessun evento registrato.</div>';
+        return;
+    }
+
+    let html = `<div class="max-w-3xl mx-auto space-y-6 relative before:absolute before:inset-y-0 before:left-1/2 before:w-px before:bg-white/10 py-10">`;
+
+    events.forEach(ev => {
+        const isHome = ev.team.id === homeId;
+        let icon = 'info';
+        let color = 'slate-500';
+
+        if (ev.type === 'Goal') { icon = 'trophy'; color = 'accent'; }
+        else if (ev.type === 'Card') {
+            icon = 'alert-triangle';
+            color = ev.detail === 'Yellow Card' ? 'warning' : 'danger';
+        }
+        else if (ev.type === 'subst') { icon = 'refresh-cw'; color = 'success'; }
+        else if (ev.type === 'Var') { icon = 'camera'; color = 'white'; }
+
+        const player = ev.player.name || 'Unknown';
+        const detail = ev.detail || ev.type;
+
+        const content = `
+            <div class="inline-block glass px-6 py-4 rounded-2xl border-white/5 hover:border-${color}/30 transition-colors group/card">
+                <div class="flex items-center gap-3 mb-1">
+                    <i data-lucide="${icon}" class="w-3 h-3 text-${color}"></i>
+                    <span class="text-[10px] font-black uppercase text-white tracking-widest">${player}</span>
+                </div>
+                <div class="text-[8px] font-bold text-slate-500 uppercase tracking-widest pl-6">${detail}</div>
+            </div>
+        `;
+
+        html += `
+            <div class="flex items-center justify-between group">
+                <div class="flex-1 text-right pr-8 ${isHome ? '' : 'invisible'}">
+                    ${isHome ? content : ''}
+                </div>
+
+                <div class="relative z-10 w-10 h-10 rounded-full glass border border-white/10 flex items-center justify-center text-xs font-black text-white tabular-nums bg-slate-900 shadow-xl shadow-black/50 group-hover:scale-110 transition-transform cursor-default ring-4 ring-slate-900">
+                    ${ev.time.elapsed}'
+                </div>
+
+                <div class="flex-1 pl-8 ${!isHome ? '' : 'invisible'}">
+                    ${!isHome ? content : ''}
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+    if (window.lucide) lucide.createIcons();
 }
 
 async function renderTeamProfile(teamId) {
@@ -1451,10 +1512,6 @@ function renderDashboardMatches() {
             </div>
 
             <!-- Action Buttons -->
-            <div class="grid grid-cols-2 gap-3 mt-6 pt-6 border-t border-white/5">
-                <button onclick="event.stopPropagation(); analyzeMatch(${m.fixture.id})" class="py-3 rounded-2xl bg-accent/10 hover:bg-accent text-accent hover:text-white border border-accent/20 transition-all font-black uppercase text-[9px] tracking-widest flex items-center justify-center gap-2 group/btn">
-                    <i data-lucide="zap" class="w-3 h-3 group-hover/btn:fill-current"></i> AI Analysis
-                </button>
                 <button onclick="event.stopPropagation(); window.location.hash='match/${m.fixture.id}'" class="py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 transition-all font-black uppercase text-[9px] tracking-widest flex items-center justify-center gap-2">
                     <i data-lucide="bar-chart-2" class="w-3 h-3"></i> Stats
                 </button>
@@ -1463,10 +1520,8 @@ function renderDashboardMatches() {
         container.appendChild(card);
     });
 
-    // If few live matches TOTAL (not filtered), show upcoming
-    if (liveMatches.length < 5) {
-        fetchAndRenderUpcoming(container, 8 - liveMatches.length);
-    }
+    // Always show upcoming matches below live matches
+    fetchAndRenderUpcoming(container, 20);
 
     if (window.lucide) lucide.createIcons();
 }
@@ -1518,8 +1573,17 @@ function upcomingMatchCardHtml(m) {
         <div class="flex items-center justify-between gap-4">
             <div class="flex flex-col items-center gap-2 flex-1 min-w-0">
                 <img src="${m.home_logo}" class="w-8 h-8 object-contain">
+                <span class="text-[9px] font-black uppercase text-center leading-tight truncate w-full">${m.home_name}</span>
+            </div>
+            <div class="text-[10px] font-black text-slate-600 italic">VS</div>
+            <div class="flex flex-col items-center gap-2 flex-1 min-w-0">
+                <img src="${m.away_logo}" class="w-8 h-8 object-contain">
                 <span class="text-[9px] font-black uppercase text-center leading-tight truncate w-full">${m.away_name}</span>
             </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5">
+             <button onclick="event.stopPropagation(); analyzeMatch(${m.fixture_id})" class="text-[8px] font-black uppercase tracking-widest text-accent hover:text-white transition-colors">AI Forecast</button>
+             <button onclick="event.stopPropagation(); window.location.hash='match/${m.fixture_id}'" class="text-[8px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Dettagli</button>
         </div>
     </div>
     `;
@@ -1548,8 +1612,6 @@ function renderDashboardHistory() {
         container.appendChild(item);
     });
 }
-
-// --- UTILS ---
 
 async function showIntelligenceInPage(id) {
     const container = document.getElementById('match-center-content');
@@ -1583,7 +1645,7 @@ async function showIntelligenceInPage(id) {
                         <div class="h-full bg-success/50" style="width: ${a}%"></div>
                     </div>
                 </div>
-        `;
+            `;
         }).join('');
 
         container.innerHTML = `
@@ -1639,10 +1701,10 @@ async function showBetDetails(bet) {
     const profit = bet.status === "won" ? (parseFloat(bet.stake) * (parseFloat(bet.odds) - 1)) : (bet.status === "lost" ? -parseFloat(bet.stake) : 0);
 
     body.innerHTML = `
-        < div class="mb-10" >
+        <div class="mb-10">
             <h2 class="text-4xl font-black italic uppercase tracking-tighter text-white mb-2">${bet.match_name}</h2>
             <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">${new Date(bet.timestamp).toLocaleString()}</div>
-        </div >
+        </div>
 
         <div class="bg-white/5 p-8 rounded-[40px] border border-white/5 mb-8">
             <div class="grid grid-cols-2 gap-8 mb-8">
@@ -1687,7 +1749,7 @@ async function showBetDetails(bet) {
 async function deleteBet(id) {
     if (!confirm('Sei sicuro di voler eliminare questa scommessa?')) return;
     try {
-        const res = await fetch(`/ api / bets / delete/${id}`);
+        const res = await fetch(`/api/bets/delete/${id}`);
         const result = await res.json();
         if (result.status === 'success') {
             closeModal();
