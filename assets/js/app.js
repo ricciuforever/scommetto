@@ -305,7 +305,7 @@ async function renderLeagueTopStats(leagueId) {
                 </div>
                 <div class="space-y-4">
                     ${list.slice(0, 5).map((p, i) => `
-                        <div class="flex items-center justify-between group cursor-pointer" onclick="window.location.hash = 'player/${p.player.id}'">
+                        <div class="flex items-center justify-between group cursor-pointer" onclick="navigate('player', ${p.player.id})">
                             <div class="flex items-center gap-3">
                                 <span class="text-[10px] font-black text-slate-500">${i + 1}</span>
                                 <span class="text-xs font-black uppercase italic group-hover:text-accent transition-colors">${p.player.name}</span>
@@ -428,7 +428,7 @@ async function renderLeagueStats(leagueId) {
                     </h3>
                     <div class="space-y-6">
                         ${list.slice(0, 5).map((p, idx) => `
-                            <div class="flex items-center gap-4 group cursor-pointer" onclick="window.location.hash = 'player/${p.player.id}'">
+                            <div class="flex items-center gap-4 group cursor-pointer" onclick="navigate('player', ${p.player.id})">
                                 <span class="text-xl font-black italic opacity-20 tabular-nums">${idx + 1}</span>
                                 <div class="w-10 h-10 rounded-2xl bg-white/5 overflow-hidden border border-white/5 p-1">
                                     <img src="${p.player.photo}" class="w-full h-full object-cover rounded-xl">
@@ -738,7 +738,7 @@ function renderMatchLineups(lineups, injuries) {
                 <div class="space-y-4">
                     <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-4 italic">Titolari (Starting XI)</div>
                     ${startXI.map(p => `
-                        <div class="flex items-center gap-4 group cursor-pointer" onclick="window.location.hash = 'player/${p.player.id}'">
+                        <div class="flex items-center gap-4 group cursor-pointer" onclick="navigate('player', ${p.player.id})">
                             <span class="w-6 text-accent font-black tabular-nums italic">${p.player.number || '-'}</span>
                             <span class="font-black uppercase italic tracking-tight text-white group-hover:text-accent transition-colors">${p.player.name}</span>
                             <span class="text-[9px] font-bold text-slate-500 uppercase ml-auto">${p.player.pos}</span>
@@ -1078,7 +1078,7 @@ async function renderTeamProfile(teamId) {
                                     </td>
                                     <td class="py-4 px-8 font-bold text-slate-500 uppercase text-[10px] tracking-widest">${p.position}</td>
                                     <td class="py-4 px-8 text-right">
-                                        <button class="px-4 py-2 rounded-xl bg-white/5 group-hover:bg-accent group-hover:text-white transition-all text-[9px] font-black uppercase tracking-widest border border-white/5" onclick="window.location.hash = 'player/${p.id}'">Dettagli</button>
+                                        <button class="px-4 py-2 rounded-xl bg-white/5 group-hover:bg-accent group-hover:text-white transition-all text-[9px] font-black uppercase tracking-widest border border-white/5" onclick="navigate('player', ${p.id})">Dettagli</button>
                                     </td>
                                 </tr>
                             `).join('')}
@@ -1620,7 +1620,7 @@ function renderDashboardMatches() {
         card.className = `glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer relative overflow-hidden mb-6 ${isHighlighted ? 'pinned-match' : ''}`;
 
         // Link to match detail
-        const goToMatch = () => window.location.hash = `match/${m.fixture.id}`;
+        const goToMatch = () => navigate('match', ${m.fixture.id});
         card.onclick = goToMatch;
 
         const homeName = m.teams.home.name;
@@ -1650,7 +1650,7 @@ function renderDashboardMatches() {
                         <div class="flex items-center gap-1.5 shrink-0 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
                             <span class="text-[9px] font-black text-slate-400">${ev.time.elapsed}'</span>
                             <i data-lucide="${icon}" class="w-3 h-3 ${color}"></i>
-                            <span class="text-[9px] font-bold text-white uppercase truncate max-w-[80px] hover:text-accent cursor-pointer transition-colors" onclick="event.stopPropagation(); window.location.hash='player/${ev.player.id}'">${ev.player.name}</span>
+                            <span class="text-[9px] font-bold text-white uppercase truncate max-w-[80px] hover:text-accent cursor-pointer transition-colors" onclick="event.stopPropagation(); navigate('player', ev.player.id)">${ev.player.name}</span>
                         </div>
                     `;
             }).join('')}
@@ -1717,7 +1717,7 @@ function renderDashboardMatches() {
 
                 <!-- Right: Buttons -->
                 <div class="flex items-center gap-3 shrink-0">
-                     <button onclick="event.stopPropagation(); window.location.hash='match/${m.fixture.id}'" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 transition-all group/btn" title="Dettagli">
+                     <button onclick="event.stopPropagation(); navigate('match', m.fixture.id)" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 transition-all group/btn" title="Dettagli">
                         <i data-lucide="arrow-right" class="w-4 h-4 group-hover/btn:translate-x-1 transition-transform"></i>
                     </button>
                     
@@ -1792,7 +1792,7 @@ function upcomingMatchCardHtml(m) {
     const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     return `
-    <div onclick="window.location.hash='match/${m.fixture_id}'" class="glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all cursor-pointer group relative overflow-hidden h-full">
+    <div onclick="navigate('match', m.fixture_id)" class="glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all cursor-pointer group relative overflow-hidden h-full">
         <div class="absolute top-0 right-0 p-4 opacity-50"><i data-lucide="calendar-clock" class="w-4 h-4 text-slate-500"></i></div>
         <div class="flex items-center gap-2 mb-4">
              <span class="text-[8px] font-black uppercase text-accent tracking-widest truncate max-w-[150px]">${m.league_name}</span>
@@ -1812,7 +1812,7 @@ function upcomingMatchCardHtml(m) {
         </div>
         <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5">
              <button onclick="event.stopPropagation(); analyzeMatch(${m.fixture_id})" class="text-[8px] font-black uppercase tracking-widest text-accent hover:text-white transition-colors">AI Forecast</button>
-             <button onclick="event.stopPropagation(); window.location.hash='match/${m.fixture_id}'" class="text-[8px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Pronostico</button>
+             <button onclick="event.stopPropagation(); navigate('match', m.fixture_id)" class="text-[8px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Pronostico</button>
         </div>
     </div>
     `;
@@ -2369,7 +2369,7 @@ async function openLineupModal(fixtureId, teamId) {
 
             <div class="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                 ${startXI.map((p, idx) => `
-                    <div class="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 cursor-pointer" onclick="window.location.hash = 'player/${p.player.id}'; closeModal()">
+                    <div class="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 cursor-pointer" onclick="navigate('player', ${p.player.id}); closeModal()">
                         <span class="w-6 text-center font-black text-slate-500 italic tabular-nums">${p.player.number || (idx + 1)}</span>
                         <div class="flex-1">
                             <div class="font-bold text-white uppercase italic text-xs">${p.player.name}</div>
@@ -2379,7 +2379,7 @@ async function openLineupModal(fixtureId, teamId) {
                 `).join('')}
             </div>
             
-            <button class="w-full mt-6 py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 font-black text-[10px] uppercase tracking-widest transition-all" onclick="window.location.hash = 'team/${teamId}'; closeModal()">
+            <button class="w-full mt-6 py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 font-black text-[10px] uppercase tracking-widest transition-all" onclick="navigate('team', ${teamId}); closeModal()">
                 Vai al profilo squadra
             </button>
             <button class="w-full mt-2 py-4 rounded-2xl bg-transparent hover:text-white text-slate-500 font-bold text-[10px] uppercase tracking-widest transition-all" onclick="closeModal()">
