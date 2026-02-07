@@ -1262,8 +1262,12 @@ async function fetchLive() {
 async function fetchHistory() {
     try {
         const res = await fetch("/api/history");
-        historyData = await res.json();
-    } catch (e) { console.error("Error fetching history", e); }
+        const data = await res.json();
+        historyData = Array.isArray(data) ? data : [];
+    } catch (e) {
+        console.error("Error fetching history", e);
+        historyData = [];
+    }
 }
 
 function updateStatsSummary() {
@@ -1306,9 +1310,11 @@ function calculateStats() {
     let pendingCount = 0; let winCount = 0; let lossCount = 0; let totalStake = 0; let netProfit = 0;
     const startingPortfolio = 100;
 
+    const data = Array.isArray(historyData) ? historyData : [];
+
     // Global profit should be based on ALL bets for portfolio
     let globalNetProfit = 0;
-    historyData.forEach(bet => {
+    data.forEach(bet => {
         const stake = parseFloat(bet.stake) || 0;
         const odds = parseFloat(bet.odds) || 0;
         if (bet.status === "won") globalNetProfit += stake * (odds - 1);
@@ -1316,7 +1322,7 @@ function calculateStats() {
     });
 
     // Filtered stats for other blocks
-    const filteredHistory = historyData.filter(bet => {
+    const filteredHistory = data.filter(bet => {
         const countryName = bet.country;
         const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
         const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
@@ -1676,7 +1682,8 @@ function renderFullHistory() {
     const container = document.getElementById('tracker-history');
     if (!container) return;
 
-    const filtered = historyData.filter(bet => {
+    const data = Array.isArray(historyData) ? historyData : [];
+    const filtered = data.filter(bet => {
         const matchesCountry = selectedCountry === 'all' || bet.country === selectedCountry;
         const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
         return matchesCountry && matchesBookie;
