@@ -73,6 +73,10 @@ class SyncController
 
     public function __construct()
     {
+        // Aumenta i limiti per evitare timeout PHP durante i sync pesanti
+        set_time_limit(300); // 5 minuti dovrebbero bastare per tutto
+        ignore_user_abort(true);
+
         $this->usageModel = new Usage();
         $this->betModel = new Bet();
         $this->analysisModel = new Analysis();
@@ -383,7 +387,13 @@ class SyncController
     {
         try {
             $db = Database::getInstance()->getConnection();
-            $fixtures = $db->query("SELECT DISTINCT fixture_id FROM bets WHERE status = 'pending'")->fetchAll(PDO::FETCH_COLUMN);
+            // Solo fixture che non aggiorniamo da più di 15 minuti
+            $sql = "SELECT DISTINCT fixture_id FROM bets 
+                    WHERE status = 'pending' 
+                    AND fixture_id NOT IN (
+                        SELECT id FROM fixtures WHERE last_updated > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+                    )";
+            $fixtures = $db->query($sql)->fetchAll(PDO::FETCH_COLUMN);
 
             if (empty($fixtures))
                 return 0;
@@ -717,7 +727,12 @@ class SyncController
 
     public function sync()
     {
-        // Ora il sync generale include sia la manutenzione che il piazzamento scommesse live
+        // Se l'utente vuole solo settle o solo hourly, evitiamo il sync live pesante
+        if (isset($_GET['only_settle']) || isset($_GET['only_hourly'])) {
+            $this->syncHourly();
+            return;
+        }
+
         $this->syncHourly();
         $this->syncLive();
     }
