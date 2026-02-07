@@ -10,7 +10,7 @@ if (empty($lineups)) {
 <div class="grid grid-cols-1 md:grid-cols-2 gap-10 animate-fade-in">
     <?php foreach ($lineups as $l):
         $startXI = json_decode($l['start_xi_json'] ?? '[]', true);
-        $subs = json_decode($l['subs_json'] ?? '[]', true);
+        $subs = json_decode($l['substitutes_json'] ?? '[]', true);
         ?>
         <div class="glass p-8 rounded-[40px] border-white/5">
             <div class="flex items-center justify-between mb-8">

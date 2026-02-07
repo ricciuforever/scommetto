@@ -97,7 +97,7 @@ $selectedLeague = $selectedLeague ?? 'all';
                         <!-- Header: League + Country -->
                         <div class="flex items-center justify-between mb-8 border-b border-white/5 pb-4">
                             <div class="flex items-center gap-3 opacity-80">
-                                <img src="<?php echo $match['league']['flag'] ?? $match['league']['logo']; ?>" class="w-5 h-5 rounded-full object-cover">
+                                <img src="<?php echo $match['league']['logo']; ?>" class="w-5 h-5 rounded-full object-cover">
                                 <div class="flex flex-col">
                                     <span class="text-[10px] font-black uppercase tracking-[0.2em] italic text-white"><?php echo $match['league']['name']; ?></span>
                                     <span class="text-[8px] font-bold uppercase tracking-widest text-slate-500"><?php echo $match['league']['country'] ?? 'International'; ?></span>

@@ -66,7 +66,7 @@ class MatchController
             $sql = "SELECT f.id as fixture_id, f.date, f.status_short, f.league_id,
                            t1.name as home_name, t1.logo as home_logo,
                            t2.name as away_name, t2.logo as away_logo,
-                           l.name as league_name, l.country_name as country_name, l.flag as country_flag
+                           l.name as league_name, l.country_name as country_name
                     FROM fixtures f
                     JOIN teams t1 ON f.team_home_id = t1.id
                     JOIN teams t2 ON f.team_away_id = t2.id
@@ -226,7 +226,7 @@ class MatchController
                 $sql = "SELECT f.id as fixture_id, f.date, f.status_short, f.league_id,
                                t1.name as home_name, t1.logo as home_logo,
                                t2.name as away_name, t2.logo as away_logo,
-                               l.name as league_name, l.country_name as country_name, l.flag as country_flag,
+                               l.name as league_name, l.country_name as country_name,
                                l.logo as league_logo
                         FROM fixtures f
                         JOIN teams t1 ON f.team_home_id = t1.id
@@ -333,8 +333,47 @@ class MatchController
     public function viewPredictions()
     {
         try {
+            $selectedCountry = $_GET['country'] ?? 'all';
+            $selectedLeague = $_GET['league'] ?? 'all';
+
             $db = \App\Services\Database::getInstance()->getConnection();
-            $predictions = $db->query("SELECT p.*, f.date, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo, l.name as league_name FROM predictions p JOIN fixtures f ON p.fixture_id = f.id JOIN teams t1 ON f.team_home_id = t1.id JOIN teams t2 ON f.team_away_id = t2.id JOIN leagues l ON f.league_id = l.id WHERE f.date >= DATE_SUB(NOW(), INTERVAL 4 HOUR) AND f.status_short = 'NS' ORDER BY f.date ASC")->fetchAll(\PDO::FETCH_ASSOC);
+
+            // 1. Fetch ALL future predictions to determine filters
+            $sqlAll = "SELECT p.advice, p.fixture_id, f.date, f.status_short,
+                              t1.id as home_id, t1.name as home_name, t1.logo as home_logo,
+                              t2.id as away_id, t2.name as away_name, t2.logo as away_logo,
+                              l.id as league_id, l.name as league_name, l.country_name as country_name
+                       FROM predictions p
+                       JOIN fixtures f ON p.fixture_id = f.id
+                       JOIN teams t1 ON f.team_home_id = t1.id
+                       JOIN teams t2 ON f.team_away_id = t2.id
+                       JOIN leagues l ON f.league_id = l.id
+                       WHERE f.date > NOW()
+                       ORDER BY f.date ASC";
+            $allPredictions = $db->query($sqlAll)->fetchAll(\PDO::FETCH_ASSOC);
+
+            // 2. Aggregate Countries and Leagues for Filters
+            $availableCountries = [];
+            $availableLeagues = []; // league_id => [name => ..., country => ...]
+
+            foreach ($allPredictions as $p) {
+                $c = $p['country_name'] ?: 'International';
+                $availableCountries[$c] = $c;
+                $availableLeagues[$p['league_id']] = [
+                    'name' => $p['league_name'],
+                    'country' => $c
+                ];
+            }
+            ksort($availableCountries);
+            uasort($availableLeagues, fn($a, $b) => strcmp($a['name'], $b['name']));
+
+            // 3. Filter predictions based on selection
+            $predictions = array_filter($allPredictions, function ($p) use ($selectedCountry, $selectedLeague) {
+                $matchesCountry = $selectedCountry === 'all' || ($p['country_name'] ?: 'International') === $selectedCountry;
+                $matchesLeague = $selectedLeague === 'all' || (string) $p['league_id'] === (string) $selectedLeague;
+                return $matchesCountry && $matchesLeague;
+            });
+
             require __DIR__ . '/../Views/partials/predictions.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
@@ -409,12 +448,12 @@ class MatchController
                     break;
 
                 case 'h2h':
-                    $stmt = $db->prepare("SELECT f.*, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo FROM fixtures f JOIN teams t1 ON f.team_home_id = t1.id JOIN teams t2 ON f.team_away_id = t2.id WHERE f.id = " . $id);
-                    $stmt->execute();
-                    $fixture = $stmt->fetch(\PDO::FETCH_ASSOC);
-                    $h2h = (new H2H())->get($fixture['team_home_id'], $fixture['team_away_id']);
-                    // The H2H model returns an object with h2h_json. We want the parsed array for the partial.
-                    $h2h = $h2h ? json_decode($h2h['h2h_json'], true) : [];
+                    $stmt = $db->prepare("SELECT team_home_id, team_away_id FROM fixtures WHERE id = ?");
+                    $stmt->execute([$id]);
+                    $fix = $stmt->fetch(\PDO::FETCH_ASSOC);
+                    $h2hData = (new H2H())->get($fix['team_home_id'], $fix['team_away_id']);
+                    // H2H model already decodes h2h_json
+                    $h2h = $h2hData['h2h_json'] ?? [];
                     require __DIR__ . '/../Views/partials/match/h2h.php';
                     break;
 

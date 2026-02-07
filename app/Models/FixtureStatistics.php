@@ -33,7 +33,11 @@ class FixtureStatistics
 
     public function getByFixture($fixture_id)
     {
-        $stmt = $this->db->prepare("SELECT * FROM fixture_statistics WHERE fixture_id = ?");
+        $sql = "SELECT fs.*, t.name as team_name, t.logo as team_logo
+                FROM fixture_statistics fs
+                JOIN teams t ON fs.team_id = t.id
+                WHERE fs.fixture_id = ?";
+        $stmt = $this->db->prepare($sql);
         $stmt->execute([$fixture_id]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }

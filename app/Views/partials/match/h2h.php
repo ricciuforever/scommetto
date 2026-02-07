@@ -17,17 +17,17 @@ if (empty($h2h)) {
     </div>
 
     <?php foreach ($h2h as $m):
-        $date = date('d M Y', strtotime($m['date']));
-        $homeScore = $m['score_home'] ?? 0;
-        $awayScore = $m['score_away'] ?? 0;
+        $date = date('d M Y', strtotime($m['fixture']['date'] ?? 'now'));
+        $homeScore = $m['goals']['home'] ?? 0;
+        $awayScore = $m['goals']['away'] ?? 0;
         ?>
         <div class="p-8 flex items-center justify-between group hover:bg-white/5 transition-all">
             <div class="flex-1 text-right flex items-center justify-end gap-4">
                 <span
                     class="font-black uppercase italic tracking-tight text-white group-hover:text-accent transition-colors text-sm">
-                    <?php echo htmlspecialchars($m['home_name']); ?>
+                    <?php echo htmlspecialchars($m['teams']['home']['name'] ?? 'Home'); ?>
                 </span>
-                <img src="<?php echo $m['home_logo']; ?>"
+                <img src="<?php echo $m['teams']['home']['logo'] ?? ''; ?>"
                     class="w-6 h-6 object-contain opacity-50 group-hover:opacity-100 transition-opacity">
             </div>
 
@@ -42,11 +42,11 @@ if (empty($h2h)) {
             </div>
 
             <div class="flex-1 text-left flex items-center gap-4">
-                <img src="<?php echo $m['away_logo']; ?>"
+                <img src="<?php echo $m['teams']['away']['logo'] ?? ''; ?>"
                     class="w-6 h-6 object-contain opacity-50 group-hover:opacity-100 transition-opacity">
                 <span
                     class="font-black uppercase italic tracking-tight text-white group-hover:text-accent transition-colors text-sm">
-                    <?php echo htmlspecialchars($m['away_name']); ?>
+                    <?php echo htmlspecialchars($m['teams']['away']['name'] ?? 'Away'); ?>
                 </span>
             </div>
         </div>

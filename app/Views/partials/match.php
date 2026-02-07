@@ -50,13 +50,13 @@ $statusClass = $f['status_short'] === 'NS' ? 'bg-slate-500' : 'bg-danger animate
                     <div class="flex flex-col items-center">
                         <div
                             class="text-[10px] font-black text-accent uppercase tracking-[0.2em] mb-4 bg-accent/10 px-4 py-1.5 rounded-full border border-accent/20">
-                            <?php echo $f['status']; ?>
+                            <?php echo $f['status_long']; ?>
                         </div>
                         <div class="flex items-center gap-8">
                             <span class="text-6xl md:text-8xl font-black italic tracking-tighter text-white">
-                                <?php echo $f['goals_home'] ?? 0; ?>
+                                <?php echo $f['score_home'] ?? 0; ?>
                                 <span class="text-accent opacity-50 px-2">-</span>
-                                <?php echo $f['goals_away'] ?? 0; ?>
+                                <?php echo $f['score_away'] ?? 0; ?>
                             </span>
                         </div>
                     </div>

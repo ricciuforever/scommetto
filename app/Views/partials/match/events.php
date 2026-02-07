@@ -10,15 +10,15 @@ if (empty($events)) {
 <div
     class="max-w-3xl mx-auto space-y-6 relative before:absolute before:inset-y-0 before:left-1/2 before:w-px before:bg-white/10 py-10 animate-fade-in">
     <?php foreach ($events as $ev):
-        // Normalize event structure (db vs api)
-        $teamId = $ev['team_id'] ?? null;
+        // Normalized event structure from FixtureEvent::getByFixture
+        $teamId = $ev['team']['id'] ?? null;
         $isHome = $teamId == $homeId;
         $icon = 'info';
         $color = 'slate-500';
         $type = $ev['type'];
         $detail = $ev['detail'];
-        $player = $ev['player_name'] ?? 'Giocatore';
-        $time = $ev['time_elapsed'];
+        $player = $ev['player']['name'] ?? 'Giocatore';
+        $time = $ev['time']['elapsed'];
 
         if ($type === 'Goal') {
             $icon = 'trophy';
