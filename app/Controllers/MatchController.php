@@ -521,4 +521,33 @@ class MatchController
             echo '<div class="text-danger p-4">Errore caricamento competizioni: ' . $e->getMessage() . '</div>';
         }
     }
+
+    /**
+     * Serves the predictions partial for HTMX
+     */
+    public function viewPredictions()
+    {
+        try {
+            $db = \App\Services\Database::getInstance()->getConnection();
+            $sql = "SELECT p.*, f.date, f.status_short, f.league_id,
+                           t1.name as home_name, t1.logo as home_logo,
+                           t2.name as away_name, t2.logo as away_logo,
+                           l.name as league_name, l.country_name as country_name
+                    FROM predictions p
+                    JOIN fixtures f ON p.fixture_id = f.id
+                    JOIN teams t1 ON f.team_home_id = t1.id
+                    JOIN teams t2 ON f.team_away_id = t2.id
+                    JOIN leagues l ON f.league_id = l.id
+                    WHERE f.date >= DATE_SUB(NOW(), INTERVAL 4 HOUR)
+                    AND f.status_short NOT IN ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD', 'AWD', 'WO')
+                    ORDER BY f.date ASC";
+            $predictions = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Pass variables to view
+            require __DIR__ . '/../Views/partials/predictions.php';
+
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore caricamento pronostici: ' . $e->getMessage() . '</div>';
+        }
+    }
 }

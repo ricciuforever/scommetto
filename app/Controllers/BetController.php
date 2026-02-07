@@ -75,4 +75,69 @@ class BetController
 
         echo json_encode(['status' => 'success', 'id' => $id]);
     }
+
+    /**
+     * Serves the tracker partial for HTMX
+     */
+    public function viewTracker()
+    {
+        try {
+            $status = $_GET['status'] ?? 'all';
+
+            // Reusing logic from getHistory but adapting for PHP view usage
+            $db = \App\Services\Database::getInstance()->getConnection();
+
+            // Base query for bets
+            $sql = "SELECT b.*, l.country_name as country, bk.name as bookmaker_name_full
+                    FROM bets b
+                    LEFT JOIN fixtures f ON b.fixture_id = f.id
+                    LEFT JOIN leagues l ON f.league_id = l.id
+                    LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id
+                    ORDER BY b.timestamp DESC LIMIT 1000";
+
+            $allBets = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Calculate summary stats on ALL bets (before filtering for display)
+            $statsSummary = [
+                'netProfit' => 0,
+                'roi' => 0,
+                'winCount' => 0,
+                'lossCount' => 0,
+                'currentPortfolio' => 0 // This should ideally come from a user bankroll setting, but we sum up net profit + initial
+            ];
+
+            $totalStaked = 0;
+
+            foreach ($allBets as $bet) {
+                if ($bet['status'] === 'won') {
+                    $profit = $bet['stake'] * ($bet['odds'] - 1);
+                    $statsSummary['netProfit'] += $profit;
+                    $statsSummary['winCount']++;
+                } elseif ($bet['status'] === 'lost') {
+                    $statsSummary['netProfit'] -= $bet['stake'];
+                    $statsSummary['lossCount']++;
+                }
+                $totalStaked += $bet['stake'];
+            }
+
+            if ($totalStaked > 0) {
+                $statsSummary['roi'] = ($statsSummary['netProfit'] / $totalStaked) * 100;
+            }
+            // Bankroll simulation (starting presumably at 0 or just showing net profit for now)
+            $statsSummary['currentPortfolio'] = $statsSummary['netProfit'];
+
+            // Filter for display
+            $bets = array_filter($allBets, function ($bet) use ($status) {
+                if ($status === 'all')
+                    return true;
+                return ($bet['status'] ?? '') === $status;
+            });
+
+            // Pass variables to view
+            require __DIR__ . '/../Views/partials/tracker.php';
+
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore caricamento tracker: ' . $e->getMessage() . '</div>';
+        }
+    }
 }

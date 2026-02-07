@@ -59,38 +59,54 @@ async function renderView(view, id) {
 
     // Toggle containers based on view
     // HTMX views: Dashboard, Leagues (List)
-    if (view === 'dashboard' || view === '' || (view === 'leagues' && !id)) {
+    // Dashboard / Leagues / Predictions / Tracker -> HTMX
+    if (['dashboard', '', 'leagues', 'predictions', 'tracker'].includes(view)) {
+
         if (htmxContainer) {
             htmxContainer.classList.remove('hidden');
 
-            // Set the correct endpoint based on view
-            const endpoint = (view === 'leagues') ? '/api/view/leagues' : '/api/view/dashboard';
+            let endpoint = '';
+            if (view === 'dashboard' || view === '') {
+                // Keep existing params if any, or default
+                const currentGet = htmxContainer.getAttribute('hx-get');
+                endpoint = currentGet && currentGet.includes('/api/view/dashboard') ? currentGet : '/api/view/dashboard';
+            } else if (view === 'leagues') {
+                endpoint = '/api/view/leagues';
+            } else if (view === 'predictions') {
+                endpoint = '/api/view/predictions';
+            } else if (view === 'tracker') {
+                endpoint = '/api/view/tracker';
+            }
 
-            // Manually trigger HTMX if needed or update attribute
-            if (htmxContainer.getAttribute('hx-get') !== endpoint) {
+            // Only update and trigger if changed or empty
+            if (endpoint && (htmxContainer.getAttribute('hx-get')?.split('?')[0] !== endpoint.split('?')[0] || !htmxContainer.innerHTML.trim())) {
                 htmxContainer.setAttribute('hx-get', endpoint);
-                htmx.process(htmxContainer); // Refresh HTMX bindings
-                htmx.trigger('#htmx-container', 'load');
-            } else if (!htmxContainer.innerHTML.trim()) {
+                htmx.process(htmxContainer);
                 htmx.trigger('#htmx-container', 'load');
             }
         }
         if (legacyContainer) legacyContainer.classList.add('hidden');
 
+        // Title Management
         if (view === 'dashboard' || view === '') {
             viewTitle.textContent = 'Dashboard Intelligence';
             updateStatsSummary();
-            renderDashboardPredictions();
+            renderDashboardPredictions(); // These might be redundant if moved to PHP partial
             renderDashboardHistory();
         } else if (view === 'leagues') {
             viewTitle.textContent = 'Competizioni';
+        } else if (view === 'predictions') {
+            viewTitle.textContent = 'Pronostici AI';
+        } else if (view === 'tracker') {
+            viewTitle.textContent = 'Bet Tracker';
         }
 
     } else {
+        // Legacy JS Views (Match Center, Team, Player, etc.)
         if (htmxContainer) htmxContainer.classList.add('hidden');
         if (legacyContainer) {
             legacyContainer.classList.remove('hidden');
-            if (view !== currentView) legacyContainer.innerHTML = ''; // Clear only if changing view context
+            legacyContainer.innerHTML = ''; // Clear for new render
         }
 
         switch (view) {

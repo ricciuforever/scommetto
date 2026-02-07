@@ -24,6 +24,10 @@ try {
         (new MatchController())->dashboard();
     } elseif ($path === '/api/view/leagues') {
         (new MatchController())->viewLeagues();
+    } elseif ($path === '/api/view/predictions') {
+        (new MatchController())->viewPredictions();
+    } elseif ($path === '/api/view/tracker') {
+        (new App\Controllers\BetController())->viewTracker();
     } elseif ($path === '/api/upcoming') {
         (new MatchController())->getUpcoming();
     } elseif ($path === '/api/history') {
