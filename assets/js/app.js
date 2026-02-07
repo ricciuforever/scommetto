@@ -1679,9 +1679,34 @@ async function placeBet(fixture_id, match, betData) {
 
 function closeModal() { document.getElementById('analysis-modal').classList.add('hidden'); }
 
+// --- TRACKER FILTERS ---
+let trackerStatusFilter = 'all';
+
+function setTrackerFilter(status) {
+    trackerStatusFilter = status;
+    document.querySelectorAll('.tracker-filter-btn').forEach(btn => {
+        if (btn.dataset.status === status) {
+            btn.classList.add('bg-accent', 'text-white');
+            btn.classList.remove('bg-white/5', 'text-slate-500');
+        } else {
+            btn.classList.remove('bg-accent', 'text-white');
+            btn.classList.add('bg-white/5', 'text-slate-500');
+        }
+    });
+    renderFullHistory();
+}
+
 async function renderTracker() {
     viewContainer.innerHTML = `
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10" id="tracker-stats-summary"></div>
+        
+        <div class="flex gap-4 mb-8 overflow-x-auto pb-2 no-scrollbar">
+            <button class="tracker-filter-btn px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${trackerStatusFilter === 'all' ? 'bg-accent text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}" onclick="setTrackerFilter('all')" data-status="all">Tutte</button>
+            <button class="tracker-filter-btn px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${trackerStatusFilter === 'won' ? 'bg-accent text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}" onclick="setTrackerFilter('won')" data-status="won">Vinte</button>
+            <button class="tracker-filter-btn px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${trackerStatusFilter === 'lost' ? 'bg-accent text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}" onclick="setTrackerFilter('lost')" data-status="lost">Perse</button>
+            <button class="tracker-filter-btn px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${trackerStatusFilter === 'pending' ? 'bg-accent text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}" onclick="setTrackerFilter('pending')" data-status="pending">In Corso</button>
+        </div>
+
         <div class="glass rounded-[40px] border-white/5 overflow-hidden divide-y divide-white/5" id="tracker-history"></div>
     `;
 
@@ -1723,7 +1748,8 @@ function renderFullHistory() {
     const filtered = data.filter(bet => {
         const matchesCountry = selectedCountry === 'all' || bet.country === selectedCountry;
         const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
-        return matchesCountry && matchesBookie;
+        const matchesStatus = trackerStatusFilter === 'all' || (bet.status || '').toLowerCase() === trackerStatusFilter;
+        return matchesCountry && matchesBookie && matchesStatus;
     });
 
     if (filtered.length === 0) {
