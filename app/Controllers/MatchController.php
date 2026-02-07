@@ -188,22 +188,58 @@ class MatchController
             }
 
             if (!$match) {
-                // FALLBACK: If not found in live cache, try fetching from DB upcoming/recent fixtures
+                // FALLBACK: Fetch from DB for Upcoming/Predicted matches
                 $db = \App\Services\Database::getInstance()->getConnection();
-                $fix = $db->query("SELECT * FROM fixtures WHERE id = " . (int) $id)->fetch(\PDO::FETCH_ASSOC);
+
+                // Get basic fixture info
+                $sql = "SELECT f.id, f.date, f.status_short, f.status_long, f.status_elapsed, f.league_id,
+                               t1.name as home_name, t1.logo as home_logo, t1.id as home_id,
+                               t2.name as away_name, t2.logo as away_logo, t2.id as away_id,
+                               l.name as league_name, l.country_name, l.logo as league_logo, l.flag as country_flag
+                        FROM fixtures f
+                        JOIN teams t1 ON f.team_home_id = t1.id
+                        JOIN teams t2 ON f.team_away_id = t2.id
+                        JOIN leagues l ON f.league_id = l.id
+                        WHERE f.id = :id";
+
+                $stmt = $db->prepare($sql);
+                $stmt->execute(['id' => $id]);
+                $fix = $stmt->fetch(\PDO::FETCH_ASSOC);
 
                 if ($fix) {
-                    // Reconstruct minimal match object for analysis if needed, or error
-                    // Gemini needs full structure. If not live, maybe we can construct it partially?
-                    // For now, keep error message but friendlier or allow analyzing via getMatch() data
-                    // But geminiService->analyze expects specific structure.
+                    // Construct a match object compatible with frontend/gemini
+                    $match = [
+                        'fixture' => [
+                            'id' => $fix['id'],
+                            'date' => $fix['date'],
+                            'status' => [
+                                'short' => $fix['status_short'],
+                                'long' => $fix['status_long'],
+                                'elapsed' => $fix['status_elapsed']
+                            ]
+                        ],
+                        'league' => [
+                            'id' => $fix['league_id'],
+                            'name' => $fix['league_name'],
+                            'country' => $fix['country_name'],
+                            'logo' => $fix['league_logo'],
+                            'flag' => $fix['country_flag']
+                        ],
+                        'teams' => [
+                            'home' => ['id' => $fix['home_id'], 'name' => $fix['home_name'], 'logo' => $fix['home_logo']],
+                            'away' => ['id' => $fix['away_id'], 'name' => $fix['away_name'], 'logo' => $fix['away_logo']]
+                        ],
+                        'goals' => ['home' => null, 'away' => null], // Not live, so no guaranteed score
+                        'score' => ['halftime' => [], 'fulltime' => [], 'extratime' => [], 'penalty' => []]
+                    ];
 
-                    // Let's try to proceed if possible or return error.
-                    // Actually, if it's upcoming, it's not live data.
+                    // Try to get score/events/stats from DB if available (e.g. if match is finished or live but not in json)
+                    $stats = (new \App\Models\FixtureStatistics())->getByFixture($id);
+                    // Add other details if needed, but this base object is enough for Gemini to run pre-match analysis
+                } else {
+                    echo json_encode(['error' => 'Partita non trovata nel database.']);
+                    return;
                 }
-
-                echo json_encode(['error' => 'Partita non trovata nei dati live locali. Attendi sincronizzazione.']);
-                return;
             }
 
             // Gemini analysis uses IntelligenceService which is already DB-only
