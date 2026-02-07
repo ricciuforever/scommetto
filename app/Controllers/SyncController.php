@@ -167,17 +167,9 @@ class SyncController
                 throw new \Exception($live['error']);
 
             $allLiveMatches = $live['response'] ?? [];
+            $results['scanned'] = count($allLiveMatches);
 
-            // FILTER REMOVED: User requested to see/process ALL live matches.
-            $matches = $allLiveMatches;
-
-            // Update live data file with ALL matches
-            $live['response'] = array_values($matches);
-            file_put_contents(Config::LIVE_DATA_FILE, json_encode($live));
-
-            $results['scanned'] = count($matches);
-
-            if (empty($matches)) {
+            if (empty($allLiveMatches)) {
                 echo "No matches currently live according to API. Checking DB for settlement...\n";
                 $betSettler = new \App\Services\BetSettler();
                 $results['settled'] = $betSettler->settleFromDatabase();
@@ -186,11 +178,51 @@ class SyncController
             }
 
             $liveOddsData = $this->apiService->fetchLiveOdds();
+            $liveOddsIds = [];
             if (isset($liveOddsData['response'])) {
                 foreach ($liveOddsData['response'] as $lo) {
-                    $this->liveOddsModel->save($lo['fixture']['id'], $lo);
+                    $fid = $lo['fixture']['id'];
+                    $this->liveOddsModel->save($fid, $lo);
+                    $liveOddsIds[] = (int)$fid;
                 }
             }
+
+            // Identify bettable matches (Live Odds OR Pre-match Odds)
+            $allFids = array_map(fn($m) => (int)$m['fixture']['id'], $allLiveMatches);
+            $fidsStr = implode(',', $allFids);
+            $stmt = $db->query("SELECT DISTINCT fixture_id FROM fixture_odds WHERE fixture_id IN ($fidsStr)");
+            $preMatchOddsIds = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+            $bettableIds = array_unique(array_merge($liveOddsIds, array_map('intval', $preMatchOddsIds)));
+
+            // Filter matches: Not finished AND (Live Odds OR Pre-match Odds)
+            $matches = array_filter($allLiveMatches, function ($m) use ($bettableIds) {
+                $status = $m['fixture']['status']['short'] ?? '';
+                $isFinished = in_array($status, ['FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD', 'AWD', 'WO']);
+                return !$isFinished && in_array((int)$m['fixture']['id'], $bettableIds);
+            });
+
+            // Enrich filtered matches with available bookmakers
+            $enrichedMatches = [];
+            if (!empty($matches)) {
+                $matchFids = array_map(fn($m) => (int)$m['fixture']['id'], $matches);
+                $matchFidsStr = implode(',', $matchFids);
+                $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($matchFidsStr)");
+                $bookiesRaw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $bookiesByFid = [];
+                foreach ($bookiesRaw as $row) {
+                    $bookiesByFid[$row['fixture_id']][] = (int)$row['bookmaker_id'];
+                }
+
+                foreach ($matches as $m) {
+                    $fid = (int)$m['fixture']['id'];
+                    $m['available_bookmakers'] = $bookiesByFid[$fid] ?? [];
+                    $enrichedMatches[] = $m;
+                }
+            }
+
+            // Update live data file with FILTERED and ENRICHED matches
+            $live['response'] = $enrichedMatches;
+            file_put_contents(Config::LIVE_DATA_FILE, json_encode($live));
 
             foreach ($matches as $m) {
                 $fid = $m['fixture']['id'];

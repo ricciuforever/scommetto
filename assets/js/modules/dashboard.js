@@ -164,7 +164,7 @@ export class Dashboard {
                         <span class="text-[10px] font-black uppercase tracking-[0.2em] italic text-slate-400">${m.league.name}</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        <span class="text-[10px] font-black text-accent uppercase tracking-widest animate-pulse">'${m.fixture.status.elapsed || 0}</span>
+                        <span class="text-[10px] font-black text-accent uppercase tracking-widest animate-pulse">${m.fixture.status.elapsed || 0}'</span>
                         <div class="w-2 h-2 bg-danger rounded-full animate-ping"></div>
                     </div>
                 </div>
