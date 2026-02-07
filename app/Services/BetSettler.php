@@ -177,6 +177,10 @@ class BetSettler
         $status = 'lost';
         $total = $homeGoals + $awayGoals;
 
+        // --- Helper for fuzzy team matching ---
+        $isHomeMentioned = $this->isTeamMentioned($homeName, $searchString);
+        $isAwayMentioned = $this->isTeamMentioned($awayName, $searchString);
+
         // --- 1X2 / Match Winner ---
         $isHomeWin = ($homeGoals > $awayGoals);
         $isAwayWin = ($awayGoals > $homeGoals);
@@ -185,23 +189,31 @@ class BetSettler
         // Home Win Patterns
         if (
             $market === '1' || strpos($searchString, 'vittoria casa') !== false || strpos($searchString, 'home win') !== false ||
-            ($homeName && strpos($searchString, $homeName) !== false && (strpos($searchString, 'win') !== false || strpos($searchString, 'vincera') !== false || strpos($searchString, 'vincerà') !== false || strpos($searchString, ' vittoria') !== false) && strpos($searchString, 'draw') === false && strpos($searchString, 'pareggio') === false)
+            ($isHomeMentioned && (strpos($searchString, 'win') !== false || strpos($searchString, 'vincera') !== false || strpos($searchString, 'vincerà') !== false || strpos($searchString, 'vittoria') !== false || strpos($searchString, 'vincente') !== false) && strpos($searchString, 'draw') === false && strpos($searchString, 'pareggio') === false)
         ) {
             if ($isHomeWin)
                 return 'won';
+            // Se abbiamo individuato la giocata 1 ma il risultato non è 1, è persa (se il match è finito)
+            if ($isFinished && !$isHomeWin)
+                return 'lost';
         }
         // Away Win Patterns
         elseif (
             $market === '2' || strpos($searchString, 'vittoria ospite') !== false || strpos($searchString, 'away win') !== false ||
-            ($awayName && strpos($searchString, $awayName) !== false && (strpos($searchString, 'win') !== false || strpos($searchString, 'vincera') !== false || strpos($searchString, 'vincerà') !== false || strpos($searchString, ' vittoria') !== false) && strpos($searchString, 'draw') === false && strpos($searchString, 'pareggio') === false)
+            ($isAwayMentioned && (strpos($searchString, 'win') !== false || strpos($searchString, 'vincera') !== false || strpos($searchString, 'vincerà') !== false || strpos($searchString, 'vittoria') !== false || strpos($searchString, 'vincente') !== false) && strpos($searchString, 'draw') === false && strpos($searchString, 'pareggio') === false)
         ) {
             if ($isAwayWin)
                 return 'won';
+            if ($isFinished && !$isAwayWin)
+                return 'lost';
         }
         // Draw Patterns
-        elseif ($market === 'x' || strpos($searchString, 'pareggio') !== false || (strpos($searchString, 'draw') !== false && strpos($searchString, 'home') === false && strpos($searchString, 'away') === false && strpos($searchString, 'double') === false)) {
-            if ($isDraw)
+        elseif ($market === 'x' || strpos($searchString, 'pareggio') !== false || (strpos($searchString, 'draw') !== false && strpos($searchString, 'home') === false && strpos($searchString, 'away') === false && strpos($searchString, 'double') === false && strpos($searchString, 'no bet') === false)) {
+            if ($isDraw) {
                 return 'won';
+            }
+            if ($isFinished && !$isDraw)
+                return 'lost';
         }
 
         // --- Double Chance ---
@@ -218,22 +230,17 @@ class BetSettler
         );
 
         if ($isDC) {
-            // Helper function per match fuzzy dei nomi
-            $matchTeam = function ($name, $search) {
-                if (!$name)
-                    return false;
-                $cleanName = str_replace(['fc', 'u21', 'u20', 'cf', 'montevideo', 'tijuana', 'puebla'], '', $name);
-                $words = explode(' ', trim($cleanName));
-                foreach ($words as $w) {
-                    if (strlen($w) > 3 && strpos($search, strtolower($w)) !== false)
-                        return true;
-                }
-                return false;
-            };
+            $is1X = (strpos($searchString, '1x') !== false || strpos($searchString, '1/x') !== false || strpos($searchString, 'home or draw') !== false || strpos($searchString, 'casa o pareggio') !== false || ($isHomeMentioned && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)));
+            $isX2 = (strpos($searchString, 'x2') !== false || strpos($searchString, 'x/2') !== false || strpos($searchString, 'draw or away') !== false || strpos($searchString, 'pareggio o ospite') !== false || ($isAwayMentioned && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)));
+            $is12 = (strpos($searchString, '12') !== false || strpos($searchString, '1/2') !== false || strpos($searchString, 'home or away') !== false || strpos($searchString, 'casa o ospite') !== false || ($isHomeMentioned && $isAwayMentioned));
 
-            $is1X = (strpos($searchString, '1x') !== false || strpos($searchString, '1/x') !== false || strpos($searchString, 'home or draw') !== false || strpos($searchString, 'casa o pareggio') !== false || (strpos($searchString, $homeName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)) || $matchTeam($homeName, $searchString));
-            $isX2 = (strpos($searchString, 'x2') !== false || strpos($searchString, 'x/2') !== false || strpos($searchString, 'draw or away') !== false || strpos($searchString, 'pareggio o ospite') !== false || (strpos($searchString, $awayName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)) || $matchTeam($awayName, $searchString));
-            $is12 = (strpos($searchString, '12') !== false || strpos($searchString, '1/2') !== false || strpos($searchString, 'home or away') !== false || strpos($searchString, 'casa o ospite') !== false || (strpos($searchString, $homeName) !== false && strpos($searchString, $awayName) !== false));
+            // Fallback intelligente: se l'analisi menziona solo una squadra in un contesto DC, assumiamo 1X o X2
+            if (!$is1X && !$isX2 && !$is12) {
+                if ($isHomeMentioned)
+                    $is1X = true;
+                elseif ($isAwayMentioned)
+                    $isX2 = true;
+            }
 
             if ($is1X && ($isHomeWin || $isDraw))
                 return 'won';
@@ -242,7 +249,7 @@ class BetSettler
             if ($is12 && ($isHomeWin || $isAwayWin))
                 return 'won';
 
-            if ($is1X || $isX2 || $is12)
+            if ($isFinished && ($is1X || $isX2 || $is12))
                 return 'lost';
         }
 
