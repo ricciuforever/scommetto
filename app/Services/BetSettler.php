@@ -299,7 +299,25 @@ class BetSettler
                 if ($homeGoals === $predHome && $awayGoals === $predAway)
                     return 'won';
                 return 'lost';
-            }
+        }
+
+        // --- Next Goal / Next Goalscorer ---
+        if (strpos($searchString, 'next goal') !== false || strpos($searchString, 'goalscorer') !== false || strpos($searchString, 'prossimo goal') !== false || strpos($searchString, 'prossimo gol') !== false) {
+            if ($isHomeMentioned && $homeGoals > 0) return 'won';
+            if ($isAwayMentioned && $awayGoals > 0) return 'won';
+            if ($isFinished) return 'lost';
+        }
+
+        // --- Fallback per Totals non standard ---
+        if (strpos($searchString, 'total goals') !== false) {
+             preg_match('/(\d+\.?\d*)/', $searchString, $matches);
+             if (isset($matches[1])) {
+                 $threshold = (float) $matches[1];
+                 if (strpos($searchString, 'over') !== false || strpos($advice, 'over') !== false) {
+                     if ($total > $threshold) return 'won';
+                     if ($isFinished) return 'lost';
+                 }
+             }
         }
 
         return 'pending';
@@ -314,9 +332,10 @@ class BetSettler
             return false;
 
         $teamName = mb_strtolower($teamName, 'UTF-8');
-        // Pulizia aggressiva del nome team
+        // Pulizia aggressiva del nome team, MA preservando i nomi di città/regione distintivi
+        // Rimossi: 'montevideo', 'tijuana', 'puebla' dalla lista di cancellazione
         $cleanName = str_replace(
-            ['fc', 'u21', 'u20', 'u19', 'cf', 'montevideo', 'tijuana', 'puebla', 'club', 'sp.', 'deportivo', 'futbol', 'soccer', 'union', 'athletic', 'atletico', 'city', 'united', 'town', 'real'],
+            ['fc', 'u21', 'u20', 'u19', 'cf', 'club', 'sp.', 'deportivo', 'futbol', 'soccer', 'union', 'athletic', 'atletico', 'city', 'united', 'town', 'real'],
             '',
             $teamName
         );
@@ -330,7 +349,7 @@ class BetSettler
         foreach ($words as $w) {
             $w = trim($w);
             // Ignora parole troppo corte dopo la pulizia (es. "la", "de")
-            if (strlen($w) > 3 && strpos($searchString, $w) !== false) {
+            if (strlen($w) > 2 && strpos($searchString, $w) !== false) {
                 return true;
             }
         }
