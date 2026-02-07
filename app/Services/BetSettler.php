@@ -47,43 +47,42 @@ class BetSettler
     public function settleFromDatabase()
     {
         $db = Database::getInstance()->getConnection();
-        $stmt = $db->query("SELECT * FROM bets WHERE status = 'pending'");
-        $pending = $stmt->fetchAll();
+
+        // Query ottimizzata: un solo colpo per prendere tutto quello che serve
+        $sql = "SELECT b.*, f.status_short, f.score_home, f.score_away, 
+                       f.score_home_ht, f.score_away_ht,
+                       t1.name as home_name, t2.name as away_name 
+                FROM bets b 
+                JOIN fixtures f ON b.fixture_id = f.id 
+                JOIN teams t1 ON f.team_home_id = t1.id 
+                JOIN teams t2 ON f.team_away_id = t2.id 
+                WHERE b.status = 'pending'";
+
+        $pending = $db->query($sql)->fetchAll();
 
         if (empty($pending))
             return 0;
 
         $settledCount = 0;
-
         foreach ($pending as $bet) {
-            $stmt = $db->prepare("SELECT f.*, t1.name as home_name, t2.name as away_name 
-                                 FROM fixtures f 
-                                 JOIN teams t1 ON f.team_home_id = t1.id 
-                                 JOIN teams t2 ON f.team_away_id = t2.id 
-                                 WHERE f.id = ?");
-            $stmt->execute([$bet['fixture_id']]);
-            $fixture = $stmt->fetch();
-
-            if ($fixture) {
-                // Mapping DB fields to expected match data structure
-                $matchData = [
-                    'fixture' => ['status' => ['short' => $fixture['status_short']]],
-                    'teams' => [
-                        'home' => ['name' => $fixture['home_name']],
-                        'away' => ['name' => $fixture['away_name']]
-                    ],
-                    'goals' => ['home' => (int) $fixture['score_home'], 'away' => (int) $fixture['score_away']],
-                    'score' => [
-                        'halftime' => [
-                            'home' => ($fixture['score_home_ht'] !== null) ? (int) $fixture['score_home_ht'] : null,
-                            'away' => ($fixture['score_away_ht'] !== null) ? (int) $fixture['score_away_ht'] : null
-                        ]
+            // Mapping dei dati per processSettlement
+            $matchData = [
+                'fixture' => ['status' => ['short' => $bet['status_short']]],
+                'teams' => [
+                    'home' => ['name' => $bet['home_name']],
+                    'away' => ['name' => $bet['away_name']]
+                ],
+                'goals' => ['home' => (int) $bet['score_home'], 'away' => (int) $bet['score_away']],
+                'score' => [
+                    'halftime' => [
+                        'home' => ($bet['score_home_ht'] !== null) ? (int) $bet['score_home_ht'] : null,
+                        'away' => ($bet['score_away_ht'] !== null) ? (int) $bet['score_away_ht'] : null
                     ]
-                ];
+                ]
+            ];
 
-                if ($this->processSettlement($bet, $matchData)) {
-                    $settledCount++;
-                }
+            if ($this->processSettlement($bet, $matchData)) {
+                $settledCount++;
             }
         }
         return $settledCount;
