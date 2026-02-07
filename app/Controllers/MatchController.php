@@ -169,6 +169,9 @@ class MatchController
             $selectedLeague = $_GET['league'] ?? 'all';
             $selectedBookmaker = $_GET['bookmaker'] ?? 'all';
 
+            $db = \App\Services\Database::getInstance()->getConnection();
+
+            // 1. Get ALL Live Matches
             $cacheFile = Config::LIVE_DATA_FILE;
             $allLiveMatches = [];
             if (file_exists($cacheFile)) {
@@ -176,7 +179,40 @@ class MatchController
                 $allLiveMatches = $raw['response'] ?? [];
             }
 
-            // Filter live matches
+            // 2. Get ALL Potential Upcoming Matches (Next 24h with odds) to determine available filters
+            $sqlAvailable = "SELECT DISTINCT l.country_name as country, l.id as league_id, l.name as league_name
+                             FROM fixtures f
+                             JOIN leagues l ON f.league_id = l.id
+                             WHERE f.date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 24 HOUR)
+                             AND f.status_short = 'NS'
+                             AND EXISTS (SELECT 1 FROM fixture_odds fo WHERE fo.fixture_id = f.id)";
+            $availableUpcoming = $db->query($sqlAvailable)->fetchAll(\PDO::FETCH_ASSOC);
+
+            // 3. Aggregate Countries and Leagues for Filters
+            $availableCountries = [];
+            $availableLeagues = []; // league_id => [name => ..., country => ...]
+
+            foreach ($allLiveMatches as $m) {
+                $c = $m['league']['country'] ?? $m['league']['country_name'] ?? 'International';
+                $availableCountries[$c] = $c;
+                $availableLeagues[$m['league']['id']] = [
+                    'name' => $m['league']['name'],
+                    'country' => $c
+                ];
+            }
+
+            foreach ($availableUpcoming as $row) {
+                $c = $row['country'] ?: 'International';
+                $availableCountries[$c] = $c;
+                $availableLeagues[$row['league_id']] = [
+                    'name' => $row['league_name'],
+                    'country' => $c
+                ];
+            }
+            ksort($availableCountries);
+            uasort($availableLeagues, fn($a, $b) => strcmp($a['name'], $b['name']));
+
+            // 4. Filter live matches for display
             $liveMatches = array_filter($allLiveMatches, function ($m) use ($selectedCountry, $selectedLeague, $selectedBookmaker) {
                 $matchesCountry = $selectedCountry === 'all' || ($m['league']['country'] ?? $m['league']['country_name'] ?? '') === $selectedCountry;
                 $matchesLeague = $selectedLeague === 'all' || (string) ($m['league']['id'] ?? '') === (string) $selectedLeague;
@@ -184,10 +220,9 @@ class MatchController
                 return $matchesCountry && $matchesLeague && $matchesBookie;
             });
 
-            // If few results, get upcoming
+            // 5. Fetch upcoming matches if needed, applying display filters
             $upcomingMatches = [];
             if (count($liveMatches) < 10) {
-                $db = \App\Services\Database::getInstance()->getConnection();
                 $sql = "SELECT f.id as fixture_id, f.date, f.status_short, f.league_id,
                                t1.name as home_name, t1.logo as home_logo,
                                t2.name as away_name, t2.logo as away_logo,
@@ -213,6 +248,20 @@ class MatchController
 
                 $sql .= " ORDER BY f.date ASC LIMIT 20";
                 $upcomingMatches = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+
+                if (!empty($upcomingMatches)) {
+                    $fids = array_column($upcomingMatches, 'fixture_id');
+                    $fidsStr = implode(',', array_map('intval', $fids));
+                    $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($fidsStr)");
+                    $bookiesRaw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                    $bookiesMap = [];
+                    foreach ($bookiesRaw as $row) {
+                        $bookiesMap[$row['fixture_id']][] = (int) $row['bookmaker_id'];
+                    }
+                    foreach ($upcomingMatches as &$m) {
+                        $m['available_bookmakers'] = $bookiesMap[$m['fixture_id']] ?? [];
+                    }
+                }
             }
 
             $db = \App\Services\Database::getInstance()->getConnection();
