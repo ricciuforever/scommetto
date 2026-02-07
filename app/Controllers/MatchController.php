@@ -49,37 +49,8 @@ class MatchController
         try {
             $cacheFile = Config::LIVE_DATA_FILE;
             if (file_exists($cacheFile)) {
-                $data = json_decode(file_get_contents($cacheFile), true);
-
-                if (isset($data['response']) && !empty($data['response'])) {
-                    $db = \App\Services\Database::getInstance()->getConnection();
-                    $fids = [];
-                    foreach ($data['response'] as $m)
-                        $fids[] = $m['fixture']['id'];
-
-                    if (!empty($fids)) {
-                        $fidsStr = implode(',', $fids);
-                        // Get bookmakers from fixture_odds
-                        $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($fidsStr)");
-                        $oddsRaw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-                        $bookmakersByFixture = [];
-                        foreach ($oddsRaw as $row) {
-                            $bookmakersByFixture[$row['fixture_id']][] = (int) $row['bookmaker_id'];
-                        }
-
-                        $filteredResponse = [];
-                        foreach ($data['response'] as $m) {
-                            $fid = $m['fixture']['id'];
-                            $bookies = $bookmakersByFixture[$fid] ?? [];
-                            if (!empty($bookies)) {
-                                $m['available_bookmakers'] = $bookies;
-                                $filteredResponse[] = $m;
-                            }
-                        }
-                        $data['response'] = $filteredResponse;
-                    }
-                }
-                echo json_encode($data);
+                // Return cache directly as it's already filtered and enriched by syncLive
+                echo file_get_contents($cacheFile);
             } else {
                 echo json_encode(['response' => [], 'status' => 'waiting_for_sync']);
             }

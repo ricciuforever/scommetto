@@ -1491,7 +1491,7 @@ function renderDashboardMatches() {
                     <span class="text-[10px] font-black uppercase tracking-[0.2em] italic truncate max-w-[150px]">${m.league.name}</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">${m.fixture.status.elapsed}'</span>
+                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">${m.fixture.status.elapsed ?? 0}'</span>
                     <div class="w-2 h-2 bg-danger rounded-full animate-ping"></div>
                 </div>
             </div>
