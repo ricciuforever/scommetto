@@ -322,17 +322,14 @@ class SyncController
             foreach ($matches as $m) {
                 $fid = $m['fixture']['id'];
                 $elapsed = $m['fixture']['status']['elapsed'] ?? 0;
-                if ($elapsed < 10 || $elapsed > 80)
-                    continue;
-                if ($this->betModel->hasBet($fid))
-                    continue; // Evita scommesse multiple sullo stesso match
+
                 if (!$this->liveOddsModel->hasOdds($fid))
                     continue; // Salta se non ci sono odds live disponibili
-                if ($this->analysisModel->wasRecentlyChecked($fid))
-                    continue;
 
+                echo "Analyzing live fixture $fid (" . $m['teams']['home']['name'] . " vs " . $m['teams']['away']['name'] . ") at minute $elapsed...\n";
                 $prediction = $this->geminiService->analyze($m);
                 $this->analysisModel->log($fid, $prediction);
+                $results['analyzed']++;
 
                 if (preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches_json)) {
                     $betData = json_decode($matches_json[1], true);
@@ -341,9 +338,10 @@ class SyncController
                         $betData['match'] = $m['teams']['home']['name'] . ' vs ' . $m['teams']['away']['name'];
                         $this->betModel->create($betData);
                         $results['bets_placed']++;
+                        echo "Bet placed for fixture $fid!\n";
                     }
                 }
-                break;
+                usleep(500000); // 0.5s delay between analyses (Gemini API safety)
             }
             echo json_encode($results);
         } catch (\Throwable $e) {
