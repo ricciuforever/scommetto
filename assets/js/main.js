@@ -6,15 +6,27 @@ import { Tracker } from './modules/tracker.js';
 // --- GLOBAL APP STATE & EXPORTS ---
 window.app = {
     showToast: UI.showToast,
-    showBetDetails: (id) => { /* Reuse or import logic */ },
-    // ... expose methods needed by legacy onclick handlers
+    showBetDetails: (id) => {
+        console.log("Show bet details for", id);
+        // We need to implement this logic or reuse it. For now, simple alert to prove it works
+        // Ideally Tracker.showDetails(id) 
+    },
+    analyzeMatch: (id) => {
+        console.log("Analyze match", id);
+        // Dashboard.analyzeMatch or similar
+    }
 };
 
 // --- INIT ---
 document.addEventListener('DOMContentLoaded', () => {
+    console.log("App initialized");
+
     // Init Router
     window.addEventListener('hashchange', handleRouting);
-    handleRouting();
+
+    // Force initial routing
+    console.log("Triggering initial route...");
+    handleRouting().catch(e => console.error("Routing failed:", e));
 
     // Theme Toggle
     const themeToggle = document.getElementById('theme-toggle');
