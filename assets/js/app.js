@@ -1814,28 +1814,7 @@ if (themeToggle) {
 if (localStorage.getItem('theme') === 'light') htmlElement.classList.remove('dark');
 
 init();
-const container = document.getElementById('tracker-stats-summary');
-if (!container) return;
 
-container.innerHTML = `
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Net Balance</span>
-            <div class="text-4xl font-black italic tracking-tighter ${summary.netProfit >= 0 ? 'text-success' : 'text-danger'}">${summary.netProfit >= 0 ? '+' : ''}${summary.netProfit.toFixed(2)}€</div>
-        </div>
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">ROI</span>
-            <div class="text-4xl font-black italic tracking-tighter text-accent">${summary.roi.toFixed(1)}%</div>
-        </div>
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Success Rate</span>
-            <div class="text-4xl font-black italic tracking-tighter text-white">${summary.winCount + summary.lossCount > 0 ? ((summary.winCount / (summary.winCount + summary.lossCount)) * 100).toFixed(0) : 0}%</div>
-        </div>
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Bankroll</span>
-            <div class="text-4xl font-black italic tracking-tighter text-white">${summary.currentPortfolio.toFixed(2)}€</div>
-        </div>
-    `;
-}
 
 function renderFullHistory() {
     const container = document.getElementById('tracker-history');
