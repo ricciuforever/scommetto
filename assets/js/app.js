@@ -1307,23 +1307,24 @@ function updateStatsSummary() {
 }
 
 function calculateStats() {
+    const data = Array.isArray(historyData) ? historyData : [];
+
     let pendingCount = 0; let winCount = 0; let lossCount = 0; let totalStake = 0; let netProfit = 0;
     const startingPortfolio = 100;
 
-    const data = Array.isArray(historyData) ? historyData : [];
-
-    // Global profit should be based on ALL bets for portfolio
+    // Global profit (ALWAYS based on ALL bets for portfolio)
     let globalNetProfit = 0;
     data.forEach(bet => {
         const stake = parseFloat(bet.stake) || 0;
         const odds = parseFloat(bet.odds) || 0;
-        if (bet.status === "won") globalNetProfit += stake * (odds - 1);
-        else if (bet.status === "lost") globalNetProfit -= stake;
+        const status = (bet.status || "").toLowerCase();
+        if (status === "won") globalNetProfit += stake * (odds - 1);
+        else if (status === "lost") globalNetProfit -= stake;
     });
 
     // Filtered stats for other blocks
     const filteredHistory = data.filter(bet => {
-        const countryName = bet.country;
+        const countryName = bet.country || bet.country_name || 'International';
         const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
         const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
         return matchesCountry && matchesBookie;
@@ -1332,10 +1333,11 @@ function calculateStats() {
     filteredHistory.forEach(bet => {
         const stake = parseFloat(bet.stake) || 0;
         const odds = parseFloat(bet.odds) || 0;
+        const status = (bet.status || "").toLowerCase();
 
-        if (bet.status === "pending") pendingCount++;
-        else if (bet.status === "won") { winCount++; totalStake += stake; netProfit += stake * (odds - 1); }
-        else if (bet.status === "lost") { lossCount++; totalStake += stake; netProfit -= stake; }
+        if (status === "pending") pendingCount++;
+        else if (status === "won") { winCount++; totalStake += stake; netProfit += stake * (odds - 1); }
+        else if (status === "lost") { lossCount++; totalStake += stake; netProfit -= stake; }
     });
 
     const liveCount = liveMatches.filter(m => {
