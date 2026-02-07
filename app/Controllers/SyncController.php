@@ -183,39 +183,70 @@ class SyncController
                 foreach ($liveOddsData['response'] as $lo) {
                     $fid = $lo['fixture']['id'];
                     $this->liveOddsModel->save($fid, $lo);
-                    $liveOddsIds[] = (int)$fid;
+                    $liveOddsIds[] = (int) $fid;
                 }
             }
 
             // Identify bettable matches (Live Odds OR Pre-match Odds)
-            $allFids = array_map(fn($m) => (int)$m['fixture']['id'], $allLiveMatches);
+            $allFids = array_map(fn($m) => (int) $m['fixture']['id'], $allLiveMatches);
             $fidsStr = implode(',', $allFids);
-            $stmt = $db->query("SELECT DISTINCT fixture_id FROM fixture_odds WHERE fixture_id IN ($fidsStr)");
-            $preMatchOddsIds = $stmt->fetchAll(\PDO::FETCH_COLUMN);
-            $bettableIds = array_unique(array_merge($liveOddsIds, array_map('intval', $preMatchOddsIds)));
+
+            // Optimization: Get existing bookmakers for these fixtures
+            $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($fidsStr)");
+            $bookiesRaw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            $bookiesByFid = [];
+            $preMatchOddsIds = [];
+            foreach ($bookiesRaw as $row) {
+                $bookiesByFid[$row['fixture_id']][] = (int) $row['bookmaker_id'];
+                $preMatchOddsIds[] = (int) $row['fixture_id'];
+            }
+            $preMatchOddsIds = array_unique($preMatchOddsIds);
+
+            // AUTO-HEAL: If a match is LIVE but has no pre-match odds (metadata), fetch them now!
+            // This fixes "missing matches" when filtering by bookmaker (e.g. William Hill)
+            $missingOddsFids = array_diff($allFids, $preMatchOddsIds);
+            if (!empty($missingOddsFids)) {
+                $missingCount = count($missingOddsFids);
+                echo "Found $missingCount live matches without pre-match odds. Fetching metadata...\n";
+
+                // Limit to 10 per run to avoid instant quota drain, but runs every minute so it catches up fast
+                $idsToFetch = array_slice($missingOddsFids, 0, 10);
+
+                foreach ($idsToFetch as $missFid) {
+                    $oddsData = $this->apiService->fetchOdds(['fixture' => $missFid]);
+                    if (isset($oddsData['response'])) {
+                        foreach ($oddsData['response'] as $row) {
+                            foreach ($row['bookmakers'] as $bm) {
+                                // Add to local index for immediate use
+                                $bookiesByFid[$missFid][] = (int) $bm['id'];
+                                foreach ($bm['bets'] as $bet) {
+                                    (new FixtureOdds())->save($missFid, $bm['id'], $bet['id'], $bet['values']);
+                                }
+                            }
+                        }
+                        $preMatchOddsIds[] = $missFid; // Now it has odds
+                        echo "Synced metadata for fixture $missFid.\n";
+                    }
+                }
+            }
+
+            $bettableIds = array_unique(array_merge($liveOddsIds, $preMatchOddsIds));
 
             // Filter matches: Not finished AND (Live Odds OR Pre-match Odds)
             $matches = array_filter($allLiveMatches, function ($m) use ($bettableIds) {
                 $status = $m['fixture']['status']['short'] ?? '';
                 $isFinished = in_array($status, ['FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD', 'AWD', 'WO']);
-                return !$isFinished && in_array((int)$m['fixture']['id'], $bettableIds);
+                return !$isFinished && in_array((int) $m['fixture']['id'], $bettableIds);
             });
 
             // Enrich filtered matches with available bookmakers
             $enrichedMatches = [];
             if (!empty($matches)) {
-                $matchFids = array_map(fn($m) => (int)$m['fixture']['id'], $matches);
-                $matchFidsStr = implode(',', $matchFids);
-                $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($matchFidsStr)");
-                $bookiesRaw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-                $bookiesByFid = [];
-                foreach ($bookiesRaw as $row) {
-                    $bookiesByFid[$row['fixture_id']][] = (int)$row['bookmaker_id'];
-                }
-
                 foreach ($matches as $m) {
-                    $fid = (int)$m['fixture']['id'];
-                    $m['available_bookmakers'] = $bookiesByFid[$fid] ?? [];
+                    $fid = (int) $m['fixture']['id'];
+                    $m['available_bookmakers'] = array_unique($bookiesByFid[$fid] ?? []);
+                    // Add dummy "Live" bookmaker if live odds exist (usually Bet365 ID 1 or similar)
+                    // This ensures compability if user filters for "Live Odds" specifically
                     $enrichedMatches[] = $m;
                 }
             }
