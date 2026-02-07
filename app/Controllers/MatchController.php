@@ -327,6 +327,7 @@ class MatchController
                     JOIN teams t2 ON f.team_away_id = t2.id
                     JOIN leagues l ON f.league_id = l.id
                     WHERE f.date >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                    AND f.status_short NOT IN ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD', 'AWD', 'WO')
                     ORDER BY f.date ASC";
             $data = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
             echo json_encode($data);
