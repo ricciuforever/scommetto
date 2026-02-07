@@ -326,28 +326,34 @@ class SyncController
         $season = $this->getCurrentSeason();
         $results = ['leagues' => 0, 'standings' => 0, 'fixtures' => 0, 'injuries' => 0, 'stats_updated' => 0, 'h2h' => 0];
 
-        try {
-            // Sync missing stats for recently finished matches (Batch fetch)
-            $results['stats_updated'] = $this->syncRecentFinishedStats();
+        $onlySettle = isset($_GET['only_settle']);
 
+        try {
             $db = Database::getInstance()->getConnection();
 
-            // Leagues: doc recommends 1/hour or 1/day.
+            // 1. Manutenzione SEMPRE eseguita (Pulisce stake 0 e duplicati)
+            $this->betModel->cleanup();
+            $this->betModel->deduplicate();
+
+            // 2. Chiusura scommesse (Fondamentale)
+            $this->refreshPendingFixtures();
+            $betSettler = new \App\Services\BetSettler();
+            $results['settled'] = $betSettler->settleFromDatabase();
+
+            if ($onlySettle) {
+                echo json_encode(['status' => 'maintenance_completed', 'results' => $results]);
+                return;
+            }
+
+            // 3. Sync Stats (Solo se non siamo in modalità settle)
+            $results['stats_updated'] = $this->syncRecentFinishedStats();
+
+            // Limita il sync delle leghe per evitare timeout
             $leaguesData = $this->apiService->fetchLeagues();
             if (isset($leaguesData['response'])) {
-                foreach ($leaguesData['response'] as $row) {
-                    // FILTER: Only sync leagues with odds coverage (Bettable)
-                    // unless they are explicitly in the PREMIUM_LEAGUES list
+                foreach (array_slice($leaguesData['response'], 0, 50) as $row) {
                     $isPremium = in_array($row['league']['id'], Config::PREMIUM_LEAGUES);
-                    $hasOdds = false;
-                    foreach ($row['seasons'] as $s) {
-                        if ($s['year'] == $season && ($s['coverage']['odds'] ?? false)) {
-                            $hasOdds = true;
-                            break;
-                        }
-                    }
-
-                    if ($isPremium || $hasOdds) {
+                    if ($isPremium) {
                         $this->leagueModel->save($row);
                         $results['leagues']++;
                     }
@@ -363,65 +369,6 @@ class SyncController
                     $results['fixtures']++;
                 }
             }
-
-            // H2H for matches starting in the next 4 hours
-            $upcoming = $db->query("SELECT id, team_home_id, team_away_id FROM fixtures
-                                    WHERE date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 4 HOUR)
-                                    AND status_short = 'NS'")->fetchAll(PDO::FETCH_ASSOC);
-            foreach ($upcoming as $match) {
-                $h2hKey = min($match['team_home_id'], $match['team_away_id']) . "-" . max($match['team_home_id'], $match['team_away_id']);
-                if ($this->h2hModel->needsRefresh($match['team_home_id'], $match['team_away_id'], 24)) {
-                    $h2hData = $this->apiService->fetchH2H($h2hKey);
-                    if (isset($h2hData['response'])) {
-                        $this->h2hModel->save($match['team_home_id'], $match['team_away_id'], $h2hData['response']);
-                        $results['h2h']++;
-                        usleep(200000);
-                    }
-                }
-            }
-
-            $activeLeagues = $db->query("SELECT DISTINCT league_id FROM fixtures WHERE DATE(date) = '$today'")->fetchAll(PDO::FETCH_COLUMN);
-
-            foreach ($activeLeagues as $lId) {
-                if (!$lId)
-                    continue;
-                $stData = $this->apiService->fetchStandings($lId, $season);
-                if (isset($stData['response'][0]['league']['standings'])) {
-                    foreach ($stData['response'][0]['league']['standings'] as $group) {
-                        foreach ($group as $row) {
-                            if (isset($row['team']['id']))
-                                $this->standingModel->save($lId, $row);
-                        }
-                    }
-                    $results['standings']++;
-                }
-
-                $injData = $this->apiService->request("/injuries?league=$lId&season=$season");
-                if (isset($injData['response'])) {
-                    foreach ($injData['response'] as $row) {
-                        if (isset($row['fixture']['id']) && isset($row['team']['id'])) {
-                            $this->injuryModel->save($row['fixture']['id'], $row);
-                        }
-                    }
-                    $results['injuries']++;
-                }
-                usleep(250000);
-            }
-
-            // Pulizia: rimuove scommesse in sospeso con stake 0 e duplicati
-            $this->betModel->cleanup();
-            $this->betModel->deduplicate();
-
-            // Rimuove fixture che non hanno odds e iniziano tra poco (non bettabili)
-            $db->exec("DELETE FROM fixtures 
-                       WHERE id NOT IN (SELECT fixture_id FROM fixture_odds) 
-                       AND status_short = 'NS' 
-                       AND date < DATE_ADD(NOW(), INTERVAL 1 HOUR)");
-
-            // Settle bets after updating standings and fixtures
-            $this->refreshPendingFixtures();
-            $betSettler = new \App\Services\BetSettler();
-            $results['settled'] = $betSettler->settleFromDatabase();
 
             echo json_encode($results);
         } catch (\Throwable $e) {
