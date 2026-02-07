@@ -104,15 +104,6 @@
             <div class="flex items-center gap-4">
                 <!-- Selectors -->
                 <div class="flex items-center gap-2 mr-4">
-                    <!-- Country Selector -->
-                    <button id="country-selector" onclick="openCountryModal()"
-                        class="h-10 px-4 rounded-xl bg-white/5 hover:bg-white/10 flex items-center gap-2 transition-all border border-white/5 group">
-                        <span id="selected-country-flag" class="text-lg">🌍</span>
-                        <span id="selected-country-name"
-                            class="text-[10px] font-black uppercase tracking-tighter text-slate-400 group-hover:text-white transition-colors">Tutte</span>
-                        <i data-lucide="chevron-down" class="w-3 h-3 text-slate-500"></i>
-                    </button>
-
                     <!-- Bookmaker Selector -->
                     <button id="bookmaker-selector" onclick="openBookmakerModal()"
                         class="h-10 px-4 rounded-xl bg-white/5 hover:bg-white/10 flex items-center gap-2 transition-all border border-white/5 group">
@@ -251,24 +242,6 @@
         </div>
     </div>
 
-    <!-- Country Selection Modal -->
-    <div id="country-modal"
-        class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
-        <div
-            class="bg-slate-900 w-full max-w-4xl rounded-[40px] border border-white/10 shadow-2xl overflow-hidden relative max-h-[90vh] flex flex-col">
-            <div class="p-8 border-b border-white/5 flex justify-between items-center">
-                <h3 class="text-2xl font-black tracking-tight text-white uppercase italic">Seleziona Nazione</h3>
-                <button onclick="closeCountryModal()"
-                    class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all text-white">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-            <div id="country-list"
-                class="p-8 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                <!-- Data injected by JS -->
-            </div>
-        </div>
-    </div>
 
     <!-- Bookmaker Selection Modal -->
     <div id="bookmaker-modal"
@@ -300,6 +273,35 @@
         .glass {
             background: rgba(15, 23, 42, 0.8);
             backdrop-filter: blur(12px);
+        }
+
+        /* Custom Dashboard Selects */
+        .dash-filter-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1rem;
+            padding-right: 2.5rem;
+        }
+
+        .pinned-match {
+            @apply ring-2 ring-accent shadow-2xl shadow-accent/20 scale-[1.01];
+            animation: pulse-ring 2s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% {
+                box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(56, 189, 248, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+            }
         }
     </style>
 

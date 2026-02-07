@@ -11,6 +11,7 @@ let historyData = [];
 
 // Global Filter State
 let selectedCountry = localStorage.getItem('selected_country') || 'all';
+let selectedLeague = localStorage.getItem('selected_league') || 'all';
 let selectedBookmaker = localStorage.getItem('selected_bookmaker') || 'all';
 let allFilterData = { countries: [], bookmakers: [] };
 
@@ -1273,46 +1274,13 @@ async function selectCountry(country) {
     selectedCountry = country;
     localStorage.setItem('selected_country', country);
 
-    // UI Update
-    const label = document.getElementById('selected-country-name');
-    const flagPlaceholder = document.getElementById('selected-country-flag');
-
-    if (country === 'all') {
-        label.textContent = 'Tutte le Nazioni';
-        flagPlaceholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4 text-accent"></i>';
-    } else {
-        const c = allFilterData.countries.find(x => x.name === country);
-        label.textContent = country;
-        if (c && c.flag) flagPlaceholder.innerHTML = `<img src="${c.flag}" class="w-5 h-5 rounded-sm object-cover">`;
-        else flagPlaceholder.innerHTML = '🌍';
-    }
-
-    // Modal Close
-    const modal = document.getElementById('country-modal');
-    if (modal) modal.classList.add('hidden');
-    if (window.lucide) lucide.createIcons();
-
-    // TRIGGER REFRESH BASED ON VIEW
     if (currentView === 'dashboard') {
-        updateDashboardFilters();
-    } else if (currentView === 'leagues') {
-        // For leagues view, maybe reload page or update hash if needed, 
-        // but currently league filter is inline in the PHP view.
-        // We could trigger a reload if we want the country filter to apply to leagues list too via URL param
-        const htmxContainer = document.getElementById('htmx-container');
-        if (htmxContainer && !htmxContainer.classList.contains('hidden')) {
-            // Leagues partial likely handles client side filtering, but if we want server side:
-            // htmxContainer.setAttribute('hx-get', `/api/view/leagues?country=${country}`);
-            // htmx.trigger('#htmx-container', 'load');
-
-            // Client-side fallback for now (if on leagues page)
-            const filterInput = document.getElementById('country-filter-php');
-            if (filterInput) { filterInput.value = country; filterLeagues(country); }
-        }
-    } else {
-        // Legacy views
-        if (currentView === 'tracker') renderTracker();
-        else if (currentView === 'predictions') renderPredictions();
+        renderDashboardMatches();
+        updateStatsSummary();
+    } else if (currentView === 'tracker') {
+        renderTracker();
+    } else if (currentView === 'predictions') {
+        renderPredictions();
     }
 }
 
@@ -1334,8 +1302,11 @@ async function selectBookmaker(bookmakerId) {
     if (modal) modal.classList.add('hidden');
 
     if (currentView === 'dashboard') {
-        updateDashboardFilters();
-    } else if (currentView === 'tracker') renderTracker();
+        renderDashboardMatches();
+        updateStatsSummary();
+    } else if (currentView === 'tracker') {
+        renderTracker();
+    }
 }
 window.selectBookmaker = selectBookmaker;
 window.setBookmaker = selectBookmaker; // Alias for legacy calls
@@ -1402,6 +1373,7 @@ function updateStatsSummary() {
     if (!container) return;
 
     const countryLabel = selectedCountry === 'all' ? 'Tutte' : selectedCountry;
+    const leagueLabel = selectedLeague === 'all' ? 'Tutti' : (Array.from(document.querySelectorAll('#dash-league-filter option')).find(opt => opt.value === selectedLeague)?.innerText || 'League');
     const bookmakerLabel = selectedBookmaker === 'all' ? 'Tutti i Book' : (allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker)?.name || 'Filtro');
 
     container.innerHTML = `
@@ -1415,7 +1387,7 @@ function updateStatsSummary() {
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
             <span class="block text-2xl font-black mb-1 ${summary.netProfit >= 0 ? 'text-success' : 'text-danger'}">${summary.netProfit >= 0 ? '+' : ''}${summary.netProfit.toFixed(2)}€</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Profitto Netto</span>
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Utile Netto | ${countryLabel} ${selectedLeague !== 'all' ? '/ ' + leagueLabel : ''}</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
             <span class="block text-2xl font-black mb-1">${summary.liveCount}</span>
@@ -1489,10 +1461,15 @@ function calculateStats() {
     const liveCount = liveMatches.filter(m => {
         const countryName = m.league.country || m.league.country_name;
         const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
+
+        const leagueId = m.league.id.toString();
+        const matchesLeague = selectedLeague === 'all' || leagueId === selectedLeague;
+
         const matchesBookie = selectedBookmaker === 'all'
             ? true
             : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
-        return matchesCountry && matchesBookie;
+
+        return matchesCountry && matchesLeague && matchesBookie;
     }).length;
 
     const currentPortfolio = startingPortfolio + globalNetProfit;
@@ -1511,38 +1488,102 @@ function calculateStats() {
     };
 }
 
+// --- FILTERS & DASHBOARD HELPERS ---
+
+function populateDashFilters() {
+    const countrySelect = document.getElementById('dash-country-filter');
+    const leagueSelect = document.getElementById('dash-league-filter');
+    if (!countrySelect || !leagueSelect) return;
+
+    // 1. Extract Countries from all live matches
+    const countries = [...new Set(liveMatches.map(m => m.league.country || m.league.country_name || 'International'))].sort();
+
+    // Preserve current selection if possible
+    const currentCountry = selectedCountry;
+    countrySelect.innerHTML = '<option value="all">Tutte le Nazioni</option>';
+    countries.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.innerText = c;
+        if (c === currentCountry) opt.selected = true;
+        countrySelect.appendChild(opt);
+    });
+
+    // 2. Extract Leagues filtered by selected country (if any)
+    const leaguesMap = new Map();
+    liveMatches.forEach(m => {
+        const c = m.league.country || m.league.country_name || 'International';
+        if (selectedCountry === 'all' || c === selectedCountry) {
+            leaguesMap.set(m.league.id.toString(), m.league.name);
+        }
+    });
+
+    const currentLeague = selectedLeague;
+    leagueSelect.innerHTML = '<option value="all">Tutti i Campionati</option>';
+    Array.from(leaguesMap.entries()).sort((a, b) => a[1].localeCompare(b[1])).forEach(([id, name]) => {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.innerText = name;
+        if (id === currentLeague) opt.selected = true;
+        leagueSelect.appendChild(opt);
+    });
+}
+
+function updateSelectedCountry(val) {
+    selectedCountry = val;
+    selectedLeague = 'all'; // Reset league when country changes
+    localStorage.setItem('selected_country', val);
+    localStorage.setItem('selected_league', 'all');
+    renderDashboardMatches();
+    updateStatsSummary();
+}
+
+function updateSelectedLeague(val) {
+    selectedLeague = val;
+    localStorage.setItem('selected_league', val);
+    renderDashboardMatches();
+}
+
+window.updateSelectedCountry = updateSelectedCountry;
+window.updateSelectedLeague = updateSelectedLeague;
+
 function renderDashboardMatches() {
     const container = document.getElementById('live-matches-list');
     if (!container) return;
 
-    // Debug filtering issues
-    console.log(`Live sync: ${liveMatches.length} matches found. Filters: Country=${selectedCountry}, Bookie=${selectedBookmaker}`);
+    // 1. Populate Dashboard Filters (Country & League)
+    populateDashFilters();
 
-    container.innerHTML = '';
-
-    // 1. Extract Leagues for Filter (From visible live matches matching country/bookie)
-    // We want to filter leagues based on current country/bookie selection to avoid empty options
-    const finalMatches = liveMatches.filter(m => {
-        const league = m.league || {};
-        const countryName = league.country || league.country_name || '';
+    // 2. Filter Matches
+    const filteredMatches = liveMatches.filter(m => {
+        const countryName = m.league.country || m.league.country_name || '';
         const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
+
+        const leagueId = m.league.id.toString();
+        const matchesLeague = selectedLeague === 'all' || leagueId === selectedLeague;
+
         const matchesBookie = selectedBookmaker === 'all'
             ? true
             : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
-        return matchesCountry && matchesBookie;
+
+        return matchesCountry && matchesLeague && matchesBookie;
     });
 
-    console.log(`Rendering ${finalMatches.length} bettable matches.`);
+    // Update active count in UI
+    const countEl = document.getElementById('live-active-count');
+    if (countEl) countEl.innerText = filteredMatches.length;
+
+    container.innerHTML = '';
 
     // Render Live Matches
-    if (finalMatches.length === 0 && liveMatches.length > 0) {
+    if (filteredMatches.length === 0 && liveMatches.length > 0) {
         const noMatch = document.createElement('div');
         noMatch.className = "glass p-8 rounded-[32px] text-center text-slate-500 font-bold uppercase tracking-widest italic";
         noMatch.innerText = "Nessun match live per i filtri selezionati.";
         container.appendChild(noMatch);
     }
 
-    finalMatches.forEach(m => {
+    filteredMatches.forEach(m => {
         const isHighlighted = pinnedMatches.has(m.fixture.id);
         const card = document.createElement('div');
         // Visual Highlight Effect: ring-2 ring-accent and shadow if pinned

@@ -10,13 +10,29 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8" id="dashboard-content">
     <!-- Live Matches Column -->
     <div class="lg:col-span-2 space-y-6">
-        <div class="flex items-center justify-between mb-8">
-            <h2 class="text-3xl font-black italic uppercase tracking-tighter text-white">Live Now <span
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+            <h2 class="text-4xl font-black italic uppercase tracking-tighter text-white leading-none">Live Now <span
                     class="text-accent">.</span></h2>
-            <div class="flex gap-2">
+
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Dashboard Local Filters -->
+                <div class="flex items-center gap-2">
+                    <select id="dash-country-filter" onchange="updateSelectedCountry(this.value)"
+                        class="dash-filter-select bg-white/5 border border-white/5 rounded-2xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 focus:border-accent/50 outline-none transition-all cursor-pointer">
+                        <option value="all">Tutte le Nazioni</option>
+                    </select>
+
+                    <select id="dash-league-filter" onchange="updateSelectedLeague(this.value)"
+                        class="dash-filter-select bg-white/5 border border-white/5 rounded-2xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 focus:border-accent/50 outline-none transition-all cursor-pointer">
+                        <option value="all">Tutti i Campionati</option>
+                    </select>
+                </div>
+
+                <div class="h-8 w-px bg-white/5 mx-2 hidden md:block"></div>
+
                 <span
-                    class="px-3 py-1 bg-accent/20 text-accent rounded-lg text-[10px] font-black uppercase tracking-widest animate-pulse">
-                    <?php echo count($liveMatches ?? []); ?> Active
+                    class="px-4 py-2 bg-accent/10 text-accent rounded-2xl text-[10px] font-black uppercase tracking-widest border border-accent/20">
+                    <span id="live-active-count"><?php echo count($liveMatches ?? []); ?></span> Active
                 </span>
             </div>
         </div>
