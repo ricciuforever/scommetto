@@ -67,7 +67,7 @@ class MatchController
             $types = ['scorers', 'assists', 'yellow_cards', 'red_cards'];
             $results = [];
             foreach ($types as $type) {
-                $results[$type] = $topStatsModel->get((int)$leagueId, $season, $type);
+                $results[$type] = $topStatsModel->get((int) $leagueId, $season, $type);
             }
             echo json_encode($results);
         } catch (\Throwable $e) {
@@ -82,29 +82,29 @@ class MatchController
             $db = \App\Services\Database::getInstance()->getConnection();
 
             // Basic Info
-            $fixture = (new \App\Models\Fixture())->getById((int)$id);
+            $fixture = (new \App\Models\Fixture())->getById((int) $id);
             if (!$fixture) {
                 echo json_encode(['error' => 'Partita non trovata.']);
                 return;
             }
 
             // Events
-            $events = (new \App\Models\FixtureEvent())->getByFixture((int)$id);
+            $events = (new \App\Models\FixtureEvent())->getByFixture((int) $id);
 
             // Stats
-            $stats = (new \App\Models\FixtureStatistics())->getByFixture((int)$id);
+            $stats = (new \App\Models\FixtureStatistics())->getByFixture((int) $id);
 
             // Lineups
-            $lineups = (new \App\Models\FixtureLineup())->getByFixture((int)$id);
+            $lineups = (new \App\Models\FixtureLineup())->getByFixture((int) $id);
 
             // Injuries
-            $injuries = (new \App\Models\FixtureInjury())->getByFixture((int)$id);
+            $injuries = (new \App\Models\FixtureInjury())->getByFixture((int) $id);
 
             // H2H
             $h2h = (new \App\Models\H2H())->get($fixture['team_home_id'], $fixture['team_away_id']);
 
             // Odds
-            $odds = (new \App\Models\FixtureOdds())->getByFixture((int)$id);
+            $odds = (new \App\Models\FixtureOdds())->getByFixture((int) $id);
 
             echo json_encode([
                 'fixture' => $fixture,
@@ -221,10 +221,10 @@ class MatchController
 
             // Get stats for the most recent league/season
             $db = \App\Services\Database::getInstance()->getConnection();
-            $latest = $db->query("SELECT league_id, season FROM team_stats WHERE team_id = " . (int)$teamId . " ORDER BY season DESC LIMIT 1")->fetch();
+            $latest = $db->query("SELECT league_id, season FROM team_stats WHERE team_id = " . (int) $teamId . " ORDER BY season DESC LIMIT 1")->fetch();
             $stats = null;
             if ($latest) {
-                $stats = $statsModel->get((int)$teamId, (int)$latest['league_id'], (int)$latest['season']);
+                $stats = $statsModel->get((int) $teamId, (int) $latest['league_id'], (int) $latest['season']);
             }
 
             if (!$team) {
@@ -257,9 +257,9 @@ class MatchController
 
             $player = $playerModel->getById((int) $playerId);
             $season = Config::getCurrentSeason();
-            $stats = $statsModel->get((int)$playerId, $season);
-            $trophies = $trophyModel->getByPlayer((int)$playerId);
-            $transfers = $transferModel->getByPlayer((int)$playerId);
+            $stats = $statsModel->get((int) $playerId, $season);
+            $trophies = $trophyModel->getByPlayer((int) $playerId);
+            $transfers = $transferModel->getByPlayer((int) $playerId);
 
             if (!$player) {
                 echo json_encode(['error' => 'Dettagli giocatore non presenti nel database.']);
@@ -293,17 +293,17 @@ class MatchController
         header('Content-Type: application/json');
         try {
             $db = \App\Services\Database::getInstance()->getConnection();
-            $sql = "SELECT p.*, f.date, f.status_short,
+            $sql = "SELECT p.*, f.date, f.status_short, f.league_id,
                            t1.name as home_name, t1.logo as home_logo,
                            t2.name as away_name, t2.logo as away_logo,
-                           l.name as league_name
+                           l.name as league_name, l.country_name as country_name
                     FROM predictions p
                     JOIN fixtures f ON p.fixture_id = f.id
                     JOIN teams t1 ON f.team_home_id = t1.id
                     JOIN teams t2 ON f.team_away_id = t2.id
                     JOIN leagues l ON f.league_id = l.id
-                    WHERE f.date >= NOW()
-                    ORDER BY f.date ASC LIMIT 20";
+                    WHERE f.date >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                    ORDER BY f.date ASC";
             $data = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
             echo json_encode($data);
         } catch (\Throwable $e) {

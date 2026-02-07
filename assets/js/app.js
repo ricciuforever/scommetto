@@ -427,49 +427,146 @@ async function renderPredictions() {
         return;
     }
 
-    let html = `<div class="grid grid-cols-1 md:grid-cols-2 gap-8">`;
+    // Estrai nazioni e leghe uniche per i filtri
+    const countries = [...new Set(predictions.map(p => p.country_name || 'International'))].sort();
 
-    predictions.forEach(p => {
-        const dateStr = new Date(p.date).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-        html += `
-            <div class="glass p-8 rounded-[40px] border-white/5 hover:border-accent/30 transition-all group relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-all scale-150">
-                    <i data-lucide="brain-circuit" class="w-20 h-20"></i>
-                </div>
-
-                <div class="flex items-center justify-between mb-6">
-                    <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 italic">${p.league_name}</span>
-                    <span class="text-[10px] font-black uppercase text-accent tracking-widest">${dateStr}</span>
-                </div>
-
-                <div class="flex items-center justify-between gap-4 mb-8">
-                    <div class="flex-1 flex flex-col items-center gap-3">
-                         <img src="${p.home_logo}" class="w-12 h-12 object-contain">
-                         <span class="text-xs font-black uppercase text-center truncate w-full">${p.home_name}</span>
-                    </div>
-                    <div class="flex flex-col items-center">
-                        <span class="text-2xl font-black italic opacity-20">VS</span>
-                    </div>
-                    <div class="flex-1 flex flex-col items-center gap-3">
-                         <img src="${p.away_logo}" class="w-12 h-12 object-contain">
-                         <span class="text-xs font-black uppercase text-center truncate w-full">${p.away_name}</span>
-                    </div>
-                </div>
-
-                <div class="bg-accent/10 border border-accent/20 p-5 rounded-3xl mb-6">
-                    <div class="text-[9px] font-black text-accent uppercase tracking-widest mb-1">AI Suggestion</div>
-                    <div class="text-lg font-black text-white italic uppercase">${p.advice}</div>
-                </div>
-
-                <button class="w-full py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 font-black text-[10px] uppercase tracking-widest transition-all" onclick="window.location.hash = 'match/${p.fixture_id}'">
-                    Apri Match Center
-                </button>
+    let html = `
+        <div class="mb-12 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div>
+                <h1 class="text-4xl font-black italic uppercase tracking-tighter mb-2">Pronostici AI</h1>
+                <p class="text-slate-500 font-bold uppercase tracking-widest text-xs italic">Suggerimenti algoritmici basati su performance e big data.</p>
             </div>
-        `;
-    });
+            
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                <!-- Filtro Nazione -->
+                <div class="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/10 group focus-within:border-accent/80 transition-all min-w-[200px] w-full sm:w-auto">
+                    <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-500 group-focus-within:text-accent transition-colors">
+                        <i data-lucide="globe" class="w-5 h-5"></i>
+                    </div>
+                    <select id="pred-country-filter" class="flex-1 bg-transparent border-none text-sm font-black uppercase italic text-white focus:ring-0 cursor-pointer pr-10 appearance-none">
+                        <option value="all" class="bg-slate-900">Tutte le Nazioni</option>
+                        ${countries.map(c => `<option value="${c}" class="bg-slate-900">${c}</option>`).join('')}
+                    </select>
+                </div>
 
-    html += `</div>`;
+                <!-- Filtro Lega -->
+                <div class="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/10 group focus-within:border-accent/80 transition-all min-w-[200px] w-full sm:w-auto">
+                    <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-500 group-focus-within:text-accent transition-colors">
+                        <i data-lucide="trophy" class="w-5 h-5"></i>
+                    </div>
+                    <select id="pred-league-filter" class="flex-1 bg-transparent border-none text-sm font-black uppercase italic text-white focus:ring-0 cursor-pointer pr-10 appearance-none">
+                        <option value="all" class="bg-slate-900">Tutte le Leghe</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="predictions-grid" class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            ${predictions.map(p => {
+        const dateStr = new Date(p.date).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        return `
+                    <div class="glass p-8 rounded-[40px] border-white/5 hover:border-accent/30 transition-all group relative overflow-hidden prediction-card active-card" 
+                         data-country="${p.country_name || 'International'}" 
+                         data-league="${p.league_id}">
+                        <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-all scale-150">
+                            <i data-lucide="brain-circuit" class="w-20 h-20"></i>
+                        </div>
+
+                        <div class="flex items-center justify-between mb-6">
+                            <span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 italic">${p.league_name}</span>
+                            <span class="text-[10px] font-black uppercase text-accent tracking-widest">${dateStr}</span>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-4 mb-8">
+                            <div class="flex-1 flex flex-col items-center gap-3">
+                                 <img src="${p.home_logo}" class="w-12 h-12 object-contain">
+                                 <span class="text-xs font-black uppercase text-center truncate w-full">${p.home_name}</span>
+                            </div>
+                            <div class="flex flex-col items-center">
+                                <span class="text-2xl font-black italic opacity-20">VS</span>
+                            </div>
+                            <div class="flex-1 flex flex-col items-center gap-3">
+                                 <img src="${p.away_logo}" class="w-12 h-12 object-contain">
+                                 <span class="text-xs font-black uppercase text-center truncate w-full">${p.away_name}</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-accent/10 border border-accent/20 p-5 rounded-3xl mb-6">
+                            <div class="text-[9px] font-black text-accent uppercase tracking-widest mb-1">AI Suggestion</div>
+                            <div class="text-lg font-black text-white italic uppercase">${p.advice}</div>
+                        </div>
+
+                        <button class="w-full py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 font-black text-[10px] uppercase tracking-widest transition-all" onclick="window.location.hash = 'match/${p.fixture_id}'">
+                            Apri Match Center
+                        </button>
+                    </div>
+                `;
+    }).join('')}
+        </div>
+    `;
+
     viewContainer.innerHTML = html;
+    if (window.lucide) lucide.createIcons();
+
+    const countryFilter = document.getElementById('pred-country-filter');
+    const leagueFilter = document.getElementById('pred-league-filter');
+
+    const updateLeagueOptions = (selectedCountry) => {
+        const filteredLeagues = predictions
+            .filter(p => selectedCountry === 'all' || (p.country_name || 'International') === selectedCountry)
+            .reduce((acc, p) => {
+                if (!acc.find(l => l.id === p.league_id)) {
+                    acc.push({ id: p.league_id, name: p.league_name });
+                }
+                return acc;
+            }, [])
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        leagueFilter.innerHTML = '<option value="all" class="bg-slate-900">Tutte le Leghe</option>' +
+            filteredLeagues.map(l => `<option value="${l.id}" class="bg-slate-900">${l.name}</option>`).join('');
+    };
+
+    const applyFilters = () => {
+        const cVal = countryFilter.value;
+        const lVal = leagueFilter.value;
+        const cards = document.querySelectorAll('.prediction-card');
+
+        cards.forEach(card => {
+            const matchesCountry = cVal === 'all' || card.getAttribute('data-country') === cVal;
+            const matchesLeague = lVal === 'all' || card.getAttribute('data-league') === lVal;
+
+            if (matchesCountry && matchesLeague) {
+                card.classList.remove('hidden');
+                card.classList.add('active-card');
+            } else {
+                card.classList.add('hidden');
+                card.classList.remove('active-card');
+            }
+        });
+    };
+
+    // Persistence
+    const savedCountry = localStorage.getItem('pred_filter_country') || 'all';
+    const savedLeague = localStorage.getItem('pred_filter_league') || 'all';
+
+    countryFilter.value = savedCountry;
+    updateLeagueOptions(savedCountry);
+    leagueFilter.value = savedLeague;
+    applyFilters();
+
+    countryFilter.onchange = (e) => {
+        const val = e.target.value;
+        localStorage.setItem('pred_filter_country', val);
+        localStorage.setItem('pred_filter_league', 'all'); // Reset league when country changes
+        leagueFilter.value = 'all';
+        updateLeagueOptions(val);
+        applyFilters();
+    };
+
+    leagueFilter.onchange = (e) => {
+        localStorage.setItem('pred_filter_league', e.target.value);
+        applyFilters();
+    };
 }
 
 async function renderTracker() {
