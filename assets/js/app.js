@@ -73,7 +73,7 @@ async function renderView(view, id) {
         // Still render sidebars/stats via JS for now if they are outside the HTMX fragment
         updateStatsSummary();
         renderDashboardPredictions();
-        // renderDashboardHistory(); 
+        renderDashboardHistory();
     } else {
         if (htmxContainer) htmxContainer.classList.add('hidden');
         if (legacyContainer) {

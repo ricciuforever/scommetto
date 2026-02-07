@@ -3,6 +3,10 @@
 // This fragment is loaded via HTMX to refresh the dashboard content
 ?>
 
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-10" id="stats-summary">
+    <!-- Populated by JS updateStatsSummary() -->
+</div>
+
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8" id="dashboard-content">
     <!-- Live Matches Column -->
     <div class="lg:col-span-2 space-y-6">
@@ -46,7 +50,8 @@
 
                 $events = $match['events'] ?? [];
                 usort($events, function ($a, $b) {
-                    return $b['time']['elapsed'] - $a['time']['elapsed']; });
+                    return $b['time']['elapsed'] - $a['time']['elapsed'];
+                });
                 $recentEvents = array_slice($events, 0, 3);
                 ?>
 
@@ -194,34 +199,21 @@
     </div>
 
     <!-- Sidebar / Stats Column -->
-    <div class="space-y-6">
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <h3 class="text-xl font-black italic uppercase tracking-tighter text-white mb-6">Market Trends</h3>
-            <div class="space-y-4">
-                <div class="bg-white/5 p-4 rounded-2xl border border-white/5 flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent">
-                        <i data-lucide="trending-up" class="w-5 h-5"></i>
-                    </div>
-                    <div>
-                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Top Market</div>
-                        <div class="text-white font-black italic">Over 2.5 Goals</div>
-                    </div>
-                </div>
-                <div class="bg-white/5 p-4 rounded-2xl border border-white/5 flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center text-success">
-                        <i data-lucide="activity" class="w-5 h-5"></i>
-                    </div>
-                    <div>
-                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">High Volatility
-                        </div>
-                        <div class="text-white font-black italic">Premier League</div>
-                    </div>
-                </div>
-            </div>
+    <aside class="space-y-8">
+        <div>
+            <h2 class="text-xl font-black tracking-tight mb-6 italic uppercase">Hot Predictions</h2>
+            <div id="dashboard-predictions" class="space-y-4"></div>
         </div>
-    </div>
+        <div>
+            <h2 class="text-xl font-black tracking-tight mb-6 italic uppercase">Recent Activity</h2>
+            <div class="glass rounded-[32px] border-white/5 divide-y divide-white/5 overflow-hidden"
+                id="dashboard-history"></div>
+        </div>
+    </aside>
 </div>
 <script>
     if (window.lucide) lucide.createIcons();
-    updateStatsSummary(); // Update sidebar stats if function exists
+    if (typeof updateStatsSummary === 'function') updateStatsSummary();
+    if (typeof renderDashboardPredictions === 'function') renderDashboardPredictions();
+    if (typeof renderDashboardHistory === 'function') renderDashboardHistory();
 </script>
