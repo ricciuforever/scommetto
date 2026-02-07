@@ -1548,8 +1548,43 @@ async function showBetDetails(bet) {
                 </div>
             ` : ''}
         </div>
+
+        <div class="flex gap-4">
+            <button class="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 font-black text-[10px] uppercase tracking-widest transition-all" onclick="closeModal()">
+                Chiudi
+            </button>
+            <button class="flex-1 py-4 rounded-2xl bg-danger/10 hover:bg-danger/20 border border-danger/20 text-danger font-black text-[10px] uppercase tracking-widest transition-all" onclick="deleteBet(${bet.id})">
+                Elimina Scommessa
+            </button>
+        </div>
     `;
     if (window.lucide) lucide.createIcons();
+}
+
+async function deleteBet(id) {
+    if (!confirm('Sei sicuro di voler eliminare questa scommessa?')) return;
+    try {
+        const res = await fetch(`/api/bets/delete/${id}`);
+        const result = await res.json();
+        if (result.status === 'success') {
+            closeModal();
+            await fetchHistory();
+            if (currentView === 'tracker') renderTracker();
+            else if (currentView === 'dashboard') updateStatsSummary();
+        }
+    } catch (e) { console.error("Error deleting bet", e); }
+}
+
+async function deduplicateBets() {
+    try {
+        const res = await fetch('/api/bets/deduplicate');
+        const result = await res.json();
+        if (result.status === 'success') {
+            await fetchHistory();
+            if (currentView === 'tracker') renderTracker();
+            else if (currentView === 'dashboard') updateStatsSummary();
+        }
+    } catch (e) { console.error("Error deduplicating bets", e); }
 }
 
 async function analyzeMatch(id) {

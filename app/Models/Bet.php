@@ -74,4 +74,22 @@ class Bet
         $sql = "DELETE FROM bets WHERE stake = 0 AND status = 'pending'";
         return $this->db->query($sql);
     }
+
+    public function delete($id)
+    {
+        $stmt = $this->db->prepare("DELETE FROM bets WHERE id = ?");
+        return $stmt->execute([$id]);
+    }
+
+    public function deduplicate()
+    {
+        // Rimuove i duplicati 'pending' per lo stesso match, tenendo solo quello con ID più alto (più recente)
+        $sql = "DELETE b1 FROM bets b1
+                INNER JOIN bets b2 
+                WHERE b1.id < b2.id 
+                AND b1.fixture_id = b2.fixture_id 
+                AND b1.status = 'pending' 
+                AND b2.status = 'pending'";
+        return $this->db->query($sql);
+    }
 }

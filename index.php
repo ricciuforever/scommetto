@@ -58,6 +58,14 @@ try {
         (new SyncController())->getUsage();
     } elseif ($path === '/api/filters') {
         (new FilterController())->getFilters();
+    } elseif (preg_match('#^/api/bets/delete/(\d+)$#', $path, $matches)) {
+        header('Content-Type: application/json');
+        $success = (new \App\Models\Bet())->delete($matches[1]);
+        echo json_encode(['status' => $success ? 'success' : 'error']);
+    } elseif ($path === '/api/bets/deduplicate') {
+        header('Content-Type: application/json');
+        $success = (new \App\Models\Bet())->deduplicate();
+        echo json_encode(['status' => 'success']);
     } elseif ($path === '/api/migrate') {
         header('Content-Type: application/json');
         $db = \App\Services\Database::getInstance()->getConnection();

@@ -408,8 +408,9 @@ class SyncController
                 usleep(250000);
             }
 
-            // Pulizia: rimuove scommesse in sospeso con stake 0
+            // Pulizia: rimuove scommesse in sospeso con stake 0 e duplicati
             $this->betModel->cleanup();
+            $this->betModel->deduplicate();
 
             // Rimuove fixture che non hanno odds e iniziano tra poco (non bettabili)
             $db->exec("DELETE FROM fixtures 
