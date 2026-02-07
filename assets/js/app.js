@@ -54,56 +54,63 @@ function updateNavLinks(activeView) {
 async function renderView(view, id) {
     showLoader(true);
 
-    // Toggle containers based on view
-    if (view === 'dashboard') {
-        document.getElementById('htmx-container').classList.remove('hidden');
-        document.getElementById('view-container').classList.add('hidden');
+    const htmxContainer = document.getElementById('htmx-container');
+    const legacyContainer = document.getElementById('view-container');
 
-        // Refresh dashboard content via HTMX
-        htmx.trigger('#htmx-container', 'load');
+    // Toggle containers based on view
+    if (view === 'dashboard' || view === '') {
+        if (htmxContainer) {
+            htmxContainer.classList.remove('hidden');
+            // Trigger HTMX to load content if empty or stale
+            if (!htmxContainer.innerHTML.trim() || htmxContainer.children.length === 0) {
+                htmx.trigger('#htmx-container', 'load');
+            }
+        }
+        if (legacyContainer) legacyContainer.classList.add('hidden');
+
+        viewTitle.textContent = 'Dashboard Intelligence';
 
         // Still render sidebars/stats via JS for now if they are outside the HTMX fragment
         updateStatsSummary();
         renderDashboardPredictions();
-        // renderDashboardHistory(); // Optional, if you want history on dashboard
+        // renderDashboardHistory(); 
     } else {
-        document.getElementById('htmx-container').classList.add('hidden');
-        document.getElementById('view-container').classList.remove('hidden');
-        viewContainer.innerHTML = ''; // Clear legacy container
-    }
+        if (htmxContainer) htmxContainer.classList.add('hidden');
+        if (legacyContainer) {
+            legacyContainer.classList.remove('hidden');
+            legacyContainer.innerHTML = ''; // Clear legacy container
+        }
 
-    switch (view) {
-        case 'dashboard':
-            viewTitle.textContent = 'Dashboard Intelligence';
-            // No need to call renderDashboard() anymore as HTMX handles the main content
-            break;
-        case 'leagues':
-            viewTitle.textContent = 'Competizioni';
-            await renderLeagues(id);
-            break;
-        case 'predictions':
-            viewTitle.textContent = 'AI Predictions';
-            await renderPredictions();
-            break;
-        case 'tracker':
-            viewTitle.textContent = 'Il Mio Tracker';
-            await renderTracker();
-            break;
-        case 'match':
-            viewTitle.textContent = 'Match Center';
-            await renderMatchCenter(id);
-            break;
-        case 'team':
-            viewTitle.textContent = 'Profilo Squadra';
-            await renderTeamProfile(id);
-            break;
-        case 'player':
-            viewTitle.textContent = 'Profilo Giocatore';
-            await renderPlayerProfile(id);
-            break;
-        default:
-            // Default to dashboard HTMX trigger is handled above
-            break;
+        switch (view) {
+            case 'leagues':
+                viewTitle.textContent = 'Competizioni';
+                await renderLeagues(id);
+                break;
+            case 'predictions':
+                viewTitle.textContent = 'AI Predictions';
+                await renderPredictions();
+                break;
+            case 'tracker':
+                viewTitle.textContent = 'Il Mio Tracker';
+                await renderTracker();
+                break;
+            case 'match':
+                viewTitle.textContent = 'Match Center';
+                await renderMatchCenter(id);
+                break;
+            case 'team':
+                viewTitle.textContent = 'Profilo Squadra';
+                await renderTeamProfile(id);
+                break;
+            case 'player':
+                viewTitle.textContent = 'Profilo Giocatore';
+                await renderPlayerProfile(id);
+                break;
+            default:
+                // Fallback to dashboard if unknown view
+                window.location.hash = 'dashboard';
+                return;
+        }
     }
 
     showLoader(false);
