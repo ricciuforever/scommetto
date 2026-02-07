@@ -43,4 +43,11 @@ class FixtureLineup
         $stmt->execute([$fixture_id, $team_id]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
+
+    public function getByFixture($fixture_id)
+    {
+        $stmt = $this->db->prepare("SELECT * FROM fixture_lineups WHERE fixture_id = ?");
+        $stmt->execute([$fixture_id]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }

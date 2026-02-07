@@ -52,6 +52,13 @@ class PlayerStatistics
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    public function get($playerId, $season)
+    {
+        $stmt = $this->db->prepare("SELECT * FROM player_statistics WHERE player_id = ? AND season = ?");
+        $stmt->execute([$playerId, $season]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
     public function needsRefresh($teamId, $season, $days = 7)
     {
         // We check refresh based on team since we fetch them by team
@@ -59,7 +66,8 @@ class PlayerStatistics
         $stmt->execute([$teamId, $season]);
         $last = $stmt->fetchColumn();
 
-        if (!$last) return true;
+        if (!$last)
+            return true;
         return (time() - strtotime($last)) > ($days * 86400);
     }
 }
