@@ -57,8 +57,13 @@ export class Dashboard {
     }
 
     static async fetchPredictions() {
-        const data = await fetchJson(endpoints.predictions);
-        updateState('predictions', Array.isArray(data) ? data : []);
+        try {
+            const data = await fetchJson(endpoints.predictions);
+            updateState('predictions', Array.isArray(data) ? data : []);
+        } catch (e) {
+            console.warn("Predictions API not available yet");
+            updateState('predictions', []);
+        }
     }
 
 
