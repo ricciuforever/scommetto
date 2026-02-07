@@ -1816,6 +1816,7 @@ init();
 function renderFullHistory() {
     const container = document.getElementById('tracker-history');
     if (!container) return;
+    container.innerHTML = '';
 
     const data = Array.isArray(historyData) ? historyData : [];
     const filtered = data.filter(bet => {
