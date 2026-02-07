@@ -70,6 +70,7 @@ class SyncController
     private $venueModel;
     private $apiService;
     private $geminiService;
+    private $betfairService;
 
     public function __construct()
     {
@@ -106,6 +107,7 @@ class SyncController
         $this->venueModel = new Venue();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
+        $this->betfairService = new \App\Services\BetfairService();
     }
 
     private function getCurrentSeason()
@@ -323,10 +325,29 @@ class SyncController
                         }
 
                         $betData['fixture_id'] = $fid;
-                        $betData['match'] = $m['teams']['home']['name'] . ' vs ' . $m['teams']['away']['name'];
+                        $matchName = $m['teams']['home']['name'] . ' vs ' . $m['teams']['away']['name'];
+                        $betData['match'] = $matchName;
+
+                        // Execute Real Bet on Betfair if configured
+                        if ($this->betfairService->isConfigured()) {
+                            $marketInfo = $this->betfairService->findMarket($matchName);
+                            if ($marketInfo) {
+                                $selectionId = $this->betfairService->mapAdviceToSelection($betData['advice'], $marketInfo['runners']);
+                                if ($selectionId) {
+                                    $bfResult = $this->betfairService->placeBet($marketInfo['marketId'], $selectionId, $betData['odds'], $betData['stake']);
+                                    if (isset($bfResult['result']['status']) && $bfResult['result']['status'] === 'SUCCESS') {
+                                        echo "REAL BET PLACED ON BETFAIR for $matchName!\n";
+                                        $betData['status'] = 'placed';
+                                    } else {
+                                        echo "Betfair placement failed: " . json_encode($bfResult) . "\n";
+                                    }
+                                }
+                            }
+                        }
+
                         $this->betModel->create($betData);
                         $results['bets_placed']++;
-                        echo "Bet placed for fixture $fid! Stake: " . $betData['stake'] . "€\n";
+                        echo "Bet registered for fixture $fid! Stake: " . $betData['stake'] . "€\n";
                     }
                 }
                 usleep(200000); // Slight delay
