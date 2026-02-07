@@ -387,12 +387,18 @@ class SyncController
     {
         try {
             $db = Database::getInstance()->getConnection();
-            // Solo fixture che non aggiorniamo da più di 15 minuti
-            $sql = "SELECT DISTINCT fixture_id FROM bets 
-                    WHERE status = 'pending' 
-                    AND fixture_id NOT IN (
-                        SELECT id FROM fixtures WHERE last_updated > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
-                    )";
+            $force = isset($_GET['force']);
+
+            // Se force è attivo, prendiamo tutto. Altrimenti solo quelle vecchie di 15 min.
+            if ($force) {
+                $sql = "SELECT DISTINCT fixture_id FROM bets WHERE status = 'pending'";
+            } else {
+                $sql = "SELECT DISTINCT fixture_id FROM bets 
+                        WHERE status = 'pending' 
+                        AND fixture_id NOT IN (
+                            SELECT id FROM fixtures WHERE last_updated > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+                        )";
+            }
             $fixtures = $db->query($sql)->fetchAll(PDO::FETCH_COLUMN);
 
             if (empty($fixtures))
