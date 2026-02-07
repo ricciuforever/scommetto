@@ -295,29 +295,34 @@ class BetSettler
             preg_match('/(\d+)\s*[-]\s*(\d+)/', $searchString, $matches);
             if (isset($matches[1]) && isset($matches[2])) {
                 $predHome = (int) $matches[1];
-                $predAway = (int) $matches[2];
                 if ($homeGoals === $predHome && $awayGoals === $predAway)
                     return 'won';
                 return 'lost';
+            }
         }
 
         // --- Next Goal / Next Goalscorer ---
         if (strpos($searchString, 'next goal') !== false || strpos($searchString, 'goalscorer') !== false || strpos($searchString, 'prossimo goal') !== false || strpos($searchString, 'prossimo gol') !== false) {
-            if ($isHomeMentioned && $homeGoals > 0) return 'won';
-            if ($isAwayMentioned && $awayGoals > 0) return 'won';
-            if ($isFinished) return 'lost';
+            if ($isHomeMentioned && $homeGoals > 0)
+                return 'won';
+            if ($isAwayMentioned && $awayGoals > 0)
+                return 'won';
+            if ($isFinished)
+                return 'lost';
         }
 
         // --- Fallback per Totals non standard ---
         if (strpos($searchString, 'total goals') !== false) {
-             preg_match('/(\d+\.?\d*)/', $searchString, $matches);
-             if (isset($matches[1])) {
-                 $threshold = (float) $matches[1];
-                 if (strpos($searchString, 'over') !== false || strpos($advice, 'over') !== false) {
-                     if ($total > $threshold) return 'won';
-                     if ($isFinished) return 'lost';
-                 }
-             }
+            preg_match('/(\d+\.?\d*)/', $searchString, $matches);
+            if (isset($matches[1])) {
+                $threshold = (float) $matches[1];
+                if (strpos($searchString, 'over') !== false || strpos($advice, 'over') !== false) {
+                    if ($total > $threshold)
+                        return 'won';
+                    if ($isFinished)
+                        return 'lost';
+                }
+            }
         }
 
         return 'pending';
