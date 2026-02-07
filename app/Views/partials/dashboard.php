@@ -3,13 +3,33 @@
 // This fragment is loaded via HTMX to refresh the dashboard content
 ?>
 
+<?php
+// Extract countries and leagues for filters from all live matches
+$countries = [];
+$leaguesMap = [];
+foreach ($allLiveMatches ?? [] as $m) {
+    $c = $m['league']['country'] ?? $m['league']['country_name'] ?? 'International';
+    if (!in_array($c, $countries))
+        $countries[] = $c;
+
+    if ($selectedCountry === 'all' || $c === $selectedCountry) {
+        $leaguesMap[$m['league']['id']] = $m['league']['name'];
+    }
+}
+sort($countries);
+asort($leaguesMap);
+
+$selectedCountry = $selectedCountry ?? 'all';
+$selectedLeague = $selectedLeague ?? 'all';
+?>
+
 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-10" id="stats-summary">
     <!-- Populated by JS updateStatsSummary() -->
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8" id="dashboard-content">
     <!-- Live Matches Column -->
-    <div class="lg:col-span-2 space-y-6">
+    <div class="lg:col-span-2 space-y-6" id="live-matches-list">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
             <h2 class="text-4xl font-black italic uppercase tracking-tighter text-white leading-none">Live Now <span
                     class="text-accent">.</span></h2>
@@ -17,14 +37,30 @@
             <div class="flex flex-wrap items-center gap-3">
                 <!-- Dashboard Local Filters -->
                 <div class="flex items-center gap-2">
-                    <select id="dash-country-filter" onchange="updateSelectedCountry(this.value)"
+                    <select id="dash-country-filter" name="country"
+                        hx-get="/api/view/dashboard" hx-target="#htmx-container" hx-include="[name='league']"
+                        hx-trigger="change"
+                        onchange="updateSelectedCountry(this.value)"
                         class="dash-filter-select bg-white/5 border border-white/5 rounded-2xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 focus:border-accent/50 outline-none transition-all cursor-pointer">
                         <option value="all">Tutte le Nazioni</option>
+                        <?php foreach ($countries as $c): ?>
+                            <option value="<?php echo htmlspecialchars($c); ?>" <?php echo $selectedCountry === $c ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($c); ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
 
-                    <select id="dash-league-filter" onchange="updateSelectedLeague(this.value)"
+                    <select id="dash-league-filter" name="league"
+                        hx-get="/api/view/dashboard" hx-target="#htmx-container" hx-include="[name='country']"
+                        hx-trigger="change"
+                        onchange="updateSelectedLeague(this.value)"
                         class="dash-filter-select bg-white/5 border border-white/5 rounded-2xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 focus:border-accent/50 outline-none transition-all cursor-pointer">
                         <option value="all">Tutti i Campionati</option>
+                        <?php foreach ($leaguesMap as $id => $name): ?>
+                            <option value="<?php echo $id; ?>" <?php echo (string) $selectedLeague === (string) $id ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($name); ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 
@@ -212,6 +248,52 @@
                     </div>
                 </div>
             <?php endforeach; ?>
+        <?php endif; ?>
+
+        <?php if (!empty($upcomingMatches)): ?>
+            <div class="col-span-full border-t border-white/5 my-8 pt-4 text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-4">
+                <div class="h-px bg-white/10 flex-1"></div>PROSSIME 24 ORE<div class="h-px bg-white/10 flex-1"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <?php foreach ($upcomingMatches as $m): ?>
+                    <div onclick="navigate('match', '<?php echo $m['fixture_id']; ?>')"
+                        class="glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all cursor-pointer group relative overflow-hidden h-full">
+                        <div class="absolute top-0 right-0 p-4 opacity-50"><i data-lucide="calendar-clock"
+                                class="w-4 h-4 text-slate-500"></i></div>
+                        <div class="flex items-center gap-2 mb-4">
+                            <span class="text-[8px] font-black uppercase text-accent tracking-widest truncate max-w-[150px]">
+                                <?php echo $m['league_name']; ?>
+                            </span>
+                            <span class="text-[8px] font-bold text-slate-500">
+                                <?php echo date('H:i', strtotime($m['date'])); ?>
+                            </span>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="flex flex-col items-center gap-2 flex-1 min-w-0">
+                                <img src="<?php echo $m['home_logo']; ?>" class="w-8 h-8 object-contain">
+                                <span class="text-[9px] font-black uppercase text-center leading-tight truncate w-full">
+                                    <?php echo htmlspecialchars($m['home_name']); ?>
+                                </span>
+                            </div>
+                            <div class="text-[10px] font-black text-slate-600 italic">VS</div>
+                            <div class="flex flex-col items-center gap-2 flex-1 min-w-0">
+                                <img src="<?php echo $m['away_logo']; ?>" class="w-8 h-8 object-contain">
+                                <span class="text-[9px] font-black uppercase text-center leading-tight truncate w-full">
+                                    <?php echo htmlspecialchars($m['away_name']); ?>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5">
+                            <button onclick="event.stopPropagation(); analyzeMatch(<?php echo $m['fixture_id']; ?>)"
+                                class="text-[8px] font-black uppercase tracking-widest text-accent hover:text-white transition-colors">AI
+                                Forecast</button>
+                            <button onclick="event.stopPropagation(); navigate('match', <?php echo $m['fixture_id']; ?>)"
+                                class="text-[8px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Pronostico</button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         <?php endif; ?>
     </div>
 

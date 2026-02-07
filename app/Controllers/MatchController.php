@@ -165,15 +165,54 @@ class MatchController
     public function dashboard()
     {
         try {
-            $country = $_GET['country'] ?? 'all';
+            $selectedCountry = $_GET['country'] ?? 'all';
+            $selectedLeague = $_GET['league'] ?? 'all';
+            $selectedBookmaker = $_GET['bookmaker'] ?? 'all';
+
             $cacheFile = Config::LIVE_DATA_FILE;
-            $liveMatches = [];
+            $allLiveMatches = [];
             if (file_exists($cacheFile)) {
                 $raw = json_decode(file_get_contents($cacheFile), true);
-                $liveMatches = $raw['response'] ?? [];
-                if ($country !== 'all') {
-                    $liveMatches = array_filter($liveMatches, fn($m) => ($m['league']['country'] ?? '') === $country);
+                $allLiveMatches = $raw['response'] ?? [];
+            }
+
+            // Filter live matches
+            $liveMatches = array_filter($allLiveMatches, function ($m) use ($selectedCountry, $selectedLeague, $selectedBookmaker) {
+                $matchesCountry = $selectedCountry === 'all' || ($m['league']['country'] ?? $m['league']['country_name'] ?? '') === $selectedCountry;
+                $matchesLeague = $selectedLeague === 'all' || (string) ($m['league']['id'] ?? '') === (string) $selectedLeague;
+                $matchesBookie = $selectedBookmaker === 'all' || in_array((int) $selectedBookmaker, $m['available_bookmakers'] ?? []);
+                return $matchesCountry && $matchesLeague && $matchesBookie;
+            });
+
+            // If few results, get upcoming
+            $upcomingMatches = [];
+            if (count($liveMatches) < 10) {
+                $db = \App\Services\Database::getInstance()->getConnection();
+                $sql = "SELECT f.id as fixture_id, f.date, f.status_short, f.league_id,
+                               t1.name as home_name, t1.logo as home_logo,
+                               t2.name as away_name, t2.logo as away_logo,
+                               l.name as league_name, l.country_name as country_name, l.flag as country_flag,
+                               l.logo as league_logo
+                        FROM fixtures f
+                        JOIN teams t1 ON f.team_home_id = t1.id
+                        JOIN teams t2 ON f.team_away_id = t2.id
+                        JOIN leagues l ON f.league_id = l.id
+                        WHERE f.date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 24 HOUR)
+                        AND f.status_short = 'NS'
+                        AND EXISTS (SELECT 1 FROM fixture_odds fo WHERE fo.fixture_id = f.id)";
+
+                if ($selectedCountry !== 'all') {
+                    $sql .= " AND l.country_name = " . $db->quote($selectedCountry);
                 }
+                if ($selectedLeague !== 'all') {
+                    $sql .= " AND l.id = " . (int) $selectedLeague;
+                }
+                if ($selectedBookmaker !== 'all') {
+                    $sql .= " AND EXISTS (SELECT 1 FROM fixture_odds fo WHERE fo.fixture_id = f.id AND fo.bookmaker_id = " . (int) $selectedBookmaker . ")";
+                }
+
+                $sql .= " ORDER BY f.date ASC LIMIT 20";
+                $upcomingMatches = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
             }
 
             $db = \App\Services\Database::getInstance()->getConnection();

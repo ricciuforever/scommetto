@@ -1319,7 +1319,7 @@ async function selectBookmaker(bookmakerId) {
     if (modal) modal.classList.add('hidden');
 
     if (currentView === 'dashboard') {
-        renderDashboardMatches();
+        updateDashboardFilters();
         updateStatsSummary();
     } else if (currentView === 'tracker') {
         renderTracker();
@@ -1336,9 +1336,8 @@ function updateDashboardFilters() {
     // Construct Query Params
     const params = new URLSearchParams();
     if (selectedCountry !== 'all') params.append('country', selectedCountry);
+    if (selectedLeague !== 'all') params.append('league', selectedLeague);
     if (selectedBookmaker !== 'all') params.append('bookmaker', selectedBookmaker);
-
-    // Add pinned matches if any logic existed for them (optional)
 
     const endpoint = `/api/view/dashboard?${params.toString()}`;
 
@@ -1568,10 +1567,7 @@ function renderDashboardMatches() {
     const container = document.getElementById('live-matches-list');
     if (!container) return;
 
-    // 1. Populate Dashboard Filters (Country & League)
-    populateDashFilters();
-
-    // 2. Filter Matches
+    // 1. Filter Matches
     const filteredMatches = liveMatches.filter(m => {
         const countryName = m.league.country || m.league.country_name || '';
         const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
@@ -1590,13 +1586,58 @@ function renderDashboardMatches() {
     const countEl = document.getElementById('live-active-count');
     if (countEl) countEl.innerText = filteredMatches.length;
 
-    container.innerHTML = '';
+    // Preserve the header
+    const headerHtml = `
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+            <h2 class="text-4xl font-black italic uppercase tracking-tighter text-white leading-none">Live Now <span
+                    class="text-accent">.</span></h2>
+
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Dashboard Local Filters -->
+                <div class="flex items-center gap-2">
+                    <select id="dash-country-filter" name="country"
+                        hx-get="/api/view/dashboard" hx-target="#htmx-container" hx-include="[name='league']"
+                        hx-trigger="change"
+                        onchange="updateSelectedCountry(this.value)"
+                        class="dash-filter-select bg-white/5 border border-white/5 rounded-2xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 focus:border-accent/50 outline-none transition-all cursor-pointer">
+                        <option value="all">Tutte le Nazioni</option>
+                    </select>
+
+                    <select id="dash-league-filter" name="league"
+                        hx-get="/api/view/dashboard" hx-target="#htmx-container" hx-include="[name='country']"
+                        hx-trigger="change"
+                        onchange="updateSelectedLeague(this.value)"
+                        class="dash-filter-select bg-white/5 border border-white/5 rounded-2xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 focus:border-accent/50 outline-none transition-all cursor-pointer">
+                        <option value="all">Tutti i Campionati</option>
+                    </select>
+                </div>
+
+                <div class="h-8 w-px bg-white/5 mx-2 hidden md:block"></div>
+
+                <span
+                    class="px-4 py-2 bg-accent/10 text-accent rounded-2xl text-[10px] font-black uppercase tracking-widest border border-accent/20">
+                    <span id="live-active-count">${filteredMatches.length}</span> Active
+                </span>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = headerHtml;
+
+    // 2. Populate Dashboard Filters (Country & League) - must be after header is in DOM
+    populateDashFilters();
 
     // Render Live Matches
-    if (filteredMatches.length === 0 && liveMatches.length > 0) {
+    if (filteredMatches.length === 0) {
         const noMatch = document.createElement('div');
-        noMatch.className = "glass p-8 rounded-[32px] text-center text-slate-500 font-bold uppercase tracking-widest italic";
-        noMatch.innerText = "Nessun match live per i filtri selezionati.";
+        noMatch.className = "glass p-8 rounded-[40px] text-center border-white/5 flex flex-col items-center justify-center mb-6";
+        noMatch.innerHTML = `
+            <div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-6">
+                <i data-lucide="calendar-off" class="w-8 h-8 text-slate-500"></i>
+            </div>
+            <h3 class="text-xl font-black text-white uppercase italic tracking-tight mb-2">Nessun Match Live</h3>
+            <p class="text-slate-400 font-medium text-sm max-w-md mx-auto">Non ci sono partite in corso che corrispondono ai tuoi filtri.</p>
+        `;
         container.appendChild(noMatch);
     }
 
@@ -1721,10 +1762,14 @@ function renderDashboardMatches() {
         container.appendChild(card);
     });
 
-    // Always show upcoming matches below live matches
-    fetchAndRenderUpcoming(container, 20);
+    // Show upcoming matches if less than 10 results
+    if (filteredMatches.length < 10) {
+        fetchAndRenderUpcoming(container, 20);
+    }
 
     if (window.lucide) lucide.createIcons();
+    // Re-process HTMX for the new elements
+    if (window.htmx) htmx.process(container);
 }
 
 
@@ -1740,12 +1785,6 @@ async function fetchAndRenderUpcoming(container, limit) {
             return;
         }
 
-        const headerId = 'upcoming-header-' + Date.now();
-        const header = document.createElement('div');
-        header.className = "col-span-full border-t border-white/5 my-8 pt-4 text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-4";
-        header.innerHTML = '<div class="h-px bg-white/10 flex-1"></div>PROSSIME 24 ORE<div class="h-px bg-white/10 flex-1"></div>';
-        container.appendChild(header);
-
         const filtered = data.response.filter(m => {
             const countryName = m.country_name || 'International';
             const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
@@ -1755,10 +1794,21 @@ async function fetchAndRenderUpcoming(container, limit) {
             return matchesCountry && matchesBookie;
         });
 
+        if (filtered.length === 0) return;
+
+        const header = document.createElement('div');
+        header.className = "col-span-full border-t border-white/5 my-8 pt-4 text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-4";
+        header.innerHTML = '<div class="h-px bg-white/10 flex-1"></div>PROSSIME 24 ORE<div class="h-px bg-white/10 flex-1"></div>';
+        container.appendChild(header);
+
+        const grid = document.createElement('div');
+        grid.className = "grid grid-cols-1 md:grid-cols-2 gap-6";
+        container.appendChild(grid);
+
         filtered.slice(0, limit).forEach(m => {
             const div = document.createElement('div');
             div.innerHTML = upcomingMatchCardHtml(m);
-            if (div.firstElementChild) container.appendChild(div.firstElementChild);
+            if (div.firstElementChild) grid.appendChild(div.firstElementChild);
         });
         if (window.lucide) lucide.createIcons();
     } catch (e) { console.error("Error fetching upcoming", e); }
