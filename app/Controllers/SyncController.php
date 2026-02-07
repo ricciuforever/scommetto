@@ -295,12 +295,15 @@ class SyncController
                     'pre_match' => $preOdds
                 ];
 
-                echo "Analyzing live fixture $fid (" . $m['teams']['home']['name'] . " vs " . $m['teams']['away']['name'] . ") at minute $elapsed...\n";
-                echo "Available Balance: " . $balance['available_balance'] . "€\n";
+                // Prevent duplicate bets on the same match
+                if ($this->betModel->hasBet($fid)) {
+                    echo "Skipping fixture $fid: Bet already registered.\n";
+                    continue;
+                }
 
-                // If balance is extremely low, maybe skip analysis to save energy/quota
+                // If balance is extremely low, skip analysis to save energy/quota
                 if ($balance['available_balance'] <= 0.50) {
-                    echo "Insufficient balance for new bets. Skipping analysis.\n";
+                    echo "Insufficient balance (" . $balance['available_balance'] . "€) for new bets. Skipping analysis.\n";
                     continue;
                 }
 

@@ -53,10 +53,9 @@ window.navigate = navigate;
 
 // --- ROUTER (Simplified for HTMX) ---
 
-document.addEventListener('htmx:afterRequest', function (evt) {
+document.addEventListener('htmx:afterRequest', async function (evt) {
     if (evt.detail.target.id === 'htmx-container') {
-        const url = evt.detail.pathInfo.requestPath;
-        // Identifica la vista dall'URL o dai dati
+        const url = evt.detail.pathInfo.requestPath || window.location.pathname;
         let view = 'dashboard';
         if (url.includes('leagues')) view = 'leagues';
         else if (url.includes('predictions')) view = 'predictions';
@@ -65,18 +64,36 @@ document.addEventListener('htmx:afterRequest', function (evt) {
         else if (url.includes('team')) view = 'team';
         else if (url.includes('player')) view = 'player';
 
+        currentView = view;
         updateNavLinks(view);
         updateViewTitle(view);
+
+        // Run view-specific JS initialization
+        if (view === 'dashboard') {
+            await fetchLive();
+            updateStatsSummary();
+            renderDashboardMatches();
+        } else if (view === 'tracker') {
+            await fetchHistory();
+            updateTrackerSummary();
+            renderFullHistory();
+        } else if (view === 'predictions') {
+            if (window.renderPredictions) renderPredictions();
+        }
+
+        if (window.lucide) lucide.createIcons();
     }
 });
 
-// Update title and links even on push state (back/forward or initial)
-document.addEventListener('htmx:pushedIntoHistory', function (evt) {
-    const path = evt.detail.path;
+// Sync currentView on history navigation (back/forward)
+window.addEventListener('popstate', function () {
+    const path = window.location.pathname;
     let view = 'dashboard';
     if (path.includes('leagues')) view = 'leagues';
     else if (path.includes('predictions')) view = 'predictions';
     else if (path.includes('tracker')) view = 'tracker';
+    else if (path.includes('match')) view = 'match';
+    currentView = view;
     updateNavLinks(view);
     updateViewTitle(view);
 });
@@ -2148,7 +2165,10 @@ async function fetchUsage() {
 
 // --- GLOBAL INIT ---
 
-window.addEventListener('hashchange', handleRouting);
+// Hash routing dismissed
+
+
+// Logic moved to HTMX lifecycle events
 
 async function init() {
     await fetchFilterData();
@@ -2175,7 +2195,26 @@ async function init() {
     if (window.lucide) lucide.createIcons();
     await fetchUsage();
     await fetchHistory();
-    handleRouting();
+
+    // Detect initial view
+    const path = window.location.pathname;
+    if (path.includes('leagues')) currentView = 'leagues';
+    else if (path.includes('predictions')) currentView = 'predictions';
+    else if (path.includes('tracker')) currentView = 'tracker';
+    else if (path.includes('match')) currentView = 'match';
+    else currentView = 'dashboard';
+
+    updateNavLinks(currentView);
+    updateViewTitle(currentView);
+
+    // Initial data refresh for the current view
+    if (currentView === 'dashboard') {
+        await fetchLive();
+        updateStatsSummary();
+    } else if (currentView === 'tracker') {
+        updateTrackerSummary();
+        renderFullHistory();
+    }
 
     // Auto-refreshers
     setInterval(fetchUsage, 60000);
@@ -2326,6 +2365,90 @@ async function openLineupModal(fixtureId, teamId) {
         body.innerHTML = '<div class="text-danger font-bold text-center py-10 uppercase italic">Errore caricamento formazioni.</div>';
     }
 }
+
+function showBetDetails(bet) {
+    const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    const btn = document.getElementById('place-bet-btn');
+    const footer = document.getElementById('modal-footer-actions');
+    const title = document.getElementById('modal-title');
+
+    if (!modal || !body) return;
+
+    modal.classList.remove('hidden');
+    if (footer) footer.classList.add('hidden');
+    if (btn) btn.classList.add('hidden');
+    if (title) title.textContent = 'Dettaglio Scommessa';
+
+    const date = new Date(bet.timestamp).toLocaleString('it-IT');
+    const odds = parseFloat(bet.odds) || 0;
+    const stake = parseFloat(bet.stake) || 0;
+
+    let profit = '0.00';
+    let color = 'text-warning';
+
+    if (bet.status === 'won') {
+        profit = '+' + (stake * (odds - 1)).toFixed(2);
+        color = 'text-success';
+    } else if (bet.status === 'lost') {
+        profit = '-' + stake.toFixed(2);
+        color = 'text-danger';
+    }
+
+    body.innerHTML = `
+        <div class="space-y-6">
+            <div class="flex items-center justify-between p-6 rounded-3xl bg-white/5 border border-white/5">
+                <div>
+                    <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Match</div>
+                    <div class="text-xl font-black italic uppercase text-white">${bet.match_name}</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Status</div>
+                    <div class="text-lg font-black italic uppercase ${color}">${bet.status}</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="p-6 rounded-3xl bg-white/5 border border-white/5">
+                    <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Mercato</div>
+                    <div class="text-lg font-black italic uppercase text-white">${bet.market}</div>
+                </div>
+                <div class="p-6 rounded-3xl bg-white/5 border border-white/5">
+                    <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Quota</div>
+                    <div class="text-lg font-black tabular-nums text-white">${odds.toFixed(2)}</div>
+                </div>
+                <div class="p-6 rounded-3xl bg-white/5 border border-white/5">
+                    <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Puntata</div>
+                    <div class="text-lg font-black tabular-nums text-white">${stake.toFixed(2)}€</div>
+                </div>
+                <div class="p-6 rounded-3xl bg-white/5 border border-white/5">
+                    <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Risultato</div>
+                    <div class="text-xl font-black tabular-nums ${color}">${profit}€</div>
+                </div>
+            </div>
+
+            ${bet.advice ? `
+                <div class="p-6 rounded-3xl bg-accent/5 border border-accent/20">
+                    <div class="text-[9px] font-black uppercase tracking-widest text-accent mb-2 italic">Analisi Originale</div>
+                    <div class="text-sm font-medium text-slate-300 leading-relaxed">${bet.advice}</div>
+                </div>
+            ` : ''}
+
+            <div class="text-center text-[10px] text-slate-500 font-bold uppercase tracking-widest italic">Piazzata il ${date}</div>
+            
+            <button class="w-full mt-4 py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 font-black text-[10px] uppercase tracking-widest transition-all" onclick="closeModal()">
+                Chiudi
+            </button>
+        </div>
+    `;
+    if (window.lucide) lucide.createIcons();
+}
+
+function closeBookmakerModal() {
+    const modal = document.getElementById('bookmaker-modal');
+    if (modal) modal.classList.add('hidden');
+}
+window.closeBookmakerModal = closeBookmakerModal;
 
 async function openStatsModal(fixtureId) {
     const modal = document.getElementById('analysis-modal');
