@@ -304,4 +304,36 @@ class BetSettler
 
         return 'pending';
     }
+
+    /**
+     * Helper fuzzy per capire se il nome di una squadra è menzionato nella stringa di ricerca
+     */
+    private function isTeamMentioned($teamName, $searchString)
+    {
+        if (!$teamName)
+            return false;
+
+        $teamName = mb_strtolower($teamName, 'UTF-8');
+        // Pulizia aggressiva del nome team
+        $cleanName = str_replace(
+            ['fc', 'u21', 'u20', 'u19', 'cf', 'montevideo', 'tijuana', 'puebla', 'club', 'sp.', 'deportivo', 'futbol', 'soccer', 'union', 'athletic', 'atletico', 'city', 'united', 'town', 'real'],
+            '',
+            $teamName
+        );
+        // Se la pulizia ha tolto tutto (es. "Club Deportivo"), rimettiamo l'originale
+        if (trim($cleanName) === '')
+            $cleanName = $teamName;
+
+        $searchString = mb_strtolower($searchString, 'UTF-8');
+        $words = explode(' ', trim($cleanName));
+
+        foreach ($words as $w) {
+            $w = trim($w);
+            // Ignora parole troppo corte dopo la pulizia (es. "la", "de")
+            if (strlen($w) > 3 && strpos($searchString, $w) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
