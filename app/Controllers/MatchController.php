@@ -14,8 +14,13 @@ use App\Models\Coach;
 use App\Models\Player;
 use App\Models\League;
 use App\Models\Fixture;
-use App\Models\Prediction as PredictionModel;
-use App\Models\Analysis as AnalysisModel;
+use App\Models\TeamStats;
+use App\Models\H2H;
+use App\Models\FixtureEvent;
+use App\Models\FixtureLineup;
+use App\Models\FixtureStatistics;
+use App\Models\FixtureOdds;
+use App\Models\FixtureInjury;
 
 class MatchController
 {
@@ -24,7 +29,6 @@ class MatchController
 
     public function __construct()
     {
-        // Strictly no FootballApiService here anymore
         $this->geminiService = new GeminiService();
         $this->betSettler = new BetSettler();
     }
@@ -39,17 +43,12 @@ class MatchController
         }
     }
 
-    /**
-     * Reads live matches from local cache only.
-     * The Cron job is responsible for updating this file.
-     */
     public function getLive()
     {
         header('Content-Type: application/json');
         try {
             $cacheFile = Config::LIVE_DATA_FILE;
             if (file_exists($cacheFile)) {
-                // Return cache directly as it's already filtered and enriched by syncLive
                 echo file_get_contents($cacheFile);
             } else {
                 echo json_encode(['response' => [], 'status' => 'waiting_for_sync']);
@@ -80,27 +79,297 @@ class MatchController
 
             if (!empty($data)) {
                 $fids = array_column($data, 'fixture_id');
-                $fids = array_filter($fids); // Extra safety
-                if (!empty($fids)) {
-                    $fidsStr = implode(',', array_map('intval', $fids));
-                    $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($fidsStr)");
-                    $oddsRaw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-                    $bookmakersByFixture = [];
-                    foreach ($oddsRaw as $row) {
-                        $bookmakersByFixture[$row['fixture_id']][] = (int) $row['bookmaker_id'];
-                    }
+                $fidsStr = implode(',', array_map('intval', $fids));
+                $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($fidsStr)");
+                $oddsRaw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                $bookmakersByFixture = [];
+                foreach ($oddsRaw as $row) {
+                    $bookmakersByFixture[$row['fixture_id']][] = (int) $row['bookmaker_id'];
+                }
+                foreach ($data as &$m) {
+                    $m['available_bookmakers'] = $bookmakersByFixture[$m['fixture_id']] ?? [];
+                }
+            }
+            echo json_encode(['response' => $data]);
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
 
-                    foreach ($data as &$m) {
-                        $fid = $m['fixture_id'];
-                        $m['available_bookmakers'] = $bookmakersByFixture[$fid] ?? [];
-                    }
-                } else {
-                    foreach ($data as &$m) {
-                        $m['available_bookmakers'] = [];
-                    }
+    public function getMatch($id)
+    {
+        header('Content-Type: application/json');
+        try {
+            $fixtureModel = new Fixture();
+            $fixture = $fixtureModel->getById((int) $id);
+            if (!$fixture) {
+                $apiService = new \App\Services\FootballApiService();
+                $data = $apiService->request("/fixtures?id=$id");
+                if (isset($data['response'][0])) {
+                    $fixtureModel->save($data['response'][0]);
+                    $fixture = $fixtureModel->getById((int) $id);
+                }
+            }
+            if (!$fixture) {
+                echo json_encode(['error' => 'Partita non trovata.']);
+                return;
+            }
+
+            echo json_encode([
+                'fixture' => $fixture,
+                'events' => (new FixtureEvent())->getByFixture((int) $id),
+                'statistics' => (new FixtureStatistics())->getByFixture((int) $id),
+                'lineups' => (new FixtureLineup())->getByFixture((int) $id),
+                'injuries' => (new FixtureInjury())->getByFixture((int) $id),
+                'h2h' => (new H2H())->get($fixture['team_home_id'], $fixture['team_away_id']),
+                'odds' => (new FixtureOdds())->getByFixture((int) $id)
+            ]);
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function analyze($id)
+    {
+        header('Content-Type: application/json');
+        try {
+            $db = \App\Services\Database::getInstance()->getConnection();
+            $stmt = $db->prepare("SELECT f.*, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo, l.name as league_name FROM fixtures f JOIN teams t1 ON f.team_home_id = t1.id JOIN teams t2 ON f.team_away_id = t2.id JOIN leagues l ON f.league_id = l.id WHERE f.id = :id");
+            $stmt->execute(['id' => $id]);
+            $fix = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            if (!$fix) {
+                echo json_encode(['error' => 'Partita non trovata.']);
+                return;
+            }
+
+            $match = [
+                'fixture' => ['id' => $fix['id'], 'date' => $fix['date'], 'status' => ['short' => $fix['status_short']]],
+                'league' => ['id' => $fix['league_id'], 'name' => $fix['league_name']],
+                'teams' => [
+                    'home' => ['id' => $fix['team_home_id'], 'name' => $fix['home_name'], 'logo' => $fix['home_logo']],
+                    'away' => ['id' => $fix['team_away_id'], 'name' => $fix['away_name'], 'logo' => $fix['away_logo']]
+                ],
+                'goals' => ['home' => $fix['score_home'], 'away' => $fix['score_away']]
+            ];
+
+            $prediction = $this->geminiService->analyze($match);
+            (new Analysis())->log((int) $id, $prediction);
+
+            echo json_encode(['prediction' => $prediction, 'match' => $match]);
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function dashboard()
+    {
+        try {
+            $country = $_GET['country'] ?? 'all';
+            $cacheFile = Config::LIVE_DATA_FILE;
+            $liveMatches = [];
+            if (file_exists($cacheFile)) {
+                $raw = json_decode(file_get_contents($cacheFile), true);
+                $liveMatches = $raw['response'] ?? [];
+                if ($country !== 'all') {
+                    $liveMatches = array_filter($liveMatches, fn($m) => ($m['league']['country'] ?? '') === $country);
                 }
             }
 
+            $db = \App\Services\Database::getInstance()->getConnection();
+            $hotPredictions = $db->query("SELECT p.*, f.date, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo, l.name as league_name FROM predictions p JOIN fixtures f ON p.fixture_id = f.id JOIN teams t1 ON f.team_home_id = t1.id JOIN teams t2 ON f.team_away_id = t2.id JOIN leagues l ON f.league_id = l.id WHERE f.date > NOW() ORDER BY f.date ASC LIMIT 3")->fetchAll(\PDO::FETCH_ASSOC);
+            $recentActivity = $db->query("SELECT b.*, l.name as league_name, bk.name as bookmaker_name FROM bets b LEFT JOIN fixtures f ON b.fixture_id = f.id LEFT JOIN leagues l ON f.league_id = l.id LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id ORDER BY b.timestamp DESC LIMIT 5")->fetchAll(\PDO::FETCH_ASSOC);
+
+            require __DIR__ . '/../Views/partials/dashboard.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function viewLeagues()
+    {
+        try {
+            $leagues = (new League())->getAll();
+            require __DIR__ . '/../Views/partials/leagues.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function viewLeagueDetails($leagueId)
+    {
+        try {
+            $league = (new League())->getById((int) $leagueId);
+            $standings = (new Standing())->getByLeague((int) $leagueId);
+
+            $season = Config::getCurrentSeason();
+            $statsModel = new \App\Models\TopStats();
+            $topStats = [
+                'scorers' => $statsModel->get((int) $leagueId, $season, 'scorers'),
+                'assists' => $statsModel->get((int) $leagueId, $season, 'assists')
+            ];
+
+            require __DIR__ . '/../Views/partials/league_details.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function viewPredictions()
+    {
+        try {
+            $db = \App\Services\Database::getInstance()->getConnection();
+            $predictions = $db->query("SELECT p.*, f.date, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo, l.name as league_name FROM predictions p JOIN fixtures f ON p.fixture_id = f.id JOIN teams t1 ON f.team_home_id = t1.id JOIN teams t2 ON f.team_away_id = t2.id JOIN leagues l ON f.league_id = l.id WHERE f.date >= DATE_SUB(NOW(), INTERVAL 4 HOUR) AND f.status_short = 'NS' ORDER BY f.date ASC")->fetchAll(\PDO::FETCH_ASSOC);
+            require __DIR__ . '/../Views/partials/predictions.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function viewTeam($teamId)
+    {
+        try {
+            $team = (new Team())->getById((int) $teamId);
+            $coach = (new Coach())->getByTeam((int) $teamId);
+            $squad = (new Player())->getByTeam((int) $teamId);
+            $db = \App\Services\Database::getInstance()->getConnection();
+            $latest = $db->query("SELECT league_id, season FROM team_stats WHERE team_id = " . (int) $teamId . " ORDER BY season DESC LIMIT 1")->fetch();
+            $stats = $latest ? (new TeamStats())->get((int) $teamId, (int) $latest['league_id'], (int) $latest['season']) : null;
+            if (!$team) {
+                echo '<div class="glass p-20 text-center italic">Squadra non trovata.</div>';
+                return;
+            }
+            require __DIR__ . '/../Views/partials/team.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function viewPlayer($playerId)
+    {
+        try {
+            $player = (new Player())->getById((int) $playerId);
+            $stats = (new \App\Models\PlayerStatistics())->get((int) $playerId, Config::getCurrentSeason());
+            $trophies = (new \App\Models\Trophy())->getByPlayer((int) $playerId);
+            $transfers = (new \App\Models\Transfer())->getByPlayer((int) $playerId);
+            if (!$player) {
+                echo '<div class="glass p-20 text-center italic">Giocatore non trovato.</div>';
+                return;
+            }
+            require __DIR__ . '/../Views/partials/player.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function viewMatchTab($id, $tab)
+    {
+        try {
+            $db = \App\Services\Database::getInstance()->getConnection();
+            $id = (int) $id;
+
+            switch ($tab) {
+                case 'analysis':
+                    $data = (new Prediction())->getByFixtureId($id);
+                    require __DIR__ . '/../Views/partials/match/analysis.php';
+                    break;
+
+                case 'events':
+                    $stmt = $db->prepare("SELECT * FROM fixtures WHERE id = ?");
+                    $stmt->execute([$id]);
+                    $fix = $stmt->fetch(\PDO::FETCH_ASSOC);
+                    $homeId = $fix['team_home_id'];
+                    $events = (new FixtureEvent())->getByFixture($id);
+                    require __DIR__ . '/../Views/partials/match/events.php';
+                    break;
+
+                case 'lineups':
+                    $lineups = (new FixtureLineup())->getByFixture($id);
+                    require __DIR__ . '/../Views/partials/match/lineups.php';
+                    break;
+
+                case 'stats':
+                    $statistics = (new FixtureStatistics())->getByFixture($id);
+                    require __DIR__ . '/../Views/partials/match/stats.php';
+                    break;
+
+                case 'h2h':
+                    $stmt = $db->prepare("SELECT f.*, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo FROM fixtures f JOIN teams t1 ON f.team_home_id = t1.id JOIN teams t2 ON f.team_away_id = t2.id WHERE f.id = " . $id);
+                    $stmt->execute();
+                    $fixture = $stmt->fetch(\PDO::FETCH_ASSOC);
+                    $h2h = (new H2H())->get($fixture['team_home_id'], $fixture['team_away_id']);
+                    // The H2H model returns an object with h2h_json. We want the parsed array for the partial.
+                    $h2h = $h2h ? json_decode($h2h['h2h_json'], true) : [];
+                    require __DIR__ . '/../Views/partials/match/h2h.php';
+                    break;
+
+                case 'odds':
+                    $odds = (new FixtureOdds())->getByFixture($id);
+                    require __DIR__ . '/../Views/partials/match/odds.php';
+                    break;
+
+                case 'info':
+                    $fixture = (new Fixture())->getById($id);
+                    require __DIR__ . '/../Views/partials/match/info.php';
+                    break;
+
+                default:
+                    echo "Tab non valida.";
+            }
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore caricamento tab: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function viewMatch($id)
+    {
+        try {
+            $db = \App\Services\Database::getInstance()->getConnection();
+            $fixture = $db->query("SELECT f.*, t1.name as team_home_name, t1.logo as team_home_logo, t2.name as team_away_name, t2.logo as team_away_logo, l.name as league_name, l.logo as league_logo FROM fixtures f JOIN teams t1 ON f.team_home_id = t1.id JOIN teams t2 ON f.team_away_id = t2.id JOIN leagues l ON f.league_id = l.id WHERE f.id = " . (int) $id)->fetch(\PDO::FETCH_ASSOC);
+            if (!$fixture) {
+                echo '<div class="glass p-20 text-center italic">Match non trovato.</div>';
+                return;
+            }
+
+            $matchData = [
+                'fixture' => $fixture,
+                'events' => (new FixtureEvent())->getByFixture((int) $id),
+                'lineups' => (new FixtureLineup())->getByFixture((int) $id),
+                'statistics' => (new FixtureStatistics())->getByFixture((int) $id),
+                'odds' => (new FixtureOdds())->getByFixture((int) $id),
+                'injuries' => (new FixtureInjury())->getByFixture((int) $id),
+                'h2h' => (new H2H())->get($fixture['team_home_id'], $fixture['team_away_id'])
+            ];
+            require __DIR__ . '/../Views/partials/match.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function getPredictions($limit = 10)
+    {
+        header('Content-Type: application/json');
+        try {
+            $db = \App\Services\Database::getInstance()->getConnection();
+            $sql = "SELECT p.*, f.date, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo, l.name as league_name 
+                    FROM predictions p 
+                    JOIN fixtures f ON p.fixture_id = f.id 
+                    JOIN teams t1 ON f.team_home_id = t1.id 
+                    JOIN teams t2 ON f.team_away_id = t2.id 
+                    JOIN leagues l ON f.league_id = l.id 
+                    WHERE f.date > NOW() ORDER BY f.date ASC LIMIT " . (int) $limit;
+            $data = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+            echo json_encode(['response' => $data]);
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function getStandings($leagueId)
+    {
+        header('Content-Type: application/json');
+        try {
+            $data = (new Standing())->getByLeague((int) $leagueId);
             echo json_encode(['response' => $data]);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
@@ -111,316 +380,43 @@ class MatchController
     {
         header('Content-Type: application/json');
         try {
-            $topStatsModel = new \App\Models\TopStats();
             $season = Config::getCurrentSeason();
-            $types = ['scorers', 'assists', 'yellow_cards', 'red_cards'];
-            $results = [];
-            foreach ($types as $type) {
-                $results[$type] = $topStatsModel->get((int) $leagueId, $season, $type);
-            }
-            echo json_encode($results);
-        } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
-        }
-    }
-
-    public function getMatch($id)
-    {
-        header('Content-Type: application/json');
-        try {
-            $db = \App\Services\Database::getInstance()->getConnection();
-
-            // Basic Info
-            $fixtureModel = new \App\Models\Fixture();
-            $fixture = $fixtureModel->getById((int) $id);
-
-            // FALLBACK: If not in DB, try to fetch from API immediately (Real-time on-demand)
-            if (!$fixture) {
-                $apiService = new \App\Services\FootballApiService();
-                $data = $apiService->request("/fixtures?id=$id");
-
-                if (isset($data['response'][0])) {
-                    $fixtureData = $data['response'][0];
-                    $fixtureModel->save($fixtureData);
-
-                    // Also save related teams, league, venue if missing? 
-                    // Ideally yes, but let's stick to fixture first to be fast.
-                    // Actually, save() method of Fixture model relies on 'teams', 'league' keys in data.
-                    // The 'save' method in Fixture model is robust enough to handle the structure.
-
-                    // Reload from DB to ensure we have the localized fields and structure
-                    $fixture = $fixtureModel->getById((int) $id);
-                }
-            }
-
-            if (!$fixture) {
-                echo json_encode(['error' => 'Partita non trovata (né DB né API).']);
-                return;
-            }
-
-            // Events
-            $events = (new \App\Models\FixtureEvent())->getByFixture((int) $id);
-
-            // Stats
-            $stats = (new \App\Models\FixtureStatistics())->getByFixture((int) $id);
-
-            // Lineups
-            $lineups = (new \App\Models\FixtureLineup())->getByFixture((int) $id);
-
-            // Injuries
-            $injuries = (new \App\Models\FixtureInjury())->getByFixture((int) $id);
-
-            // H2H
-            $h2h = (new \App\Models\H2H())->get($fixture['team_home_id'], $fixture['team_away_id']);
-
-            // Odds
-            $odds = (new \App\Models\FixtureOdds())->getByFixture((int) $id);
-
-            echo json_encode([
-                'fixture' => $fixture,
-                'events' => $events,
-                'statistics' => $stats,
-                'lineups' => $lineups,
-                'injuries' => $injuries,
-                'h2h' => $h2h,
-                'odds' => $odds
-            ]);
-        } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Performs AI analysis using strictly local DB data.
-     */
-    public function analyze($id)
-    {
-        header('Content-Type: application/json');
-        try {
-            $cacheFile = Config::LIVE_DATA_FILE;
-            $liveData = json_decode(file_exists($cacheFile) ? file_get_contents($cacheFile) : '{"response":[]}', true);
-            $match = null;
-
-            foreach ($liveData['response'] ?? [] as $m) {
-                if ($m['fixture']['id'] == $id) {
-                    $match = $m;
-                    break;
-                }
-            }
-
-            if (!$match) {
-                // FALLBACK: Fetch from DB for Upcoming/Predicted matches
-                $db = \App\Services\Database::getInstance()->getConnection();
-
-                // Get basic fixture info
-                $sql = "SELECT f.id, f.date, f.status_short, f.status_long, f.status_elapsed, f.league_id,
-                               t1.name as home_name, t1.logo as home_logo, t1.id as home_id,
-                               t2.name as away_name, t2.logo as away_logo, t2.id as away_id,
-                               l.name as league_name, l.country_name, l.logo as league_logo, l.flag as country_flag
-                        FROM fixtures f
-                        JOIN teams t1 ON f.team_home_id = t1.id
-                        JOIN teams t2 ON f.team_away_id = t2.id
-                        JOIN leagues l ON f.league_id = l.id
-                        WHERE f.id = :id";
-
-                $stmt = $db->prepare($sql);
-                $stmt->execute(['id' => $id]);
-                $fix = $stmt->fetch(\PDO::FETCH_ASSOC);
-
-                if ($fix) {
-                    // Construct a match object compatible with frontend/gemini
-                    $match = [
-                        'fixture' => [
-                            'id' => $fix['id'],
-                            'date' => $fix['date'],
-                            'status' => [
-                                'short' => $fix['status_short'],
-                                'long' => $fix['status_long'],
-                                'elapsed' => $fix['status_elapsed']
-                            ]
-                        ],
-                        'league' => [
-                            'id' => $fix['league_id'],
-                            'name' => $fix['league_name'],
-                            'country' => $fix['country_name'],
-                            'logo' => $fix['league_logo'],
-                            'flag' => $fix['country_flag']
-                        ],
-                        'teams' => [
-                            'home' => ['id' => $fix['home_id'], 'name' => $fix['home_name'], 'logo' => $fix['home_logo']],
-                            'away' => ['id' => $fix['away_id'], 'name' => $fix['away_name'], 'logo' => $fix['away_logo']]
-                        ],
-                        'goals' => ['home' => null, 'away' => null], // Not live, so no guaranteed score
-                        'score' => ['halftime' => [], 'fulltime' => [], 'extratime' => [], 'penalty' => []]
-                    ];
-
-                    // Try to get score/events/stats from DB if available
-                    $eventModel = new \App\Models\FixtureEvent();
-                    $match['events'] = $eventModel->getByFixture($id);
-
-                    $statModel = new \App\Models\FixtureStatistics();
-                    $stats = $statModel->getByFixture($id);
-                    $match['statistics'] = [];
-                    foreach ($stats as $s) {
-                        $match['statistics'][] = [
-                            'team' => ['id' => $s['team_id'], 'name' => ($s['team_id'] == $fix['home_id'] ? $fix['home_name'] : $fix['away_name']), 'logo' => ($s['team_id'] == $fix['home_id'] ? $fix['home_logo'] : $fix['away_logo'])],
-                            'statistics' => json_decode($s['statistics'], true)
-                        ];
-                    }
-
-                    $lineupModel = new \App\Models\FixtureLineup();
-                    $lineups = $lineupModel->getByFixture($id);
-                    $match['lineups'] = [];
-                    foreach ($lineups as $l) {
-                        $match['lineups'][] = [
-                            'team' => ['id' => $l['team_id'], 'name' => ($l['team_id'] == $fix['home_id'] ? $fix['home_name'] : $fix['away_name'])],
-                            'startXI' => json_decode($l['start_xi_json'] ?? '[]', true),
-                            'substitutes' => json_decode($l['subs_json'] ?? '[]', true),
-                            'formation' => $l['formation'] ?? ''
-                        ];
-                    }
-
-                    // We also need goals because frontend uses match.goals
-                    $match['goals'] = [
-                        'home' => $fix['score_home'] ?? 0,
-                        'away' => $fix['score_away'] ?? 0
-                    ];
-
-                } else {
-                    echo json_encode(['error' => 'Partita non trovata nel database.']);
-                    return;
-                }
-            }
-
-            // Gemini analysis uses IntelligenceService which is already DB-only
-            $prediction = $this->geminiService->analyze($match);
-
-            try {
-                $analysisModel = new Analysis();
-                $analysisModel->log((int) $id, $prediction);
-            } catch (\Throwable $e) {
-                error_log("Error saving analysis: " . $e->getMessage());
-            }
-
-            echo json_encode([
-                'fixture_id' => $id,
-                'prediction' => $prediction,
-                'match' => $match
-            ]);
-        } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Gets predictions from DB only.
-     */
-    public function getPredictions($id)
-    {
-        header('Content-Type: application/json');
-        try {
-            $predictionModel = new Prediction();
-            $data = $predictionModel->getByFixtureId((int) $id);
-
-            if (!$data) {
-                echo json_encode(['error' => 'Pronostico non ancora disponibile nel database.']);
-                return;
-            }
+            $topStats = new \App\Models\TopStats();
+            $data = [
+                'scorers' => $topStats->get((int) $leagueId, $season, 'scorers'),
+                'assists' => $topStats->get((int) $leagueId, $season, 'assists')
+            ];
             echo json_encode($data);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
-    /**
-     * Gets standings from DB only.
-     */
-    public function getStandings($leagueId)
-    {
-        header('Content-Type: application/json');
-        try {
-            $standingModel = new Standing();
-            $data = $standingModel->getByLeague((int) $leagueId);
-
-            if (empty($data)) {
-                echo json_encode(['error' => 'Classifica non ancora sincronizzata nel database.']);
-                return;
-            }
-            echo json_encode($data);
-        } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Gets team, coach and squad from DB only.
-     */
     public function getTeamDetails($teamId)
     {
         header('Content-Type: application/json');
         try {
-            $teamModel = new Team();
-            $coachModel = new Coach();
-            $playerModel = new Player();
-            $statsModel = new \App\Models\TeamStats();
-
-            $team = $teamModel->getById((int) $teamId);
-            $coach = $coachModel->getByTeam((int) $teamId);
-            $squad = $playerModel->getByTeam((int) $teamId);
-
-            // Get stats for the most recent league/season
+            $team = (new Team())->getById((int) $teamId);
+            $coach = (new Coach())->getByTeam((int) $teamId);
+            $squad = (new Player())->getByTeam((int) $teamId);
             $db = \App\Services\Database::getInstance()->getConnection();
             $latest = $db->query("SELECT league_id, season FROM team_stats WHERE team_id = " . (int) $teamId . " ORDER BY season DESC LIMIT 1")->fetch();
-            $stats = null;
-            if ($latest) {
-                $stats = $statsModel->get((int) $teamId, (int) $latest['league_id'], (int) $latest['season']);
-            }
-
-            if (!$team) {
-                echo json_encode(['error' => 'Dati squadra non presenti nel database. Attendi il cron sync.']);
-                return;
-            }
-
-            echo json_encode([
-                'team' => $team,
-                'coach' => $coach,
-                'squad' => $squad,
-                'statistics' => $stats
-            ]);
+            $stats = $latest ? (new TeamStats())->get((int) $teamId, (int) $latest['league_id'], (int) $latest['season']) : null;
+            echo json_encode(['team' => $team, 'coach' => $coach, 'squad' => $squad, 'stats' => $stats]);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
-    /**
-     * Gets player details from DB only.
-     */
     public function getPlayerDetails($playerId)
     {
         header('Content-Type: application/json');
         try {
-            $playerModel = new Player();
-            $statsModel = new \App\Models\PlayerStatistics();
-            $trophyModel = new \App\Models\Trophy();
-            $transferModel = new \App\Models\Transfer();
-
-            $player = $playerModel->getById((int) $playerId);
-            $season = Config::getCurrentSeason();
-            $stats = $statsModel->get((int) $playerId, $season);
-            $trophies = $trophyModel->getByPlayer((int) $playerId);
-            $transfers = $transferModel->getByPlayer((int) $playerId);
-
-            if (!$player) {
-                echo json_encode(['error' => 'Dettagli giocatore non presenti nel database.']);
-                return;
-            }
-
-            echo json_encode([
-                'player' => $player,
-                'statistics' => $stats,
-                'trophies' => $trophies,
-                'transfers' => $transfers
-            ]);
+            $player = (new Player())->getById((int) $playerId);
+            $stats = (new \App\Models\PlayerStatistics())->get((int) $playerId, Config::getCurrentSeason());
+            $trophies = (new \App\Models\Trophy())->getByPlayer((int) $playerId);
+            $transfers = (new \App\Models\Transfer())->getByPlayer((int) $playerId);
+            echo json_encode(['player' => $player, 'statistics' => $stats, 'trophies' => $trophies, 'transfers' => $transfers]);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
@@ -430,8 +426,8 @@ class MatchController
     {
         header('Content-Type: application/json');
         try {
-            $leagueModel = new League();
-            echo json_encode($leagueModel->getAll());
+            $data = (new League())->getAll();
+            echo json_encode(['response' => $data]);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
@@ -439,115 +435,6 @@ class MatchController
 
     public function getPredictionsAll()
     {
-        header('Content-Type: application/json');
-        try {
-            $db = \App\Services\Database::getInstance()->getConnection();
-            $sql = "SELECT p.*, f.date, f.status_short, f.league_id,
-                           t1.name as home_name, t1.logo as home_logo,
-                           t2.name as away_name, t2.logo as away_logo,
-                           l.name as league_name, l.country_name as country_name
-                    FROM predictions p
-                    JOIN fixtures f ON p.fixture_id = f.id
-                    JOIN teams t1 ON f.team_home_id = t1.id
-                    JOIN teams t2 ON f.team_away_id = t2.id
-                    JOIN leagues l ON f.league_id = l.id
-                    WHERE f.date >= DATE_SUB(NOW(), INTERVAL 4 HOUR)
-                    AND f.status_short NOT IN ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD', 'AWD', 'WO')
-                    ORDER BY f.date ASC";
-            $data = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
-            echo json_encode($data);
-        } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Serves the dashboard partial for HTMX
-     */
-    public function dashboard()
-    {
-        try {
-            // Get filter params
-            $country = $_GET['country'] ?? 'all';
-            $bookmaker = $_GET['bookmaker'] ?? 'all';
-            $pinned = isset($_GET['pinned']) ? explode(',', $_GET['pinned']) : [];
-
-            $cacheFile = Config::LIVE_DATA_FILE;
-            $liveMatches = [];
-
-            if (file_exists($cacheFile)) {
-                $raw = json_decode(file_get_contents($cacheFile), true);
-                if (isset($raw['response']) && is_array($raw['response'])) {
-                    $liveMatches = $raw['response'];
-
-                    // Simple filtering
-                    if ($country !== 'all') {
-                        $liveMatches = array_filter($liveMatches, function ($m) use ($country) {
-                            return isset($m['league']['country']) && $m['league']['country'] === $country;
-                        });
-                    }
-
-                    // Filter by bookmaker available if needed (logic from JS)
-                    if ($bookmaker !== 'all') {
-                        // This logic is complex because 'available_bookmakers' might not be in the live feed directly
-                        // unless we enhance the sync script. For now, we trust the frontend or ignore.
-                    }
-                }
-            }
-
-            // Pass variables to view
-            $pinnedMatches = $pinned;
-            require __DIR__ . '/../Views/partials/dashboard.php';
-
-        } catch (\Throwable $e) {
-            echo '<div class="text-danger p-4">Errore caricamento dashboard: ' . $e->getMessage() . '</div>';
-        }
-    }
-
-    /**
-     * Serves the leagues partial for HTMX
-     */
-    public function viewLeagues()
-    {
-        try {
-            // Fetch leagues using the model
-            $leagueModel = new League();
-            $leagues = $leagueModel->getAll(); // Assume this returns an array of leagues
-
-            // Pass variables to view
-            require __DIR__ . '/../Views/partials/leagues.php';
-
-        } catch (\Throwable $e) {
-            echo '<div class="text-danger p-4">Errore caricamento competizioni: ' . $e->getMessage() . '</div>';
-        }
-    }
-
-    /**
-     * Serves the predictions partial for HTMX
-     */
-    public function viewPredictions()
-    {
-        try {
-            $db = \App\Services\Database::getInstance()->getConnection();
-            $sql = "SELECT p.*, f.date, f.status_short, f.league_id,
-                           t1.name as home_name, t1.logo as home_logo,
-                           t2.name as away_name, t2.logo as away_logo,
-                           l.name as league_name, l.country_name as country_name
-                    FROM predictions p
-                    JOIN fixtures f ON p.fixture_id = f.id
-                    JOIN teams t1 ON f.team_home_id = t1.id
-                    JOIN teams t2 ON f.team_away_id = t2.id
-                    JOIN leagues l ON f.league_id = l.id
-                    WHERE f.date >= DATE_SUB(NOW(), INTERVAL 4 HOUR)
-                    AND f.status_short NOT IN ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD', 'AWD', 'WO')
-                    ORDER BY f.date ASC";
-            $predictions = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
-
-            // Pass variables to view
-            require __DIR__ . '/../Views/partials/predictions.php';
-
-        } catch (\Throwable $e) {
-            echo '<div class="text-danger p-4">Errore caricamento pronostici: ' . $e->getMessage() . '</div>';
-        }
+        return $this->getPredictions(100);
     }
 }

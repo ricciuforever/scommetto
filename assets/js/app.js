@@ -57,29 +57,31 @@ async function renderView(view, id) {
     const htmxContainer = document.getElementById('htmx-container');
     const legacyContainer = document.getElementById('view-container');
 
-    // Toggle containers based on view
-    // HTMX views: Dashboard, Leagues (List)
-    // Dashboard / Leagues / Predictions / Tracker -> HTMX
-    if (['dashboard', '', 'leagues', 'predictions', 'tracker'].includes(view)) {
+    // HTMX views: Dashboard, Leagues, Predictions, Tracker, Match, Team, Player
+    if (['dashboard', '', 'leagues', 'predictions', 'tracker', 'match', 'team', 'player'].includes(view)) {
 
         if (htmxContainer) {
             htmxContainer.classList.remove('hidden');
 
             let endpoint = '';
             if (view === 'dashboard' || view === '') {
-                // Keep existing params if any, or default
                 const currentGet = htmxContainer.getAttribute('hx-get');
                 endpoint = currentGet && currentGet.includes('/api/view/dashboard') ? currentGet : '/api/view/dashboard';
             } else if (view === 'leagues') {
-                endpoint = '/api/view/leagues';
+                endpoint = id ? `/api/view/leagues/${id}` : '/api/view/leagues';
             } else if (view === 'predictions') {
                 endpoint = '/api/view/predictions';
             } else if (view === 'tracker') {
                 endpoint = '/api/view/tracker';
+            } else if (view === 'match') {
+                endpoint = `/api/view/match/${id}`;
+            } else if (view === 'team') {
+                endpoint = `/api/view/team/${id}`;
+            } else if (view === 'player') {
+                endpoint = `/api/view/player/${id}`;
             }
 
-            // Only update and trigger if changed or empty
-            if (endpoint && (htmxContainer.getAttribute('hx-get')?.split('?')[0] !== endpoint.split('?')[0] || !htmxContainer.innerHTML.trim())) {
+            if (endpoint && (htmxContainer.getAttribute('hx-get') !== endpoint || !htmxContainer.innerHTML.trim())) {
                 htmxContainer.setAttribute('hx-get', endpoint);
                 htmx.process(htmxContainer);
                 htmx.trigger('#htmx-container', 'load');
@@ -91,22 +93,26 @@ async function renderView(view, id) {
         if (view === 'dashboard' || view === '') {
             viewTitle.textContent = 'Dashboard Intelligence';
             updateStatsSummary();
-            renderDashboardPredictions(); // These might be redundant if moved to PHP partial
-            renderDashboardHistory();
         } else if (view === 'leagues') {
             viewTitle.textContent = 'Competizioni';
         } else if (view === 'predictions') {
             viewTitle.textContent = 'Pronostici AI';
         } else if (view === 'tracker') {
             viewTitle.textContent = 'Bet Tracker';
+        } else if (view === 'match') {
+            viewTitle.textContent = 'Match Center';
+        } else if (view === 'team') {
+            viewTitle.textContent = 'Profilo Squadra';
+        } else if (view === 'player') {
+            viewTitle.textContent = 'Profilo Giocatore';
         }
 
     } else {
-        // Legacy JS Views (Match Center, Team, Player, etc.)
+        // Legacy JS Views (Team, Player, etc.)
         if (htmxContainer) htmxContainer.classList.add('hidden');
         if (legacyContainer) {
             legacyContainer.classList.remove('hidden');
-            legacyContainer.innerHTML = ''; // Clear for new render
+            legacyContainer.innerHTML = '';
         }
 
         switch (view) {
@@ -600,7 +606,9 @@ async function renderMatchCenter(fixtureId) {
 }
 
 async function renderMatchTab(tab, fixtureId, matchData) {
-    const container = document.getElementById('match-view-content');
+    const container = document.getElementById('match-tab-content'); // Use the id from match.php
+    if (!container) return; // Guard if not in match view
+
     container.innerHTML = '<div class="flex justify-center py-20"><i data-lucide="loader-2" class="w-8 h-8 text-accent rotator"></i></div>';
     if (window.lucide) lucide.createIcons();
 
@@ -629,6 +637,7 @@ async function renderMatchTab(tab, fixtureId, matchData) {
     }
     if (window.lucide) lucide.createIcons();
 }
+window.renderMatchTab = renderMatchTab;
 
 async function renderMatchAnalysis(id) {
     const container = document.getElementById('match-view-content');
@@ -1239,22 +1248,24 @@ function setCountry(name) {
     const flagPlaceholder = document.getElementById('selected-country-flag');
 
     if (name === 'all') {
-        label.textContent = 'Tutte le Nazioni';
-        flagPlaceholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4 text-accent"></i>';
+        if (label) label.textContent = 'Tutte le Nazioni';
+        if (flagPlaceholder) flagPlaceholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4 text-accent"></i>';
     } else {
         const c = allFilterData.countries.find(x => x.name === name);
-        label.textContent = name;
-        if (c && c.flag) {
+        if (label) label.textContent = name;
+        if (c && c.flag && flagPlaceholder) {
             flagPlaceholder.innerHTML = `<img src="${c.flag}" class="w-5 h-5 rounded-sm object-cover">`;
-        } else {
+        } else if (flagPlaceholder) {
             flagPlaceholder.textContent = '🏳️';
         }
     }
 
     closeCountryModal();
     if (window.lucide) lucide.createIcons();
-    refreshAllViews();
+    // Use the shared selectCountry logic to trigger proper HTMX reloads
+    selectCountry(name);
 }
+window.setCountry = setCountry;
 
 function closeCountryModal() { document.getElementById('country-modal').classList.add('hidden'); }
 
@@ -1277,159 +1288,144 @@ function openBookmakerModal() {
     if (window.lucide) lucide.createIcons();
 }
 
-function setBookmaker(id, name) {
-    selectedBookmaker = id.toString();
-    localStorage.setItem('selected_bookmaker', selectedBookmaker);
-    function closeBookmakerModal() { document.getElementById('bookmaker-modal').classList.add('hidden'); }
+// --- SHARED DATA FETCHERS & UPDATERS ---
 
-    function refreshAllViews() {
-        updateStatsSummary();
-        if (currentView === 'dashboard') {
-            renderDashboardMatches();
-            renderDashboardHistory();
-            renderDashboardPredictions();
-        } else if (currentView === 'predictions') {
-            renderPredictions();
-        } else if (currentView === 'leagues') {
-            renderLeagues();
-        } else if (currentView === 'tracker') {
-            renderTracker();
-        }
+async function selectCountry(country) {
+    selectedCountry = country;
+    localStorage.setItem('selected_country', country);
+
+    // UI Update
+    const label = document.getElementById('selected-country-name');
+    const flagPlaceholder = document.getElementById('selected-country-flag');
+
+    if (country === 'all') {
+        label.textContent = 'Tutte le Nazioni';
+        flagPlaceholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4 text-accent"></i>';
+    } else {
+        const c = allFilterData.countries.find(x => x.name === country);
+        label.textContent = country;
+        if (c && c.flag) flagPlaceholder.innerHTML = `<img src="${c.flag}" class="w-5 h-5 rounded-sm object-cover">`;
+        else flagPlaceholder.innerHTML = '🌍';
     }
 
-    // --- SHARED DATA FETCHERS & UPDATERS ---
+    // Modal Close
+    const modal = document.getElementById('country-modal');
+    if (modal) modal.classList.add('hidden');
+    if (window.lucide) lucide.createIcons();
 
-    async function selectCountry(country) {
-        selectedCountry = country;
-        localStorage.setItem('selected_country', country);
-
-        // UI Update
-        const label = document.getElementById('selected-country-name');
-        const flagPlaceholder = document.getElementById('selected-country-flag');
-
-        if (country === 'all') {
-            label.textContent = 'Tutte le Nazioni';
-            flagPlaceholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4 text-accent"></i>';
-        } else {
-            const c = allFilterData.countries.find(x => x.name === country);
-            label.textContent = country;
-            if (c && c.flag) flagPlaceholder.innerHTML = `<img src="${c.flag}" class="w-5 h-5 rounded-sm object-cover">`;
-            else flagPlaceholder.innerHTML = '🌍';
-        }
-
-        // Modal Close
-        const modal = document.getElementById('country-modal');
-        if (modal) modal.classList.add('hidden');
-        if (window.lucide) lucide.createIcons();
-
-        // TRIGGER REFRESH BASED ON VIEW
-        if (currentView === 'dashboard') {
-            updateDashboardFilters();
-        } else if (currentView === 'leagues') {
-            // For leagues view, maybe reload page or update hash if needed, 
-            // but currently league filter is inline in the PHP view.
-            // We could trigger a reload if we want the country filter to apply to leagues list too via URL param
-            const htmxContainer = document.getElementById('htmx-container');
-            if (htmxContainer && !htmxContainer.classList.contains('hidden')) {
-                // Leagues partial likely handles client side filtering, but if we want server side:
-                // htmxContainer.setAttribute('hx-get', `/api/view/leagues?country=${country}`);
-                // htmx.trigger('#htmx-container', 'load');
-
-                // Client-side fallback for now (if on leagues page)
-                const filterInput = document.getElementById('country-filter-php');
-                if (filterInput) { filterInput.value = country; filterLeagues(country); }
-            }
-        } else {
-            // Legacy views
-            if (currentView === 'tracker') renderTracker();
-            else if (currentView === 'predictions') renderPredictions();
-        }
-    }
-
-    async function selectBookmaker(bookmakerId) {
-        selectedBookmaker = bookmakerId;
-        localStorage.setItem('selected_bookmaker', bookmakerId);
-
-        const label = document.getElementById('selected-bookmaker-name');
-        if (bookmakerId === 'all') {
-            label.textContent = 'Tutti i Book';
-        } else {
-            const bookie = allFilterData.bookmakers.find(b => b.id.toString() === bookmakerId.toString());
-            if (bookie) label.textContent = bookie.name;
-        }
-
-        document.getElementById('bookmaker-modal').classList.add('hidden');
-
-        if (currentView === 'dashboard') {
-            updateDashboardFilters();
-        } else if (currentView === 'tracker') renderTracker();
-    }
-
-
-    function updateDashboardFilters() {
+    // TRIGGER REFRESH BASED ON VIEW
+    if (currentView === 'dashboard') {
+        updateDashboardFilters();
+    } else if (currentView === 'leagues') {
+        // For leagues view, maybe reload page or update hash if needed, 
+        // but currently league filter is inline in the PHP view.
+        // We could trigger a reload if we want the country filter to apply to leagues list too via URL param
         const htmxContainer = document.getElementById('htmx-container');
-        if (!htmxContainer) return;
+        if (htmxContainer && !htmxContainer.classList.contains('hidden')) {
+            // Leagues partial likely handles client side filtering, but if we want server side:
+            // htmxContainer.setAttribute('hx-get', `/api/view/leagues?country=${country}`);
+            // htmx.trigger('#htmx-container', 'load');
 
-        // Construct Query Params
-        const params = new URLSearchParams();
-        if (selectedCountry !== 'all') params.append('country', selectedCountry);
-        if (selectedBookmaker !== 'all') params.append('bookmaker', selectedBookmaker);
-
-        // Add pinned matches if any logic existed for them (optional)
-
-        const endpoint = `/api/view/dashboard?${params.toString()}`;
-
-        // Update HTMX attribute and trigger load
-        htmxContainer.setAttribute('hx-get', endpoint);
-        htmx.process(htmxContainer);
-        htmx.trigger('#htmx-container', 'load');
-    }
-
-    async function fetchLive() {
-        try {
-            const res = await fetch('/api/live');
-            const data = await res.json();
-            liveMatches = data.response || [];
-
-            // Update match states for notifications
-            liveMatches.forEach(m => {
-                const id = m.fixture.id;
-                const prevState = matchStates[id];
-                const currentEventsCount = (m.events || []).filter(ev => ev.type !== 'subst').length;
-
-                if (prevState) {
-                    const goalsChanged = m.goals.home !== prevState.goals.home || m.goals.away !== prevState.goals.away;
-                    if (goalsChanged) {
-                        pinnedMatches.add(id);
-                        notificationSound.play().catch(() => { });
-                        setTimeout(() => pinnedMatches.delete(id), 10000);
-                    }
-                }
-                matchStates[id] = { goals: { home: m.goals.home, away: m.goals.away }, eventsCount: currentEventsCount };
-            });
-        } catch (e) { console.error("Error fetching live data", e); }
-    }
-
-    async function fetchHistory() {
-        try {
-            const res = await fetch("/api/history");
-            const data = await res.json();
-            historyData = Array.isArray(data) ? data : [];
-        } catch (e) {
-            console.error("Error fetching history", e);
-            historyData = [];
+            // Client-side fallback for now (if on leagues page)
+            const filterInput = document.getElementById('country-filter-php');
+            if (filterInput) { filterInput.value = country; filterLeagues(country); }
         }
+    } else {
+        // Legacy views
+        if (currentView === 'tracker') renderTracker();
+        else if (currentView === 'predictions') renderPredictions();
+    }
+}
+
+window.selectCountry = selectCountry;
+
+async function selectBookmaker(bookmakerId) {
+    selectedBookmaker = bookmakerId;
+    localStorage.setItem('selected_bookmaker', bookmakerId);
+
+    const label = document.getElementById('selected-bookmaker-name');
+    if (bookmakerId === 'all') {
+        if (label) label.textContent = 'Tutti i Book';
+    } else {
+        const bookie = allFilterData.bookmakers.find(b => b.id.toString() === bookmakerId.toString());
+        if (bookie && label) label.textContent = bookie.name;
     }
 
-    function updateStatsSummary() {
-        const summary = calculateStats();
-        const container = document.getElementById('stats-summary');
-        if (!container) return;
+    const modal = document.getElementById('bookmaker-modal');
+    if (modal) modal.classList.add('hidden');
 
-        const countryLabel = selectedCountry === 'all' ? 'Tutte' : selectedCountry;
-        const bookmakerLabel = selectedBookmaker === 'all' ? 'Tutti i Book' : (allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker)?.name || 'Filtro');
+    if (currentView === 'dashboard') {
+        updateDashboardFilters();
+    } else if (currentView === 'tracker') renderTracker();
+}
+window.selectBookmaker = selectBookmaker;
+window.setBookmaker = selectBookmaker; // Alias for legacy calls
 
-        container.innerHTML = `
+
+function updateDashboardFilters() {
+    const htmxContainer = document.getElementById('htmx-container');
+    if (!htmxContainer) return;
+
+    // Construct Query Params
+    const params = new URLSearchParams();
+    if (selectedCountry !== 'all') params.append('country', selectedCountry);
+    if (selectedBookmaker !== 'all') params.append('bookmaker', selectedBookmaker);
+
+    // Add pinned matches if any logic existed for them (optional)
+
+    const endpoint = `/api/view/dashboard?${params.toString()}`;
+
+    // Update HTMX attribute and trigger load
+    htmxContainer.setAttribute('hx-get', endpoint);
+    htmx.process(htmxContainer);
+    htmx.trigger('#htmx-container', 'load');
+}
+
+async function fetchLive() {
+    try {
+        const res = await fetch('/api/live');
+        const data = await res.json();
+        liveMatches = data.response || [];
+
+        // Update match states for notifications
+        liveMatches.forEach(m => {
+            const id = m.fixture.id;
+            const prevState = matchStates[id];
+            const currentEventsCount = (m.events || []).filter(ev => ev.type !== 'subst').length;
+
+            if (prevState) {
+                const goalsChanged = m.goals.home !== prevState.goals.home || m.goals.away !== prevState.goals.away;
+                if (goalsChanged) {
+                    pinnedMatches.add(id);
+                    notificationSound.play().catch(() => { });
+                    setTimeout(() => pinnedMatches.delete(id), 10000);
+                }
+            }
+            matchStates[id] = { goals: { home: m.goals.home, away: m.goals.away }, eventsCount: currentEventsCount };
+        });
+    } catch (e) { console.error("Error fetching live data", e); }
+}
+
+async function fetchHistory() {
+    try {
+        const res = await fetch("/api/history");
+        const data = await res.json();
+        historyData = Array.isArray(data) ? data : [];
+    } catch (e) {
+        console.error("Error fetching history", e);
+        historyData = [];
+    }
+}
+
+function updateStatsSummary() {
+    const summary = calculateStats();
+    const container = document.getElementById('stats-summary');
+    if (!container) return;
+
+    const countryLabel = selectedCountry === 'all' ? 'Tutte' : selectedCountry;
+    const bookmakerLabel = selectedBookmaker === 'all' ? 'Tutti i Book' : (allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker)?.name || 'Filtro');
+
+    container.innerHTML = `
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
             <span class="block text-2xl font-black mb-1">${summary.currentPortfolio.toFixed(2)}€</span>
             <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Portafoglio</span>
@@ -1455,136 +1451,136 @@ function setBookmaker(id, name) {
             <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">ROI | ${bookmakerLabel}</span>
         </div>
     `;
+}
+
+function calculateStats() {
+    const data = Array.isArray(historyData) ? historyData : [];
+
+    let pendingCount = 0; let winCount = 0; let lossCount = 0; let totalStake = 0; let netProfit = 0;
+    const startingPortfolio = 100;
+
+    // Global profit (ALWAYS based on ALL bets for portfolio)
+    let globalNetProfit = 0;
+    data.forEach(bet => {
+        const stake = parseFloat(bet.stake) || 0;
+        const odds = parseFloat(bet.odds) || 0;
+        const status = (bet.status || "").toLowerCase();
+        if (status === "won") globalNetProfit += stake * (odds - 1);
+        else if (status === "lost") globalNetProfit -= stake;
+    });
+
+    // Filtered stats for other blocks
+    const filteredHistory = data.filter(bet => {
+        const countryName = bet.country || bet.country_name || 'International';
+        const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
+        const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
+        return matchesCountry && matchesBookie;
+    });
+
+    filteredHistory.forEach(bet => {
+        const stake = parseFloat(bet.stake) || 0;
+        const odds = parseFloat(bet.odds) || 0;
+        const status = (bet.status || "").toLowerCase();
+
+        if (status === "pending") pendingCount++;
+        else if (status === "won") { winCount++; totalStake += stake; netProfit += stake * (odds - 1); }
+        else if (status === "lost") { lossCount++; totalStake += stake; netProfit -= stake; }
+    });
+
+    const liveCount = liveMatches.filter(m => {
+        const countryName = m.league.country || m.league.country_name;
+        const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
+        const matchesBookie = selectedBookmaker === 'all'
+            ? true
+            : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
+        return matchesCountry && matchesBookie;
+    }).length;
+
+    return {
+        pendingCount, winCount, lossCount, netProfit, liveCount,
+        roi: totalStake > 0 ? (netProfit / totalStake) * 100 : 0,
+        currentPortfolio: startingPortfolio + globalNetProfit
+    };
+}
+
+function renderDashboardMatches() {
+    const container = document.getElementById('live-matches-list');
+    if (!container) return;
+
+    // Debug filtering issues
+    console.log(`Live sync: ${liveMatches.length} matches found. Filters: Country=${selectedCountry}, Bookie=${selectedBookmaker}`);
+
+    container.innerHTML = '';
+
+    // 1. Extract Leagues for Filter (From visible live matches matching country/bookie)
+    // We want to filter leagues based on current country/bookie selection to avoid empty options
+    const finalMatches = liveMatches.filter(m => {
+        const league = m.league || {};
+        const countryName = league.country || league.country_name || '';
+        const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
+        const matchesBookie = selectedBookmaker === 'all'
+            ? true
+            : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
+        return matchesCountry && matchesBookie;
+    });
+
+    console.log(`Rendering ${finalMatches.length} bettable matches.`);
+
+    // Render Live Matches
+    if (finalMatches.length === 0 && liveMatches.length > 0) {
+        const noMatch = document.createElement('div');
+        noMatch.className = "glass p-8 rounded-[32px] text-center text-slate-500 font-bold uppercase tracking-widest italic";
+        noMatch.innerText = "Nessun match live per i filtri selezionati.";
+        container.appendChild(noMatch);
     }
 
-    function calculateStats() {
-        const data = Array.isArray(historyData) ? historyData : [];
+    finalMatches.forEach(m => {
+        const isHighlighted = pinnedMatches.has(m.fixture.id);
+        const card = document.createElement('div');
+        // Visual Highlight Effect: ring-2 ring-accent and shadow if pinned
+        card.className = `glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer relative overflow-hidden mb-6 ${isHighlighted ? 'pinned-match' : ''}`;
 
-        let pendingCount = 0; let winCount = 0; let lossCount = 0; let totalStake = 0; let netProfit = 0;
-        const startingPortfolio = 100;
+        // Link to match detail
+        const goToMatch = () => window.location.hash = `match/${m.fixture.id}`;
+        card.onclick = goToMatch;
 
-        // Global profit (ALWAYS based on ALL bets for portfolio)
-        let globalNetProfit = 0;
-        data.forEach(bet => {
-            const stake = parseFloat(bet.stake) || 0;
-            const odds = parseFloat(bet.odds) || 0;
-            const status = (bet.status || "").toLowerCase();
-            if (status === "won") globalNetProfit += stake * (odds - 1);
-            else if (status === "lost") globalNetProfit -= stake;
-        });
+        const homeName = m.teams.home.name;
+        const awayName = m.teams.away.name;
+        const scoreHome = m.goals.home ?? 0;
+        const scoreAway = m.goals.away ?? 0;
+        const elapsed = m.fixture.status.elapsed ?? 0;
+        const statusShort = m.fixture.status.short;
 
-        // Filtered stats for other blocks
-        const filteredHistory = data.filter(bet => {
-            const countryName = bet.country || bet.country_name || 'International';
-            const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
-            const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
-            return matchesCountry && matchesBookie;
-        });
+        let period = '';
+        if (['1H', 'HT', '2H', 'ET', 'P'].includes(statusShort)) period = statusShort;
+        else if (elapsed <= 45) period = '1H';
+        else period = '2H';
 
-        filteredHistory.forEach(bet => {
-            const stake = parseFloat(bet.stake) || 0;
-            const odds = parseFloat(bet.odds) || 0;
-            const status = (bet.status || "").toLowerCase();
-
-            if (status === "pending") pendingCount++;
-            else if (status === "won") { winCount++; totalStake += stake; netProfit += stake * (odds - 1); }
-            else if (status === "lost") { lossCount++; totalStake += stake; netProfit -= stake; }
-        });
-
-        const liveCount = liveMatches.filter(m => {
-            const countryName = m.league.country || m.league.country_name;
-            const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
-            const matchesBookie = selectedBookmaker === 'all'
-                ? true
-                : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
-            return matchesCountry && matchesBookie;
-        }).length;
-
-        return {
-            pendingCount, winCount, lossCount, netProfit, liveCount,
-            roi: totalStake > 0 ? (netProfit / totalStake) * 100 : 0,
-            currentPortfolio: startingPortfolio + globalNetProfit
-        };
-    }
-
-    function renderDashboardMatches() {
-        const container = document.getElementById('live-matches-list');
-        if (!container) return;
-
-        // Debug filtering issues
-        console.log(`Live sync: ${liveMatches.length} matches found. Filters: Country=${selectedCountry}, Bookie=${selectedBookmaker}`);
-
-        container.innerHTML = '';
-
-        // 1. Extract Leagues for Filter (From visible live matches matching country/bookie)
-        // We want to filter leagues based on current country/bookie selection to avoid empty options
-        const finalMatches = liveMatches.filter(m => {
-            const league = m.league || {};
-            const countryName = league.country || league.country_name || '';
-            const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
-            const matchesBookie = selectedBookmaker === 'all'
-                ? true
-                : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
-            return matchesCountry && matchesBookie;
-        });
-
-        console.log(`Rendering ${finalMatches.length} bettable matches.`);
-
-        // Render Live Matches
-        if (finalMatches.length === 0 && liveMatches.length > 0) {
-            const noMatch = document.createElement('div');
-            noMatch.className = "glass p-8 rounded-[32px] text-center text-slate-500 font-bold uppercase tracking-widest italic";
-            noMatch.innerText = "Nessun match live per i filtri selezionati.";
-            container.appendChild(noMatch);
-        }
-
-        finalMatches.forEach(m => {
-            const isHighlighted = pinnedMatches.has(m.fixture.id);
-            const card = document.createElement('div');
-            // Visual Highlight Effect: ring-2 ring-accent and shadow if pinned
-            card.className = `glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer relative overflow-hidden mb-6 ${isHighlighted ? 'pinned-match' : ''}`;
-
-            // Link to match detail
-            const goToMatch = () => window.location.hash = `match/${m.fixture.id}`;
-            card.onclick = goToMatch;
-
-            const homeName = m.teams.home.name;
-            const awayName = m.teams.away.name;
-            const scoreHome = m.goals.home ?? 0;
-            const scoreAway = m.goals.away ?? 0;
-            const elapsed = m.fixture.status.elapsed ?? 0;
-            const statusShort = m.fixture.status.short;
-
-            let period = '';
-            if (['1H', 'HT', '2H', 'ET', 'P'].includes(statusShort)) period = statusShort;
-            else if (elapsed <= 45) period = '1H';
-            else period = '2H';
-
-            // Event Timeline Logic
-            const events = (m.events || []).sort((a, b) => b.time.elapsed - a.time.elapsed).slice(0, 3); // Last 3 events
-            let timelineHtml = '';
-            if (events.length > 0) {
-                timelineHtml = `<div class="flex items-center gap-3 overflow-x-auto no-scrollbar mask-linear-fade pr-4">
+        // Event Timeline Logic
+        const events = (m.events || []).sort((a, b) => b.time.elapsed - a.time.elapsed).slice(0, 3); // Last 3 events
+        let timelineHtml = '';
+        if (events.length > 0) {
+            timelineHtml = `<div class="flex items-center gap-3 overflow-x-auto no-scrollbar mask-linear-fade pr-4">
                 ${events.map(ev => {
-                    let icon = 'info'; let color = 'slate-500';
-                    if (ev.type === 'Goal') { icon = 'trophy'; color = 'text-accent'; }
-                    else if (ev.type === 'Card' && ev.detail === 'Yellow Card') { icon = 'alert-triangle'; color = 'text-warning'; }
-                    else if (ev.type === 'Card') { icon = 'alert-octagon'; color = 'text-danger'; }
+                let icon = 'info'; let color = 'slate-500';
+                if (ev.type === 'Goal') { icon = 'trophy'; color = 'text-accent'; }
+                else if (ev.type === 'Card' && ev.detail === 'Yellow Card') { icon = 'alert-triangle'; color = 'text-warning'; }
+                else if (ev.type === 'Card') { icon = 'alert-octagon'; color = 'text-danger'; }
 
-                    return `
+                return `
                         <div class="flex items-center gap-1.5 shrink-0 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
                             <span class="text-[9px] font-black text-slate-400">${ev.time.elapsed}'</span>
                             <i data-lucide="${icon}" class="w-3 h-3 ${color}"></i>
                             <span class="text-[9px] font-bold text-white uppercase truncate max-w-[80px] hover:text-accent cursor-pointer transition-colors" onclick="event.stopPropagation(); window.location.hash='player/${ev.player.id}'">${ev.player.name}</span>
                         </div>
                     `;
-                }).join('')}
+            }).join('')}
             </div>`;
-            } else {
-                timelineHtml = '<div class="text-[9px] font-bold text-slate-600 italic">Nessun evento recente</div>';
-            }
+        } else {
+            timelineHtml = '<div class="text-[9px] font-bold text-slate-600 italic">Nessun evento recente</div>';
+        }
 
-            card.innerHTML = `
+        card.innerHTML = `
             <!-- Header: League + Country -->
             <div class="flex items-center justify-between mb-8 border-b border-white/5 pb-4">
                 <div class="flex items-center gap-3 opacity-80">
@@ -1656,57 +1652,57 @@ function setBookmaker(id, name) {
                 </div>
             </div>
         `;
-            container.appendChild(card);
+        container.appendChild(card);
+    });
+
+    // Always show upcoming matches below live matches
+    fetchAndRenderUpcoming(container, 20);
+
+    if (window.lucide) lucide.createIcons();
+}
+
+
+async function fetchAndRenderUpcoming(container, limit) {
+    try {
+        const res = await fetch('/api/upcoming');
+        const data = await res.json();
+
+        if (!data.response || !data.response.length) {
+            if (container.children.length === 0) {
+                container.innerHTML = '<div class="glass p-10 rounded-[32px] text-center text-slate-500 font-black italic uppercase tracking-widest">Nessun evento disponibile</div>';
+            }
+            return;
+        }
+
+        const headerId = 'upcoming-header-' + Date.now();
+        const header = document.createElement('div');
+        header.className = "col-span-full border-t border-white/5 my-8 pt-4 text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-4";
+        header.innerHTML = '<div class="h-px bg-white/10 flex-1"></div>PROSSIME 24 ORE<div class="h-px bg-white/10 flex-1"></div>';
+        container.appendChild(header);
+
+        const filtered = data.response.filter(m => {
+            const countryName = m.country_name || 'International';
+            const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
+            const matchesBookie = selectedBookmaker === 'all'
+                ? true
+                : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
+            return matchesCountry && matchesBookie;
         });
 
-        // Always show upcoming matches below live matches
-        fetchAndRenderUpcoming(container, 20);
-
+        filtered.slice(0, limit).forEach(m => {
+            const div = document.createElement('div');
+            div.innerHTML = upcomingMatchCardHtml(m);
+            if (div.firstElementChild) container.appendChild(div.firstElementChild);
+        });
         if (window.lucide) lucide.createIcons();
-    }
+    } catch (e) { console.error("Error fetching upcoming", e); }
+}
 
+function upcomingMatchCardHtml(m) {
+    const d = new Date(m.date);
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    async function fetchAndRenderUpcoming(container, limit) {
-        try {
-            const res = await fetch('/api/upcoming');
-            const data = await res.json();
-
-            if (!data.response || !data.response.length) {
-                if (container.children.length === 0) {
-                    container.innerHTML = '<div class="glass p-10 rounded-[32px] text-center text-slate-500 font-black italic uppercase tracking-widest">Nessun evento disponibile</div>';
-                }
-                return;
-            }
-
-            const headerId = 'upcoming-header-' + Date.now();
-            const header = document.createElement('div');
-            header.className = "col-span-full border-t border-white/5 my-8 pt-4 text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-4";
-            header.innerHTML = '<div class="h-px bg-white/10 flex-1"></div>PROSSIME 24 ORE<div class="h-px bg-white/10 flex-1"></div>';
-            container.appendChild(header);
-
-            const filtered = data.response.filter(m => {
-                const countryName = m.country_name || 'International';
-                const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
-                const matchesBookie = selectedBookmaker === 'all'
-                    ? true
-                    : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
-                return matchesCountry && matchesBookie;
-            });
-
-            filtered.slice(0, limit).forEach(m => {
-                const div = document.createElement('div');
-                div.innerHTML = upcomingMatchCardHtml(m);
-                if (div.firstElementChild) container.appendChild(div.firstElementChild);
-            });
-            if (window.lucide) lucide.createIcons();
-        } catch (e) { console.error("Error fetching upcoming", e); }
-    }
-
-    function upcomingMatchCardHtml(m) {
-        const d = new Date(m.date);
-        const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-        return `
+    return `
     <div onclick="window.location.hash='match/${m.fixture_id}'" class="glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all cursor-pointer group relative overflow-hidden h-full">
         <div class="absolute top-0 right-0 p-4 opacity-50"><i data-lucide="calendar-clock" class="w-4 h-4 text-slate-500"></i></div>
         <div class="flex items-center gap-2 mb-4">
@@ -1731,75 +1727,79 @@ function setBookmaker(id, name) {
         </div>
     </div>
     `;
+}
+
+function renderDashboardHistory() {
+    const container = document.getElementById('dashboard-history');
+    if (!container) return;
+
+    if (historyData.length === 0) {
+        container.innerHTML = '<div class="p-10 text-center text-slate-500 font-bold text-xs">Nessuna attività recente.</div>';
+        return;
     }
 
-    function renderDashboardHistory() {
-        const container = document.getElementById('dashboard-history');
-        if (!container) return;
-
-        if (historyData.length === 0) {
-            container.innerHTML = '<div class="p-10 text-center text-slate-500 font-bold text-xs">Nessuna attività recente.</div>';
-            return;
-        }
-
-        historyData.slice(0, 5).forEach(h => {
-            const item = document.createElement('div');
-            item.className = "p-6 hover:bg-white/5 cursor-pointer transition-all";
-            item.onclick = () => showBetDetails(h);
-            item.innerHTML = `
+    historyData.slice(0, 5).forEach(h => {
+        const item = document.createElement('div');
+        item.className = "p-6 hover:bg-white/5 cursor-pointer transition-all";
+        item.onclick = () => showBetDetails(h);
+        item.innerHTML = `
             <div class="flex justify-between items-start mb-1">
                 <span class="font-black text-xs uppercase tracking-tight italic truncate max-w-[120px] text-white">${h.match_name}</span>
                 <span class="text-[9px] font-black uppercase italic ${h.status === 'won' ? 'text-success' : h.status === 'lost' ? 'text-danger' : 'text-warning'}">${h.status}</span>
             </div>
             <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">${h.market} @ ${h.odds}</div>
         `;
-            container.appendChild(item);
-        });
-    }
+        container.appendChild(item);
+    });
+}
 
-    async function showIntelligenceInPage(id) {
-        const container = document.getElementById('match-center-content');
-        try {
-            const res = await fetch(`/api/predictions/${id}`);
-            const data = await res.json();
+async function renderMatchAnalysis(id) {
+    const container = document.getElementById('match-tab-content'); // Use correct container
+    if (!container) return;
 
-            if (data.error) {
-                container.innerHTML = `<div class="glass p-10 text-center font-bold text-slate-500 uppercase">${data.error}</div>`;
-                return;
-            }
+    try {
+        const res = await fetch(`/api/predictions/${id}`);
+        const data = await res.json();
 
-            const comp = data.comparison || {};
-            const perc = data.percent || {};
-            const metrics = [
-                { label: 'Forma', key: 'form' }, { label: 'Attacco', key: 'attaching' },
-                { label: 'Difesa', key: 'defensive' }, { label: 'Probabilità Gol', key: 'poisson_distribution' },
-                { label: 'H2H', key: 'h2h' }, { label: 'Gol', key: 'goals' }
-            ];
+        if (data.error) {
+            container.innerHTML = `<div class="glass p-10 text-center font-black text-slate-500 uppercase italic">${data.error}</div>`;
+            return;
+        }
 
-            let metricsHtml = metrics.map(m => {
-                const val = comp[m.key] || { home: '50%', away: '50%' };
-                const h = parseInt(val.home); const a = parseInt(val.away);
-                return `
-                <div class="space-y-2">
+        const perc = data.percent || {};
+        const comp = data.comparison || {};
+        const metrics = [
+            { label: 'Forma', key: 'form' }, { label: 'Attacco', key: 'attaching' },
+            { label: 'Difesa', key: 'defensive' }, { label: 'Probabilità Gol', key: 'poisson_distribution' }
+        ];
+
+        let metricsHtml = metrics.map(m => {
+            const val = comp[m.key] || { home: '50%', away: '50%' };
+            const h = parseInt(val.home); const a = parseInt(val.away);
+            return `
+                <div class="space-y-2 mb-6">
                     <div class="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-500">
                         <span>${h}%</span> <span class="text-white italic">${m.label}</span> <span>${a}%</span>
                     </div>
-                    <div class="h-2 bg-white/5 rounded-full overflow-hidden flex">
+                    <div class="h-2 bg-slate-800 rounded-full overflow-hidden flex">
                         <div class="h-full bg-accent" style="width: ${h}%"></div>
-                        <div class="h-full bg-success/50" style="width: ${a}%"></div>
+                        <div class="h-full bg-slate-600" style="width: ${a}%"></div>
                     </div>
                 </div>
             `;
-            }).join('');
+        }).join('');
 
-            container.innerHTML = `
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        container.innerHTML = `
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
                 <div class="space-y-8">
-                    <div class="glass p-10 rounded-[48px] border-white/5 bg-accent/5">
-                        <div class="text-[10px] font-black text-accent uppercase tracking-[0.2em] mb-4 italic">Algorithmic Advice</div>
-                        <div class="text-4xl font-black text-white italic tracking-tight uppercase leading-tight mb-8">${data.advice}</div>
-
-                        <div class="grid grid-cols-3 gap-6">
+                     <div class="glass p-10 rounded-[48px] border-white/5 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 p-10 opacity-5">
+                            <i data-lucide="brain-circuit" class="w-32 h-32 text-accent"></i>
+                        </div>
+                        <div class="text-[10px] font-black text-accent uppercase tracking-[0.3em] mb-4 italic">AI Match Intelligence</div>
+                        <h3 class="text-4xl font-black text-white italic uppercase tracking-tighter leading-none mb-10">${data.advice}</h3>
+                        
+                        <div class="grid grid-cols-3 gap-4">
                             <div class="bg-white/5 p-6 rounded-3xl border border-white/5 text-center">
                                 <span class="text-[9px] font-black text-slate-500 uppercase block mb-1">Casa</span>
                                 <span class="text-3xl font-black text-white tabular-nums">${perc.home}</span>
@@ -1826,25 +1826,27 @@ function setBookmaker(id, name) {
                 </div>
             </div>
         `;
-        } catch (e) { container.innerHTML = "Errore durante il caricamento delle statistiche."; }
-    }
+        if (window.lucide) lucide.createIcons();
+    } catch (e) { container.innerHTML = "Errore durante il caricamento delle statistiche."; }
+}
+window.renderMatchAnalysis = renderMatchAnalysis;
 
-    async function showBetDetails(bet) {
-        // Reuse existing modal logic
-        const modal = document.getElementById("analysis-modal");
-        const body = document.getElementById("modal-body");
-        const btn = document.getElementById("place-bet-btn");
-        const confInd = document.getElementById('confidence-indicator');
-        const footerActions = document.getElementById('modal-footer-actions');
+async function showBetDetails(bet) {
+    // Reuse existing modal logic
+    const modal = document.getElementById("analysis-modal");
+    const body = document.getElementById("modal-body");
+    const btn = document.getElementById("place-bet-btn");
+    const confInd = document.getElementById('confidence-indicator');
+    const footerActions = document.getElementById('modal-footer-actions');
 
-        modal.classList.remove('hidden');
-        if (footerActions) footerActions.classList.add('hidden');
-        btn.classList.add('hidden');
-        confInd.classList.add('hidden');
+    modal.classList.remove('hidden');
+    if (footerActions) footerActions.classList.add('hidden');
+    btn.classList.add('hidden');
+    confInd.classList.add('hidden');
 
-        const profit = bet.status === "won" ? (parseFloat(bet.stake) * (parseFloat(bet.odds) - 1)) : (bet.status === "lost" ? -parseFloat(bet.stake) : 0);
+    const profit = bet.status === "won" ? (parseFloat(bet.stake) * (parseFloat(bet.odds) - 1)) : (bet.status === "lost" ? -parseFloat(bet.stake) : 0);
 
-        body.innerHTML = `
+    body.innerHTML = `
         <div class="mb-10">
             <h2 class="text-4xl font-black italic uppercase tracking-tighter text-white mb-2">${bet.match_name}</h2>
             <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">${new Date(bet.timestamp).toLocaleString()}</div>
@@ -1887,63 +1889,63 @@ function setBookmaker(id, name) {
             </button>
         </div>
     `;
-        if (window.lucide) lucide.createIcons();
-    }
+    if (window.lucide) lucide.createIcons();
+}
 
-    async function deleteBet(id) {
-        if (!confirm('Sei sicuro di voler eliminare questa scommessa?')) return;
-        try {
-            const res = await fetch(`/api/bets/delete/${id}`);
-            const result = await res.json();
-            if (result.status === 'success') {
-                closeModal();
-                await fetchHistory();
-                if (currentView === 'tracker') renderTracker();
-                else if (currentView === 'dashboard') updateStatsSummary();
-            }
-        } catch (e) { console.error("Error deleting bet", e); }
-    }
+async function deleteBet(id) {
+    if (!confirm('Sei sicuro di voler eliminare questa scommessa?')) return;
+    try {
+        const res = await fetch(`/api/bets/delete/${id}`);
+        const result = await res.json();
+        if (result.status === 'success') {
+            closeModal();
+            await fetchHistory();
+            if (currentView === 'tracker') renderTracker();
+            else if (currentView === 'dashboard') updateStatsSummary();
+        }
+    } catch (e) { console.error("Error deleting bet", e); }
+}
 
-    async function deduplicateBets() {
-        try {
-            const res = await fetch('/api/bets/deduplicate');
-            const result = await res.json();
-            if (result.status === 'success') {
-                await fetchHistory();
-                if (currentView === 'tracker') renderTracker();
-                else if (currentView === 'dashboard') updateStatsSummary();
-            }
-        } catch (e) { console.error("Error deduplicating bets", e); }
-    }
+async function deduplicateBets() {
+    try {
+        const res = await fetch('/api/bets/deduplicate');
+        const result = await res.json();
+        if (result.status === 'success') {
+            await fetchHistory();
+            if (currentView === 'tracker') renderTracker();
+            else if (currentView === 'dashboard') updateStatsSummary();
+        }
+    } catch (e) { console.error("Error deduplicating bets", e); }
+}
 
-    async function analyzeMatch(id) {
-        // Reuse existing modal logic but adapted
-        const modal = document.getElementById('analysis-modal');
-        const body = document.getElementById('modal-body');
-        const btn = document.getElementById('place-bet-btn');
-        const confInd = document.getElementById('confidence-indicator');
-        const confVal = document.getElementById('confidence-val');
-        const confBar = document.getElementById('confidence-bar');
-        const footerActions = document.getElementById('modal-footer-actions');
+async function analyzeMatch(id) {
+    // Reuse existing modal logic but adapted
+    const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    const btn = document.getElementById('place-bet-btn');
+    const confInd = document.getElementById('confidence-indicator');
+    const confVal = document.getElementById('confidence-val');
+    const confBar = document.getElementById('confidence-bar');
+    const footerActions = document.getElementById('modal-footer-actions');
 
-        if (footerActions) footerActions.classList.remove('hidden');
-        modal.classList.remove('hidden');
-        body.innerHTML = '<div class="text-center py-20"><i data-lucide="loader-2" class="w-12 h-12 text-accent rotator mx-auto mb-4"></i><p class="font-black uppercase italic text-xs tracking-widest">Gemini AI Analysis in progress...</p></div>';
-        btn.classList.add('hidden');
-        confInd.classList.add('hidden');
-        if (window.lucide) lucide.createIcons();
+    if (footerActions) footerActions.classList.remove('hidden');
+    modal.classList.remove('hidden');
+    body.innerHTML = '<div class="text-center py-20"><i data-lucide="loader-2" class="w-12 h-12 text-accent rotator mx-auto mb-4"></i><p class="font-black uppercase italic text-xs tracking-widest">Gemini AI Analysis in progress...</p></div>';
+    btn.classList.add('hidden');
+    confInd.classList.add('hidden');
+    if (window.lucide) lucide.createIcons();
 
-        try {
-            const res = await fetch(`/api/analyze/${id}`);
-            const data = await res.json();
-            if (data.error) { body.innerHTML = `<div class="text-danger font-black text-center py-20 uppercase italic">${data.error}</div>`; return; }
+    try {
+        const res = await fetch(`/api/analyze/${id}`);
+        const data = await res.json();
+        if (data.error) { body.innerHTML = `<div class="text-danger font-black text-center py-20 uppercase italic">${data.error}</div>`; return; }
 
-            const prediction = data.prediction;
-            let betData = null; let displayHtml = prediction;
-            const jsonMatch = prediction.match(/```json\n?([\s\S]*?)\n?```/i);
-            if (jsonMatch) { try { betData = JSON.parse(jsonMatch[1]); displayHtml = prediction.replace(/```json[\s\S]*?```/i, ''); } catch (e) { } }
+        const prediction = data.prediction;
+        let betData = null; let displayHtml = prediction;
+        const jsonMatch = prediction.match(/```json\n?([\s\S]*?)\n?```/i);
+        if (jsonMatch) { try { betData = JSON.parse(jsonMatch[1]); displayHtml = prediction.replace(/```json[\s\S]*?```/i, ''); } catch (e) { } }
 
-            body.innerHTML = `
+        body.innerHTML = `
             <div class="max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
                 <div class="text-slate-400 leading-relaxed font-medium mb-10 text-sm italic">${displayHtml}</div>
                 ${betData ? `
@@ -1975,60 +1977,60 @@ function setBookmaker(id, name) {
                 ` : '<div class="bg-warning/10 p-6 rounded-3xl border border-warning/20 text-warning font-black uppercase italic text-xs">AI Confidence too low for automatic betting.</div>'}
             </div>
         `;
-            if (betData) {
-                btn.classList.remove('hidden');
-                btn.onclick = () => placeBet(id, data.match, betData);
-                if (betData.confidence) {
-                    confInd.classList.remove('hidden');
-                    confVal.textContent = betData.confidence + '%';
-                    confBar.style.width = betData.confidence + '%';
-                }
+        if (betData) {
+            btn.classList.remove('hidden');
+            btn.onclick = () => placeBet(id, data.match, betData);
+            if (betData.confidence) {
+                confInd.classList.remove('hidden');
+                confVal.textContent = betData.confidence + '%';
+                confBar.style.width = betData.confidence + '%';
             }
-            if (window.lucide) lucide.createIcons();
-        } catch (e) { body.innerHTML = "Errore durante l'analisi."; }
-    }
+        }
+        if (window.lucide) lucide.createIcons();
+    } catch (e) { body.innerHTML = "Errore durante l'analisi."; }
+}
 
-    async function placeBet(fixture_id, match, betData) {
-        try {
-            const matchName = typeof match === 'string' ? match : `${match.teams.home.name} vs ${match.teams.away.name}`;
+async function placeBet(fixture_id, match, betData) {
+    try {
+        const matchName = typeof match === 'string' ? match : `${match.teams.home.name} vs ${match.teams.away.name}`;
 
-            let payload = { fixture_id, match: matchName, ...betData };
-            if (selectedBookmaker !== 'all') {
-                payload.bookmaker_id = parseInt(selectedBookmaker);
-                const bookie = allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker);
-                if (bookie) payload.bookmaker_name = bookie.name;
-            }
+        let payload = { fixture_id, match: matchName, ...betData };
+        if (selectedBookmaker !== 'all') {
+            payload.bookmaker_id = parseInt(selectedBookmaker);
+            const bookie = allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker);
+            if (bookie) payload.bookmaker_name = bookie.name;
+        }
 
-            const res = await fetch('/api/place_bet', {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            const result = await res.json();
-            if (result.status === 'success') { closeModal(); fetchHistory(); if (currentView === 'dashboard') updateStatsSummary(); }
-        } catch (e) { alert("Errore nell'invio della scommessa."); }
-    }
-
-    function closeModal() { document.getElementById('analysis-modal').classList.add('hidden'); }
-
-    // --- TRACKER FILTERS ---
-    let trackerStatusFilter = 'all';
-
-    function setTrackerFilter(status) {
-        trackerStatusFilter = status;
-        document.querySelectorAll('.tracker-filter-btn').forEach(btn => {
-            if (btn.dataset.status === status) {
-                btn.classList.add('bg-accent', 'text-white');
-                btn.classList.remove('bg-white/5', 'text-slate-500');
-            } else {
-                btn.classList.remove('bg-accent', 'text-white');
-                btn.classList.add('bg-white/5', 'text-slate-500');
-            }
+        const res = await fetch('/api/place_bet', {
+            method: 'POST',
+            body: JSON.stringify(payload)
         });
-        renderFullHistory();
-    }
+        const result = await res.json();
+        if (result.status === 'success') { closeModal(); fetchHistory(); if (currentView === 'dashboard') updateStatsSummary(); }
+    } catch (e) { alert("Errore nell'invio della scommessa."); }
+}
 
-    async function renderTracker() {
-        viewContainer.innerHTML = `
+function closeModal() { document.getElementById('analysis-modal').classList.add('hidden'); }
+
+// --- TRACKER FILTERS ---
+let trackerStatusFilter = 'all';
+
+function setTrackerFilter(status) {
+    trackerStatusFilter = status;
+    document.querySelectorAll('.tracker-filter-btn').forEach(btn => {
+        if (btn.dataset.status === status) {
+            btn.classList.add('bg-accent', 'text-white');
+            btn.classList.remove('bg-white/5', 'text-slate-500');
+        } else {
+            btn.classList.remove('bg-accent', 'text-white');
+            btn.classList.add('bg-white/5', 'text-slate-500');
+        }
+    });
+    renderFullHistory();
+}
+
+async function renderTracker() {
+    viewContainer.innerHTML = `
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10" id="tracker-stats-summary"></div>
         
         <div class="flex gap-4 mb-8 overflow-x-auto pb-2 no-scrollbar">
@@ -2041,17 +2043,17 @@ function setBookmaker(id, name) {
         <div class="glass rounded-[40px] border-white/5 overflow-hidden divide-y divide-white/5" id="tracker-history"></div>
     `;
 
-        await fetchHistory();
-        updateTrackerSummary();
-        renderFullHistory();
-    }
+    await fetchHistory();
+    updateTrackerSummary();
+    renderFullHistory();
+}
 
-    function updateTrackerSummary() {
-        const summary = calculateStats();
-        const container = document.getElementById('tracker-stats-summary');
-        if (!container) return;
+function updateTrackerSummary() {
+    const summary = calculateStats();
+    const container = document.getElementById('tracker-stats-summary');
+    if (!container) return;
 
-        container.innerHTML = `
+    container.innerHTML = `
         <div class="glass p-8 rounded-[40px] border-white/5">
             <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Net Balance</span>
             <div class="text-4xl font-black italic tracking-tighter ${summary.netProfit >= 0 ? 'text-success' : 'text-danger'}">${summary.netProfit >= 0 ? '+' : ''}${summary.netProfit.toFixed(2)}€</div>
@@ -2069,104 +2071,104 @@ function setBookmaker(id, name) {
             <div class="text-4xl font-black italic tracking-tighter text-white">${summary.currentPortfolio.toFixed(2)}€</div>
         </div>
     `;
+}
+
+// --- SHARED DATA FETCHERS & UPDATERS ---
+
+async function fetchUsage() {
+    try {
+        const res = await fetch('/api/usage');
+        const data = await res.json();
+        if (data) {
+            const usageVal = document.getElementById('usage-val');
+            const limitVal = document.getElementById('limit-val');
+            if (usageVal) usageVal.textContent = data.requests_used || 0;
+            if (limitVal) limitVal.textContent = data.requests_limit || 75000;
+        }
+    } catch (e) { console.error("Error fetching API usage", e); }
+}
+
+// --- GLOBAL INIT ---
+
+window.addEventListener('hashchange', handleRouting);
+
+async function init() {
+    await fetchFilterData();
+    // Update header labels from localStorage
+    const label = document.getElementById('selected-country-name');
+    const flagPlaceholder = document.getElementById('selected-country-flag');
+
+    if (selectedCountry === 'all') {
+        label.textContent = 'Tutte le Nazioni';
+        flagPlaceholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4 text-accent"></i>';
+    } else {
+        const c = allFilterData.countries.find(x => x.name === selectedCountry);
+        label.textContent = selectedCountry;
+        if (c && c.flag) {
+            flagPlaceholder.innerHTML = `<img src="${c.flag}" class="w-5 h-5 rounded-sm object-cover">`;
+        }
     }
 
-    // --- SHARED DATA FETCHERS & UPDATERS ---
-
-    async function fetchUsage() {
-        try {
-            const res = await fetch('/api/usage');
-            const data = await res.json();
-            if (data) {
-                const usageVal = document.getElementById('usage-val');
-                const limitVal = document.getElementById('limit-val');
-                if (usageVal) usageVal.textContent = data.requests_used || 0;
-                if (limitVal) limitVal.textContent = data.requests_limit || 75000;
-            }
-        } catch (e) { console.error("Error fetching API usage", e); }
+    if (selectedBookmaker !== 'all') {
+        const bookie = allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker);
+        if (bookie) document.getElementById('selected-bookmaker-name').textContent = bookie.name;
     }
 
-    // --- GLOBAL INIT ---
+    if (window.lucide) lucide.createIcons();
+    await fetchUsage();
+    await fetchHistory();
+    handleRouting();
 
-    window.addEventListener('hashchange', handleRouting);
-
-    async function init() {
-        await fetchFilterData();
-        // Update header labels from localStorage
-        const label = document.getElementById('selected-country-name');
-        const flagPlaceholder = document.getElementById('selected-country-flag');
-
-        if (selectedCountry === 'all') {
-            label.textContent = 'Tutte le Nazioni';
-            flagPlaceholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4 text-accent"></i>';
-        } else {
-            const c = allFilterData.countries.find(x => x.name === selectedCountry);
-            label.textContent = selectedCountry;
-            if (c && c.flag) {
-                flagPlaceholder.innerHTML = `<img src="${c.flag}" class="w-5 h-5 rounded-sm object-cover">`;
-            }
+    // Auto-refreshers
+    setInterval(fetchUsage, 60000);
+    setInterval(fetchHistory, 60000);
+    setInterval(async () => {
+        if (currentView === 'dashboard') {
+            await fetchLive();
+            updateStatsSummary();
+            renderDashboardMatches();
         }
+    }, 60000);
+}
 
-        if (selectedBookmaker !== 'all') {
-            const bookie = allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker);
-            if (bookie) document.getElementById('selected-bookmaker-name').textContent = bookie.name;
-        }
-
+// Theme Toggle
+const themeToggle = document.getElementById('theme-toggle');
+const htmlElement = document.documentElement;
+if (themeToggle) {
+    themeToggle.onclick = () => {
+        const isDark = htmlElement.classList.toggle('dark');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
         if (window.lucide) lucide.createIcons();
-        await fetchUsage();
-        await fetchHistory();
-        handleRouting();
+    };
+}
+if (localStorage.getItem('theme') === 'light') htmlElement.classList.remove('dark');
 
-        // Auto-refreshers
-        setInterval(fetchUsage, 60000);
-        setInterval(fetchHistory, 60000);
-        setInterval(async () => {
-            if (currentView === 'dashboard') {
-                await fetchLive();
-                updateStatsSummary();
-                renderDashboardMatches();
-            }
-        }, 60000);
+init();
+
+
+function renderFullHistory() {
+    const container = document.getElementById('tracker-history');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const data = Array.isArray(historyData) ? historyData : [];
+    const filtered = data.filter(bet => {
+        const matchesCountry = selectedCountry === 'all' || bet.country === selectedCountry;
+        const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
+        const matchesStatus = trackerStatusFilter === 'all' || (bet.status || '').toLowerCase().trim() === trackerStatusFilter;
+        return matchesCountry && matchesBookie && matchesStatus;
+    });
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="p-20 text-center text-slate-500 font-black uppercase italic">Nessuna scommessa trovata per i filtri selezionati.</div>';
+        return;
     }
 
-    // Theme Toggle
-    const themeToggle = document.getElementById('theme-toggle');
-    const htmlElement = document.documentElement;
-    if (themeToggle) {
-        themeToggle.onclick = () => {
-            const isDark = htmlElement.classList.toggle('dark');
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-            if (window.lucide) lucide.createIcons();
-        };
-    }
-    if (localStorage.getItem('theme') === 'light') htmlElement.classList.remove('dark');
-
-    init();
-
-
-    function renderFullHistory() {
-        const container = document.getElementById('tracker-history');
-        if (!container) return;
-        container.innerHTML = '';
-
-        const data = Array.isArray(historyData) ? historyData : [];
-        const filtered = data.filter(bet => {
-            const matchesCountry = selectedCountry === 'all' || bet.country === selectedCountry;
-            const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
-            const matchesStatus = trackerStatusFilter === 'all' || (bet.status || '').toLowerCase().trim() === trackerStatusFilter;
-            return matchesCountry && matchesBookie && matchesStatus;
-        });
-
-        if (filtered.length === 0) {
-            container.innerHTML = '<div class="p-20 text-center text-slate-500 font-black uppercase italic">Nessuna scommessa trovata per i filtri selezionati.</div>';
-            return;
-        }
-
-        filtered.forEach(h => {
-            const item = document.createElement('div');
-            item.className = "p-8 hover:bg-white/5 cursor-pointer transition-all flex items-center justify-between group";
-            item.onclick = () => showBetDetails(h);
-            item.innerHTML = `
+    filtered.forEach(h => {
+        const item = document.createElement('div');
+        item.className = "p-8 hover:bg-white/5 cursor-pointer transition-all flex items-center justify-between group";
+        item.onclick = () => showBetDetails(h);
+        item.innerHTML = `
             <div class="flex items-center gap-6">
                 <div class="w-12 h-12 rounded-2xl flex items-center justify-center border ${h.status === 'won' ? 'border-success bg-success/10 text-success' : h.status === 'lost' ? 'border-danger bg-danger/10 text-danger' : 'border-warning bg-warning/10 text-warning'}">
                     <i data-lucide="${h.status === 'won' ? 'check-circle' : h.status === 'lost' ? 'x-circle' : 'clock'}" class="w-6 h-6"></i>
@@ -2183,42 +2185,42 @@ function setBookmaker(id, name) {
                 <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Puntata: ${h.stake}€</div>
             </div>
         `;
-            container.appendChild(item);
-        });
-        if (window.lucide) lucide.createIcons();
-    }
+        container.appendChild(item);
+    });
+    if (window.lucide) lucide.createIcons();
+}
 
-    // --- NEW MODAL HELPERS ---
+// --- NEW MODAL HELPERS ---
 
-    async function openLineupModal(fixtureId, teamId) {
-        const modal = document.getElementById('analysis-modal');
-        const body = document.getElementById('modal-body');
-        const btn = document.getElementById('place-bet-btn');
-        const footer = document.getElementById('modal-footer-actions');
+async function openLineupModal(fixtureId, teamId) {
+    const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    const btn = document.getElementById('place-bet-btn');
+    const footer = document.getElementById('modal-footer-actions');
 
-        modal.classList.remove('hidden');
-        if (footer) footer.classList.add('hidden');
-        if (btn) btn.classList.add('hidden');
+    modal.classList.remove('hidden');
+    if (footer) footer.classList.add('hidden');
+    if (btn) btn.classList.add('hidden');
 
-        body.innerHTML = '<div class="text-center py-20"><i data-lucide="loader-2" class="w-12 h-12 text-accent rotator mx-auto mb-4"></i><p class="font-black uppercase italic text-xs tracking-widest text-slate-500">Loading Lineups...</p></div>';
-        if (window.lucide) lucide.createIcons();
+    body.innerHTML = '<div class="text-center py-20"><i data-lucide="loader-2" class="w-12 h-12 text-accent rotator mx-auto mb-4"></i><p class="font-black uppercase italic text-xs tracking-widest text-slate-500">Loading Lineups...</p></div>';
+    if (window.lucide) lucide.createIcons();
 
-        try {
-            const res = await fetch(`/api/match/${fixtureId}`);
-            const data = await res.json();
+    try {
+        const res = await fetch(`/api/match/${fixtureId}`);
+        const data = await res.json();
 
-            if (data.error || !data.lineups || !data.lineups.length) {
-                body.innerHTML = '<div class="glass p-10 text-center font-bold text-slate-500 uppercase italic">Formazioni non disponibili.</div>';
-                return;
-            }
+        if (data.error || !data.lineups || !data.lineups.length) {
+            body.innerHTML = '<div class="glass p-10 text-center font-bold text-slate-500 uppercase italic">Formazioni non disponibili.</div>';
+            return;
+        }
 
-            const lineup = data.lineups.find(l => l.team_id == teamId) || data.lineups[0];
-            const startXI = typeof lineup.start_xi_json === 'string' ? JSON.parse(lineup.start_xi_json) : (lineup.start_xi_json || []);
+        const lineup = data.lineups.find(l => l.team_id == teamId) || data.lineups[0];
+        const startXI = typeof lineup.start_xi_json === 'string' ? JSON.parse(lineup.start_xi_json) : (lineup.start_xi_json || []);
 
-            // Coach info if available
-            let coachHtml = '';
-            if (lineup.coach_name) {
-                coachHtml = `
+        // Coach info if available
+        let coachHtml = '';
+        if (lineup.coach_name) {
+            coachHtml = `
                 <div class="flex items-center gap-4 mb-6 p-4 rounded-2xl bg-white/5 border border-white/5">
                     <img src="${lineup.coach_photo || ''}" class="w-10 h-10 rounded-full bg-slate-800 object-cover" onerror="this.src='https://media.api-sports.io/football/players/1.png'">
                     <div>
@@ -2227,9 +2229,9 @@ function setBookmaker(id, name) {
                     </div>
                 </div>
             `;
-            }
+        }
 
-            body.innerHTML = `
+        body.innerHTML = `
             <div class="mb-8 flex items-center justify-between">
                 <div class="flex items-center gap-4">
                     <img src="${lineup.team_logo}" class="w-12 h-12 object-contain">
@@ -2261,46 +2263,46 @@ function setBookmaker(id, name) {
                 Chiudi
             </button>
         `;
-        } catch (e) {
-            console.error(e);
-            body.innerHTML = '<div class="text-danger font-bold text-center py-10 uppercase italic">Errore caricamento formazioni.</div>';
-        }
+    } catch (e) {
+        console.error(e);
+        body.innerHTML = '<div class="text-danger font-bold text-center py-10 uppercase italic">Errore caricamento formazioni.</div>';
     }
+}
 
-    async function openStatsModal(fixtureId) {
-        const modal = document.getElementById('analysis-modal');
-        const body = document.getElementById('modal-body');
-        const btn = document.getElementById('place-bet-btn');
-        const footer = document.getElementById('modal-footer-actions');
+async function openStatsModal(fixtureId) {
+    const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    const btn = document.getElementById('place-bet-btn');
+    const footer = document.getElementById('modal-footer-actions');
 
-        modal.classList.remove('hidden');
-        if (footer) footer.classList.add('hidden');
-        if (btn) btn.classList.add('hidden');
+    modal.classList.remove('hidden');
+    if (footer) footer.classList.add('hidden');
+    if (btn) btn.classList.add('hidden');
 
-        body.innerHTML = '<div class="text-center py-20"><i data-lucide="loader-2" class="w-12 h-12 text-accent rotator mx-auto mb-4"></i><p class="font-black uppercase italic text-xs tracking-widest text-slate-500">Fetching AI Predictions...</p></div>';
-        if (window.lucide) lucide.createIcons();
+    body.innerHTML = '<div class="text-center py-20"><i data-lucide="loader-2" class="w-12 h-12 text-accent rotator mx-auto mb-4"></i><p class="font-black uppercase italic text-xs tracking-widest text-slate-500">Fetching AI Predictions...</p></div>';
+    if (window.lucide) lucide.createIcons();
 
-        try {
-            const res = await fetch(`/api/predictions/${fixtureId}`);
-            const data = await res.json();
+    try {
+        const res = await fetch(`/api/predictions/${fixtureId}`);
+        const data = await res.json();
 
-            if (data.error) {
-                body.innerHTML = `<div class="glass p-10 text-center font-black text-slate-500 uppercase italic">${data.error}</div>`;
-                return;
-            }
+        if (data.error) {
+            body.innerHTML = `<div class="glass p-10 text-center font-black text-slate-500 uppercase italic">${data.error}</div>`;
+            return;
+        }
 
-            // Render metrics
-            const comp = data.comparison || {};
-            const perc = data.percent || {};
-            const metrics = [
-                { label: 'Forma', key: 'form' }, { label: 'Attacco', key: 'attaching' },
-                { label: 'Difesa', key: 'defensive' }, { label: 'Probabilità Gol', key: 'poisson_distribution' }
-            ];
+        // Render metrics
+        const comp = data.comparison || {};
+        const perc = data.percent || {};
+        const metrics = [
+            { label: 'Forma', key: 'form' }, { label: 'Attacco', key: 'attaching' },
+            { label: 'Difesa', key: 'defensive' }, { label: 'Probabilità Gol', key: 'poisson_distribution' }
+        ];
 
-            let metricsHtml = metrics.map(m => {
-                const val = comp[m.key] || { home: '50%', away: '50%' };
-                const h = parseInt(val.home); const a = parseInt(val.away);
-                return `
+        let metricsHtml = metrics.map(m => {
+            const val = comp[m.key] || { home: '50%', away: '50%' };
+            const h = parseInt(val.home); const a = parseInt(val.away);
+            return `
                 <div class="space-y-1 mb-4">
                     <div class="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-slate-500">
                         <span>${h}%</span> <span class="text-white italic">${m.label}</span> <span>${a}%</span>
@@ -2311,9 +2313,9 @@ function setBookmaker(id, name) {
                     </div>
                 </div>
             `;
-            }).join('');
+        }).join('');
 
-            body.innerHTML = `
+        body.innerHTML = `
              <div class="mb-8">
                  <div class="text-[9px] font-black text-accent uppercase tracking-widest mb-2 italic flex items-center gap-2">
                     <i data-lucide="brain-circuit" class="w-4 h-4"></i> Algorithmic Prediction
@@ -2347,21 +2349,28 @@ function setBookmaker(id, name) {
                 Chiudi
             </button>
         `;
-            if (window.lucide) lucide.createIcons();
-
-        } catch (e) {
-            body.innerHTML = '<div class="text-danger font-bold text-center py-10 uppercase italic">Errore caricamento statistiche.</div>';
-        }
-    }
-    // --- INITIALIZATION ---
-
-    document.addEventListener('DOMContentLoaded', () => {
-        // Initial Route
-        handleRouting();
-
-        // Listen to hash changes
-        window.addEventListener('hashchange', handleRouting);
-
-        // Re-init icons
         if (window.lucide) lucide.createIcons();
-    });
+
+    } catch (e) {
+        body.innerHTML = '<div class="text-danger font-bold text-center py-10 uppercase italic">Errore caricamento statistiche.</div>';
+    }
+}
+window.analyzeMatch = analyzeMatch;
+window.openLineupModal = openLineupModal;
+window.openStatsModal = openStatsModal;
+window.showBetDetails = showBetDetails;
+window.closeModal = closeModal;
+
+// --- INITIALIZATION ---
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Initial Route
+    handleRouting();
+
+    // Listen to hash changes
+    window.addEventListener('hashchange', handleRouting);
+
+    // Re-init icons
+    if (window.lucide) lucide.createIcons();
+});
+

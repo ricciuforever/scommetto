@@ -88,18 +88,19 @@
                     <div class="flex items-center justify-between gap-4 mb-8">
                         <!-- Home -->
                         <div class="flex flex-col items-center gap-4 flex-1 group/team cursor-pointer"
-                            onclick="event.stopPropagation(); openLineupModal(<?php echo $match['fixture']['id']; ?>, <?php echo $match['teams']['home']['id']; ?>)">
+                            onclick="event.stopPropagation(); window.location.hash = 'team/<?php echo $match['teams']['home']['id']; ?>'">
                             <div
                                 class="w-16 h-16 p-2 glass rounded-2xl flex items-center justify-center group-hover/team:border-accent/50 transition-all relative">
                                 <img src="<?php echo $match['teams']['home']['logo']; ?>"
                                     class="w-full h-full object-contain drop-shadow-2xl">
                                 <div
                                     class="absolute -bottom-2 bg-slate-900 border border-white/10 px-2 rounded text-[8px] font-black uppercase text-slate-500 group-hover/team:text-accent transition-colors">
-                                    Lineup</div>
+                                    Profilo</div>
                             </div>
                             <span
                                 class="text-xs font-black uppercase tracking-tight text-center leading-tight flex items-center gap-2">
-                                <?php echo $homeName; ?> <i data-lucide="chevron-right" class="w-3 h-3 text-slate-600"></i>
+                                <?php echo htmlspecialchars($homeName); ?> <i data-lucide="chevron-right"
+                                    class="w-3 h-3 text-slate-600 shrink-0"></i>
                             </span>
                         </div>
 
@@ -116,19 +117,19 @@
 
                         <!-- Away -->
                         <div class="flex flex-col items-center gap-4 flex-1 group/team cursor-pointer"
-                            onclick="event.stopPropagation(); openLineupModal(<?php echo $match['fixture']['id']; ?>, <?php echo $match['teams']['away']['id']; ?>)">
+                            onclick="event.stopPropagation(); window.location.hash = 'team/<?php echo $match['teams']['away']['id']; ?>'">
                             <div
                                 class="w-16 h-16 p-2 glass rounded-2xl flex items-center justify-center group-hover/team:border-accent/50 transition-all relative">
                                 <img src="<?php echo $match['teams']['away']['logo']; ?>"
                                     class="w-full h-full object-contain drop-shadow-2xl">
                                 <div
                                     class="absolute -bottom-2 bg-slate-900 border border-white/10 px-2 rounded text-[8px] font-black uppercase text-slate-500 group-hover/team:text-accent transition-colors">
-                                    Lineup</div>
+                                    Profilo</div>
                             </div>
                             <span
                                 class="text-xs font-black uppercase tracking-tight text-center leading-tight flex items-center gap-2">
-                                <i data-lucide="chevron-left" class="w-3 h-3 text-slate-600"></i>
-                                <?php echo $awayName; ?>
+                                <i data-lucide="chevron-left" class="w-3 h-3 text-slate-600 shrink-0"></i>
+                                <?php echo htmlspecialchars($awayName); ?>
                             </span>
                         </div>
                     </div>
@@ -202,18 +203,68 @@
     <aside class="space-y-8">
         <div>
             <h2 class="text-xl font-black tracking-tight mb-6 italic uppercase">Hot Predictions</h2>
-            <div id="dashboard-predictions" class="space-y-4"></div>
+            <div id="dashboard-predictions-php" class="space-y-4">
+                <?php if (empty($hotPredictions)): ?>
+                    <div class="text-[10px] font-bold text-slate-500 italic uppercase">Nessun pronostico hot.</div>
+                <?php else: ?>
+                    <?php foreach ($hotPredictions as $p): ?>
+                        <div class="glass p-5 rounded-[24px] border-white/5 cursor-pointer hover:border-accent/30 transition-all group"
+                            onclick="window.location.hash='match/<?php echo $p['fixture_id']; ?>'">
+                            <div class="flex items-center justify-between mb-4">
+                                <span
+                                    class="text-[8px] font-black uppercase tracking-widest text-slate-500 italic truncate max-w-[100px]"><?php echo $p['league_name']; ?></span>
+                                <span
+                                    class="text-[8px] font-black uppercase text-accent tracking-widest"><?php echo date('d M', strtotime($p['date'])); ?></span>
+                            </div>
+                            <div class="flex items-center justify-between gap-3 mb-4">
+                                <img src="<?php echo $p['home_logo']; ?>" class="w-8 h-8 object-contain">
+                                <span class="text-[9px] font-black uppercase text-slate-500 text-center flex-1">VS</span>
+                                <img src="<?php echo $p['away_logo']; ?>" class="w-8 h-8 object-contain">
+                            </div>
+                            <div class="bg-accent/10 border border-accent/20 p-3 rounded-xl text-center">
+                                <div class="text-[7px] font-black text-accent uppercase tracking-widest mb-1 opacity-80">AI
+                                    Suggestion</div>
+                                <div class="text-[10px] font-black text-white italic uppercase leading-tight">
+                                    <?php echo $p['advice']; ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
         </div>
         <div>
             <h2 class="text-xl font-black tracking-tight mb-6 italic uppercase">Recent Activity</h2>
             <div class="glass rounded-[32px] border-white/5 divide-y divide-white/5 overflow-hidden"
-                id="dashboard-history"></div>
+                id="dashboard-history-php">
+                <?php if (empty($recentActivity)): ?>
+                    <div class="p-6 text-[10px] font-bold text-slate-500 italic uppercase text-center">Nessuna attività
+                        recente.</div>
+                <?php else: ?>
+                    <?php foreach ($recentActivity as $bet):
+                        $statusClass = $bet['status'] === 'won' ? 'text-success' : ($bet['status'] === 'lost' ? 'text-danger' : 'text-warning');
+                        ?>
+                        <div class="p-5 hover:bg-white/5 cursor-pointer transition-all flex flex-col gap-2 group"
+                            onclick='showBetDetails(<?php echo json_encode($bet); ?>)'>
+                            <div class="flex items-center justify-between">
+                                <span
+                                    class="text-[8px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[120px]"><?php echo $bet['match_name']; ?></span>
+                                <span
+                                    class="text-[8px] font-black uppercase <?php echo $statusClass; ?>"><?php echo $bet['status']; ?></span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span
+                                    class="text-xs font-black italic text-white group-hover:text-accent transition-colors truncate max-w-[150px]"><?php echo $bet['market']; ?></span>
+                                <span class="text-xs font-black tabular-nums text-white">@ <?php echo $bet['odds']; ?></span>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
         </div>
     </aside>
 </div>
 <script>
     if (window.lucide) lucide.createIcons();
     if (typeof updateStatsSummary === 'function') updateStatsSummary();
-    if (typeof renderDashboardPredictions === 'function') renderDashboardPredictions();
-    if (typeof renderDashboardHistory === 'function') renderDashboardHistory();
 </script>

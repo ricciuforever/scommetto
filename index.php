@@ -24,10 +24,20 @@ try {
         (new MatchController())->dashboard();
     } elseif ($path === '/api/view/leagues') {
         (new MatchController())->viewLeagues();
+    } elseif (preg_match('#^/api/view/leagues/(\d+)$#', $path, $matches)) {
+        (new MatchController())->viewLeagueDetails($matches[1]);
     } elseif ($path === '/api/view/predictions') {
         (new MatchController())->viewPredictions();
     } elseif ($path === '/api/view/tracker') {
         (new App\Controllers\BetController())->viewTracker();
+    } elseif (preg_match('#^/api/view/match/(\d+)/tab/(\w+)$#', $path, $matches)) {
+        (new MatchController())->viewMatchTab($matches[1], $matches[2]);
+    } elseif (preg_match('#^/api/view/match/(\d+)$#', $path, $matches)) {
+        (new MatchController())->viewMatch($matches[1]);
+    } elseif (preg_match('#^/api/view/team/(\d+)$#', $path, $matches)) {
+        (new MatchController())->viewTeam($matches[1]);
+    } elseif (preg_match('#^/api/view/player/(\d+)$#', $path, $matches)) {
+        (new MatchController())->viewPlayer($matches[1]);
     } elseif ($path === '/api/upcoming') {
         (new MatchController())->getUpcoming();
     } elseif ($path === '/api/history') {

@@ -42,19 +42,25 @@ $selectedCountry = $_GET['country'] ?? 'all';
                     </div>
 
                     <div class="flex items-center justify-between gap-4 mb-8">
-                        <div class="flex-1 flex flex-col items-center gap-3">
-                            <img src="<?php echo $p['home_logo']; ?>" class="w-12 h-12 object-contain">
-                            <span class="text-xs font-black uppercase text-center truncate w-full">
-                                <?php echo $p['home_name']; ?>
+                        <div class="flex-1 flex flex-col items-center gap-3 cursor-pointer group/team"
+                            onclick="window.location.hash = 'team/<?php echo $p['home_id']; ?>'">
+                            <img src="<?php echo $p['home_logo']; ?>"
+                                class="w-12 h-12 object-contain group-hover/team:scale-110 transition-transform">
+                            <span
+                                class="text-xs font-black uppercase text-center truncate w-full group-hover/team:text-accent transition-colors">
+                                <?php echo htmlspecialchars($p['home_name']); ?>
                             </span>
                         </div>
                         <div class="flex flex-col items-center">
                             <span class="text-2xl font-black italic opacity-20">VS</span>
                         </div>
-                        <div class="flex-1 flex flex-col items-center gap-3">
-                            <img src="<?php echo $p['away_logo']; ?>" class="w-12 h-12 object-contain">
-                            <span class="text-xs font-black uppercase text-center truncate w-full">
-                                <?php echo $p['away_name']; ?>
+                        <div class="flex-1 flex flex-col items-center gap-3 cursor-pointer group/team"
+                            onclick="window.location.hash = 'team/<?php echo $p['away_id']; ?>'">
+                            <img src="<?php echo $p['away_logo']; ?>"
+                                class="w-12 h-12 object-contain group-hover/team:scale-110 transition-transform">
+                            <span
+                                class="text-xs font-black uppercase text-center truncate w-full group-hover/team:text-accent transition-colors">
+                                <?php echo htmlspecialchars($p['away_name']); ?>
                             </span>
                         </div>
                     </div>

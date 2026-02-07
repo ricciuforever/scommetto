@@ -107,9 +107,9 @@
                     <!-- Country Selector -->
                     <button id="country-selector" onclick="openCountryModal()"
                         class="h-10 px-4 rounded-xl bg-white/5 hover:bg-white/10 flex items-center gap-2 transition-all border border-white/5 group">
-                        <span id="selected-country-flag" class="text-lg">🇮🇹</span>
+                        <span id="selected-country-flag" class="text-lg">🌍</span>
                         <span id="selected-country-name"
-                            class="text-[10px] font-black uppercase tracking-tighter text-slate-400 group-hover:text-white transition-colors">Italy</span>
+                            class="text-[10px] font-black uppercase tracking-tighter text-slate-400 group-hover:text-white transition-colors">Tutte</span>
                         <i data-lucide="chevron-down" class="w-3 h-3 text-slate-500"></i>
                     </button>
 
