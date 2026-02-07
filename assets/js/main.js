@@ -1,7 +1,7 @@
-import { handleRouting, routes } from './router.js';
-import { updateState } from './utils.js';
-import { UI } from './ui.js';
-import { Tracker } from './tracker.js';
+import { handleRouting, routes } from './modules/router.js';
+import { updateState } from './modules/utils.js';
+import { UI } from './modules/ui.js';
+import { Tracker } from './modules/tracker.js';
 
 // --- GLOBAL APP STATE & EXPORTS ---
 window.app = {
