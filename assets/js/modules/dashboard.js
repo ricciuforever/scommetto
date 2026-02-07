@@ -99,8 +99,10 @@ export class Dashboard {
         const liveCount = (state.liveMatches || []).filter(m => {
             const countryName = m.league?.country || m.league?.country_name;
             const matchesCountry = state.selectedCountry === 'all' || countryName === state.selectedCountry;
-            // Simplified bookmaker check for now as data structure might vary
-            return matchesCountry;
+            const matchesBookie = state.selectedBookmaker === 'all'
+                ? (m.available_bookmakers || []).length > 0
+                : (m.available_bookmakers || []).includes(parseInt(state.selectedBookmaker));
+            return matchesCountry && matchesBookie;
         }).length;
 
         const currentPortfolio = startingPortfolio + globalNetProfit;
@@ -142,7 +144,10 @@ export class Dashboard {
         const filteredMatches = matches.filter(m => {
             const countryName = m.league?.country || m.league?.country_name;
             const matchesCountry = state.selectedCountry === 'all' || countryName === state.selectedCountry;
-            return matchesCountry;
+            const matchesBookie = state.selectedBookmaker === 'all'
+                ? (m.available_bookmakers || []).length > 0
+                : (m.available_bookmakers || []).includes(parseInt(state.selectedBookmaker));
+            return matchesCountry && matchesBookie;
         });
 
         if (filteredMatches.length === 0) {

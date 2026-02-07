@@ -67,10 +67,16 @@ class MatchController
                             $bookmakersByFixture[$row['fixture_id']][] = (int) $row['bookmaker_id'];
                         }
 
-                        foreach ($data['response'] as &$m) {
+                        $filteredResponse = [];
+                        foreach ($data['response'] as $m) {
                             $fid = $m['fixture']['id'];
-                            $m['available_bookmakers'] = $bookmakersByFixture[$fid] ?? [];
+                            $bookies = $bookmakersByFixture[$fid] ?? [];
+                            if (!empty($bookies)) {
+                                $m['available_bookmakers'] = $bookies;
+                                $filteredResponse[] = $m;
+                            }
                         }
+                        $data['response'] = $filteredResponse;
                     }
                 }
                 echo json_encode($data);
@@ -97,10 +103,33 @@ class MatchController
                     JOIN leagues l ON f.league_id = l.id
                     WHERE f.date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 24 HOUR)
                     AND f.status_short = 'NS'
+                    AND EXISTS (SELECT 1 FROM fixture_odds fo WHERE fo.fixture_id = f.id)
                     ORDER BY f.date ASC LIMIT 20";
             $data = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
 
-            // Format response to match live structure partially if needed, or simple list
+            if (!empty($data)) {
+                $fids = array_column($data, 'fixture_id');
+                $fids = array_filter($fids); // Extra safety
+                if (!empty($fids)) {
+                    $fidsStr = implode(',', array_map('intval', $fids));
+                    $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($fidsStr)");
+                    $oddsRaw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                    $bookmakersByFixture = [];
+                    foreach ($oddsRaw as $row) {
+                        $bookmakersByFixture[$row['fixture_id']][] = (int) $row['bookmaker_id'];
+                    }
+
+                    foreach ($data as &$m) {
+                        $fid = $m['fixture_id'];
+                        $m['available_bookmakers'] = $bookmakersByFixture[$fid] ?? [];
+                    }
+                } else {
+                    foreach ($data as &$m) {
+                        $m['available_bookmakers'] = [];
+                    }
+                }
+            }
+
             echo json_encode(['response' => $data]);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
