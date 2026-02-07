@@ -244,7 +244,7 @@ class SyncController
             if (!empty($matches)) {
                 foreach ($matches as $m) {
                     $fid = (int) $m['fixture']['id'];
-                    $m['available_bookmakers'] = array_unique($bookiesByFid[$fid] ?? []);
+                    $m['available_bookmakers'] = array_values(array_unique($bookiesByFid[$fid] ?? []));
                     // Add dummy "Live" bookmaker if live odds exist (usually Bet365 ID 1 or similar)
                     // This ensures compability if user filters for "Live Odds" specifically
                     $enrichedMatches[] = $m;

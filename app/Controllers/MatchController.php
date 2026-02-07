@@ -131,9 +131,30 @@ class MatchController
             $db = \App\Services\Database::getInstance()->getConnection();
 
             // Basic Info
-            $fixture = (new \App\Models\Fixture())->getById((int) $id);
+            $fixtureModel = new \App\Models\Fixture();
+            $fixture = $fixtureModel->getById((int) $id);
+
+            // FALLBACK: If not in DB, try to fetch from API immediately (Real-time on-demand)
             if (!$fixture) {
-                echo json_encode(['error' => 'Partita non trovata.']);
+                $apiService = new \App\Services\FootballApiService();
+                $data = $apiService->request("/fixtures?id=$id");
+
+                if (isset($data['response'][0])) {
+                    $fixtureData = $data['response'][0];
+                    $fixtureModel->save($fixtureData);
+
+                    // Also save related teams, league, venue if missing? 
+                    // Ideally yes, but let's stick to fixture first to be fast.
+                    // Actually, save() method of Fixture model relies on 'teams', 'league' keys in data.
+                    // The 'save' method in Fixture model is robust enough to handle the structure.
+
+                    // Reload from DB to ensure we have the localized fields and structure
+                    $fixture = $fixtureModel->getById((int) $id);
+                }
+            }
+
+            if (!$fixture) {
+                echo json_encode(['error' => 'Partita non trovata (né DB né API).']);
                 return;
             }
 
