@@ -17,7 +17,14 @@ class BetController
     public function getHistory()
     {
         header('Content-Type: application/json');
-        $history = $this->betModel->getAll();
+        $db = \App\Services\Database::getInstance()->getConnection();
+        $sql = "SELECT b.*, l.country_name as country, bk.name as bookmaker_name_full
+                FROM bets b
+                LEFT JOIN fixtures f ON b.fixture_id = f.id
+                LEFT JOIN leagues l ON f.league_id = l.id
+                LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id
+                ORDER BY b.timestamp DESC";
+        $history = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
         echo json_encode($history);
     }
 

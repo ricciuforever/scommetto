@@ -58,6 +58,16 @@ try {
         (new SyncController())->getUsage();
     } elseif ($path === '/api/filters') {
         (new FilterController())->getFilters();
+    } elseif ($path === '/api/migrate') {
+        header('Content-Type: application/json');
+        $db = \App\Services\Database::getInstance()->getConnection();
+        try {
+            $db->exec("ALTER TABLE bets ADD COLUMN bookmaker_id INT NULL AFTER fixture_id");
+            $db->exec("ALTER TABLE bets ADD COLUMN bookmaker_name VARCHAR(100) NULL AFTER bookmaker_id");
+            echo json_encode(['status' => 'success', 'message' => 'Schema updated']);
+        } catch (\PDOException $e) {
+            echo json_encode(['status' => 'already_updated', 'message' => $e->getMessage()]);
+        }
     } else {
         http_response_code(404);
         echo json_encode(['error' => 'Not Found', 'path' => $path]);

@@ -49,7 +49,31 @@ class MatchController
         try {
             $cacheFile = Config::LIVE_DATA_FILE;
             if (file_exists($cacheFile)) {
-                echo file_get_contents($cacheFile);
+                $data = json_decode(file_get_contents($cacheFile), true);
+
+                if (isset($data['response']) && !empty($data['response'])) {
+                    $db = \App\Services\Database::getInstance()->getConnection();
+                    $fids = [];
+                    foreach ($data['response'] as $m)
+                        $fids[] = $m['fixture']['id'];
+
+                    if (!empty($fids)) {
+                        $fidsStr = implode(',', $fids);
+                        // Get bookmakers from fixture_odds
+                        $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($fidsStr)");
+                        $oddsRaw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                        $bookmakersByFixture = [];
+                        foreach ($oddsRaw as $row) {
+                            $bookmakersByFixture[$row['fixture_id']][] = (int) $row['bookmaker_id'];
+                        }
+
+                        foreach ($data['response'] as &$m) {
+                            $fid = $m['fixture']['id'];
+                            $m['available_bookmakers'] = $bookmakersByFixture[$fid] ?? [];
+                        }
+                    }
+                }
+                echo json_encode($data);
             } else {
                 echo json_encode(['response' => [], 'status' => 'waiting_for_sync']);
             }

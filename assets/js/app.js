@@ -10,7 +10,7 @@ let currentView = 'dashboard';
 let historyData = [];
 
 // Global Filter State
-let selectedCountry = localStorage.getItem('selected_country') || 'Italy';
+let selectedCountry = localStorage.getItem('selected_country') || 'all';
 let selectedBookmaker = localStorage.getItem('selected_bookmaker') || 'all';
 let allFilterData = { countries: [], bookmakers: [] };
 
@@ -439,47 +439,23 @@ async function renderPredictions() {
         return;
     }
 
-    // Estrai nazioni e leghe uniche per i filtri
-    const countries = [...new Set(predictions.map(p => p.country_name || 'International'))].sort();
+    const filtered = predictions.filter(p => {
+        const matchesCountry = selectedCountry === 'all' || (p.country_name || 'International') === selectedCountry;
+        // As predictions might not have bookmaker info directly yet, we filter primarily by country
+        return matchesCountry;
+    });
 
     let html = `
-        <div class="mb-12 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div>
-                <h1 class="text-4xl font-black italic uppercase tracking-tighter mb-2">Pronostici AI</h1>
-                <p class="text-slate-500 font-bold uppercase tracking-widest text-xs italic">Suggerimenti algoritmici basati su performance e big data.</p>
-            </div>
-            
-            <div class="flex flex-col sm:flex-row items-center gap-4">
-                <!-- Filtro Nazione -->
-                <div class="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/10 group focus-within:border-accent/80 transition-all min-w-[200px] w-full sm:w-auto">
-                    <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-500 group-focus-within:text-accent transition-colors">
-                        <i data-lucide="globe" class="w-5 h-5"></i>
-                    </div>
-                    <select id="pred-country-filter" class="flex-1 bg-transparent border-none text-sm font-black uppercase italic text-white focus:ring-0 cursor-pointer pr-10 appearance-none">
-                        <option value="all" class="bg-slate-900">Tutte le Nazioni</option>
-                        ${countries.map(c => `<option value="${c}" class="bg-slate-900">${c}</option>`).join('')}
-                    </select>
-                </div>
-
-                <!-- Filtro Lega -->
-                <div class="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/10 group focus-within:border-accent/80 transition-all min-w-[200px] w-full sm:w-auto">
-                    <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-500 group-focus-within:text-accent transition-colors">
-                        <i data-lucide="trophy" class="w-5 h-5"></i>
-                    </div>
-                    <select id="pred-league-filter" class="flex-1 bg-transparent border-none text-sm font-black uppercase italic text-white focus:ring-0 cursor-pointer pr-10 appearance-none">
-                        <option value="all" class="bg-slate-900">Tutte le Leghe</option>
-                    </select>
-                </div>
-            </div>
+        <div class="mb-12">
+            <h1 class="text-4xl font-black italic uppercase tracking-tighter mb-2">Pronostici AI</h1>
+            <p class="text-slate-500 font-bold uppercase tracking-widest text-xs italic">Suggerimenti algoritmici basati su performance e big data per ${selectedCountry === 'all' ? 'tutte le nazioni' : selectedCountry}.</p>
         </div>
 
         <div id="predictions-grid" class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            ${predictions.map(p => {
+            ${filtered.length > 0 ? filtered.map(p => {
         const dateStr = new Date(p.date).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
         return `
-                    <div class="glass p-8 rounded-[40px] border-white/5 hover:border-accent/30 transition-all group relative overflow-hidden prediction-card active-card" 
-                         data-country="${p.country_name || 'International'}" 
-                         data-league="${p.league_id}">
+                    <div class="glass p-8 rounded-[40px] border-white/5 hover:border-accent/30 transition-all group relative overflow-hidden prediction-card active-card">
                         <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-all scale-150">
                             <i data-lucide="brain-circuit" class="w-20 h-20"></i>
                         </div>
@@ -513,72 +489,12 @@ async function renderPredictions() {
                         </button>
                     </div>
                 `;
-    }).join('')}
+    }).join('') : `<div class="col-span-2 glass p-20 rounded-[40px] text-center font-black uppercase text-slate-500 italic">Nessun pronostico trovato per i filtri attuali.</div>`}
         </div>
     `;
 
     viewContainer.innerHTML = html;
     if (window.lucide) lucide.createIcons();
-
-    const countryFilter = document.getElementById('pred-country-filter');
-    const leagueFilter = document.getElementById('pred-league-filter');
-
-    const updateLeagueOptions = (selectedCountry) => {
-        const filteredLeagues = predictions
-            .filter(p => selectedCountry === 'all' || (p.country_name || 'International') === selectedCountry)
-            .reduce((acc, p) => {
-                if (!acc.find(l => l.id === p.league_id)) {
-                    acc.push({ id: p.league_id, name: p.league_name });
-                }
-                return acc;
-            }, [])
-            .sort((a, b) => a.name.localeCompare(b.name));
-
-        leagueFilter.innerHTML = '<option value="all" class="bg-slate-900">Tutte le Leghe</option>' +
-            filteredLeagues.map(l => `<option value="${l.id}" class="bg-slate-900">${l.name}</option>`).join('');
-    };
-
-    const applyFilters = () => {
-        const cVal = countryFilter.value;
-        const lVal = leagueFilter.value;
-        const cards = document.querySelectorAll('.prediction-card');
-
-        cards.forEach(card => {
-            const matchesCountry = cVal === 'all' || card.getAttribute('data-country') === cVal;
-            const matchesLeague = lVal === 'all' || card.getAttribute('data-league') === lVal;
-
-            if (matchesCountry && matchesLeague) {
-                card.classList.remove('hidden');
-                card.classList.add('active-card');
-            } else {
-                card.classList.add('hidden');
-                card.classList.remove('active-card');
-            }
-        });
-    };
-
-    // Persistence
-    const savedCountry = localStorage.getItem('pred_filter_country') || 'all';
-    const savedLeague = localStorage.getItem('pred_filter_league') || 'all';
-
-    countryFilter.value = savedCountry;
-    updateLeagueOptions(savedCountry);
-    leagueFilter.value = savedLeague;
-    applyFilters();
-
-    countryFilter.onchange = (e) => {
-        const val = e.target.value;
-        localStorage.setItem('pred_filter_country', val);
-        localStorage.setItem('pred_filter_league', 'all'); // Reset league when country changes
-        leagueFilter.value = 'all';
-        updateLeagueOptions(val);
-        applyFilters();
-    };
-
-    leagueFilter.onchange = (e) => {
-        localStorage.setItem('pred_filter_league', e.target.value);
-        applyFilters();
-    };
 }
 
 async function renderTracker() {
@@ -1225,20 +1141,48 @@ function openCountryModal() {
     const list = document.getElementById('country-list');
     modal.classList.remove('hidden');
 
-    list.innerHTML = allFilterData.countries.map(c => `
+    const allNations = `
+        <div onclick="setCountry('all')" class="p-4 rounded-3xl border border-white/5 hover:border-accent bg-white/5 transition-all cursor-pointer flex flex-col items-center gap-2 ${selectedCountry === 'all' ? 'border-accent bg-accent/10' : ''}">
+            <div class="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
+                <i data-lucide="globe" class="w-6 h-6 text-accent"></i>
+            </div>
+            <span class="text-[10px] font-black uppercase tracking-tighter text-center">Tutte le Nazioni</span>
+        </div>
+    `;
+
+    list.innerHTML = allNations + allFilterData.countries.map(c => `
         <div onclick="setCountry('${c.name}')" class="p-4 rounded-3xl border border-white/5 hover:border-accent bg-white/5 transition-all cursor-pointer flex flex-col items-center gap-2 ${selectedCountry === c.name ? 'border-accent bg-accent/10' : ''}">
-            <span class="text-3xl">${countryFlags[c.name] || '🏳️'}</span>
+            <div class="w-10 h-10 rounded-lg overflow-hidden border border-white/10">
+                <img src="${c.flag}" class="w-full h-full object-cover">
+            </div>
             <span class="text-[10px] font-black uppercase tracking-tighter text-center">${c.name}</span>
         </div>
     `).join('');
+    if (window.lucide) lucide.createIcons();
 }
 
 function setCountry(name) {
     selectedCountry = name;
     localStorage.setItem('selected_country', name);
-    document.getElementById('selected-country-name').textContent = name;
-    document.getElementById('selected-country-flag').textContent = countryFlags[name] || '🏳️';
+
+    const label = document.getElementById('selected-country-name');
+    const flagPlaceholder = document.getElementById('selected-country-flag');
+
+    if (name === 'all') {
+        label.textContent = 'Tutte le Nazioni';
+        flagPlaceholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4 text-accent"></i>';
+    } else {
+        const c = allFilterData.countries.find(x => x.name === name);
+        label.textContent = name;
+        if (c && c.flag) {
+            flagPlaceholder.innerHTML = `<img src="${c.flag}" class="w-5 h-5 rounded-sm object-cover">`;
+        } else {
+            flagPlaceholder.textContent = '🏳️';
+        }
+    }
+
     closeCountryModal();
+    if (window.lucide) lucide.createIcons();
     refreshAllViews();
 }
 
@@ -1327,6 +1271,9 @@ function updateStatsSummary() {
     const container = document.getElementById('stats-summary');
     if (!container) return;
 
+    const countryLabel = selectedCountry === 'all' ? 'Tutte' : selectedCountry;
+    const bookmakerLabel = selectedBookmaker === 'all' ? 'Tutti i Book' : (allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker)?.name || 'Filtro');
+
     container.innerHTML = `
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
             <span class="block text-2xl font-black mb-1">${summary.currentPortfolio.toFixed(2)}€</span>
@@ -1334,23 +1281,23 @@ function updateStatsSummary() {
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
             <span class="block text-2xl font-black mb-1">${summary.winCount}W - ${summary.lossCount}L</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black font-medium">Filtro: ${selectedCountry}</span>
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Filtro: ${countryLabel}</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
             <span class="block text-2xl font-black mb-1 ${summary.netProfit >= 0 ? 'text-success' : 'text-danger'}">${summary.netProfit >= 0 ? '+' : ''}${summary.netProfit.toFixed(2)}€</span>
             <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Profitto Netto</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-            <span class="block text-2xl font-black mb-1">${liveMatches.filter(m => (selectedCountry === 'all' || (m.league.country || m.league.country_name) === selectedCountry)).length}</span>
+            <span class="block text-2xl font-black mb-1">${summary.liveCount}</span>
             <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Live Now</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-            <span class="block text-2xl font-black mb-1">${summary.pendingCount}</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black text-warning">In Sospeso</span>
+            <span class="block text-2xl font-black mb-1 text-warning">${summary.pendingCount}</span>
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">In Sospeso</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
             <span class="block text-2xl font-black mb-1 text-success">${summary.roi.toFixed(1)}%</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">ROI</span>
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">ROI | ${bookmakerLabel}</span>
         </div>
     `;
 }
@@ -1359,34 +1306,43 @@ function calculateStats() {
     let pendingCount = 0; let winCount = 0; let lossCount = 0; let totalStake = 0; let netProfit = 0;
     const startingPortfolio = 100;
 
-    // Filter history by Country and Bookmaker (if set)
-    const filteredHistory = historyData.filter(bet => {
-        // Bookmaker filter usually not easily available in history data without joining or storing it
-        // The user says: "if id bookmaker is specified it filters". 
-        // I need to make sure the Bet table has a bookmaker_id or similar.
-        // Assuming historyData has match details that we can filter.
-        return true;
-    });
-
+    // Global profit should be based on ALL bets for portfolio
+    let globalNetProfit = 0;
     historyData.forEach(bet => {
-        // Actually the portfolio block shouldn't be filtered according to user: 
-        // "filtro... si estende poi a tutti i blocchi in cima tranne al portafoglio"
         const stake = parseFloat(bet.stake) || 0;
         const odds = parseFloat(bet.odds) || 0;
+        if (bet.status === "won") globalNetProfit += stake * (odds - 1);
+        else if (bet.status === "lost") globalNetProfit -= stake;
+    });
 
-        // Check if bet matches country filter (Complexity: we might need to know the country of the fixture)
-        // Since we don't have country directly in the bet table, we might need to rely on match_name or fetch it.
-        // For now, I'll implement the logic assuming we can match it somehow or just explain.
+    // Filtered stats for other blocks
+    const filteredHistory = historyData.filter(bet => {
+        const countryName = bet.country;
+        const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
+        const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
+        return matchesCountry && matchesBookie;
+    });
+
+    filteredHistory.forEach(bet => {
+        const stake = parseFloat(bet.stake) || 0;
+        const odds = parseFloat(bet.odds) || 0;
 
         if (bet.status === "pending") pendingCount++;
         else if (bet.status === "won") { winCount++; totalStake += stake; netProfit += stake * (odds - 1); }
         else if (bet.status === "lost") { lossCount++; totalStake += stake; netProfit -= stake; }
     });
 
+    const liveCount = liveMatches.filter(m => {
+        const countryName = m.league.country || m.league.country_name;
+        const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
+        const matchesBookie = selectedBookmaker === 'all' || (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
+        return matchesCountry && matchesBookie;
+    }).length;
+
     return {
-        pendingCount, winCount, lossCount, netProfit,
+        pendingCount, winCount, lossCount, netProfit, liveCount,
         roi: totalStake > 0 ? (netProfit / totalStake) * 100 : 0,
-        currentPortfolio: startingPortfolio + netProfit
+        currentPortfolio: startingPortfolio + globalNetProfit
     };
 }
 
@@ -1394,10 +1350,16 @@ function renderDashboardMatches() {
     const container = document.getElementById('live-matches-list');
     if (!container) return;
 
-    const filteredMatches = liveMatches.filter(m => (selectedCountry === 'all' || (m.league.country || m.league.country_name) === selectedCountry));
+    const filteredMatches = liveMatches.filter(m => {
+        const countryName = m.league.country || m.league.country_name;
+        const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
+        const matchesBookie = selectedBookmaker === 'all' || (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
+        return matchesCountry && matchesBookie;
+    });
 
     if (filteredMatches.length === 0) {
-        container.innerHTML = `<div class="glass p-10 rounded-[32px] text-center text-slate-500 font-black italic uppercase tracking-widest">Nessun match live per ${selectedCountry}</div>`;
+        const msg = selectedCountry === 'all' && selectedBookmaker === 'all' ? 'nessun match live' : `nessun match live per ${selectedCountry === 'all' ? 'Tutte le Nazioni' : selectedCountry}`;
+        container.innerHTML = `<div class="glass p-10 rounded-[32px] text-center text-slate-500 font-black italic uppercase tracking-widest">${msg}</div>`;
         return;
     }
 
@@ -1655,9 +1617,17 @@ async function analyzeMatch(id) {
 async function placeBet(fixture_id, match, betData) {
     try {
         const matchName = typeof match === 'string' ? match : `${match.teams.home.name} vs ${match.teams.away.name}`;
+
+        let payload = { fixture_id, match: matchName, ...betData };
+        if (selectedBookmaker !== 'all') {
+            payload.bookmaker_id = parseInt(selectedBookmaker);
+            const bookie = allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker);
+            if (bookie) payload.bookmaker_name = bookie.name;
+        }
+
         const res = await fetch('/api/place_bet', {
             method: 'POST',
-            body: JSON.stringify({ fixture_id, match: matchName, ...betData })
+            body: JSON.stringify(payload)
         });
         const result = await res.json();
         if (result.status === 'success') { closeModal(); fetchHistory(); if (currentView === 'dashboard') updateStatsSummary(); }
@@ -1666,20 +1636,16 @@ async function placeBet(fixture_id, match, betData) {
 
 function closeModal() { document.getElementById('analysis-modal').classList.add('hidden'); }
 
-async function fetchUsage() {
-    try {
-        const res = await fetch('/api/usage');
-        const data = await res.json();
-        if (data) {
-            const usageVal = document.getElementById('usage-val');
-            const limitVal = document.getElementById('limit-val');
-            if (usageVal) usageVal.textContent = data.requests_used || 0;
-            if (limitVal) limitVal.textContent = data.requests_limit || 75000;
-        }
-    } catch (e) { console.error("Error fetching API usage", e); }
-}
+async function renderTracker() {
+    viewContainer.innerHTML = `
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10" id="tracker-stats-summary"></div>
+        <div class="glass rounded-[40px] border-white/5 overflow-hidden divide-y divide-white/5" id="tracker-history"></div>
+    `;
 
-// --- TRACKER SPECIFIC RENDERERS ---
+    await fetchHistory();
+    updateTrackerSummary();
+    renderFullHistory();
+}
 
 function updateTrackerSummary() {
     const summary = calculateStats();
@@ -1710,12 +1676,18 @@ function renderFullHistory() {
     const container = document.getElementById('tracker-history');
     if (!container) return;
 
-    if (historyData.length === 0) {
-        container.innerHTML = '<div class="p-20 text-center text-slate-500 font-black uppercase italic">Nessuna scommessa registrata nel sistema.</div>';
+    const filtered = historyData.filter(bet => {
+        const matchesCountry = selectedCountry === 'all' || bet.country === selectedCountry;
+        const matchesBookie = selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === selectedBookmaker;
+        return matchesCountry && matchesBookie;
+    });
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="p-20 text-center text-slate-500 font-black uppercase italic">Nessuna scommessa trovata per i filtri selezionati.</div>';
         return;
     }
 
-    historyData.forEach(h => {
+    filtered.forEach(h => {
         const item = document.createElement('div');
         item.className = "p-8 hover:bg-white/5 cursor-pointer transition-all flex items-center justify-between group";
         item.onclick = () => showBetDetails(h);
@@ -1738,6 +1710,7 @@ function renderFullHistory() {
         `;
         container.appendChild(item);
     });
+    if (window.lucide) lucide.createIcons();
 }
 
 // --- GLOBAL INIT ---
@@ -1747,15 +1720,26 @@ window.addEventListener('hashchange', handleRouting);
 async function init() {
     await fetchFilterData();
     // Update header labels from localStorage
-    if (selectedCountry) {
-        document.getElementById('selected-country-name').textContent = selectedCountry;
-        document.getElementById('selected-country-flag').textContent = countryFlags[selectedCountry] || '🏳️';
+    const label = document.getElementById('selected-country-name');
+    const flagPlaceholder = document.getElementById('selected-country-flag');
+
+    if (selectedCountry === 'all') {
+        label.textContent = 'Tutte le Nazioni';
+        flagPlaceholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4 text-accent"></i>';
+    } else {
+        const c = allFilterData.countries.find(x => x.name === selectedCountry);
+        label.textContent = selectedCountry;
+        if (c && c.flag) {
+            flagPlaceholder.innerHTML = `<img src="${c.flag}" class="w-5 h-5 rounded-sm object-cover">`;
+        }
     }
+
     if (selectedBookmaker !== 'all') {
         const bookie = allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker);
         if (bookie) document.getElementById('selected-bookmaker-name').textContent = bookie.name;
     }
 
+    if (window.lucide) lucide.createIcons();
     await fetchUsage();
     await fetchHistory();
     handleRouting();
