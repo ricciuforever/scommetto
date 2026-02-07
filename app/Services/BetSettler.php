@@ -247,6 +247,18 @@ class BetSettler
             return 'lost';
         }
 
+        // --- Correct Score / Risultato Esatto ---
+        if (strpos($searchString, 'score') !== false || strpos($searchString, 'risultato esatto') !== false || preg_match('/\d+[-]\d+/', $searchString)) {
+            preg_match('/(\d+)\s*[-]\s*(\d+)/', $searchString, $matches);
+            if (isset($matches[1]) && isset($matches[2])) {
+                $predHome = (int) $matches[1];
+                $predAway = (int) $matches[2];
+                if ($homeGoals === $predHome && $awayGoals === $predAway)
+                    return 'won';
+                return 'lost';
+            }
+        }
+
         return 'pending';
     }
 }

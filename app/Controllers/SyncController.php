@@ -770,6 +770,8 @@ class SyncController
 
     public function sync()
     {
+        // Ora il sync generale include sia la manutenzione che il piazzamento scommesse live
+        $this->syncHourly();
         $this->syncLive();
     }
 
