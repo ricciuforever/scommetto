@@ -15,10 +15,12 @@ class BetfairService
     private $sessionToken;
     private $ssoUrl;
     private $apiUrl = 'https://api.betfair.com/exchange/betting/json-rpc/v1';
+    private $lastRequestTime = 0;
 
     public function __construct()
     {
-        $this->appKey = Config::get('BETFAIR_APP_KEY_LIVE');
+        // Prioritize Delayed Key as requested
+        $this->appKey = Config::get('BETFAIR_APP_KEY_DELAY') ?: Config::get('BETFAIR_APP_KEY_LIVE');
         $this->username = Config::get('BETFAIR_USERNAME');
         $this->password = Config::get('BETFAIR_PASSWORD');
         $this->certPath = Config::get('BETFAIR_CERT_PATH');
@@ -68,6 +70,14 @@ class BetfairService
     {
         $token = $this->authenticate();
         if (!$token) return null;
+
+        // Rate Limiting: max 5 requests per second (0.2s interval)
+        $now = microtime(true);
+        $elapsed = $now - $this->lastRequestTime;
+        if ($elapsed < 0.2) {
+            usleep((0.2 - $elapsed) * 1000000);
+        }
+        $this->lastRequestTime = microtime(true);
 
         $payload = json_encode([
             "jsonrpc" => "2.0",
