@@ -53,12 +53,29 @@ function updateNavLinks(activeView) {
 
 async function renderView(view, id) {
     showLoader(true);
-    viewContainer.innerHTML = '';
+
+    // Toggle containers based on view
+    if (view === 'dashboard') {
+        document.getElementById('htmx-container').classList.remove('hidden');
+        document.getElementById('view-container').classList.add('hidden');
+
+        // Refresh dashboard content via HTMX
+        htmx.trigger('#htmx-container', 'load');
+
+        // Still render sidebars/stats via JS for now if they are outside the HTMX fragment
+        updateStatsSummary();
+        renderDashboardPredictions();
+        // renderDashboardHistory(); // Optional, if you want history on dashboard
+    } else {
+        document.getElementById('htmx-container').classList.add('hidden');
+        document.getElementById('view-container').classList.remove('hidden');
+        viewContainer.innerHTML = ''; // Clear legacy container
+    }
 
     switch (view) {
         case 'dashboard':
             viewTitle.textContent = 'Dashboard Intelligence';
-            await renderDashboard();
+            // No need to call renderDashboard() anymore as HTMX handles the main content
             break;
         case 'leagues':
             viewTitle.textContent = 'Competizioni';
@@ -85,87 +102,17 @@ async function renderView(view, id) {
             await renderPlayerProfile(id);
             break;
         default:
-            renderDashboard();
+            // Default to dashboard HTMX trigger is handled above
+            break;
     }
 
     showLoader(false);
     if (window.lucide) lucide.createIcons();
 }
 
-function showLoader(show) {
-    if (show) {
-        viewLoader.classList.remove('hidden');
-        viewContainer.classList.add('hidden');
-    } else {
-        viewLoader.classList.add('hidden');
-        viewContainer.classList.remove('hidden');
-    }
-}
-
-// --- VIEW RENDERERS ---
-
+// Deprecated or simplified renderDashboard
 async function renderDashboard() {
-    // Stats Summary Grid
-    const statsHtml = `
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-10" id="stats-summary">
-            <!-- Populated by updateStats() -->
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-10">
-            <div class="lg:col-span-3">
-                <div class="flex flex-col gap-6 mb-8">
-                    <!-- Filters Header -->
-                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <h2 class="text-2xl font-black tracking-tight flex items-center gap-3">
-                            <span class="w-2 h-8 bg-accent rounded-full"></span>
-                            Live Now
-                        </h2>
-
-                        <div class="flex items-center gap-3">
-                            <!-- Nation Filter -->
-                            <div class="relative group z-20">
-                                <button onclick="openCountryModal()" class="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-2xl transition-all">
-                                    <div id="selected-country-flag" class="w-5 h-5 flex items-center justify-center">
-                                        <i data-lucide="globe" class="w-4 h-4 text-accent"></i>
-                                    </div>
-                                    <span id="selected-country-name" class="text-[10px] font-black uppercase tracking-widest text-white truncate max-w-[100px]">Tutte</span>
-                                    <i data-lucide="chevron-down" class="w-3 h-3 text-slate-500"></i>
-                                </button>
-                                <!-- Modal handled globally -->
-                            </div>
-
-                            <!-- Bookmaker Filter -->
-                            <div class="relative group z-20">
-                                <button onclick="openBookmakerModal()" class="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-2xl transition-all">
-                                    <i data-lucide="landmark" class="w-4 h-4 text-accent"></i>
-                                    <span id="selected-bookmaker-name" class="text-[10px] font-black uppercase tracking-widest text-white truncate max-w-[100px]">Tutti i Book</span>
-                                    <i data-lucide="chevron-down" class="w-3 h-3 text-slate-500"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div id="live-matches-list" class="space-y-6"></div>
-            </div>
-            <aside class="space-y-8">
-                <div>
-                    <h2 class="text-xl font-black tracking-tight mb-6 italic uppercase">Hot Predictions</h2>
-                    <div id="dashboard-predictions" class="space-y-4"></div>
-                </div>
-                <div>
-                    <h2 class="text-xl font-black tracking-tight mb-6 italic uppercase">Recent Activity</h2>
-                    <div class="glass rounded-[32px] border-white/5 divide-y divide-white/5 overflow-hidden" id="dashboard-history"></div>
-                </div>
-            </aside>
-        </div>
-    `;
-    viewContainer.innerHTML = statsHtml;
-
-    await fetchLive();
-    updateStatsSummary();
-    renderDashboardMatches();
-    renderDashboardHistory();
-    renderDashboardPredictions();
+    // Legacy placeholder, now handled by HTMX mostly
 }
 
 async function renderDashboardPredictions() {

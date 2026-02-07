@@ -20,6 +20,8 @@ try {
         (new MatchController())->index();
     } elseif ($path === '/api/live') {
         (new MatchController())->getLive();
+    } elseif ($path === '/api/dashboard') {
+        (new MatchController())->dashboard();
     } elseif ($path === '/api/upcoming') {
         (new MatchController())->getUpcoming();
     } elseif ($path === '/api/history') {

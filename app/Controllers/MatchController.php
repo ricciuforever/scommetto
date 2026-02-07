@@ -460,4 +460,47 @@ class MatchController
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
+
+    /**
+     * Serves the dashboard partial for HTMX
+     */
+    public function dashboard()
+    {
+        try {
+            // Get filter params
+            $country = $_GET['country'] ?? 'all';
+            $bookmaker = $_GET['bookmaker'] ?? 'all';
+            $pinned = isset($_GET['pinned']) ? explode(',', $_GET['pinned']) : [];
+
+            $cacheFile = Config::LIVE_DATA_FILE;
+            $liveMatches = [];
+
+            if (file_exists($cacheFile)) {
+                $raw = json_decode(file_get_contents($cacheFile), true);
+                if (isset($raw['response']) && is_array($raw['response'])) {
+                    $liveMatches = $raw['response'];
+
+                    // Simple filtering
+                    if ($country !== 'all') {
+                        $liveMatches = array_filter($liveMatches, function ($m) use ($country) {
+                            return isset($m['league']['country']) && $m['league']['country'] === $country;
+                        });
+                    }
+
+                    // Filter by bookmaker available if needed (logic from JS)
+                    if ($bookmaker !== 'all') {
+                        // This logic is complex because 'available_bookmakers' might not be in the live feed directly
+                        // unless we enhance the sync script. For now, we trust the frontend or ignore.
+                    }
+                }
+            }
+
+            // Pass variables to view
+            $pinnedMatches = $pinned;
+            require __DIR__ . '/../Views/partials/dashboard.php';
+
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore caricamento dashboard: ' . $e->getMessage() . '</div>';
+        }
+    }
 }
