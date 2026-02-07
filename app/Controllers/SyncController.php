@@ -339,10 +339,14 @@ class SyncController
             $this->betModel->cleanup();
             $this->betModel->deduplicate();
 
-            // 2. Chiusura scommesse (Fondamentale)
+            // 2. Bet Settlement (Crucial)
             $this->refreshPendingFixtures();
             $betSettler = new \App\Services\BetSettler();
-            $results['settled'] = $betSettler->settleFromDatabase();
+
+            // Modifica temporanea per debug: recuperiamo i dettagli
+            $settleResult = $betSettler->settleFromDatabaseDebug();
+            $results['settled'] = $settleResult['count'];
+            $results['debug_failures'] = $settleResult['failures'];
 
             if ($onlySettle) {
                 echo json_encode(['status' => 'maintenance_completed', 'results' => $results]);

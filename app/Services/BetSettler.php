@@ -46,9 +46,13 @@ class BetSettler
      */
     public function settleFromDatabase()
     {
-        $db = Database::getInstance()->getConnection();
+        $result = $this->settleFromDatabaseDebug();
+        return $result['count'];
+    }
 
-        // Query ottimizzata: un solo colpo per prendere tutto quello che serve
+    public function settleFromDatabaseDebug()
+    {
+        $db = Database::getInstance()->getConnection();
         $sql = "SELECT b.*, f.status_short, f.score_home, f.score_away, 
                        f.score_home_ht, f.score_away_ht,
                        t1.name as home_name, t2.name as away_name 
@@ -59,14 +63,13 @@ class BetSettler
                 WHERE b.status = 'pending'";
 
         $pending = $db->query($sql)->fetchAll();
-        error_log("settleFromDatabase: Found " . count($pending) . " pending bets via JOIN.");
+        $failures = [];
 
         if (empty($pending))
-            return 0;
+            return ['count' => 0, 'failures' => []];
 
         $settledCount = 0;
         foreach ($pending as $bet) {
-            // Mapping dei dati per processSettlement
             $matchData = [
                 'fixture' => ['status' => ['short' => $bet['status_short']]],
                 'teams' => [
@@ -84,12 +87,18 @@ class BetSettler
 
             if ($this->processSettlement($bet, $matchData)) {
                 $settledCount++;
-                error_log("Settled bet ID: " . $bet['id']);
             } else {
-                error_log("Failed to settle bet ID: " . $bet['id'] . " - Status: " . $bet['status_short']);
+                $failures[] = [
+                    'id' => $bet['id'],
+                    'status_short' => $bet['status_short'],
+                    'market' => $bet['market'],
+                    'home_name' => $bet['home_name'],
+                    'away_name' => $bet['away_name'],
+                    'score' => $bet['score_home'] . '-' . $bet['score_away']
+                ];
             }
         }
-        return $settledCount;
+        return ['count' => $settledCount, 'failures' => $failures];
     }
 
     /**
