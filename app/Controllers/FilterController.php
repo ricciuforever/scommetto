@@ -19,16 +19,16 @@ class FilterController
             $db = Database::getInstance()->getConnection();
 
             // Countries ordered by importance then alphabetical
-            // Important: Italy, England, Spain, Germany, France, Brazil, Argentina
-            $important = ["'Italy'", "'England'", "'Spain'", "'Germany'", "'France'", "'Brazil'", "'Argentina'", "'World'"];
+            $important = ["'Italy'", "'England'", "'Spain'", "'Germany'", "'France'", "'Brazil'", "'Argentina'"];
             $importantSql = implode(',', $important);
 
             $countries = $db->query("
-                SELECT *, 
-                CASE WHEN name IN ($importantSql) THEN 0 ELSE 1 END as importance
-                FROM countries 
-                ORDER BY importance ASC, name ASC
-            ")->fetchAll(PDO::FETCH_ASSOC);
+				SELECT *, 
+				CASE WHEN name IN ($importantSql) THEN 0 ELSE 1 END as importance
+				FROM countries 
+				WHERE name != 'World'
+				ORDER BY importance ASC, name ASC
+			")->fetchAll(PDO::FETCH_ASSOC);
 
             // Bookmakers ordered by managed matches
             $bookmakers = $db->query("

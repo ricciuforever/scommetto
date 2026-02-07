@@ -16,7 +16,7 @@ let allFilterData = { countries: [], bookmakers: [] };
 
 const countryFlags = {
     'Italy': '🇮🇹', 'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Spain': '🇪🇸', 'Germany': '🇩🇪',
-    'France': '🇫🇷', 'Brazil': '🇧🇷', 'Argentina': '🇦🇷', 'World': '🌍',
+    'France': '🇫🇷', 'Brazil': '🇧🇷', 'Argentina': '🇦🇷',
     'Belgium': '🇧🇪', 'Netherlands': '🇳🇱', 'Portugal': '🇵🇹', 'Turkey': '🇹🇷',
     'USA': '🇺🇸', 'Japan': '🇯🇵', 'Saudi Arabia': '🇸🇦', 'International': '🌍'
 };
