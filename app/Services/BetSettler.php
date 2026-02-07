@@ -121,14 +121,14 @@ class BetSettler
             $awayGoals = $matchData['score']['halftime']['away'] ?? $awayGoals;
             $finalResultString = "HT: $homeGoals-$awayGoals";
 
-            $settlementStatus = $this->calculateResult($bet, $matchData, $homeGoals, $awayGoals);
+            $settlementStatus = $this->calculateResult($bet, $matchData, $homeGoals, $awayGoals, true);
         }
         // 2. Full Time Markets
         else {
             if (!$isFinished) {
                 // Only settle if the result is guaranteed and cannot change
                 if (strpos($searchString, 'over') !== false) {
-                    preg_match('/over\s+(\d+\.?\d*)/', $searchString, $matches);
+                    preg_match('/over\s*(\d+\.?\d*)/', $searchString, $matches);
                     $threshold = (float) ($matches[1] ?? 0.5);
                     if (($homeGoals + $awayGoals) > $threshold)
                         $settlementStatus = 'won';
@@ -140,7 +140,7 @@ class BetSettler
                 if ($settlementStatus === 'pending')
                     return false;
             } else {
-                $settlementStatus = $this->calculateResult($bet, $matchData, $homeGoals, $awayGoals);
+                $settlementStatus = $this->calculateResult($bet, $matchData, $homeGoals, $awayGoals, $isFinished);
             }
         }
 
@@ -152,7 +152,7 @@ class BetSettler
         return false;
     }
 
-    private function calculateResult($bet, $matchData, $homeGoals, $awayGoals)
+    private function calculateResult($bet, $matchData, $homeGoals, $awayGoals, $isFinished)
     {
         $market = mb_strtolower($bet['market'], 'UTF-8');
         $advice = mb_strtolower($bet['advice'], 'UTF-8');
@@ -205,9 +205,9 @@ class BetSettler
         );
 
         if ($isDC) {
-            $is1X = (strpos($searchString, '1x') !== false || strpos($searchString, 'home or draw') !== false || strpos($searchString, 'casa o pareggio') !== false || (strpos($searchString, $homeName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)));
-            $isX2 = (strpos($searchString, 'x2') !== false || strpos($searchString, 'draw or away') !== false || strpos($searchString, 'pareggio o ospite') !== false || (strpos($searchString, $awayName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)));
-            $is12 = (strpos($searchString, '12') !== false || strpos($searchString, 'home or away') !== false || strpos($searchString, 'casa o ospite') !== false || (strpos($searchString, $homeName) !== false && strpos($searchString, $awayName) !== false));
+            $is1X = (strpos($searchString, '1x') !== false || strpos($searchString, '1/x') !== false || strpos($searchString, 'home or draw') !== false || strpos($searchString, 'casa o pareggio') !== false || (strpos($searchString, $homeName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)) || (strpos($homeName, 'u21') === false && strpos($searchString, explode(' ', $homeName)[0]) !== false && strpos($searchString, 'draw') !== false));
+            $isX2 = (strpos($searchString, 'x2') !== false || strpos($searchString, 'x/2') !== false || strpos($searchString, 'draw or away') !== false || strpos($searchString, 'pareggio o ospite') !== false || (strpos($searchString, $awayName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)) || (strpos($awayName, 'u21') === false && strpos($searchString, explode(' ', $awayName)[0]) !== false && strpos($searchString, 'draw') !== false));
+            $is12 = (strpos($searchString, '12') !== false || strpos($searchString, '1/2') !== false || strpos($searchString, 'home or away') !== false || strpos($searchString, 'casa o ospite') !== false || (strpos($searchString, $homeName) !== false && strpos($searchString, $awayName) !== false));
 
             if ($is1X && ($isHomeWin || $isDraw))
                 return 'won';
@@ -221,18 +221,29 @@ class BetSettler
         }
 
         // --- Over/Under ---
-        if (strpos($searchString, 'over') !== false) {
-            preg_match('/over\s+(\d+\.?\d*)/', $searchString, $matches);
-            $threshold = (float) ($matches[1] ?? 0.5);
-            if ($total > $threshold)
-                return 'won';
-            return 'lost';
-        } elseif (strpos($searchString, 'under') !== false) {
-            preg_match('/under\s+(\d+\.?\d*)/', $searchString, $matches);
-            $threshold = (float) ($matches[1] ?? 0.5);
-            if ($total < $threshold)
-                return 'won';
-            return 'lost';
+        if (strpos($searchString, 'over') !== false || strpos($searchString, 'più di') !== false || strpos($market, 'goals') !== false) {
+            preg_match('/over\s*(\d+\.?\d*)/', $searchString, $matches);
+            if (!isset($matches[1]))
+                preg_match('/(\d+\.?\d*)\s*goals/', $searchString, $matches);
+
+            if (isset($matches[1])) {
+                $threshold = (float) $matches[1];
+                if ($total > $threshold)
+                    return 'won';
+                if ($isFinished)
+                    return 'lost';
+            }
+        }
+
+        if (strpos($searchString, 'under') !== false || strpos($searchString, 'meno di') !== false) {
+            preg_match('/under\s*(\d+\.?\d*)/', $searchString, $matches);
+            if (isset($matches[1])) {
+                $threshold = (float) $matches[1];
+                if ($total < $threshold && $isFinished)
+                    return 'won';
+                if ($total > $threshold)
+                    return 'lost';
+            }
         }
 
         // --- BTS ---
