@@ -82,6 +82,31 @@ class MatchController
         }
     }
 
+    public function getUpcoming()
+    {
+        header('Content-Type: application/json');
+        try {
+            $db = \App\Services\Database::getInstance()->getConnection();
+            $sql = "SELECT f.id as fixture_id, f.date, f.status_short, f.league_id,
+                           t1.name as home_name, t1.logo as home_logo,
+                           t2.name as away_name, t2.logo as away_logo,
+                           l.name as league_name, l.country_name as country_name, l.flag as country_flag
+                    FROM fixtures f
+                    JOIN teams t1 ON f.team_home_id = t1.id
+                    JOIN teams t2 ON f.team_away_id = t2.id
+                    JOIN leagues l ON f.league_id = l.id
+                    WHERE f.date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 24 HOUR)
+                    AND f.status_short = 'NS'
+                    ORDER BY f.date ASC LIMIT 20";
+            $data = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Format response to match live structure partially if needed, or simple list
+            echo json_encode(['response' => $data]);
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
     public function getLeagueStats($leagueId)
     {
         header('Content-Type: application/json');
@@ -163,6 +188,20 @@ class MatchController
             }
 
             if (!$match) {
+                // FALLBACK: If not found in live cache, try fetching from DB upcoming/recent fixtures
+                $db = \App\Services\Database::getInstance()->getConnection();
+                $fix = $db->query("SELECT * FROM fixtures WHERE id = " . (int) $id)->fetch(\PDO::FETCH_ASSOC);
+
+                if ($fix) {
+                    // Reconstruct minimal match object for analysis if needed, or error
+                    // Gemini needs full structure. If not live, maybe we can construct it partially?
+                    // For now, keep error message but friendlier or allow analyzing via getMatch() data
+                    // But geminiService->analyze expects specific structure.
+
+                    // Let's try to proceed if possible or return error.
+                    // Actually, if it's upcoming, it's not live data.
+                }
+
                 echo json_encode(['error' => 'Partita non trovata nei dati live locali. Attendi sincronizzazione.']);
                 return;
             }

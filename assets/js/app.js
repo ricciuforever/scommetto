@@ -1193,7 +1193,7 @@ function openBookmakerModal() {
     const list = document.getElementById('bookmaker-list');
     modal.classList.remove('hidden');
 
-    const bookies = [{ id: 'all', name: 'Tutti i Bookmaker' }, ...allFilterData.bookmakers];
+    const bookies = [{ id: 'all', name: 'Tutti i Bookmaker' }, ...allFilterData.bookmakers.filter(b => b.managed_matches > 0)];
 
     list.innerHTML = bookies.map(b => `
         <div onclick="setBookmaker('${b.id}', '${b.name}')" class="p-5 rounded-2xl border border-white/5 hover:border-accent bg-white/5 transition-all cursor-pointer flex items-center justify-between ${selectedBookmaker === b.id.toString() ? 'border-accent bg-accent/10' : ''}">
@@ -1366,12 +1366,7 @@ function renderDashboardMatches() {
         return matchesCountry && matchesBookie;
     });
 
-    if (filteredMatches.length === 0) {
-        const msg = selectedCountry === 'all' && selectedBookmaker === 'all' ? 'nessun match live' : `nessun match live per ${selectedCountry === 'all' ? 'Tutte le Nazioni' : selectedCountry}`;
-        container.innerHTML = `<div class="glass p-10 rounded-[32px] text-center text-slate-500 font-black italic uppercase tracking-widest">${msg}</div>`;
-        return;
-    }
-
+    // Render Live Matches
     filteredMatches.forEach(m => {
         const card = document.createElement('div');
         card.className = "glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer";
@@ -1403,6 +1398,60 @@ function renderDashboardMatches() {
         `;
         container.appendChild(card);
     });
+
+    // If few live matches, show upcoming
+    if (filteredMatches.length < 5) {
+        fetchAndRenderUpcoming(container, 8 - filteredMatches.length);
+    }
+}
+
+async function fetchAndRenderUpcoming(container, limit) {
+    try {
+        const res = await fetch('/api/upcoming');
+        const data = await res.json();
+
+        if (!data.response || !data.response.length) {
+            if (container.children.length === 0) {
+                container.innerHTML = '<div class="glass p-10 rounded-[32px] text-center text-slate-500 font-black italic uppercase tracking-widest">Nessun evento disponibile</div>';
+            }
+            return;
+        }
+
+        const headerId = 'upcoming-header-' + Date.now();
+        const header = document.createElement('div');
+        header.className = "col-span-full border-t border-white/5 my-8 pt-4 text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-4";
+        header.innerHTML = '<div class="h-px bg-white/10 flex-1"></div>In Arrivo<div class="h-px bg-white/10 flex-1"></div>';
+        container.appendChild(header);
+
+        data.response.slice(0, limit).forEach(m => {
+            const div = document.createElement('div');
+            div.innerHTML = upcomingMatchCardHtml(m);
+            if (div.firstElementChild) container.appendChild(div.firstElementChild);
+        });
+        if (window.lucide) lucide.createIcons();
+    } catch (e) { console.error("Error fetching upcoming", e); }
+}
+
+function upcomingMatchCardHtml(m) {
+    const d = new Date(m.date);
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    return `
+    <div onclick="window.location.hash='match/${m.fixture_id}'" class="glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all cursor-pointer group relative overflow-hidden h-full">
+        <div class="absolute top-0 right-0 p-4 opacity-50"><i data-lucide="calendar-clock" class="w-4 h-4 text-slate-500"></i></div>
+        <div class="flex items-center gap-2 mb-4">
+             <span class="text-[8px] font-black uppercase text-accent tracking-widest truncate max-w-[150px]">${m.league_name}</span>
+             <span class="text-[8px] font-bold text-slate-500">${time}</span>
+        </div>
+        
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex flex-col items-center gap-2 flex-1 min-w-0">
+                <img src="${m.home_logo}" class="w-8 h-8 object-contain">
+                <span class="text-[9px] font-black uppercase text-center leading-tight truncate w-full">${m.away_name}</span>
+            </div>
+        </div>
+    </div>
+    `;
 }
 
 function renderDashboardHistory() {
@@ -1463,7 +1512,7 @@ async function showIntelligenceInPage(id) {
                         <div class="h-full bg-success/50" style="width: ${a}%"></div>
                     </div>
                 </div>
-            `;
+        `;
         }).join('');
 
         container.innerHTML = `
@@ -1509,18 +1558,20 @@ async function showBetDetails(bet) {
     const body = document.getElementById("modal-body");
     const btn = document.getElementById("place-bet-btn");
     const confInd = document.getElementById('confidence-indicator');
+    const footerActions = document.getElementById('modal-footer-actions');
 
     modal.classList.remove('hidden');
+    if (footerActions) footerActions.classList.add('hidden');
     btn.classList.add('hidden');
     confInd.classList.add('hidden');
 
     const profit = bet.status === "won" ? (parseFloat(bet.stake) * (parseFloat(bet.odds) - 1)) : (bet.status === "lost" ? -parseFloat(bet.stake) : 0);
 
     body.innerHTML = `
-        <div class="mb-10">
+        < div class="mb-10" >
             <h2 class="text-4xl font-black italic uppercase tracking-tighter text-white mb-2">${bet.match_name}</h2>
             <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">${new Date(bet.timestamp).toLocaleString()}</div>
-        </div>
+        </div >
 
         <div class="bg-white/5 p-8 rounded-[40px] border border-white/5 mb-8">
             <div class="grid grid-cols-2 gap-8 mb-8">
@@ -1565,7 +1616,7 @@ async function showBetDetails(bet) {
 async function deleteBet(id) {
     if (!confirm('Sei sicuro di voler eliminare questa scommessa?')) return;
     try {
-        const res = await fetch(`/api/bets/delete/${id}`);
+        const res = await fetch(`/ api / bets / delete/${id}`);
         const result = await res.json();
         if (result.status === 'success') {
             closeModal();
@@ -1596,7 +1647,9 @@ async function analyzeMatch(id) {
     const confInd = document.getElementById('confidence-indicator');
     const confVal = document.getElementById('confidence-val');
     const confBar = document.getElementById('confidence-bar');
+    const footerActions = document.getElementById('modal-footer-actions');
 
+    if (footerActions) footerActions.classList.remove('hidden');
     modal.classList.remove('hidden');
     body.innerHTML = '<div class="text-center py-20"><i data-lucide="loader-2" class="w-12 h-12 text-accent rotator mx-auto mb-4"></i><p class="font-black uppercase italic text-xs tracking-widest">Gemini AI Analysis in progress...</p></div>';
     btn.classList.add('hidden');

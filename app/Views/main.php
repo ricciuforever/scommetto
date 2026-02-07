@@ -197,7 +197,7 @@
                                 style="width: 90%"></div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-4 w-full sm:w-auto justify-end">
+                    <div id="modal-footer-actions" class="flex items-center gap-4 w-full sm:w-auto justify-end">
                         <button onclick="closeModal()"
                             class="px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Chiudi</button>
                         <button id="place-bet-btn"

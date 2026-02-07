@@ -20,6 +20,8 @@ try {
         (new MatchController())->index();
     } elseif ($path === '/api/live') {
         (new MatchController())->getLive();
+    } elseif ($path === '/api/upcoming') {
+        (new MatchController())->getUpcoming();
     } elseif ($path === '/api/history') {
         (new BetController())->getHistory();
     } elseif (preg_match('#^/api/match/(\d+)$#', $path, $matches)) {
