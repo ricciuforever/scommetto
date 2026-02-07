@@ -88,14 +88,26 @@ class BetController
             $db = \App\Services\Database::getInstance()->getConnection();
 
             // Base query for bets
-            $sql = "SELECT b.*, l.country_name as country, bk.name as bookmaker_name_full
-                    FROM bets b
-                    LEFT JOIN fixtures f ON b.fixture_id = f.id
-                    LEFT JOIN leagues l ON f.league_id = l.id
-                    LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id
-                    ORDER BY b.timestamp DESC LIMIT 1000";
-
-            $allBets = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+            try {
+                $sql = "SELECT b.*, l.country_name as country, bk.name as bookmaker_name_full
+                        FROM bets b
+                        LEFT JOIN fixtures f ON b.fixture_id = f.id
+                        LEFT JOIN leagues l ON f.league_id = l.id
+                        LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id
+                        ORDER BY b.timestamp DESC LIMIT 1000";
+                $allBets = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+            } catch (\Throwable $e) {
+                // Fallback for missing bookmaker_id
+                $sql = "SELECT b.*, l.country_name as country
+                        FROM bets b
+                        LEFT JOIN fixtures f ON b.fixture_id = f.id
+                        LEFT JOIN leagues l ON f.league_id = l.id
+                        ORDER BY b.timestamp DESC LIMIT 1000";
+                $allBets = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+                foreach ($allBets as &$bet) {
+                    $bet['bookmaker_name_full'] = $bet['bookmaker_name'] ?? 'Puntata';
+                }
+            }
 
             // Calculate summary stats on ALL bets (before filtering for display)
             $statsSummary = [

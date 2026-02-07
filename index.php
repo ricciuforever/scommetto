@@ -88,13 +88,14 @@ try {
         echo json_encode(['status' => 'success']);
     } elseif ($path === '/api/migrate') {
         header('Content-Type: application/json');
-        $db = \App\Services\Database::getInstance()->getConnection();
         try {
-            $db->exec("ALTER TABLE bets ADD COLUMN bookmaker_id INT NULL AFTER fixture_id");
-            $db->exec("ALTER TABLE bets ADD COLUMN bookmaker_name VARCHAR(100) NULL AFTER bookmaker_id");
-            echo json_encode(['status' => 'success', 'message' => 'Schema updated']);
-        } catch (\PDOException $e) {
-            echo json_encode(['status' => 'already_updated', 'message' => $e->getMessage()]);
+            // Invece di due alter table, eseguiamo direttamente la logica di fix_db.php
+            ob_start();
+            require __DIR__ . '/fix_db.php';
+            $output = ob_get_clean();
+            echo json_encode(['status' => 'success', 'message' => 'Schema updated via fix_db.php', 'output' => $output]);
+        } catch (\Throwable $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
     } else {
         http_response_code(404);

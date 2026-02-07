@@ -178,7 +178,34 @@ class MatchController
 
             $db = \App\Services\Database::getInstance()->getConnection();
             $hotPredictions = $db->query("SELECT p.*, f.date, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo, l.name as league_name FROM predictions p JOIN fixtures f ON p.fixture_id = f.id JOIN teams t1 ON f.team_home_id = t1.id JOIN teams t2 ON f.team_away_id = t2.id JOIN leagues l ON f.league_id = l.id WHERE f.date > NOW() ORDER BY f.date ASC LIMIT 3")->fetchAll(\PDO::FETCH_ASSOC);
-            $recentActivity = $db->query("SELECT b.*, l.name as league_name, bk.name as bookmaker_name FROM bets b LEFT JOIN fixtures f ON b.fixture_id = f.id LEFT JOIN leagues l ON f.league_id = l.id LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id ORDER BY b.timestamp DESC LIMIT 5")->fetchAll(\PDO::FETCH_ASSOC);
+
+            try {
+                // Base query for bets
+                try {
+                    $sql = "SELECT b.*, l.country_name as country, bk.name as bookmaker_name_full
+                            FROM bets b
+                            LEFT JOIN fixtures f ON b.fixture_id = f.id
+                            LEFT JOIN leagues l ON f.league_id = l.id
+                            LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id
+                            ORDER BY b.timestamp DESC LIMIT 5"; // Changed limit to 5 for recentActivity
+                    $recentActivity = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+                } catch (\Throwable $e) {
+                    // Fallback if bookmaker_id or bookmakers table is missing
+                    $sql = "SELECT b.*, l.country_name as country
+                            FROM bets b
+                            LEFT JOIN fixtures f ON b.fixture_id = f.id
+                            LEFT JOIN leagues l ON f.league_id = l.id
+                            ORDER BY b.timestamp DESC LIMIT 5"; // Changed limit to 5 for recentActivity
+                    $recentActivity = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+                    foreach ($recentActivity as &$bet)
+                        $bet['bookmaker_name_full'] = $bet['bookmaker_name'] ?? 'Puntata';
+                }
+            } catch (\Throwable $e) {
+                // Fallback if even the simplified query fails
+                $recentActivity = $db->query("SELECT b.*, l.name as league_name FROM bets b LEFT JOIN fixtures f ON b.fixture_id = f.id LEFT JOIN leagues l ON f.league_id = l.id ORDER BY b.timestamp DESC LIMIT 5")->fetchAll(\PDO::FETCH_ASSOC);
+                foreach ($recentActivity as &$ra)
+                    $ra['bookmaker_name'] = 'Puntata';
+            }
 
             require __DIR__ . '/../Views/partials/dashboard.php';
         } catch (\Throwable $e) {
