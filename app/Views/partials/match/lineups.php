@@ -32,7 +32,7 @@ if (empty($lineups)) {
                 <div class="grid grid-cols-1 gap-1">
                     <?php foreach ($startXI as $p): ?>
                         <div class="flex items-center gap-4 group cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-all"
-                            onclick="window.location.hash = 'player/<?php echo $p['player']['id']; ?>'">
+                            onclick="navigate('player', '<?php echo $p['player']['id']; ?>')">
                             <span class="w-6 text-accent font-black tabular-nums italic text-sm">
                                 <?php echo $p['player']['number'] ?? '-'; ?>
                             </span>
@@ -54,7 +54,7 @@ if (empty($lineups)) {
                         <div class="grid grid-cols-1 gap-1 opacity-60">
                             <?php foreach ($subs as $p): ?>
                                 <div class="flex items-center gap-4 group cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-all"
-                                    onclick="window.location.hash = 'player/<?php echo $p['player']['id']; ?>'">
+                                    onclick="navigate('player', '<?php echo $p['player']['id']; ?>')">
                                     <span class="w-6 text-slate-500 font-bold tabular-nums italic text-xs">
                                         <?php echo $p['player']['number'] ?? '-'; ?>
                                     </span>

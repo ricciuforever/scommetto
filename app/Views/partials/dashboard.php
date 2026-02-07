@@ -56,7 +56,7 @@
                 ?>
 
                 <div class="glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer relative overflow-hidden mb-6 <?php echo $isPinned ? 'pinned-match' : ''; ?>"
-                    onclick="window.location.hash = 'match/<?php echo $match['fixture']['id']; ?>'">
+                    onclick="navigate('match', '<?php echo $match['fixture']['id']; ?>')">
 
                     <!-- Header: League + Country -->
                     <div class="flex items-center justify-between mb-8 border-b border-white/5 pb-4">
@@ -88,7 +88,7 @@
                     <div class="flex items-center justify-between gap-4 mb-8">
                         <!-- Home -->
                         <div class="flex flex-col items-center gap-4 flex-1 group/team cursor-pointer"
-                            onclick="event.stopPropagation(); window.location.hash = 'team/<?php echo $match['teams']['home']['id']; ?>'">
+                            onclick="event.stopPropagation(); navigate('team', '<?php echo $match['teams']['home']['id']; ?>')">
                             <div
                                 class="w-16 h-16 p-2 glass rounded-2xl flex items-center justify-center group-hover/team:border-accent/50 transition-all relative">
                                 <img src="<?php echo $match['teams']['home']['logo']; ?>"
@@ -117,7 +117,7 @@
 
                         <!-- Away -->
                         <div class="flex flex-col items-center gap-4 flex-1 group/team cursor-pointer"
-                            onclick="event.stopPropagation(); window.location.hash = 'team/<?php echo $match['teams']['away']['id']; ?>'">
+                            onclick="event.stopPropagation(); navigate('team', '<?php echo $match['teams']['away']['id']; ?>')">
                             <div
                                 class="w-16 h-16 p-2 glass rounded-2xl flex items-center justify-center group-hover/team:border-accent/50 transition-all relative">
                                 <img src="<?php echo $match['teams']['away']['logo']; ?>"
@@ -162,7 +162,7 @@
                                             <i data-lucide="<?php echo $icon; ?>" class="w-3 h-3 <?php echo $color; ?>"></i>
                                             <span
                                                 class="text-[9px] font-bold text-white uppercase truncate max-w-[80px] hover:text-accent cursor-pointer transition-colors"
-                                                onclick="event.stopPropagation(); window.location.hash='player/<?php echo $ev['player']['id']; ?>'">
+                                                onclick="event.stopPropagation(); navigate('player', '<?php echo $ev['player']['id']; ?>')">
                                                 <?php echo $ev['player']['name']; ?>
                                             </span>
                                         </div>
@@ -176,7 +176,7 @@
                         <!-- Right: Buttons -->
                         <div class="flex items-center gap-3 shrink-0">
                             <button
-                                onclick="event.stopPropagation(); window.location.hash='match/<?php echo $match['fixture']['id']; ?>'"
+                                onclick="event.stopPropagation(); navigate('match', '<?php echo $match['fixture']['id']; ?>')"
                                 class="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 transition-all group/btn"
                                 title="Dettagli">
                                 <i data-lucide="arrow-right"
@@ -209,7 +209,7 @@
                 <?php else: ?>
                     <?php foreach ($hotPredictions as $p): ?>
                         <div class="glass p-5 rounded-[24px] border-white/5 cursor-pointer hover:border-accent/30 transition-all group"
-                            onclick="window.location.hash='match/<?php echo $p['fixture_id']; ?>'">
+                            onclick="navigate('match', '<?php echo $p['fixture_id']; ?>')">
                             <div class="flex items-center justify-between mb-4">
                                 <span
                                     class="text-[8px] font-black uppercase tracking-widest text-slate-500 italic truncate max-w-[100px]"><?php echo $p['league_name']; ?></span>

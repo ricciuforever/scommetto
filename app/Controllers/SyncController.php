@@ -283,12 +283,12 @@ class SyncController
                 $fid = $m['fixture']['id'];
                 $elapsed = $m['fixture']['status']['elapsed'] ?? 0;
 
-                // REMOVED STRICT CHECK: if (!$this->liveOddsModel->hasOdds($fid)) continue;
-                // Now we bet even if API doesn't allow live odds polling, using database Context.
+                // Calculate balance before analysis
+                $balance = $this->betModel->getBalanceSummary(Config::INITIAL_BANKROLL);
 
                 // Inject Odds Context for Gemini
                 $liveOdds = $this->liveOddsModel->get($fid);
-                $preOdds = (new \App\Models\FixtureOdds())->getByFixture($fid); // Assuming this method exists or we use raw query
+                $preOdds = (new \App\Models\FixtureOdds())->getByFixture($fid);
 
                 $m['odds_context'] = [
                     'live' => $liveOdds ? json_decode($liveOdds['odds_json'], true) : null,
@@ -296,20 +296,34 @@ class SyncController
                 ];
 
                 echo "Analyzing live fixture $fid (" . $m['teams']['home']['name'] . " vs " . $m['teams']['away']['name'] . ") at minute $elapsed...\n";
+                echo "Available Balance: " . $balance['available_balance'] . "€\n";
 
-                // Force analysis for every match in this loop
-                $prediction = $this->geminiService->analyze($m);
+                // If balance is extremely low, maybe skip analysis to save energy/quota
+                if ($balance['available_balance'] <= 0.50) {
+                    echo "Insufficient balance for new bets. Skipping analysis.\n";
+                    continue;
+                }
+
+                // AI analysis with balance context
+                $prediction = $this->geminiService->analyze($m, $balance);
                 $this->analysisModel->log($fid, $prediction);
                 $results['analyzed']++;
 
                 if (preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches_json)) {
                     $betData = json_decode($matches_json[1], true);
                     if ($betData && isset($betData['stake']) && $betData['stake'] > 0) {
+
+                        // Final Safety Check: Check if we still have balance (in case of race conditions or multiple bets in same loop)
+                        if ($betData['stake'] > $balance['available_balance']) {
+                            echo "Proposed stake (" . $betData['stake'] . "€) exceeds available balance (" . $balance['available_balance'] . "€). Bet rejected.\n";
+                            continue;
+                        }
+
                         $betData['fixture_id'] = $fid;
                         $betData['match'] = $m['teams']['home']['name'] . ' vs ' . $m['teams']['away']['name'];
                         $this->betModel->create($betData);
                         $results['bets_placed']++;
-                        echo "Bet placed for fixture $fid!\n";
+                        echo "Bet placed for fixture $fid! Stake: " . $betData['stake'] . "€\n";
                     }
                 }
                 usleep(200000); // Slight delay

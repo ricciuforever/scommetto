@@ -55,22 +55,22 @@
         </div>
 
         <nav class="flex-1 px-4 py-4 space-y-2">
-            <a href="#dashboard"
+            <a hx-get="/api/view/dashboard" hx-target="#htmx-container" hx-push-url="/dashboard"
                 class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm active-nav"
                 data-view="dashboard">
                 <i data-lucide="home" class="w-5 h-5"></i> Dashboard
             </a>
-            <a href="#leagues"
+            <a hx-get="/api/view/leagues" hx-target="#htmx-container" hx-push-url="/leagues"
                 class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
                 data-view="leagues">
                 <i data-lucide="trophy" class="w-5 h-5"></i> Competizioni
             </a>
-            <a href="#predictions"
+            <a hx-get="/api/view/predictions" hx-target="#htmx-container" hx-push-url="/predictions"
                 class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
                 data-view="predictions">
                 <i data-lucide="brain-circuit" class="w-5 h-5"></i> Pronostici
             </a>
-            <a href="#tracker"
+            <a hx-get="/api/view/tracker" hx-target="#htmx-container" hx-push-url="/tracker"
                 class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
                 data-view="tracker">
                 <i data-lucide="line-chart" class="w-5 h-5"></i> Tracker
@@ -145,8 +145,35 @@
                 <i data-lucide="loader-2" class="w-10 h-10 text-accent rotator"></i>
             </div>
 
-            <!-- HTMX Container for Dashboard (Default View) -->
-            <div id="htmx-container" hx-get="/api/dashboard" hx-trigger="load, every 60s" hx-target="#htmx-container"
+            <!-- HTMX Container for Dynamic Content -->
+            <?php
+            $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+            $initialApi = '/api/view/dashboard';
+            $initialTitle = 'Dashboard Intelligence';
+
+            if (strpos($currentPath, '/leagues') !== false) {
+                $initialApi = '/api/view/leagues';
+                $initialTitle = 'Competizioni';
+            } elseif (strpos($currentPath, '/predictions') !== false) {
+                $initialApi = '/api/view/predictions';
+                $initialTitle = 'Pronostici AI';
+            } elseif (strpos($currentPath, '/tracker') !== false) {
+                $initialApi = '/api/view/tracker';
+                $initialTitle = 'Tracker Scommesse';
+            } elseif (preg_match('#^/match/(\d+)$#', $currentPath, $m)) {
+                $initialApi = "/api/view/match/{$m[1]}";
+                $initialTitle = 'Analisi Match';
+            } elseif (preg_match('#^/team/(\d+)$#', $currentPath, $m)) {
+                $initialApi = "/api/view/team/{$m[1]}";
+                $initialTitle = 'Profilo Squadra';
+            } elseif (preg_match('#^/player/(\d+)$#', $currentPath, $m)) {
+                $initialApi = "/api/view/player/{$m[1]}";
+                $initialTitle = 'Dettagli Giocatore';
+            }
+            ?>
+            <script>document.getElementById('view-title').textContent = '<?php echo $initialTitle; ?>';</script>
+
+            <div id="htmx-container" hx-get="<?php echo $initialApi; ?>" hx-trigger="load" hx-target="#htmx-container"
                 hx-swap="innerHTML">
                 <!-- Initial placeholder while loading -->
                 <div class="flex items-center justify-center py-20">
@@ -162,19 +189,23 @@
     <!-- Bottom Navigation Mobile -->
     <nav
         class="lg:hidden fixed bottom-0 left-0 right-0 glass border-t border-white/10 px-6 py-3 flex justify-between items-center z-50">
-        <a href="#dashboard" class="flex flex-col items-center gap-1 text-accent" data-view="dashboard">
+        <a hx-get="/api/view/dashboard" hx-target="#htmx-container" hx-push-url="/dashboard"
+            class="flex flex-col items-center gap-1 text-accent" data-view="dashboard">
             <i data-lucide="home" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold uppercase tracking-widest">Home</span>
         </a>
-        <a href="#leagues" class="flex flex-col items-center gap-1 text-slate-500" data-view="leagues">
+        <a hx-get="/api/view/leagues" hx-target="#htmx-container" hx-push-url="/leagues"
+            class="flex flex-col items-center gap-1 text-slate-500" data-view="leagues">
             <i data-lucide="trophy" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold uppercase tracking-widest">Leghe</span>
         </a>
-        <a href="#predictions" class="flex flex-col items-center gap-1 text-slate-500" data-view="predictions">
+        <a hx-get="/api/view/predictions" hx-target="#htmx-container" hx-push-url="/predictions"
+            class="flex flex-col items-center gap-1 text-slate-500" data-view="predictions">
             <i data-lucide="brain-circuit" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold uppercase tracking-widest">AI Tips</span>
         </a>
-        <a href="#tracker" class="flex flex-col items-center gap-1 text-slate-500" data-view="tracker">
+        <a hx-get="/api/view/tracker" hx-target="#htmx-container" hx-push-url="/tracker"
+            class="flex flex-col items-center gap-1 text-slate-500" data-view="tracker">
             <i data-lucide="line-chart" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold uppercase tracking-widest">Tracker</span>
         </a>

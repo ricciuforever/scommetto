@@ -12,6 +12,7 @@ class Config
     const LIVE_DATA_FILE = self::DATA_PATH . 'live_matches.json';
     const BETS_HISTORY_FILE = self::DATA_PATH . 'bets_history.json';
     const USAGE_FILE = self::DATA_PATH . 'usage.json';
+    const INITIAL_BANKROLL = 100.00;
 
     // Popular League IDs
     const LEAGUE_SERIE_A = 135;
@@ -58,6 +59,6 @@ class Config
 
     public static function getCurrentSeason()
     {
-        return (int)date('m') <= 6 ? (int)date('Y') - 1 : (int)date('Y');
+        return (int) date('m') <= 6 ? (int) date('Y') - 1 : (int) date('Y');
     }
 }

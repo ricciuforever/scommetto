@@ -46,7 +46,7 @@ sort($countries);
             ?>
             <div class="glass p-6 rounded-[32px] border-white/5 hover:border-accent/30 transition-all cursor-pointer group league-card active-card flex items-center gap-4"
                 data-country="<?php echo htmlspecialchars($country); ?>"
-                onclick="window.location.hash = 'leagues/<?php echo $l['id']; ?>'">
+                onclick="navigate('leagues', '<?php echo $l['id']; ?>')">
 
                 <div
                     class="w-14 h-14 bg-white rounded-2xl p-2 flex items-center justify-center shadow-lg border border-white/10 overflow-hidden shrink-0">

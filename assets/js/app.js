@@ -26,20 +26,64 @@ const viewContainer = document.getElementById('view-container');
 const viewTitle = document.getElementById('view-title');
 const viewLoader = document.getElementById('view-loader');
 
-// --- ROUTER ---
+/**
+ * Modern HTMX Navigation Helper
+ * @param {string} view - 'dashboard', 'leagues', 'match', etc.
+ * @param {string|number} id - optional ID
+ */
+function navigate(view, id = null) {
+    let endpoint = `/api/view/${view}`;
+    let pushUrl = `/${view}`;
 
-function handleRouting() {
-    const hash = window.location.hash.substring(1) || 'dashboard';
-    const [view, id] = hash.split('/');
+    if (id) {
+        endpoint += `/${id}`;
+        pushUrl += `/${id}`;
+    }
 
-    currentView = view;
-    updateNavLinks(view);
-    renderView(view, id);
+    // Fallback per dashboard
+    if (view === 'dashboard') pushUrl = '/dashboard';
+
+    const container = document.getElementById('htmx-container');
+    if (container) {
+        htmx.ajax('GET', endpoint, { target: '#htmx-container', pushUrl: pushUrl });
+    }
 }
+window.navigate = navigate;
+
+// --- ROUTER (Simplified for HTMX) ---
+
+document.addEventListener('htmx:afterRequest', function (evt) {
+    if (evt.detail.target.id === 'htmx-container') {
+        const url = evt.detail.pathInfo.requestPath;
+        // Identifica la vista dall'URL o dai dati
+        let view = 'dashboard';
+        if (url.includes('leagues')) view = 'leagues';
+        else if (url.includes('predictions')) view = 'predictions';
+        else if (url.includes('tracker')) view = 'tracker';
+        else if (url.includes('match')) view = 'match';
+        else if (url.includes('team')) view = 'team';
+        else if (url.includes('player')) view = 'player';
+
+        updateNavLinks(view);
+        updateViewTitle(view);
+    }
+});
+
+// Update title and links even on push state (back/forward or initial)
+document.addEventListener('htmx:pushedIntoHistory', function (evt) {
+    const path = evt.detail.path;
+    let view = 'dashboard';
+    if (path.includes('leagues')) view = 'leagues';
+    else if (path.includes('predictions')) view = 'predictions';
+    else if (path.includes('tracker')) view = 'tracker';
+    updateNavLinks(view);
+    updateViewTitle(view);
+});
 
 function updateNavLinks(activeView) {
     document.querySelectorAll('.nav-link, nav a').forEach(link => {
-        if (link.dataset.view === activeView) {
+        const view = link.dataset.view;
+        if (view === activeView) {
             link.classList.add('active-nav');
             link.classList.remove('text-slate-500');
         } else {
@@ -51,104 +95,39 @@ function updateNavLinks(activeView) {
     });
 }
 
-async function renderView(view, id) {
-    showLoader(true);
-
-    const htmxContainer = document.getElementById('htmx-container');
-    const legacyContainer = document.getElementById('view-container');
-
-    // HTMX views: Dashboard, Leagues, Predictions, Tracker, Match, Team, Player
-    if (['dashboard', '', 'leagues', 'predictions', 'tracker', 'match', 'team', 'player'].includes(view)) {
-
-        if (htmxContainer) {
-            htmxContainer.classList.remove('hidden');
-
-            let endpoint = '';
-            if (view === 'dashboard' || view === '') {
-                const currentGet = htmxContainer.getAttribute('hx-get');
-                endpoint = currentGet && currentGet.includes('/api/view/dashboard') ? currentGet : '/api/view/dashboard';
-            } else if (view === 'leagues') {
-                endpoint = id ? `/api/view/leagues/${id}` : '/api/view/leagues';
-            } else if (view === 'predictions') {
-                endpoint = '/api/view/predictions';
-            } else if (view === 'tracker') {
-                endpoint = '/api/view/tracker';
-            } else if (view === 'match') {
-                endpoint = `/api/view/match/${id}`;
-            } else if (view === 'team') {
-                endpoint = `/api/view/team/${id}`;
-            } else if (view === 'player') {
-                endpoint = `/api/view/player/${id}`;
-            }
-
-            if (endpoint && (htmxContainer.getAttribute('hx-get') !== endpoint || !htmxContainer.innerHTML.trim())) {
-                htmxContainer.setAttribute('hx-get', endpoint);
-                htmx.process(htmxContainer);
-                htmx.trigger('#htmx-container', 'load');
-            }
-        }
-        if (legacyContainer) legacyContainer.classList.add('hidden');
-
-        // Title Management
-        if (view === 'dashboard' || view === '') {
-            viewTitle.textContent = 'Dashboard Intelligence';
-            updateStatsSummary();
-        } else if (view === 'leagues') {
-            viewTitle.textContent = 'Competizioni';
-        } else if (view === 'predictions') {
-            viewTitle.textContent = 'Pronostici AI';
-        } else if (view === 'tracker') {
-            viewTitle.textContent = 'Bet Tracker';
-        } else if (view === 'match') {
-            viewTitle.textContent = 'Match Center';
-        } else if (view === 'team') {
-            viewTitle.textContent = 'Profilo Squadra';
-        } else if (view === 'player') {
-            viewTitle.textContent = 'Profilo Giocatore';
-        }
-
-    } else {
-        // Legacy JS Views (Team, Player, etc.)
-        if (htmxContainer) htmxContainer.classList.add('hidden');
-        if (legacyContainer) {
-            legacyContainer.classList.remove('hidden');
-            legacyContainer.innerHTML = '';
-        }
-
-        switch (view) {
-            case 'leagues':
-                // Detailed League View is still JS-based for now
-                viewTitle.textContent = 'Dettaglio Competizione';
-                if (id) await renderLeagueDetails(id);
-                break;
-            case 'predictions':
-                viewTitle.textContent = 'AI Predictions';
-                await renderPredictions();
-                break;
-            case 'tracker':
-                viewTitle.textContent = 'Il Mio Tracker';
-                await renderTracker();
-                break;
-            case 'match':
-                viewTitle.textContent = 'Match Center';
-                await renderMatchCenter(id);
-                break;
-            case 'team':
-                viewTitle.textContent = 'Profilo Squadra';
-                await renderTeamProfile(id);
-                break;
-            case 'player':
-                viewTitle.textContent = 'Profilo Giocatore';
-                await renderPlayerProfile(id);
-                break;
-            default:
-                break;
-        }
-    }
-
-    showLoader(false);
-    if (window.lucide) lucide.createIcons();
+function updateViewTitle(view) {
+    const titles = {
+        'dashboard': 'Dashboard Intelligence',
+        'leagues': 'Competizioni',
+        'predictions': 'Pronostici AI',
+        'tracker': 'Tracker Scommesse',
+        'match': 'Analisi Match',
+        'team': 'Profilo Squadra',
+        'player': 'Dettagli Giocatore'
+    };
+    if (viewTitle) viewTitle.textContent = titles[view] || 'Scommetto.AI';
 }
+
+// Initial call to set active state based on current URL (non-hash)
+window.addEventListener('load', () => {
+    const path = window.location.pathname;
+    let view = 'dashboard';
+    if (path.includes('leagues')) view = 'leagues';
+    else if (path.includes('predictions')) view = 'predictions';
+    else if (path.includes('tracker')) view = 'tracker';
+    updateNavLinks(view);
+    updateViewTitle(view);
+});
+
+// --- END ROUTER ---
+
+function showLoader(show) {
+    if (viewLoader) {
+        if (show) viewLoader.classList.remove('hidden');
+        else viewLoader.classList.add('hidden');
+    }
+}
+
 
 // Deprecated or simplified renderDashboard
 async function renderDashboard() {
@@ -171,7 +150,7 @@ async function renderDashboardPredictions() {
         data.slice(0, 3).forEach(p => {
             const item = document.createElement('div');
             item.className = "glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all cursor-pointer group";
-            item.onclick = () => window.location.hash = `match/${p.fixture_id}`;
+            item.onclick = () => navigate('match', p.fixture_id);
             item.innerHTML = `
                 <div class="flex items-center justify-between mb-4">
                     <span class="text-[8px] font-black uppercase text-slate-500 tracking-widest">${p.league_name}</span>
@@ -221,7 +200,7 @@ async function renderLeagues(leagueId) {
 
         <div id="leagues-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             ${leagues.map(l => `
-                <div class="glass p-6 rounded-[32px] border-white/5 hover:border-accent/30 transition-all cursor-pointer group league-card active-card" data-country="${l.country_name || l.country || 'International'}" onclick="window.location.hash = 'leagues/${l.id}'">
+                <div class="glass p-6 rounded-[32px] border-white/5 hover:border-accent/30 transition-all cursor-pointer group league-card active-card" data-country="${l.country_name || l.country || 'International'}" onclick="navigate('leagues', '${l.id}')">
                     <div class="flex items-center gap-4">
                         <div class="w-14 h-14 bg-white rounded-2xl p-2 flex items-center justify-center shadow-lg border border-white/10 overflow-hidden">
                             <img src="${l.logo}" class="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform">
@@ -358,7 +337,7 @@ async function renderLeagueDetails(leagueId) {
         }).join('');
 
         html += `
-            <tr class="hover:bg-white/5 transition-colors cursor-pointer" onclick="window.location.hash = 'team/${row.team_id}'">
+            <tr class="hover:bg-white/5 transition-colors cursor-pointer" onclick="navigate('team', '${row.team_id}')">
                 <td class="py-5 px-6 font-black text-accent tabular-nums">${row.rank}</td>
                 <td class="py-5 px-6">
                     <div class="flex items-center gap-4">
@@ -497,7 +476,7 @@ async function renderPredictions() {
                             <div class="text-lg font-black text-white italic uppercase">${p.advice}</div>
                         </div>
 
-                        <button class="w-full py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 font-black text-[10px] uppercase tracking-widest transition-all" onclick="window.location.hash = 'match/${p.fixture_id}'">
+                        <button class="w-full py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 font-black text-[10px] uppercase tracking-widest transition-all" onclick="navigate('match', '${p.fixture_id}')">
                             Apri Match Center
                         </button>
                     </div>
@@ -535,7 +514,7 @@ async function renderMatchCenter(fixtureId) {
 
     let html = `
         <div class="mb-8 flex items-center gap-4">
-             <button onclick="window.location.hash = 'dashboard'" class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-all border border-white/10">
+             <button onclick="navigate('dashboard')" class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-all border border-white/10">
                 <i data-lucide="arrow-left" class="w-5 h-5"></i>
              </button>
              <div class="flex flex-col">
@@ -546,7 +525,7 @@ async function renderMatchCenter(fixtureId) {
 
         <div class="glass rounded-[48px] border-white/5 overflow-hidden mb-10">
             <div class="p-10 md:p-16 flex flex-col md:flex-row items-center justify-between gap-12 bg-gradient-to-br from-accent/5 to-transparent">
-                <div class="flex-1 flex flex-col items-center gap-6 cursor-pointer group" onclick="window.location.hash = 'team/${f.team_home_id}'">
+                <div class="flex-1 flex flex-col items-center gap-6 cursor-pointer group" onclick="navigate('team', '${f.team_home_id}')">
                     <div class="w-24 h-24 md:w-32 md:h-32 glass rounded-[48px] p-6 flex items-center justify-center group-hover:scale-110 transition-transform border-white/10">
                         <img src="${f.team_home_logo}" class="w-full h-full object-contain">
                     </div>
@@ -564,7 +543,7 @@ async function renderMatchCenter(fixtureId) {
                     </div>
                 </div>
 
-                <div class="flex-1 flex flex-col items-center gap-6 cursor-pointer group" onclick="window.location.hash = 'team/${f.team_away_id}'">
+                <div class="flex-1 flex flex-col items-center gap-6 cursor-pointer group" onclick="navigate('team', '${f.team_away_id}')">
                     <div class="w-24 h-24 md:w-32 md:h-32 glass rounded-[48px] p-6 flex items-center justify-center group-hover:scale-110 transition-transform border-white/10">
                         <img src="${f.team_away_logo}" class="w-full h-full object-contain">
                     </div>
@@ -1427,12 +1406,12 @@ function updateStatsSummary() {
 
     container.innerHTML = `
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-            <span class="block text-2xl font-black mb-1">${summary.currentPortfolio.toFixed(2)}€</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Portafoglio</span>
+            <span class="block text-2xl font-black mb-1 ${summary.availableBalance >= 0 ? 'text-white' : 'text-danger'}">${summary.availableBalance.toFixed(2)}€</span>
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Disponibile</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-            <span class="block text-2xl font-black mb-1">${summary.winCount}W - ${summary.lossCount}L</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Filtro: ${countryLabel}</span>
+             <span class="block text-2xl font-black mb-1">${summary.currentPortfolio.toFixed(2)}€</span>
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Portafoglio</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
             <span class="block text-2xl font-black mb-1 ${summary.netProfit >= 0 ? 'text-success' : 'text-danger'}">${summary.netProfit >= 0 ? '+' : ''}${summary.netProfit.toFixed(2)}€</span>
@@ -1443,7 +1422,7 @@ function updateStatsSummary() {
             <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Live Now</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-            <span class="block text-2xl font-black mb-1 text-warning">${summary.pendingCount}</span>
+            <span class="block text-2xl font-black mb-1 text-warning">${summary.pendingCount} (${summary.pendingStakes.toFixed(0)}€)</span>
             <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">In Sospeso</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
@@ -1456,20 +1435,32 @@ function updateStatsSummary() {
 function calculateStats() {
     const data = Array.isArray(historyData) ? historyData : [];
 
-    let pendingCount = 0; let winCount = 0; let lossCount = 0; let totalStake = 0; let netProfit = 0;
+    let pendingCount = 0;
+    let pendingStakes = 0;
+    let winCount = 0;
+    let lossCount = 0;
+    let totalStakeFiltered = 0;
+    let netProfitFiltered = 0;
     const startingPortfolio = 100;
 
-    // Global profit (ALWAYS based on ALL bets for portfolio)
+    // Global calculations for portfolio
     let globalNetProfit = 0;
+
     data.forEach(bet => {
         const stake = parseFloat(bet.stake) || 0;
         const odds = parseFloat(bet.odds) || 0;
-        const status = (bet.status || "").toLowerCase();
-        if (status === "won") globalNetProfit += stake * (odds - 1);
-        else if (status === "lost") globalNetProfit -= stake;
+        const status = (bet.status || "").toLowerCase().trim();
+
+        if (status === "won") {
+            globalNetProfit += stake * (odds - 1);
+        } else if (status === "lost") {
+            globalNetProfit -= stake;
+        } else if (status === "pending") {
+            pendingStakes += stake;
+        }
     });
 
-    // Filtered stats for other blocks
+    // Filtered stats for display
     const filteredHistory = data.filter(bet => {
         const countryName = bet.country || bet.country_name || 'International';
         const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
@@ -1480,11 +1471,19 @@ function calculateStats() {
     filteredHistory.forEach(bet => {
         const stake = parseFloat(bet.stake) || 0;
         const odds = parseFloat(bet.odds) || 0;
-        const status = (bet.status || "").toLowerCase();
+        const status = (bet.status || "").toLowerCase().trim();
 
-        if (status === "pending") pendingCount++;
-        else if (status === "won") { winCount++; totalStake += stake; netProfit += stake * (odds - 1); }
-        else if (status === "lost") { lossCount++; totalStake += stake; netProfit -= stake; }
+        if (status === "pending") {
+            pendingCount++;
+        } else if (status === "won") {
+            winCount++;
+            totalStakeFiltered += stake;
+            netProfitFiltered += stake * (odds - 1);
+        } else if (status === "lost") {
+            lossCount++;
+            totalStakeFiltered += stake;
+            netProfitFiltered -= stake;
+        }
     });
 
     const liveCount = liveMatches.filter(m => {
@@ -1496,10 +1495,19 @@ function calculateStats() {
         return matchesCountry && matchesBookie;
     }).length;
 
+    const currentPortfolio = startingPortfolio + globalNetProfit;
+    const availableBalance = currentPortfolio - pendingStakes;
+
     return {
-        pendingCount, winCount, lossCount, netProfit, liveCount,
-        roi: totalStake > 0 ? (netProfit / totalStake) * 100 : 0,
-        currentPortfolio: startingPortfolio + globalNetProfit
+        pendingCount,
+        pendingStakes,
+        winCount,
+        lossCount,
+        netProfit: netProfitFiltered,
+        liveCount,
+        roi: totalStakeFiltered > 0 ? (netProfitFiltered / totalStakeFiltered) * 100 : 0,
+        currentPortfolio,
+        availableBalance
     };
 }
 
@@ -1992,6 +2000,15 @@ async function analyzeMatch(id) {
 
 async function placeBet(fixture_id, match, betData) {
     try {
+        // Double check balance before placing manual bet
+        const summary = calculateStats();
+        const requestedStake = parseFloat(betData.stake) || 0;
+
+        if (requestedStake > summary.availableBalance) {
+            alert(`Saldo insufficiente! Hai ${summary.availableBalance.toFixed(2)}€ disponibili, ma la scommessa richiede ${requestedStake.toFixed(2)}€.`);
+            return;
+        }
+
         const matchName = typeof match === 'string' ? match : `${match.teams.home.name} vs ${match.teams.away.name}`;
 
         let payload = { fixture_id, match: matchName, ...betData };
@@ -2364,12 +2381,6 @@ window.closeModal = closeModal;
 // --- INITIALIZATION ---
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Initial Route
-    handleRouting();
-
-    // Listen to hash changes
-    window.addEventListener('hashchange', handleRouting);
-
     // Re-init icons
     if (window.lucide) lucide.createIcons();
 });

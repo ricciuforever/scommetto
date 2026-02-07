@@ -25,7 +25,7 @@ if (!$league) {
             </div>
         </div>
 
-        <button onclick="window.location.hash = 'leagues'"
+        <button onclick="navigate('leagues')"
             class="px-8 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-all border border-white/5 flex items-center gap-2">
             <i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Lista
         </button>
@@ -59,7 +59,7 @@ if (!$league) {
                                 $form = str_split($row['form'] ?? '');
                                 ?>
                                 <tr class="hover:bg-white/5 transition-colors cursor-pointer group"
-                                    onclick="window.location.hash = 'team/<?php echo $row['team_id']; ?>'">
+                                    onclick="navigate('team', '<?php echo $row['team_id']; ?>')">
                                     <td class="py-6 px-8 font-black text-accent tabular-nums">
                                         <?php echo $row['rank']; ?>
                                     </td>
@@ -136,7 +136,7 @@ if (!$league) {
                         <?php else: ?>
                             <?php foreach (array_slice($list, 0, 5) as $idx => $p): ?>
                                 <div class="flex items-center gap-4 group cursor-pointer"
-                                    onclick="window.location.hash = 'player/<?php echo $p['player']['id']; ?>'">
+                                    onclick="navigate('player', '<?php echo $p['player']['id']; ?>')">
                                     <span
                                         class="text-2xl font-black italic text-slate-800 group-hover:text-accent/20 transition-colors tabular-nums w-8">
                                         <?php echo $idx + 1; ?>

@@ -92,4 +92,38 @@ class Bet
                 AND b2.status = 'pending'";
         return $this->db->query($sql);
     }
+
+    public function getBalanceSummary($startingBankroll = 100)
+    {
+        $stmt = $this->db->query("SELECT status, stake, odds FROM bets");
+        $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $realizedProfit = 0;
+        $pendingStakes = 0;
+
+        foreach ($bets as $bet) {
+            $status = strtolower($bet['status']);
+            $stake = (float) $bet['stake'];
+            $odds = (float) $bet['odds'];
+
+            if ($status === 'won') {
+                $realizedProfit += $stake * ($odds - 1);
+            } elseif ($status === 'lost') {
+                $realizedProfit -= $stake;
+            } elseif ($status === 'pending') {
+                $pendingStakes += $stake;
+            }
+        }
+
+        $currentPortfolio = $startingBankroll + $realizedProfit;
+        $availableBalance = $currentPortfolio - $pendingStakes;
+
+        return [
+            'starting_bankroll' => $startingBankroll,
+            'realized_profit' => $realizedProfit,
+            'pending_stakes' => $pendingStakes,
+            'current_portfolio' => $currentPortfolio,
+            'available_balance' => $availableBalance
+        ];
+    }
 }

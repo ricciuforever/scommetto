@@ -16,7 +16,11 @@ $path = parse_url($request, PHP_URL_PATH);
 $path = str_replace('/scommetto', '', $path); // Adjust if running in a subdirectory
 
 try {
-    if ($path === '/' || $path === '/index.php' || $path === '') {
+    if (
+        $path === '/' || $path === '/index.php' || $path === '' ||
+        in_array($path, ['/dashboard', '/leagues', '/predictions', '/tracker']) ||
+        preg_match('#^/(match|team|player)/(\d+)$#', $path)
+    ) {
         (new MatchController())->index();
     } elseif ($path === '/api/live') {
         (new MatchController())->getLive();

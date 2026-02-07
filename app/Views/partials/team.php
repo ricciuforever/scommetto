@@ -155,7 +155,7 @@ $stats = $stats ?? null;
                                     <?php echo htmlspecialchars($p['position']); ?>
                                 </td>
                                 <td class="py-5 px-8 text-right">
-                                    <button onclick="window.location.hash = 'player/<?php echo $p['id']; ?>'"
+                                    <button onclick="navigate('player', '<?php echo $p['id']; ?>')"
                                         class="px-5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white font-black uppercase text-[9px] tracking-widest border border-white/5 transition-all">
                                         Dettagli
                                     </button>

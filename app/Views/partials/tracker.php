@@ -24,6 +24,20 @@ function getIcon($s)
     <!-- Tracker Summary Metrics -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10" id="tracker-stats-summary-php">
         <div class="glass p-8 rounded-[40px] border-white/5">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Available
+                Balance</span>
+            <div
+                class="text-4xl font-black italic tracking-tighter <?php echo $summary['available_balance'] >= 0 ? 'text-white' : 'text-danger'; ?>">
+                <?php echo number_format($summary['available_balance'], 2); ?>€
+            </div>
+        </div>
+        <div class="glass p-8 rounded-[40px] border-white/5">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Portfolio</span>
+            <div class="text-4xl font-black italic tracking-tighter text-white">
+                <?php echo number_format($summary['currentPortfolio'], 2); ?>€
+            </div>
+        </div>
+        <div class="glass p-8 rounded-[40px] border-white/5">
             <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Net Balance</span>
             <div
                 class="text-4xl font-black italic tracking-tighter <?php echo $summary['netProfit'] >= 0 ? 'text-success' : 'text-danger'; ?>">
@@ -34,21 +48,6 @@ function getIcon($s)
             <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">ROI</span>
             <div class="text-4xl font-black italic tracking-tighter text-accent">
                 <?php echo number_format($summary['roi'], 1); ?>%
-            </div>
-        </div>
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Success Rate</span>
-            <div class="text-4xl font-black italic tracking-tighter text-white">
-                <?php
-                $total = $summary['winCount'] + $summary['lossCount'];
-                echo $total > 0 ? number_format(($summary['winCount'] / $total) * 100, 0) : 0;
-                ?>%
-            </div>
-        </div>
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Bankroll</span>
-            <div class="text-4xl font-black italic tracking-tighter text-white">
-                <?php echo number_format($summary['currentPortfolio'], 2); ?>€
             </div>
         </div>
     </div>

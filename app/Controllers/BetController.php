@@ -71,6 +71,14 @@ class BetController
             return;
         }
 
+        // Balance Check
+        $summary = $this->betModel->getBalanceSummary(\App\Config\Config::INITIAL_BANKROLL);
+        $stake = (float) ($input['stake'] ?? 0);
+        if ($stake > $summary['available_balance']) {
+            echo json_encode(['error' => 'Insufficient balance. Available: ' . $summary['available_balance'] . '€']);
+            return;
+        }
+
         $id = $this->betModel->create($input);
 
         echo json_encode(['status' => 'success', 'id' => $id]);
@@ -109,34 +117,33 @@ class BetController
                 }
             }
 
-            // Calculate summary stats on ALL bets (before filtering for display)
+            // Calculate summary stats using the new model method
+            $balanceSummary = $this->betModel->getBalanceSummary(\App\Config\Config::INITIAL_BANKROLL);
+
             $statsSummary = [
-                'netProfit' => 0,
+                'netProfit' => $balanceSummary['realized_profit'],
                 'roi' => 0,
                 'winCount' => 0,
                 'lossCount' => 0,
-                'currentPortfolio' => 0 // This should ideally come from a user bankroll setting, but we sum up net profit + initial
+                'currentPortfolio' => $balanceSummary['current_portfolio'],
+                'available_balance' => $balanceSummary['available_balance'],
+                'pending_stakes' => $balanceSummary['pending_stakes']
             ];
 
-            $totalStaked = 0;
-
+            $totalStakedSet = 0;
             foreach ($allBets as $bet) {
                 if ($bet['status'] === 'won') {
-                    $profit = $bet['stake'] * ($bet['odds'] - 1);
-                    $statsSummary['netProfit'] += $profit;
                     $statsSummary['winCount']++;
+                    $totalStakedSet += $bet['stake'];
                 } elseif ($bet['status'] === 'lost') {
-                    $statsSummary['netProfit'] -= $bet['stake'];
                     $statsSummary['lossCount']++;
+                    $totalStakedSet += $bet['stake'];
                 }
-                $totalStaked += $bet['stake'];
             }
 
-            if ($totalStaked > 0) {
-                $statsSummary['roi'] = ($statsSummary['netProfit'] / $totalStaked) * 100;
+            if ($totalStakedSet > 0) {
+                $statsSummary['roi'] = ($statsSummary['netProfit'] / $totalStakedSet) * 100;
             }
-            // Bankroll simulation (starting presumably at 0 or just showing net profit for now)
-            $statsSummary['currentPortfolio'] = $statsSummary['netProfit'];
 
             // Filter for display
             $bets = array_filter($allBets, function ($bet) use ($status) {

@@ -43,7 +43,7 @@ $selectedCountry = $_GET['country'] ?? 'all';
 
                     <div class="flex items-center justify-between gap-4 mb-8">
                         <div class="flex-1 flex flex-col items-center gap-3 cursor-pointer group/team"
-                            onclick="window.location.hash = 'team/<?php echo $p['home_id']; ?>'">
+                            onclick="navigate('team', '<?php echo $p['home_id']; ?>')">
                             <img src="<?php echo $p['home_logo']; ?>"
                                 class="w-12 h-12 object-contain group-hover/team:scale-110 transition-transform">
                             <span
@@ -55,7 +55,7 @@ $selectedCountry = $_GET['country'] ?? 'all';
                             <span class="text-2xl font-black italic opacity-20">VS</span>
                         </div>
                         <div class="flex-1 flex flex-col items-center gap-3 cursor-pointer group/team"
-                            onclick="window.location.hash = 'team/<?php echo $p['away_id']; ?>'">
+                            onclick="navigate('team', '<?php echo $p['away_id']; ?>')">
                             <img src="<?php echo $p['away_logo']; ?>"
                                 class="w-12 h-12 object-contain group-hover/team:scale-110 transition-transform">
                             <span
@@ -74,7 +74,7 @@ $selectedCountry = $_GET['country'] ?? 'all';
 
                     <button
                         class="w-full py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 font-black text-[10px] uppercase tracking-widest transition-all"
-                        onclick="window.location.hash = 'match/<?php echo $p['fixture_id']; ?>'">
+                        onclick="navigate('match', '<?php echo $p['fixture_id']; ?>')">
                         Apri Match Center
                     </button>
                 </div>
