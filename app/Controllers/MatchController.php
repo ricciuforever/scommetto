@@ -503,4 +503,22 @@ class MatchController
             echo '<div class="text-danger p-4">Errore caricamento dashboard: ' . $e->getMessage() . '</div>';
         }
     }
+
+    /**
+     * Serves the leagues partial for HTMX
+     */
+    public function viewLeagues()
+    {
+        try {
+            // Fetch leagues using the model
+            $leagueModel = new League();
+            $leagues = $leagueModel->getAll(); // Assume this returns an array of leagues
+
+            // Pass variables to view
+            require __DIR__ . '/../Views/partials/leagues.php';
+
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore caricamento competizioni: ' . $e->getMessage() . '</div>';
+        }
+    }
 }

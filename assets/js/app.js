@@ -58,33 +58,46 @@ async function renderView(view, id) {
     const legacyContainer = document.getElementById('view-container');
 
     // Toggle containers based on view
-    if (view === 'dashboard' || view === '') {
+    // HTMX views: Dashboard, Leagues (List)
+    if (view === 'dashboard' || view === '' || (view === 'leagues' && !id)) {
         if (htmxContainer) {
             htmxContainer.classList.remove('hidden');
-            // Trigger HTMX to load content if empty or stale
-            if (!htmxContainer.innerHTML.trim() || htmxContainer.children.length === 0) {
+
+            // Set the correct endpoint based on view
+            const endpoint = (view === 'leagues') ? '/api/view/leagues' : '/api/view/dashboard';
+
+            // Manually trigger HTMX if needed or update attribute
+            if (htmxContainer.getAttribute('hx-get') !== endpoint) {
+                htmxContainer.setAttribute('hx-get', endpoint);
+                htmx.process(htmxContainer); // Refresh HTMX bindings
+                htmx.trigger('#htmx-container', 'load');
+            } else if (!htmxContainer.innerHTML.trim()) {
                 htmx.trigger('#htmx-container', 'load');
             }
         }
         if (legacyContainer) legacyContainer.classList.add('hidden');
 
-        viewTitle.textContent = 'Dashboard Intelligence';
+        if (view === 'dashboard' || view === '') {
+            viewTitle.textContent = 'Dashboard Intelligence';
+            updateStatsSummary();
+            renderDashboardPredictions();
+            renderDashboardHistory();
+        } else if (view === 'leagues') {
+            viewTitle.textContent = 'Competizioni';
+        }
 
-        // Still render sidebars/stats via JS for now if they are outside the HTMX fragment
-        updateStatsSummary();
-        renderDashboardPredictions();
-        renderDashboardHistory();
     } else {
         if (htmxContainer) htmxContainer.classList.add('hidden');
         if (legacyContainer) {
             legacyContainer.classList.remove('hidden');
-            legacyContainer.innerHTML = ''; // Clear legacy container
+            if (view !== currentView) legacyContainer.innerHTML = ''; // Clear only if changing view context
         }
 
         switch (view) {
             case 'leagues':
-                viewTitle.textContent = 'Competizioni';
-                await renderLeagues(id);
+                // Detailed League View is still JS-based for now
+                viewTitle.textContent = 'Dettaglio Competizione';
+                if (id) await renderLeagueDetails(id);
                 break;
             case 'predictions':
                 viewTitle.textContent = 'AI Predictions';
@@ -107,9 +120,7 @@ async function renderView(view, id) {
                 await renderPlayerProfile(id);
                 break;
             default:
-                // Fallback to dashboard if unknown view
-                window.location.hash = 'dashboard';
-                return;
+                break;
         }
     }
 
