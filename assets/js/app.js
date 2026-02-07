@@ -1405,7 +1405,9 @@ function calculateStats() {
     const liveCount = liveMatches.filter(m => {
         const countryName = m.league.country || m.league.country_name;
         const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
-        const matchesBookie = selectedBookmaker === 'all' || (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
+        const matchesBookie = selectedBookmaker === 'all'
+            ? (m.available_bookmakers || []).length > 0
+            : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
         return matchesCountry && matchesBookie;
     }).length;
 
@@ -1431,7 +1433,9 @@ function renderDashboardMatches() {
         const league = m.league || {};
         const countryName = league.country || league.country_name || '';
         const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
-        const matchesBookie = selectedBookmaker === 'all' || (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
+        const matchesBookie = selectedBookmaker === 'all'
+            ? (m.available_bookmakers || []).length > 0
+            : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
         return matchesCountry && matchesBookie;
     });
 
@@ -1549,7 +1553,16 @@ async function fetchAndRenderUpcoming(container, limit) {
         header.innerHTML = '<div class="h-px bg-white/10 flex-1"></div>In Arrivo<div class="h-px bg-white/10 flex-1"></div>';
         container.appendChild(header);
 
-        data.response.slice(0, limit).forEach(m => {
+        const filtered = data.response.filter(m => {
+            const countryName = m.country_name || 'International';
+            const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
+            const matchesBookie = selectedBookmaker === 'all'
+                ? (m.available_bookmakers || []).length > 0
+                : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
+            return matchesCountry && matchesBookie;
+        });
+
+        filtered.slice(0, limit).forEach(m => {
             const div = document.createElement('div');
             div.innerHTML = upcomingMatchCardHtml(m);
             if (div.firstElementChild) container.appendChild(div.firstElementChild);
