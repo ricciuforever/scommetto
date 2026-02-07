@@ -330,18 +330,23 @@ class SyncController
 
                         // Execute Real Bet on Betfair if configured
                         if ($this->betfairService->isConfigured()) {
+                            echo "Attempting Betfair placement for $matchName...\n";
                             $marketInfo = $this->betfairService->findMarket($matchName);
                             if ($marketInfo) {
                                 $selectionId = $this->betfairService->mapAdviceToSelection($betData['advice'], $marketInfo['runners']);
                                 if ($selectionId) {
                                     $bfResult = $this->betfairService->placeBet($marketInfo['marketId'], $selectionId, $betData['odds'], $betData['stake']);
                                     if (isset($bfResult['result']['status']) && $bfResult['result']['status'] === 'SUCCESS') {
-                                        echo "REAL BET PLACED ON BETFAIR for $matchName!\n";
+                                        echo "REAL BET PLACED ON BETFAIR for $matchName! Market: {$marketInfo['marketId']}, Selection: $selectionId\n";
                                         $betData['status'] = 'placed';
                                     } else {
-                                        echo "Betfair placement failed: " . json_encode($bfResult) . "\n";
+                                        echo "Betfair placement FAILED for $matchName: " . json_encode($bfResult) . "\n";
                                     }
+                                } else {
+                                    echo "Betfair selection mapping failed for $matchName. Advice: {$betData['advice']}\n";
                                 }
+                            } else {
+                                echo "Betfair market not found for $matchName.\n";
                             }
                         }
 
