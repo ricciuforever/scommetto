@@ -59,6 +59,7 @@ class BetSettler
                 WHERE b.status = 'pending'";
 
         $pending = $db->query($sql)->fetchAll();
+        error_log("settleFromDatabase: Found " . count($pending) . " pending bets via JOIN.");
 
         if (empty($pending))
             return 0;
@@ -83,6 +84,9 @@ class BetSettler
 
             if ($this->processSettlement($bet, $matchData)) {
                 $settledCount++;
+                error_log("Settled bet ID: " . $bet['id']);
+            } else {
+                error_log("Failed to settle bet ID: " . $bet['id'] . " - Status: " . $bet['status_short']);
             }
         }
         return $settledCount;

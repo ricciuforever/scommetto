@@ -389,6 +389,8 @@ class SyncController
             $db = Database::getInstance()->getConnection();
             $force = isset($_GET['force']);
 
+            error_log("Starting refreshPendingFixtures. Force: " . ($force ? 'YES' : 'NO'));
+
             // Se force è attivo, prendiamo tutto. Altrimenti solo quelle vecchie di 15 min.
             if ($force) {
                 $sql = "SELECT DISTINCT fixture_id FROM bets WHERE status = 'pending'";
@@ -401,6 +403,8 @@ class SyncController
             }
             $fixtures = $db->query($sql)->fetchAll(PDO::FETCH_COLUMN);
 
+            error_log("Found " . count($fixtures) . " pending fixtures to update.");
+
             if (empty($fixtures))
                 return 0;
 
@@ -410,6 +414,7 @@ class SyncController
 
             foreach ($chunks as $chunk) {
                 $ids = implode('-', $chunk);
+                error_log("Requesting update for fixtures: $ids");
                 $data = $this->apiService->request("/fixtures?ids=$ids");
 
                 if (isset($data['response']) && is_array($data['response'])) {
@@ -420,6 +425,7 @@ class SyncController
                 }
                 usleep(500000); // Throttling tra i batch
             }
+            error_log("Updated $count fixtures successfully.");
             return $count;
         } catch (\Exception $e) {
             error_log("Error in refreshPendingFixtures: " . $e->getMessage());
