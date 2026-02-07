@@ -205,8 +205,21 @@ class BetSettler
         );
 
         if ($isDC) {
-            $is1X = (strpos($searchString, '1x') !== false || strpos($searchString, '1/x') !== false || strpos($searchString, 'home or draw') !== false || strpos($searchString, 'casa o pareggio') !== false || (strpos($searchString, $homeName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)) || (strpos($homeName, 'u21') === false && strpos($searchString, explode(' ', $homeName)[0]) !== false && strpos($searchString, 'draw') !== false));
-            $isX2 = (strpos($searchString, 'x2') !== false || strpos($searchString, 'x/2') !== false || strpos($searchString, 'draw or away') !== false || strpos($searchString, 'pareggio o ospite') !== false || (strpos($searchString, $awayName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)) || (strpos($awayName, 'u21') === false && strpos($searchString, explode(' ', $awayName)[0]) !== false && strpos($searchString, 'draw') !== false));
+            // Helper function per match fuzzy dei nomi
+            $matchTeam = function ($name, $search) {
+                if (!$name)
+                    return false;
+                $cleanName = str_replace(['fc', 'u21', 'u20', 'cf', 'montevideo', 'tijuana', 'puebla'], '', $name);
+                $words = explode(' ', trim($cleanName));
+                foreach ($words as $w) {
+                    if (strlen($w) > 3 && strpos($search, strtolower($w)) !== false)
+                        return true;
+                }
+                return false;
+            };
+
+            $is1X = (strpos($searchString, '1x') !== false || strpos($searchString, '1/x') !== false || strpos($searchString, 'home or draw') !== false || strpos($searchString, 'casa o pareggio') !== false || (strpos($searchString, $homeName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)) || $matchTeam($homeName, $searchString));
+            $isX2 = (strpos($searchString, 'x2') !== false || strpos($searchString, 'x/2') !== false || strpos($searchString, 'draw or away') !== false || strpos($searchString, 'pareggio o ospite') !== false || (strpos($searchString, $awayName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)) || $matchTeam($awayName, $searchString));
             $is12 = (strpos($searchString, '12') !== false || strpos($searchString, '1/2') !== false || strpos($searchString, 'home or away') !== false || strpos($searchString, 'casa o ospite') !== false || (strpos($searchString, $homeName) !== false && strpos($searchString, $awayName) !== false));
 
             if ($is1X && ($isHomeWin || $isDraw))
