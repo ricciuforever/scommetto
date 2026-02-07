@@ -39,12 +39,20 @@ class GeminiService
             "2. Valuta la 'confidence' (fiducia) da 0 a 100.\n" .
             "3. Se la fiducia è < 75, NON CONSIGLIARE la scommessa.\n" .
             "4. Se confidence >= 75, rispondi con un'analisi e il blocco JSON.\n\n" .
+            "VOCABOLARIO JSON CONTROLLATO (OBBLIGATORIO):\n" .
+            "- Market: USA SOLO: '1X2', 'Double Chance', 'Over/Under', 'Both Teams to Score', 'Correct Score'.\n" .
+            "- Advice (1X2): '1', 'X', '2'\n" .
+            "- Advice (Double Chance): '1X', 'X2', '12'\n" .
+            "- Advice (Over/Under): 'Over 0.5 Goals', 'Over 1.5 Goals', 'Over 2.5 Goals', 'Under 2.5 Goals', etc.\n" .
+            "- Advice (BTTS): 'Yes' (Goal/Goal), 'No' (No Goal)\n" .
+            "- Advice (Correct Score): '1-0', '2-1', etc.\n" .
+            "NON USARE TERMINI COME 'Vittoria Casa', 'Pareggio', 'Segna Gol', 'Next Goalscorer'. Usa SOLO lo standard internazionale.\n\n" .
             "FORMATO RISPOSTA:\n" .
             "Analisi tecnica in ITALIANO.\n" .
             "```json\n" .
             "{\n" .
-            "  \"advice\": \"Consiglio\",\n" .
-            "  \"market\": \"Mercato\",\n" .
+            "  \"advice\": \"Over 2.5 Goals\",\n" .
+            "  \"market\": \"Over/Under\",\n" .
             "  \"odds\": 1.80,\n" .
             "  \"stake\": 3.0,\n" .
             "  \"urgency\": \"High\",\n" .
