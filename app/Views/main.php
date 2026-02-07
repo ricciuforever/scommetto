@@ -261,7 +261,7 @@
         }
     </style>
 
-    <script src="/assets/js/app.js?v=<?php echo time(); ?>"></script>
+    <script type="module" src="/assets/js/main.js?v=<?php echo time(); ?>"></script>
     <script>
         // Init Lucide
         lucide.createIcons();
