@@ -5,7 +5,7 @@ import { Tracker } from './tracker.js'; // For stats calculation reuse
 
 export class Dashboard {
     static async render() {
-        const container = document.getElementById('view-content');
+        const container = document.getElementById('view-container');
         if (!container) return;
 
         container.innerHTML = `

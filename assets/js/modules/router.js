@@ -24,7 +24,7 @@ export async function handleRouting() {
     updateState('currentView', hash);
     const viewTitle = getElement('view-title');
     const viewLoader = getElement('view-loader');
-    const viewContainer = getElement('view-content');
+    const viewContainer = getElement('view-container');
 
     // Update Nav
     document.querySelectorAll('.nav-link').forEach(l => {

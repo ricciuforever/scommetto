@@ -53,7 +53,7 @@ export class Tracker {
     }
 
     static async render() {
-        const container = document.getElementById('view-content');
+        const container = document.getElementById('view-container');
         if (!container) return;
 
         // Render Structure
