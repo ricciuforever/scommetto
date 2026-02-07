@@ -100,7 +100,7 @@ export class Dashboard {
             const countryName = m.league?.country || m.league?.country_name;
             const matchesCountry = state.selectedCountry === 'all' || countryName === state.selectedCountry;
             const matchesBookie = state.selectedBookmaker === 'all'
-                ? (m.available_bookmakers || []).length > 0
+                ? true
                 : (m.available_bookmakers || []).includes(parseInt(state.selectedBookmaker));
             return matchesCountry && matchesBookie;
         }).length;
@@ -145,7 +145,7 @@ export class Dashboard {
             const countryName = m.league?.country || m.league?.country_name;
             const matchesCountry = state.selectedCountry === 'all' || countryName === state.selectedCountry;
             const matchesBookie = state.selectedBookmaker === 'all'
-                ? (m.available_bookmakers || []).length > 0
+                ? true
                 : (m.available_bookmakers || []).includes(parseInt(state.selectedBookmaker));
             return matchesCountry && matchesBookie;
         });

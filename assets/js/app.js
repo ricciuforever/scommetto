@@ -12,7 +12,6 @@ let historyData = [];
 // Global Filter State
 let selectedCountry = localStorage.getItem('selected_country') || 'all';
 let selectedBookmaker = localStorage.getItem('selected_bookmaker') || 'all';
-let selectedLeague = 'all'; // New League Filter State
 let allFilterData = { countries: [], bookmakers: [] };
 
 const countryFlags = {
@@ -702,6 +701,8 @@ function renderMatchLineups(lineups, injuries) {
 
     let html = `<div class="grid grid-cols-1 md:grid-cols-2 gap-10">`;
     lineups.forEach(l => {
+        const startXI = typeof l.start_xi_json === 'string' ? JSON.parse(l.start_xi_json) : (l.start_xi_json || []);
+
         html += `
             <div class="glass p-8 rounded-[40px] border-white/5">
                 <div class="flex items-center justify-between mb-8">
@@ -711,7 +712,7 @@ function renderMatchLineups(lineups, injuries) {
 
                 <div class="space-y-4">
                     <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-4 italic">Titolari (Starting XI)</div>
-                    ${(l.start_xi_json || []).map(p => `
+                    ${startXI.map(p => `
                         <div class="flex items-center gap-4 group cursor-pointer" onclick="window.location.hash = 'player/${p.player.id}'">
                             <span class="w-6 text-accent font-black tabular-nums italic">${p.player.number || '-'}</span>
                             <span class="font-black uppercase italic tracking-tight text-white group-hover:text-accent transition-colors">${p.player.name}</span>
@@ -1406,7 +1407,7 @@ function calculateStats() {
         const countryName = m.league.country || m.league.country_name;
         const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
         const matchesBookie = selectedBookmaker === 'all'
-            ? (m.available_bookmakers || []).length > 0
+            ? true
             : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
         return matchesCountry && matchesBookie;
     }).length;
@@ -1423,54 +1424,29 @@ function renderDashboardMatches() {
     if (!container) return;
 
     // Debug filtering issues
-    console.log(`Live sync: ${liveMatches.length} matches found. Filters: Country=${selectedCountry}, Bookie=${selectedBookmaker}, League=${selectedLeague}`);
+    console.log(`Live sync: ${liveMatches.length} matches found. Filters: Country=${selectedCountry}, Bookie=${selectedBookmaker}`);
 
     container.innerHTML = '';
 
     // 1. Extract Leagues for Filter (From visible live matches matching country/bookie)
     // We want to filter leagues based on current country/bookie selection to avoid empty options
-    const preFiltered = liveMatches.filter(m => {
+    const finalMatches = liveMatches.filter(m => {
         const league = m.league || {};
         const countryName = league.country || league.country_name || '';
         const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
         const matchesBookie = selectedBookmaker === 'all'
-            ? (m.available_bookmakers || []).length > 0
+            ? true
             : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
         return matchesCountry && matchesBookie;
     });
 
-    const leagues = [...new Set(preFiltered.map(m => m.league.name))].sort();
-
-    // 2. Render League Filter Dropdown (Only if we have matches)
-    if (preFiltered.length > 0) {
-        const filterWrapper = document.createElement('div');
-        filterWrapper.className = "flex justify-end mb-6";
-        filterWrapper.innerHTML = `
-            <div class="relative group">
-                <select onchange="updateLeagueFilter(this.value)" class="appearance-none bg-white/5 border border-white/10 text-slate-300 text-[10px] font-bold uppercase tracking-widest pl-4 pr-10 py-3 rounded-2xl focus:outline-none focus:border-accent cursor-pointer hover:bg-white/10 transition-all">
-                    <option value="all" ${selectedLeague === 'all' ? 'selected' : ''}>Tutte le Leghe (${leagues.length})</option>
-                    ${leagues.map(l => `<option value="${l}" ${selectedLeague === l ? 'selected' : ''}>${l}</option>`).join('')}
-                </select>
-                <div class="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-slate-500">
-                    <i data-lucide="chevron-down" class="w-4 h-4"></i>
-                </div>
-            </div>
-        `;
-        container.appendChild(filterWrapper);
-    }
-
-    // 3. Final Filter
-    const finalMatches = preFiltered.filter(m => {
-        return selectedLeague === 'all' || m.league.name === selectedLeague;
-    });
-
-    console.log(`Rendering ${finalMatches.length} matches after league filter.`);
+    console.log(`Rendering ${finalMatches.length} bettable matches.`);
 
     // Render Live Matches
-    if (finalMatches.length === 0 && preFiltered.length > 0) {
+    if (finalMatches.length === 0 && liveMatches.length > 0) {
         const noMatch = document.createElement('div');
         noMatch.className = "glass p-8 rounded-[32px] text-center text-slate-500 font-bold uppercase tracking-widest italic";
-        noMatch.innerText = "Nessun match live per questa lega.";
+        noMatch.innerText = "Nessun match live per i filtri selezionati.";
         container.appendChild(noMatch);
     }
 
@@ -1530,10 +1506,6 @@ function renderDashboardMatches() {
     if (window.lucide) lucide.createIcons();
 }
 
-function updateLeagueFilter(val) {
-    selectedLeague = val;
-    renderDashboardMatches();
-}
 
 async function fetchAndRenderUpcoming(container, limit) {
     try {
@@ -1550,14 +1522,14 @@ async function fetchAndRenderUpcoming(container, limit) {
         const headerId = 'upcoming-header-' + Date.now();
         const header = document.createElement('div');
         header.className = "col-span-full border-t border-white/5 my-8 pt-4 text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-4";
-        header.innerHTML = '<div class="h-px bg-white/10 flex-1"></div>In Arrivo<div class="h-px bg-white/10 flex-1"></div>';
+        header.innerHTML = '<div class="h-px bg-white/10 flex-1"></div>PROSSIME 24 ORE<div class="h-px bg-white/10 flex-1"></div>';
         container.appendChild(header);
 
         const filtered = data.response.filter(m => {
             const countryName = m.country_name || 'International';
             const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
             const matchesBookie = selectedBookmaker === 'all'
-                ? (m.available_bookmakers || []).length > 0
+                ? true
                 : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
             return matchesCountry && matchesBookie;
         });
@@ -1596,7 +1568,7 @@ function upcomingMatchCardHtml(m) {
         </div>
         <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5">
              <button onclick="event.stopPropagation(); analyzeMatch(${m.fixture_id})" class="text-[8px] font-black uppercase tracking-widest text-accent hover:text-white transition-colors">AI Forecast</button>
-             <button onclick="event.stopPropagation(); window.location.hash='match/${m.fixture_id}'" class="text-[8px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Dettagli</button>
+             <button onclick="event.stopPropagation(); window.location.hash='match/${m.fixture_id}'" class="text-[8px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Pronostico</button>
         </div>
     </div>
     `;

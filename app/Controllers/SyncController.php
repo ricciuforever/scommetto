@@ -207,7 +207,7 @@ class SyncController
                 $matchFids = array_map(fn($m) => (int)$m['fixture']['id'], $matches);
                 $matchFidsStr = implode(',', $matchFids);
                 $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($matchFidsStr)");
-                $bookiesRaw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $bookiesRaw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
                 $bookiesByFid = [];
                 foreach ($bookiesRaw as $row) {
                     $bookiesByFid[$row['fixture_id']][] = (int)$row['bookmaker_id'];
