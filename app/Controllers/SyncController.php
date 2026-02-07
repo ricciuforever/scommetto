@@ -159,12 +159,13 @@ class SyncController
             $results = ['scanned' => 0, 'analyzed' => 0, 'bets_placed' => 0, 'settled' => 0, 'predictions' => 0];
 
             $live = $this->apiService->fetchLiveMatches();
-            if (isset($live['error'])) throw new \Exception($live['error']);
+            if (isset($live['error']))
+                throw new \Exception($live['error']);
 
             $allLiveMatches = $live['response'] ?? [];
 
             // FILTER: Only keep matches from bettable leagues
-            $matches = array_filter($allLiveMatches, function($m) {
+            $matches = array_filter($allLiveMatches, function ($m) {
                 return $this->leagueModel->isBettable($m['league']['id'] ?? 0);
             });
 
@@ -207,7 +208,8 @@ class SyncController
                     if (isset($eventsData['response'])) {
                         $this->eventModel->deleteByFixture($fid);
                         foreach ($eventsData['response'] as $ev) {
-                            if (isset($ev['team']['id'])) $this->eventModel->save($fid, $ev);
+                            if (isset($ev['team']['id']))
+                                $this->eventModel->save($fid, $ev);
                         }
                     }
 
@@ -215,7 +217,8 @@ class SyncController
                     $statsData = $this->apiService->fetchFixtureStatistics($fid);
                     if (isset($statsData['response'])) {
                         foreach ($statsData['response'] as $st) {
-                            if (isset($st['team']['id'])) $this->statModel->save($fid, $st['team']['id'], $st['statistics']);
+                            if (isset($st['team']['id']))
+                                $this->statModel->save($fid, $st['team']['id'], $st['statistics']);
                         }
                     }
 
@@ -226,7 +229,8 @@ class SyncController
                         $lineupsData = $this->apiService->fetchFixtureLineups($fid);
                         if (isset($lineupsData['response'])) {
                             foreach ($lineupsData['response'] as $l) {
-                                if (isset($l['team']['id'])) $this->fixtureLineupModel->save($fid, $l['team']['id'], $l);
+                                if (isset($l['team']['id']))
+                                    $this->fixtureLineupModel->save($fid, $l['team']['id'], $l);
                             }
                         }
                     }
@@ -260,7 +264,8 @@ class SyncController
                                               AND status_short = 'NS'")->fetchAll(PDO::FETCH_ASSOC);
 
             foreach ($upcomingForLineups as $u) {
-                if (!$this->leagueModel->isBettable($u['league_id'] ?? 0)) continue;
+                if (!$this->leagueModel->isBettable($u['league_id'] ?? 0))
+                    continue;
 
                 // Fetch lineups if not recently fetched (every 15 min)
                 // We use a simple check: if we already have it in DB and last_updated is < 15 min, skip
@@ -271,7 +276,8 @@ class SyncController
                     $lineupsData = $this->apiService->fetchFixtureLineups($u['id']);
                     if (isset($lineupsData['response'])) {
                         foreach ($lineupsData['response'] as $l) {
-                            if (isset($l['team']['id'])) $this->fixtureLineupModel->save($u['id'], $l['team']['id'], $l);
+                            if (isset($l['team']['id']))
+                                $this->fixtureLineupModel->save($u['id'], $l['team']['id'], $l);
                         }
                         $results['lineups'] = ($results['lineups'] ?? 0) + 1;
                     }
@@ -282,9 +288,14 @@ class SyncController
             foreach ($matches as $m) {
                 $fid = $m['fixture']['id'];
                 $elapsed = $m['fixture']['status']['elapsed'] ?? 0;
-                if ($elapsed < 10 || $elapsed > 80) continue;
-                if ($this->betModel->isPending($fid)) continue;
-                if ($this->analysisModel->wasRecentlyChecked($fid)) continue;
+                if ($elapsed < 10 || $elapsed > 80)
+                    continue;
+                if ($this->betModel->hasBet($fid))
+                    continue; // Evita scommesse multiple sullo stesso match
+                if (!$this->liveOddsModel->hasOdds($fid))
+                    continue; // Salta se non ci sono odds live disponibili
+                if ($this->analysisModel->wasRecentlyChecked($fid))
+                    continue;
 
                 $prediction = $this->geminiService->analyze($m);
                 $this->analysisModel->log($fid, $prediction);
@@ -301,7 +312,9 @@ class SyncController
                 break;
             }
             echo json_encode($results);
-        } catch (\Throwable $e) { $this->handleException($e); }
+        } catch (\Throwable $e) {
+            $this->handleException($e);
+        }
     }
 
     /**
@@ -370,12 +383,14 @@ class SyncController
             $activeLeagues = $db->query("SELECT DISTINCT league_id FROM fixtures WHERE DATE(date) = '$today'")->fetchAll(PDO::FETCH_COLUMN);
 
             foreach ($activeLeagues as $lId) {
-                if (!$lId) continue;
+                if (!$lId)
+                    continue;
                 $stData = $this->apiService->fetchStandings($lId, $season);
                 if (isset($stData['response'][0]['league']['standings'])) {
                     foreach ($stData['response'][0]['league']['standings'] as $group) {
                         foreach ($group as $row) {
-                            if (isset($row['team']['id'])) $this->standingModel->save($lId, $row);
+                            if (isset($row['team']['id']))
+                                $this->standingModel->save($lId, $row);
                         }
                     }
                     $results['standings']++;
@@ -393,12 +408,59 @@ class SyncController
                 usleep(250000);
             }
 
+            // Pulizia: rimuove scommesse in sospeso con stake 0
+            $this->betModel->cleanup();
+
+            // Rimuove fixture che non hanno odds e iniziano tra poco (non bettabili)
+            $db->exec("DELETE FROM fixtures 
+                       WHERE id NOT IN (SELECT fixture_id FROM fixture_odds) 
+                       AND status_short = 'NS' 
+                       AND date < DATE_ADD(NOW(), INTERVAL 1 HOUR)");
+
             // Settle bets after updating standings and fixtures
+            $this->refreshPendingFixtures();
             $betSettler = new \App\Services\BetSettler();
             $results['settled'] = $betSettler->settleFromDatabase();
 
             echo json_encode($results);
-        } catch (\Throwable $e) { $this->handleException($e); }
+        } catch (\Throwable $e) {
+            $this->handleException($e);
+        }
+    }
+
+    /**
+     * Aggiorna i dati delle partite che hanno scommesse in sospeso (Costo API ridotto con batch)
+     */
+    public function refreshPendingFixtures()
+    {
+        try {
+            $db = Database::getInstance()->getConnection();
+            $fixtures = $db->query("SELECT DISTINCT fixture_id FROM bets WHERE status = 'pending'")->fetchAll(PDO::FETCH_COLUMN);
+
+            if (empty($fixtures))
+                return 0;
+
+            $count = 0;
+            // Batch process fixtures (API-Football supports up to 20 IDs per request)
+            $chunks = array_chunk($fixtures, 20);
+
+            foreach ($chunks as $chunk) {
+                $ids = implode('-', $chunk);
+                $data = $this->apiService->request("/fixtures?ids=$ids");
+
+                if (isset($data['response']) && is_array($data['response'])) {
+                    foreach ($data['response'] as $fixtureData) {
+                        $this->fixtureModel->save($fixtureData);
+                        $count++;
+                    }
+                }
+                usleep(500000); // Throttling tra i batch
+            }
+            return $count;
+        } catch (\Exception $e) {
+            error_log("Error in refreshPendingFixtures: " . $e->getMessage());
+            return 0;
+        }
     }
 
     /**
@@ -446,7 +508,9 @@ class SyncController
                 usleep(250000);
             }
             echo json_encode($results);
-        } catch (\Throwable $e) { $this->handleException($e); }
+        } catch (\Throwable $e) {
+            $this->handleException($e);
+        }
     }
 
     /**
@@ -457,10 +521,21 @@ class SyncController
         $this->sendJsonHeader();
         $season = $this->getCurrentSeason();
         $results = [
-            'countries' => 0, 'teams' => 0, 'coaches' => 0, 'squads' => 0,
-            'predictions' => 0, 'trophies' => 0, 'transfers' => 0,
-            'sidelined' => 0, 'player_stats' => 0, 'player_seasons' => 0,
-            'bookmakers' => 0, 'bet_types' => 0, 'venues' => 0, 'team_stats' => 0, 'h2h' => 0
+            'countries' => 0,
+            'teams' => 0,
+            'coaches' => 0,
+            'squads' => 0,
+            'predictions' => 0,
+            'trophies' => 0,
+            'transfers' => 0,
+            'sidelined' => 0,
+            'player_stats' => 0,
+            'player_seasons' => 0,
+            'bookmakers' => 0,
+            'bet_types' => 0,
+            'venues' => 0,
+            'team_stats' => 0,
+            'h2h' => 0
         ];
 
         try {
@@ -494,7 +569,10 @@ class SyncController
 
             $cData = $this->apiService->fetchCountries();
             if (isset($cData['response'])) {
-                foreach ($cData['response'] as $c) { $this->countryModel->save($c); $results['countries']++; }
+                foreach ($cData['response'] as $c) {
+                    $this->countryModel->save($c);
+                    $results['countries']++;
+                }
             }
 
             // 2. League-Specific Data (Filter by Bettable only)
@@ -502,13 +580,15 @@ class SyncController
                                            FROM fixtures f
                                            JOIN leagues l ON f.league_id = l.id
                                            WHERE f.date BETWEEN DATE_SUB(NOW(), INTERVAL 7 DAY) AND DATE_ADD(NOW(), INTERVAL 14 DAY)
-                                           AND (l.coverage_json LIKE '%\"odds\":true%' OR l.id IN (".implode(',', Config::PREMIUM_LEAGUES)."))")
-                                  ->fetchAll(PDO::FETCH_COLUMN);
+                                           AND (l.coverage_json LIKE '%\"odds\":true%' OR l.id IN (" . implode(',', Config::PREMIUM_LEAGUES) . "))")
+                ->fetchAll(PDO::FETCH_COLUMN);
 
-            if (empty($relevantLeagues)) $relevantLeagues = Config::PREMIUM_LEAGUES;
+            if (empty($relevantLeagues))
+                $relevantLeagues = Config::PREMIUM_LEAGUES;
 
             foreach ($relevantLeagues as $lId) {
-                if (!$lId) continue;
+                if (!$lId)
+                    continue;
                 $tData = $this->apiService->fetchTeams(['league' => $lId, 'season' => $season]);
                 if (isset($tData['response'])) {
                     foreach ($tData['response'] as $row) {
@@ -612,7 +692,9 @@ class SyncController
                                         }
                                     }
                                     $page++;
-                                } else { $page = 0; }
+                                } else {
+                                    $page = 0;
+                                }
                             } while ($page > 1 && $page <= ($psData['paging']['total'] ?? 1));
                             usleep(250000);
                         }
@@ -653,7 +735,9 @@ class SyncController
             }
 
             echo json_encode($results);
-        } catch (\Throwable $e) { $this->handleException($e); }
+        } catch (\Throwable $e) {
+            $this->handleException($e);
+        }
     }
 
     /**
@@ -668,7 +752,8 @@ class SyncController
             $players = $db->query("SELECT id FROM players ORDER BY last_updated ASC LIMIT 50")->fetchAll(PDO::FETCH_COLUMN);
 
             foreach ($players as $pid) {
-                if (!$pid) continue;
+                if (!$pid)
+                    continue;
                 $pData = $this->apiService->fetchPlayers(['id' => $pid, 'season' => $this->getCurrentSeason()]);
                 if (isset($pData['response'][0])) {
                     $this->playerModel->save($pData['response'][0]['player']);
@@ -677,10 +762,15 @@ class SyncController
                 usleep(250000);
             }
             echo json_encode($results);
-        } catch (\Throwable $e) { $this->handleException($e); }
+        } catch (\Throwable $e) {
+            $this->handleException($e);
+        }
     }
 
-    public function sync() { $this->syncLive(); }
+    public function sync()
+    {
+        $this->syncLive();
+    }
 
     private function syncRecentFinishedStats()
     {
@@ -713,7 +803,8 @@ class SyncController
             $lineupsData = $this->apiService->fetchFixtureLineups($fid);
             if (isset($lineupsData['response'])) {
                 foreach ($lineupsData['response'] as $l) {
-                    if (isset($l['team']['id'])) $this->fixtureLineupModel->save($fid, $l['team']['id'], $l);
+                    if (isset($l['team']['id']))
+                        $this->fixtureLineupModel->save($fid, $l['team']['id'], $l);
                 }
             }
 
@@ -747,19 +838,29 @@ class SyncController
         foreach ($types as $type) {
             $data = null;
             switch ($type) {
-                case 'scorers': $data = $this->apiService->fetchTopScorers($leagueId, $season); break;
-                case 'assists': $data = $this->apiService->fetchTopAssists($leagueId, $season); break;
-                case 'yellow_cards': $data = $this->apiService->fetchTopYellowCards($leagueId, $season); break;
-                case 'red_cards': $data = $this->apiService->fetchTopRedCards($leagueId, $season); break;
+                case 'scorers':
+                    $data = $this->apiService->fetchTopScorers($leagueId, $season);
+                    break;
+                case 'assists':
+                    $data = $this->apiService->fetchTopAssists($leagueId, $season);
+                    break;
+                case 'yellow_cards':
+                    $data = $this->apiService->fetchTopYellowCards($leagueId, $season);
+                    break;
+                case 'red_cards':
+                    $data = $this->apiService->fetchTopRedCards($leagueId, $season);
+                    break;
             }
-            if ($data && isset($data['response'])) $topStatsModel->save($leagueId, $season, $type, $data['response']);
+            if ($data && isset($data['response']))
+                $topStatsModel->save($leagueId, $season, $type, $data['response']);
             usleep(200000);
         }
     }
 
     public function deepSync($leagueId = 135, $season = null)
     {
-        if ($season === null) $season = $this->getCurrentSeason();
+        if ($season === null)
+            $season = $this->getCurrentSeason();
         $this->sendJsonHeader();
         try {
             $results = [
@@ -768,7 +869,9 @@ class SyncController
                 'status' => 'success'
             ];
             echo json_encode($results);
-        } catch (\Throwable $e) { $this->handleException($e); }
+        } catch (\Throwable $e) {
+            $this->handleException($e);
+        }
     }
 
     public function syncLeagueOverview($leagueId, $season)
@@ -791,7 +894,8 @@ class SyncController
     {
         $data = $this->apiService->request("/fixtures?league=$leagueId&season=$season");
         if (isset($data['response'])) {
-            foreach ($data['response'] as $f) $this->fixtureModel->save($f);
+            foreach ($data['response'] as $f)
+                $this->fixtureModel->save($f);
         }
         return ['status' => 'completed'];
     }

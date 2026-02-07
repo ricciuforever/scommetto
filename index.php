@@ -6,6 +6,7 @@ require_once __DIR__ . '/bootstrap.php';
 use App\Controllers\MatchController;
 use App\Controllers\BetController;
 use App\Controllers\SyncController;
+use App\Controllers\FilterController;
 
 $request = $_SERVER['REQUEST_URI'] ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -45,16 +46,18 @@ try {
         (new SyncController())->sync();
     } elseif ($path === '/api/deep-sync') {
         $league = $_GET['league'] ?? 135;
-        
+
         // Calcolo dinamico tramite Config
         $defaultSeason = \App\Config\Config::getCurrentSeason();
-        
+
         // Prende la stagione dall'URL se presente (?season=2025), altrimenti usa quella dinamica
-        $season = isset($_GET['season']) ? (int)$_GET['season'] : $defaultSeason;
-        
+        $season = isset($_GET['season']) ? (int) $_GET['season'] : $defaultSeason;
+
         (new SyncController())->deepSync($league, $season);
     } elseif ($path === '/api/usage') {
         (new SyncController())->getUsage();
+    } elseif ($path === '/api/filters') {
+        (new FilterController())->getFilters();
     } else {
         http_response_code(404);
         echo json_encode(['error' => 'Not Found', 'path' => $path]);

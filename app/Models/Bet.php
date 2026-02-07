@@ -50,6 +50,13 @@ class Bet
         return $stmt->fetch() !== false;
     }
 
+    public function hasBet($fixture_id)
+    {
+        $stmt = $this->db->prepare("SELECT id FROM bets WHERE fixture_id = ?");
+        $stmt->execute([$fixture_id]);
+        return $stmt->fetch() !== false;
+    }
+
     public function updateStatus($id, $status, $result = null)
     {
         $sql = "UPDATE bets SET status = :status, result = :result WHERE id = :id";
@@ -59,5 +66,10 @@ class Bet
             'result' => $result,
             'id' => $id
         ]);
+    }
+    public function cleanup()
+    {
+        $sql = "DELETE FROM bets WHERE stake = 0 AND status = 'pending'";
+        return $this->db->query($sql);
     }
 }

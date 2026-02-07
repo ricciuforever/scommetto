@@ -38,4 +38,10 @@ class LiveOdds
         $stmt->execute([$fixture_id]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
+    public function hasOdds($fixture_id)
+    {
+        $stmt = $this->db->prepare("SELECT 1 FROM live_odds WHERE fixture_id = ?");
+        $stmt->execute([$fixture_id]);
+        return $stmt->fetch() !== false;
+    }
 }
