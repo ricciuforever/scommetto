@@ -193,9 +193,21 @@ class BetSettler
         }
 
         // --- Double Chance ---
-        if (strpos($searchString, 'double chance') !== false || strpos($searchString, 'doppia chance') !== false || strpos($searchString, ' or ') !== false || strpos($searchString, '/') !== false || strpos($searchString, '1x') !== false || strpos($searchString, 'x2') !== false || strpos($searchString, '12') !== false) {
-            $is1X = (strpos($searchString, '1x') !== false || strpos($searchString, 'home or draw') !== false || strpos($searchString, 'casa o pareggio') !== false || (strpos($searchString, $homeName) !== false && strpos($searchString, 'draw') !== false) || (strpos($searchString, $homeName) !== false && strpos($searchString, 'pareggio') !== false));
-            $isX2 = (strpos($searchString, 'x2') !== false || strpos($searchString, 'draw or away') !== false || strpos($searchString, 'pareggio o ospite') !== false || (strpos($searchString, $awayName) !== false && strpos($searchString, 'draw') !== false) || (strpos($searchString, $awayName) !== false && strpos($searchString, 'pareggio') !== false));
+        $isDC = (
+            strpos($searchString, 'double chance') !== false ||
+            strpos($searchString, 'doppia chance') !== false ||
+            strpos($searchString, ' or ') !== false ||
+            strpos($searchString, '/') !== false ||
+            strpos($searchString, '1x') !== false ||
+            strpos($searchString, 'x2') !== false ||
+            strpos($searchString, '12') !== false ||
+            strpos($searchString, 'dc') !== false ||
+            preg_match('/\b(1x|x2|12)\b/', $searchString)
+        );
+
+        if ($isDC) {
+            $is1X = (strpos($searchString, '1x') !== false || strpos($searchString, 'home or draw') !== false || strpos($searchString, 'casa o pareggio') !== false || (strpos($searchString, $homeName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)));
+            $isX2 = (strpos($searchString, 'x2') !== false || strpos($searchString, 'draw or away') !== false || strpos($searchString, 'pareggio o ospite') !== false || (strpos($searchString, $awayName) !== false && (strpos($searchString, 'draw') !== false || strpos($searchString, 'pareggio') !== false)));
             $is12 = (strpos($searchString, '12') !== false || strpos($searchString, 'home or away') !== false || strpos($searchString, 'casa o ospite') !== false || (strpos($searchString, $homeName) !== false && strpos($searchString, $awayName) !== false));
 
             if ($is1X && ($isHomeWin || $isDraw))
@@ -205,7 +217,6 @@ class BetSettler
             if ($is12 && ($isHomeWin || $isAwayWin))
                 return 'won';
 
-            // If it matched the DC pattern but didn't win, it's a loss
             if ($is1X || $isX2 || $is12)
                 return 'lost';
         }

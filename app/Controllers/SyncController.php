@@ -302,7 +302,7 @@ class SyncController
 
                 if (preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches_json)) {
                     $betData = json_decode($matches_json[1], true);
-                    if ($betData) {
+                    if ($betData && isset($betData['stake']) && $betData['stake'] > 0) {
                         $betData['fixture_id'] = $fid;
                         $betData['match'] = $m['teams']['home']['name'] . ' vs ' . $m['teams']['away']['name'];
                         $this->betModel->create($betData);

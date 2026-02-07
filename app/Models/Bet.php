@@ -71,7 +71,7 @@ class Bet
     }
     public function cleanup()
     {
-        $sql = "DELETE FROM bets WHERE stake = 0 AND status = 'pending'";
+        $sql = "DELETE FROM bets WHERE stake <= 0";
         return $this->db->query($sql);
     }
 
