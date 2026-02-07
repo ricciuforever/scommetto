@@ -1717,30 +1717,27 @@ async function renderTracker() {
 
 function updateTrackerSummary() {
     const summary = calculateStats();
-    filtered.forEach(h => {
-        const item = document.createElement('div');
-        item.className = "p-8 hover:bg-white/5 cursor-pointer transition-all flex items-center justify-between group";
-        item.onclick = () => showBetDetails(h);
-        item.innerHTML = `
-            <div class="flex items-center gap-6">
-                <div class="w-12 h-12 rounded-2xl flex items-center justify-center border ${h.status === 'won' ? 'border-success bg-success/10 text-success' : h.status === 'lost' ? 'border-danger bg-danger/10 text-danger' : 'border-warning bg-warning/10 text-warning'}">
-                    <i data-lucide="${h.status === 'won' ? 'check-circle' : h.status === 'lost' ? 'x-circle' : 'clock'}" class="w-6 h-6"></i>
-                </div>
-                <div>
-                    <div class="text-xl font-black italic uppercase tracking-tight text-white group-hover:text-accent transition-colors">${h.match_name}</div>
-                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">${h.market} @ ${h.odds} | ${new Date(h.timestamp).toLocaleDateString()}</div>
-                </div>
-            </div>
-            <div class="text-right">
-                <div class="text-2xl font-black italic tracking-tighter ${h.status === 'won' ? 'text-success' : h.status === 'lost' ? 'text-danger' : 'text-slate-500'}">
-                    ${h.status === 'won' ? '+' + (h.stake * (h.odds - 1)).toFixed(2) : (h.status === 'lost' ? '-' + h.stake : '0.00')}€
-                </div>
-                <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">Puntata: ${h.stake}€</div>
-            </div>
-        `;
-        container.appendChild(item);
-    });
-    if (window.lucide) lucide.createIcons();
+    const container = document.getElementById('tracker-stats-summary');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="glass p-8 rounded-[40px] border-white/5">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Net Balance</span>
+            <div class="text-4xl font-black italic tracking-tighter ${summary.netProfit >= 0 ? 'text-success' : 'text-danger'}">${summary.netProfit >= 0 ? '+' : ''}${summary.netProfit.toFixed(2)}€</div>
+        </div>
+        <div class="glass p-8 rounded-[40px] border-white/5">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">ROI</span>
+            <div class="text-4xl font-black italic tracking-tighter text-accent">${summary.roi.toFixed(1)}%</div>
+        </div>
+        <div class="glass p-8 rounded-[40px] border-white/5">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Success Rate</span>
+            <div class="text-4xl font-black italic tracking-tighter text-white">${summary.winCount + summary.lossCount > 0 ? ((summary.winCount / (summary.winCount + summary.lossCount)) * 100).toFixed(0) : 0}%</div>
+        </div>
+        <div class="glass p-8 rounded-[40px] border-white/5">
+            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Bankroll</span>
+            <div class="text-4xl font-black italic tracking-tighter text-white">${summary.currentPortfolio.toFixed(2)}€</div>
+        </div>
+    `;
 }
 
 // --- SHARED DATA FETCHERS & UPDATERS ---
