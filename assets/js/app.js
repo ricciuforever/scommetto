@@ -1713,6 +1713,21 @@ function renderFullHistory() {
     if (window.lucide) lucide.createIcons();
 }
 
+// --- SHARED DATA FETCHERS & UPDATERS ---
+
+async function fetchUsage() {
+    try {
+        const res = await fetch('/api/usage');
+        const data = await res.json();
+        if (data) {
+            const usageVal = document.getElementById('usage-val');
+            const limitVal = document.getElementById('limit-val');
+            if (usageVal) usageVal.textContent = data.requests_used || 0;
+            if (limitVal) limitVal.textContent = data.requests_limit || 75000;
+        }
+    } catch (e) { console.error("Error fetching API usage", e); }
+}
+
 // --- GLOBAL INIT ---
 
 window.addEventListener('hashchange', handleRouting);
