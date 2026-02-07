@@ -168,18 +168,10 @@ class SyncController
 
             $allLiveMatches = $live['response'] ?? [];
 
-            // Get IDs of matches with pending bets or recent predictions to ensure they are tracked
-            // This fixes the issue where a match with an active bet disappears from dashboard
-            $pendingFixtureIds = $db->query("SELECT DISTINCT fixture_id FROM bets WHERE status = 'pending'")->fetchAll(\PDO::FETCH_COLUMN);
+            // FILTER REMOVED: User requested to see/process ALL live matches.
+            $matches = $allLiveMatches;
 
-            // FILTER: Keep matches from bettable leagues OR matches we have bet on
-            $matches = array_filter($allLiveMatches, function ($m) use ($pendingFixtureIds) {
-                $isBettable = $this->leagueModel->isBettable($m['league']['id'] ?? 0);
-                $hasBet = in_array($m['fixture']['id'], $pendingFixtureIds);
-                return $isBettable || $hasBet;
-            });
-
-            // Update live data file with filtered matches
+            // Update live data file with ALL matches
             $live['response'] = array_values($matches);
             file_put_contents(Config::LIVE_DATA_FILE, json_encode($live));
 
