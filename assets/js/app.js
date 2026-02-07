@@ -2176,20 +2176,23 @@ async function init() {
     const label = document.getElementById('selected-country-name');
     const flagPlaceholder = document.getElementById('selected-country-flag');
 
-    if (selectedCountry === 'all') {
-        label.textContent = 'Tutte le Nazioni';
-        flagPlaceholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4 text-accent"></i>';
-    } else {
-        const c = allFilterData.countries.find(x => x.name === selectedCountry);
-        label.textContent = selectedCountry;
-        if (c && c.flag) {
-            flagPlaceholder.innerHTML = `<img src="${c.flag}" class="w-5 h-5 rounded-sm object-cover">`;
+    if (label) {
+        if (selectedCountry === 'all') {
+            label.textContent = 'Tutte le Nazioni';
+            if (flagPlaceholder) flagPlaceholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4 text-accent"></i>';
+        } else {
+            const c = allFilterData.countries.find(x => x.name === selectedCountry);
+            label.textContent = selectedCountry;
+            if (c && c.flag && flagPlaceholder) {
+                flagPlaceholder.innerHTML = `<img src="${c.flag}" class="w-5 h-5 rounded-sm object-cover">`;
+            }
         }
     }
 
-    if (selectedBookmaker !== 'all') {
+    const bookmakerLabel = document.getElementById('selected-bookmaker-name');
+    if (selectedBookmaker !== 'all' && bookmakerLabel) {
         const bookie = allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker);
-        if (bookie) document.getElementById('selected-bookmaker-name').textContent = bookie.name;
+        if (bookie) bookmakerLabel.textContent = bookie.name;
     }
 
     if (window.lucide) lucide.createIcons();
