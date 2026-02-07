@@ -113,11 +113,37 @@ async function renderDashboard() {
 
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-10">
             <div class="lg:col-span-3">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-                    <h2 class="text-2xl font-black tracking-tight flex items-center gap-3">
-                        <span class="w-2 h-8 bg-accent rounded-full"></span>
-                        Live Now
-                    </h2>
+                <div class="flex flex-col gap-6 mb-8">
+                    <!-- Filters Header -->
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <h2 class="text-2xl font-black tracking-tight flex items-center gap-3">
+                            <span class="w-2 h-8 bg-accent rounded-full"></span>
+                            Live Now
+                        </h2>
+
+                        <div class="flex items-center gap-3">
+                            <!-- Nation Filter -->
+                            <div class="relative group z-20">
+                                <button onclick="openCountryModal()" class="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-2xl transition-all">
+                                    <div id="selected-country-flag" class="w-5 h-5 flex items-center justify-center">
+                                        <i data-lucide="globe" class="w-4 h-4 text-accent"></i>
+                                    </div>
+                                    <span id="selected-country-name" class="text-[10px] font-black uppercase tracking-widest text-white truncate max-w-[100px]">Tutte</span>
+                                    <i data-lucide="chevron-down" class="w-3 h-3 text-slate-500"></i>
+                                </button>
+                                <!-- Modal handled globally -->
+                            </div>
+
+                            <!-- Bookmaker Filter -->
+                            <div class="relative group z-20">
+                                <button onclick="openBookmakerModal()" class="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-2xl transition-all">
+                                    <i data-lucide="landmark" class="w-4 h-4 text-accent"></i>
+                                    <span id="selected-bookmaker-name" class="text-[10px] font-black uppercase tracking-widest text-white truncate max-w-[100px]">Tutti i Book</span>
+                                    <i data-lucide="chevron-down" class="w-3 h-3 text-slate-500"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div id="live-matches-list" class="space-y-6"></div>
             </div>
@@ -1451,50 +1477,121 @@ function renderDashboardMatches() {
     }
 
     finalMatches.forEach(m => {
+        const isHighlighted = pinnedMatches.has(m.fixture.id);
         const card = document.createElement('div');
-        card.className = "glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer relative overflow-hidden mb-6";
-        card.onclick = () => window.location.hash = `match/${m.fixture.id}`;
+        // Visual Highlight Effect: ring-2 ring-accent and shadow if pinned
+        card.className = `glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer relative overflow-hidden mb-6 ${isHighlighted ? 'pinned-match' : ''}`;
+
+        // Link to match detail
+        const goToMatch = () => window.location.hash = `match/${m.fixture.id}`;
+        card.onclick = goToMatch;
 
         const homeName = m.teams.home.name;
         const awayName = m.teams.away.name;
-        const scoreHome = m.goals.home;
-        const scoreAway = m.goals.away;
+        const scoreHome = m.goals.home ?? 0;
+        const scoreAway = m.goals.away ?? 0;
+        const elapsed = m.fixture.status.elapsed ?? 0;
+        const statusShort = m.fixture.status.short;
+
+        let period = '';
+        if (['1H', 'HT', '2H', 'ET', 'P'].includes(statusShort)) period = statusShort;
+        else if (elapsed <= 45) period = '1H';
+        else period = '2H';
+
+        // Event Timeline Logic
+        const events = (m.events || []).sort((a, b) => b.time.elapsed - a.time.elapsed).slice(0, 3); // Last 3 events
+        let timelineHtml = '';
+        if (events.length > 0) {
+            timelineHtml = `<div class="flex items-center gap-3 overflow-x-auto no-scrollbar mask-linear-fade pr-4">
+                ${events.map(ev => {
+                let icon = 'info'; let color = 'slate-500';
+                if (ev.type === 'Goal') { icon = 'trophy'; color = 'text-accent'; }
+                else if (ev.type === 'Card' && ev.detail === 'Yellow Card') { icon = 'alert-triangle'; color = 'text-warning'; }
+                else if (ev.type === 'Card') { icon = 'alert-octagon'; color = 'text-danger'; }
+
+                return `
+                        <div class="flex items-center gap-1.5 shrink-0 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
+                            <span class="text-[9px] font-black text-slate-400">${ev.time.elapsed}'</span>
+                            <i data-lucide="${icon}" class="w-3 h-3 ${color}"></i>
+                            <span class="text-[9px] font-bold text-white uppercase truncate max-w-[80px] hover:text-accent cursor-pointer transition-colors" onclick="event.stopPropagation(); window.location.hash='player/${ev.player.id}'">${ev.player.name}</span>
+                        </div>
+                    `;
+            }).join('')}
+            </div>`;
+        } else {
+            timelineHtml = '<div class="text-[9px] font-bold text-slate-600 italic">Nessun evento recente</div>';
+        }
 
         card.innerHTML = `
-            <div class="flex items-center justify-between mb-8">
-                <div class="flex items-center gap-3 opacity-60">
-                    <img src="${m.league.logo}" class="w-5 h-5 object-contain" onerror="this.src='https://media.api-sports.io/football/leagues/1.png'">
-                    <span class="text-[10px] font-black uppercase tracking-[0.2em] italic truncate max-w-[150px]">${m.league.name}</span>
+            <!-- Header: League + Country -->
+            <div class="flex items-center justify-between mb-8 border-b border-white/5 pb-4">
+                <div class="flex items-center gap-3 opacity-80">
+                    <img src="${m.league.flag || m.league.logo}" class="w-5 h-5 rounded-full object-cover">
+                    <div class="flex flex-col">
+                        <span class="text-[10px] font-black uppercase tracking-[0.2em] italic text-white">${m.league.name}</span>
+                        <span class="text-[8px] font-bold uppercase tracking-widest text-slate-500">${m.league.country || 'International'}</span>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">${m.fixture.status.elapsed ?? 0}'</span>
-                    <div class="w-2 h-2 bg-danger rounded-full animate-ping"></div>
+                <div class="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
+                    <span class="text-[10px] font-black text-accent uppercase tracking-widest">${period}</span>
+                    <div class="h-3 w-px bg-white/10"></div>
+                    <span class="text-[10px] font-black text-white uppercase tracking-widest">${elapsed}'</span>
+                    <div class="w-1.5 h-1.5 bg-danger rounded-full animate-pulse shadow-[0_0_10px_red]"></div>
                 </div>
             </div>
             
-            <div class="flex items-center justify-between gap-4 mb-6">
+            <!-- Match Score & Teams -->
+            <div class="flex items-center justify-between gap-4 mb-8">
                 <!-- Home -->
-                <div class="flex flex-col items-center gap-4 flex-1">
-                    <img src="${m.teams.home.logo}" class="w-16 h-16 object-contain drop-shadow-2xl" onerror="this.style.display='none'">
-                    <span class="text-xs font-black uppercase tracking-tight text-center leading-tight">${homeName}</span>
+                <div class="flex flex-col items-center gap-4 flex-1 group/team cursor-pointer" onclick="event.stopPropagation(); openLineupModal(${m.fixture.id}, ${m.teams.home.id})">
+                    <div class="w-16 h-16 p-2 glass rounded-2xl flex items-center justify-center group-hover/team:border-accent/50 transition-all relative">
+                        <img src="${m.teams.home.logo}" class="w-full h-full object-contain drop-shadow-2xl">
+                        <div class="absolute -bottom-2 bg-slate-900 border border-white/10 px-2 rounded text-[8px] font-black uppercase text-slate-500 group-hover/team:text-accent transition-colors">Lineup</div>
+                    </div>
+                    <span class="text-xs font-black uppercase tracking-tight text-center leading-tight flex items-center gap-2">
+                        ${homeName} <i data-lucide="chevron-right" class="w-3 h-3 text-slate-600"></i>
+                    </span>
                 </div>
 
                 <!-- Score -->
-                <div class="text-5xl font-black italic tracking-tighter text-white tabular-nums">
-                    ${scoreHome} - ${scoreAway}
+                <div class="text-5xl md:text-6xl font-black italic tracking-tighter text-white tabular-nums flex flex-col items-center">
+                    <span>${scoreHome} - ${scoreAway}</span>
+                    <span class="text-[9px] font-bold text-slate-500 tracking-widest uppercase mt-2 opacity-50">Live Score</span>
                 </div>
 
                 <!-- Away -->
-                <div class="flex flex-col items-center gap-4 flex-1">
-                    <img src="${m.teams.away.logo}" class="w-16 h-16 object-contain drop-shadow-2xl" onerror="this.style.display='none'">
-                    <span class="text-xs font-black uppercase tracking-tight text-center leading-tight">${awayName}</span>
+                <div class="flex flex-col items-center gap-4 flex-1 group/team cursor-pointer" onclick="event.stopPropagation(); openLineupModal(${m.fixture.id}, ${m.teams.away.id})">
+                    <div class="w-16 h-16 p-2 glass rounded-2xl flex items-center justify-center group-hover/team:border-accent/50 transition-all relative">
+                        <img src="${m.teams.away.logo}" class="w-full h-full object-contain drop-shadow-2xl">
+                        <div class="absolute -bottom-2 bg-slate-900 border border-white/10 px-2 rounded text-[8px] font-black uppercase text-slate-500 group-hover/team:text-accent transition-colors">Lineup</div>
+                    </div>
+                    <span class="text-xs font-black uppercase tracking-tight text-center leading-tight flex items-center gap-2">
+                         <i data-lucide="chevron-left" class="w-3 h-3 text-slate-600"></i> ${awayName}
+                    </span>
                 </div>
             </div>
 
-            <!-- Action Buttons -->
-                <button onclick="event.stopPropagation(); window.location.hash='match/${m.fixture.id}'" class="py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 transition-all font-black uppercase text-[9px] tracking-widest flex items-center justify-center gap-2">
-                    <i data-lucide="bar-chart-2" class="w-3 h-3"></i> Stats
-                </button>
+            <!-- Bottom Section: Timeline & Actions -->
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6 pt-6 border-t border-white/5">
+                <!-- Left: Timeline -->
+                <div class="flex-1 min-w-0 w-full">
+                    ${timelineHtml}
+                </div>
+
+                <!-- Right: Buttons -->
+                <div class="flex items-center gap-3 shrink-0">
+                     <button onclick="event.stopPropagation(); window.location.hash='match/${m.fixture.id}'" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 transition-all group/btn" title="Dettagli">
+                        <i data-lucide="arrow-right" class="w-4 h-4 group-hover/btn:translate-x-1 transition-transform"></i>
+                    </button>
+                    
+                    <button onclick="event.stopPropagation(); openStatsModal(${m.fixture.id})" class="px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/5 transition-all font-black uppercase text-[9px] tracking-widest flex items-center gap-2">
+                        <i data-lucide="bar-chart-2" class="w-3 h-3"></i> Stats & Predictions
+                    </button>
+                    
+                    <button onclick="event.stopPropagation(); analyzeMatch(${m.fixture.id})" class="px-5 py-3 rounded-xl bg-accent text-white shadow-lg shadow-accent/20 hover:scale-[1.02] active:scale-95 transition-all font-black uppercase text-[9px] tracking-widest flex items-center gap-2">
+                        <i data-lucide="sparkles" class="w-3 h-3"></i> AI Analysis
+                    </button>
+                </div>
             </div>
         `;
         container.appendChild(card);
@@ -2029,3 +2126,168 @@ function renderFullHistory() {
     if (window.lucide) lucide.createIcons();
 }
 
+// --- NEW MODAL HELPERS ---
+
+async function openLineupModal(fixtureId, teamId) {
+    const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    const btn = document.getElementById('place-bet-btn');
+    const footer = document.getElementById('modal-footer-actions');
+
+    modal.classList.remove('hidden');
+    if (footer) footer.classList.add('hidden');
+    if (btn) btn.classList.add('hidden');
+
+    body.innerHTML = '<div class="text-center py-20"><i data-lucide="loader-2" class="w-12 h-12 text-accent rotator mx-auto mb-4"></i><p class="font-black uppercase italic text-xs tracking-widest text-slate-500">Loading Lineups...</p></div>';
+    if (window.lucide) lucide.createIcons();
+
+    try {
+        const res = await fetch(`/api/match/${fixtureId}`);
+        const data = await res.json();
+
+        if (data.error || !data.lineups || !data.lineups.length) {
+            body.innerHTML = '<div class="glass p-10 text-center font-bold text-slate-500 uppercase italic">Formazioni non disponibili.</div>';
+            return;
+        }
+
+        const lineup = data.lineups.find(l => l.team_id == teamId) || data.lineups[0];
+        const startXI = typeof lineup.start_xi_json === 'string' ? JSON.parse(lineup.start_xi_json) : (lineup.start_xi_json || []);
+
+        // Coach info if available
+        let coachHtml = '';
+        if (lineup.coach_name) {
+            coachHtml = `
+                <div class="flex items-center gap-4 mb-6 p-4 rounded-2xl bg-white/5 border border-white/5">
+                    <img src="${lineup.coach_photo || ''}" class="w-10 h-10 rounded-full bg-slate-800 object-cover" onerror="this.src='https://media.api-sports.io/football/players/1.png'">
+                    <div>
+                        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Allenatore</div>
+                        <div class="font-black italic text-white uppercase">${lineup.coach_name}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        body.innerHTML = `
+            <div class="mb-8 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <img src="${lineup.team_logo}" class="w-12 h-12 object-contain">
+                    <div>
+                        <h2 class="text-2xl font-black italic uppercase tracking-tighter text-white">${lineup.team_name}</h2>
+                        <span class="px-2 py-0.5 rounded bg-accent/10 text-accent text-[9px] font-black uppercase tracking-widest border border-accent/20 inline-block">${lineup.formation}</span>
+                    </div>
+                </div>
+            </div>
+            
+            ${coachHtml}
+
+            <div class="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                ${startXI.map((p, idx) => `
+                    <div class="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 cursor-pointer" onclick="window.location.hash = 'player/${p.player.id}'; closeModal()">
+                        <span class="w-6 text-center font-black text-slate-500 italic tabular-nums">${p.player.number || (idx + 1)}</span>
+                        <div class="flex-1">
+                            <div class="font-bold text-white uppercase italic text-xs">${p.player.name}</div>
+                        </div>
+                         <span class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">${p.player.pos}</span>
+                    </div>
+                `).join('')}
+            </div>
+            
+            <button class="w-full mt-6 py-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 font-black text-[10px] uppercase tracking-widest transition-all" onclick="window.location.hash = 'team/${teamId}'; closeModal()">
+                Vai al profilo squadra
+            </button>
+            <button class="w-full mt-2 py-4 rounded-2xl bg-transparent hover:text-white text-slate-500 font-bold text-[10px] uppercase tracking-widest transition-all" onclick="closeModal()">
+                Chiudi
+            </button>
+        `;
+    } catch (e) {
+        console.error(e);
+        body.innerHTML = '<div class="text-danger font-bold text-center py-10 uppercase italic">Errore caricamento formazioni.</div>';
+    }
+}
+
+async function openStatsModal(fixtureId) {
+    const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    const btn = document.getElementById('place-bet-btn');
+    const footer = document.getElementById('modal-footer-actions');
+
+    modal.classList.remove('hidden');
+    if (footer) footer.classList.add('hidden');
+    if (btn) btn.classList.add('hidden');
+
+    body.innerHTML = '<div class="text-center py-20"><i data-lucide="loader-2" class="w-12 h-12 text-accent rotator mx-auto mb-4"></i><p class="font-black uppercase italic text-xs tracking-widest text-slate-500">Fetching AI Predictions...</p></div>';
+    if (window.lucide) lucide.createIcons();
+
+    try {
+        const res = await fetch(`/api/predictions/${fixtureId}`);
+        const data = await res.json();
+
+        if (data.error) {
+            body.innerHTML = `<div class="glass p-10 text-center font-black text-slate-500 uppercase italic">${data.error}</div>`;
+            return;
+        }
+
+        // Render metrics
+        const comp = data.comparison || {};
+        const perc = data.percent || {};
+        const metrics = [
+            { label: 'Forma', key: 'form' }, { label: 'Attacco', key: 'attaching' },
+            { label: 'Difesa', key: 'defensive' }, { label: 'Probabilità Gol', key: 'poisson_distribution' }
+        ];
+
+        let metricsHtml = metrics.map(m => {
+            const val = comp[m.key] || { home: '50%', away: '50%' };
+            const h = parseInt(val.home); const a = parseInt(val.away);
+            return `
+                <div class="space-y-1 mb-4">
+                    <div class="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-slate-500">
+                        <span>${h}%</span> <span class="text-white italic">${m.label}</span> <span>${a}%</span>
+                    </div>
+                    <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden flex">
+                        <div class="h-full bg-accent" style="width: ${h}%"></div>
+                        <div class="h-full bg-slate-600" style="width: ${a}%"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        body.innerHTML = `
+             <div class="mb-8">
+                 <div class="text-[9px] font-black text-accent uppercase tracking-widest mb-2 italic flex items-center gap-2">
+                    <i data-lucide="brain-circuit" class="w-4 h-4"></i> Algorithmic Prediction
+                 </div>
+                 <div class="text-3xl font-black text-white italic tracking-tight uppercase leading-none mb-6">${data.advice}</div>
+                 
+                 <div class="grid grid-cols-3 gap-2 mb-8">
+                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
+                        <span class="text-[8px] font-black text-slate-500 uppercase block mb-1">1</span>
+                        <span class="text-xl font-black text-white tabular-nums">${perc.home}</span>
+                    </div>
+                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
+                        <span class="text-[8px] font-black text-slate-500 uppercase block mb-1">X</span>
+                        <span class="text-xl font-black text-white tabular-nums">${perc.draw}</span>
+                    </div>
+                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
+                        <span class="text-[8px] font-black text-slate-500 uppercase block mb-1">2</span>
+                        <span class="text-xl font-black text-white tabular-nums">${perc.away}</span>
+                    </div>
+                 </div>
+                 
+                 <div class="bg-slate-900/50 p-6 rounded-3xl border border-white/5">
+                    ${metricsHtml}
+                 </div>
+             </div>
+             
+             <button class="w-full py-4 rounded-2xl bg-accent text-white font-black uppercase tracking-widest italic shadow-lg shadow-accent/20 hover:scale-[1.01] transition-all" onclick="analyzeMatch(${fixtureId})">
+                 Analizza Live con Gemini
+             </button>
+              <button class="w-full mt-2 py-4 rounded-2xl bg-transparent hover:text-white text-slate-500 font-bold text-[10px] uppercase tracking-widest transition-all" onclick="closeModal()">
+                Chiudi
+            </button>
+        `;
+        if (window.lucide) lucide.createIcons();
+
+    } catch (e) {
+        body.innerHTML = '<div class="text-danger font-bold text-center py-10 uppercase italic">Errore caricamento statistiche.</div>';
+    }
+}
