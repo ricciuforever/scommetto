@@ -71,27 +71,67 @@ export class Dashboard {
         const container = document.getElementById('stats-summary');
         if (!container) return;
 
-        // Reuse Tracker logic for consistent stats
-        const stats = Tracker.calculateStats();
+        const data = state.historyData || [];
+        let pendingCount = 0; let winCount = 0; let lossCount = 0; let netProfit = 0;
+        const startingPortfolio = 100;
+        let globalNetProfit = 0;
 
-        // Mock Bankroll for now or fetch from API if available
-        const bankroll = stats.profit + 100; // Example base
+        // Calculate stats
+        data.forEach(bet => {
+            const stake = parseFloat(bet.stake) || 0;
+            const odds = parseFloat(bet.odds) || 0;
+            const status = (bet.status || "").toLowerCase();
 
-        const cards = [
-            { label: 'Active', value: stats.pending, color: 'text-warning' },
-            { label: 'Won', value: stats.won, color: 'text-success' },
-            { label: 'Lost', value: stats.lost, color: 'text-danger' },
-            { label: 'Net Profit', value: `${stats.profit >= 0 ? '+' : ''}${stats.profit.toFixed(2)}€`, color: stats.profit >= 0 ? 'text-success' : 'text-danger' },
-            { label: 'ROI', value: `${stats.roi.toFixed(1)}%`, color: 'text-accent' },
-            { label: 'Win Rate', value: `${(stats.won + stats.lost) > 0 ? ((stats.won / (stats.won + stats.lost)) * 100).toFixed(0) : 0}%`, color: 'text-white' }
-        ];
+            if (status === "won") globalNetProfit += stake * (odds - 1);
+            else if (status === "lost") globalNetProfit -= stake;
 
-        container.innerHTML = cards.map(c => `
-            <div class="glass p-6 rounded-[32px] border-white/5 flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-all">
-                <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">${c.label}</span>
-                <div class="text-3xl font-black italic tracking-tighter ${c.color}">${c.value}</div>
+            // Filter logic same as original
+            const matchesCountry = state.selectedCountry === 'all' || (bet.country || bet.country_name || 'International') === state.selectedCountry;
+            const matchesBookie = state.selectedBookmaker === 'all' || bet.bookmaker_id?.toString() === state.selectedBookmaker;
+
+            if (matchesCountry && matchesBookie) {
+                if (status === "pending") pendingCount++;
+                else if (status === "won") { winCount++; netProfit += stake * (odds - 1); }
+                else if (status === "lost") { lossCount++; netProfit -= stake; }
+            }
+        });
+
+        const liveCount = (state.liveMatches || []).filter(m => {
+            const countryName = m.league?.country || m.league?.country_name;
+            const matchesCountry = state.selectedCountry === 'all' || countryName === state.selectedCountry;
+            // Simplified bookmaker check for now as data structure might vary
+            return matchesCountry;
+        }).length;
+
+        const currentPortfolio = startingPortfolio + globalNetProfit;
+        const countryLabel = state.selectedCountry === 'all' ? 'Tutte' : state.selectedCountry;
+
+        container.innerHTML = `
+            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
+                <span class="block text-2xl font-black mb-1">${currentPortfolio.toFixed(2)}€</span>
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Portafoglio</span>
             </div>
-         `).join('');
+            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
+                <span class="block text-2xl font-black mb-1">${winCount}W - ${lossCount}L</span>
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Filtro: ${countryLabel}</span>
+            </div>
+            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
+                <span class="block text-2xl font-black mb-1 ${netProfit >= 0 ? 'text-success' : 'text-danger'}">${netProfit >= 0 ? '+' : ''}${netProfit.toFixed(2)}€</span>
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Profitto Netto</span>
+            </div>
+            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
+                <span class="block text-2xl font-black mb-1">${liveCount}</span>
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Live Now</span>
+            </div>
+            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
+                <span class="block text-2xl font-black mb-1 text-warning">${pendingCount}</span>
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">In Sospeso</span>
+            </div>
+            <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
+                <span class="block text-2xl font-black mb-1 text-success">ROI</span>
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Return On Investment</span>
+            </div>
+        `;
     }
 
     static renderMatches() {
@@ -99,39 +139,45 @@ export class Dashboard {
         if (!container) return;
 
         const matches = state.liveMatches || [];
-        if (matches.length === 0) {
-            container.innerHTML = '<div class="p-10 text-center text-slate-500 font-bold uppercase italic">Nessun match live al momento</div>';
+        const filteredMatches = matches.filter(m => {
+            const countryName = m.league?.country || m.league?.country_name;
+            const matchesCountry = state.selectedCountry === 'all' || countryName === state.selectedCountry;
+            return matchesCountry;
+        });
+
+        if (filteredMatches.length === 0) {
+            const msg = state.selectedCountry === 'all' ? 'nessun match live' : `nessun match live per ${state.selectedCountry}`;
+            container.innerHTML = `<div class="glass p-10 rounded-[32px] text-center text-slate-500 font-black italic uppercase tracking-widest">${msg}</div>`;
             return;
         }
 
-        container.innerHTML = matches.map(m => `
-            <div class="glass p-8 rounded-[40px] border-white/5 hover:border-accent/20 transition-all group relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-10 transition-opacity">
-                    <i data-lucide="zap" class="w-24 h-24 text-accent rotate-12"></i>
+        container.innerHTML = filteredMatches.map(m => `
+            <div class="glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer" onclick="window.app.analyzeMatch(${m.fixture.id})">
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex items-center gap-3 opacity-60">
+                        <img src="${m.league.logo}" class="w-5 h-5 object-contain" onerror="this.src='https://media.api-sports.io/football/leagues/1.png'">
+                        <span class="text-[10px] font-black uppercase tracking-[0.2em] italic text-slate-400">${m.league.name}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-black text-accent uppercase tracking-widest animate-pulse">'${m.fixture.status.elapsed || 0}</span>
+                        <div class="w-2 h-2 bg-danger rounded-full animate-ping"></div>
+                    </div>
                 </div>
-                <div class="flex flex-col md:flex-row items-center gap-8 relative z-10">
-                    <div class="flex items-center gap-4 flex-1 w-full justify-center md:justify-start">
-                         <div class="text-center w-12">
-                            <span class="text-accent font-black text-xs block mb-1">Live</span>
-                            <span class="text-white font-black text-lg animate-pulse">'${m.fixture.status.elapsed || 0}</span>
-                         </div>
-                         <div class="flex-1 flex flex-col gap-2">
-                             <div class="flex justify-between items-center bg-white/5 p-3 rounded-2xl">
-                                <span class="font-black text-lg uppercase italic text-white truncate max-w-[200px]">${m.teams.home.name}</span>
-                                <span class="bg-darkbg px-4 py-1 rounded-lg text-xl font-black text-accent">${m.goals.home ?? 0}</span>
-                             </div>
-                             <div class="flex justify-between items-center bg-white/5 p-3 rounded-2xl">
-                                <span class="font-black text-lg uppercase italic text-white truncate max-w-[200px]">${m.teams.away.name}</span>
-                                <span class="bg-darkbg px-4 py-1 rounded-lg text-xl font-black text-accent">${m.goals.away ?? 0}</span>
-                             </div>
-                         </div>
+                <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-8 mb-4 text-center">
+                    <div class="flex flex-col items-center gap-3">
+                        <img src="${m.teams.home.logo}" class="w-16 h-16 object-contain" onerror="this.src='https://media.api-sports.io/football/teams/default.png'">
+                        <span class="text-xs font-black uppercase tracking-tight text-white max-w-[100px] truncate">${m.teams.home.name}</span>
                     </div>
-                     <div class="w-full md:w-auto flex flex-col gap-2">
-                        <button onclick="window.app.analyzeMatch(${m.fixture.id})" class="w-full bg-accent hover:bg-sky-400 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-accent/20 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 group-hover:animate-pulse">
-                            <i data-lucide="brain-circuit" class="w-4 h-4"></i>
-                            Analizza con AI
-                        </button>
+                    <div class="text-5xl font-black italic tracking-tighter text-white flex gap-4">
+                        <span>${m.goals.home ?? 0}</span><span class="text-white/20">-</span><span>${m.goals.away ?? 0}</span>
                     </div>
+                    <div class="flex flex-col items-center gap-3">
+                        <img src="${m.teams.away.logo}" class="w-16 h-16 object-contain" onerror="this.src='https://media.api-sports.io/football/teams/default.png'">
+                        <span class="text-xs font-black uppercase tracking-tight text-white max-w-[100px] truncate">${m.teams.away.name}</span>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-center">
+                    <button class="bg-white/5 hover:bg-accent hover:text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Analizza Match</button>
                 </div>
             </div>
         `).join('');
