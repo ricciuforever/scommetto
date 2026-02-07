@@ -43,27 +43,120 @@
         </div>
     </div>
 
-    <!-- ... sidebar ... -->
-
-    <!-- Main Content Area -->
-    <main id="main-content" class="flex-1 p-6 pb-24 lg:pb-6 max-w-7xl mx-auto w-full">
-        <!-- Loader (only used for non-HTMX transitions) -->
-        <div id="view-loader" class="flex items-center justify-center h-full py-20 hidden">
-            <i data-lucide="loader-2" class="w-10 h-10 text-accent rotator"></i>
-        </div>
-
-        <!-- HTMX Container for Dashboard (Default View) -->
-        <div id="htmx-container" hx-get="/api/dashboard" hx-trigger="load, every 60s" hx-target="#htmx-container"
-            hx-swap="innerHTML">
-            <!-- Initial placeholder while loading -->
-            <div class="flex items-center justify-center py-20">
-                <i data-lucide="loader-2" class="w-10 h-10 text-accent rotator"></i>
+    <!-- Sidebar Desktop -->
+    <aside class="hidden lg:flex flex-col w-64 h-screen sticky top-0 border-r border-white/10 glass z-50">
+        <div class="p-6 flex items-center gap-3">
+            <div class="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/20">
+                <i data-lucide="layout-dashboard" class="text-white w-6 h-6"></i>
+            </div>
+            <div class="text-2xl font-black tracking-tighter uppercase italic">
+                Scommetto<span class="text-accent">.AI</span>
             </div>
         </div>
 
-        <!-- Legacy Container for non-dashboard views (Leagues, Tracker, etc.) -->
-        <div id="view-container" class="hidden"></div>
-    </main>
+        <nav class="flex-1 px-4 py-4 space-y-2">
+            <a href="#dashboard"
+                class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm active-nav"
+                data-view="dashboard">
+                <i data-lucide="home" class="w-5 h-5"></i> Dashboard
+            </a>
+            <a href="#leagues"
+                class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
+                data-view="leagues">
+                <i data-lucide="trophy" class="w-5 h-5"></i> Competizioni
+            </a>
+            <a href="#predictions"
+                class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
+                data-view="predictions">
+                <i data-lucide="brain-circuit" class="w-5 h-5"></i> Pronostici
+            </a>
+            <a href="#tracker"
+                class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
+                data-view="tracker">
+                <i data-lucide="line-chart" class="w-5 h-5"></i> Tracker
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-white/10">
+            <div class="flex flex-col gap-1 p-4 rounded-2xl bg-white/5 border border-white/5">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">API Status</span>
+                <div class="text-sm font-black"><span id="usage-val" class="text-accent">...</span> / <span
+                        id="limit-val">75000</span></div>
+            </div>
+        </div>
+    </aside>
+
+    <div class="flex-1 flex flex-col min-h-screen">
+        <!-- Header Mobile / Top Bar -->
+        <header
+            class="sticky top-0 z-40 glass border-b border-white/10 px-6 py-4 flex justify-between items-center lg:mb-0">
+            <div class="flex lg:hidden items-center gap-3">
+                <div class="text-xl font-black tracking-tighter uppercase italic">
+                    Scommetto<span class="text-accent">.AI</span>
+                </div>
+            </div>
+            <div class="hidden lg:block">
+                <!-- Breadcrumbs or Search could go here -->
+                <div id="view-title"
+                    class="text-xl font-black tracking-tight uppercase tracking-widest text-slate-500 text-[10px]">
+                    Dashboard</div>
+            </div>
+            <div class="flex items-center gap-4">
+                <!-- Selectors -->
+                <div class="flex items-center gap-2 mr-4">
+                    <!-- Country Selector -->
+                    <button id="country-selector" onclick="openCountryModal()"
+                        class="h-10 px-4 rounded-xl bg-white/5 hover:bg-white/10 flex items-center gap-2 transition-all border border-white/5 group">
+                        <span id="selected-country-flag" class="text-lg">🇮🇹</span>
+                        <span id="selected-country-name"
+                            class="text-[10px] font-black uppercase tracking-tighter text-slate-400 group-hover:text-white transition-colors">Italy</span>
+                        <i data-lucide="chevron-down" class="w-3 h-3 text-slate-500"></i>
+                    </button>
+
+                    <!-- Bookmaker Selector -->
+                    <button id="bookmaker-selector" onclick="openBookmakerModal()"
+                        class="h-10 px-4 rounded-xl bg-white/5 hover:bg-white/10 flex items-center gap-2 transition-all border border-white/5 group">
+                        <i data-lucide="landmark" class="w-4 h-4 text-accent"></i>
+                        <span id="selected-bookmaker-name"
+                            class="text-[10px] font-black uppercase tracking-tighter text-slate-400 group-hover:text-white transition-colors">Tutti
+                            i Book</span>
+                        <i data-lucide="chevron-down" class="w-3 h-3 text-slate-500"></i>
+                    </button>
+                </div>
+
+                <button id="theme-toggle"
+                    class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all border border-white/5">
+                    <i data-lucide="sun" class="hidden dark:block w-5 h-5 text-yellow-400"></i>
+                    <i data-lucide="moon" class="block dark:hidden w-5 h-5 text-slate-600"></i>
+                </button>
+                <div
+                    class="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center relative">
+                    <i data-lucide="bell" class="w-5 h-5 text-accent"></i>
+                    <span
+                        class="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full ring-2 ring-darkbg animate-pulse"></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main id="main-content" class="flex-1 p-6 pb-24 lg:pb-6 max-w-7xl mx-auto w-full">
+            <!-- Loader (only used for non-HTMX transitions) -->
+            <div id="view-loader" class="flex items-center justify-center h-full py-20 hidden">
+                <i data-lucide="loader-2" class="w-10 h-10 text-accent rotator"></i>
+            </div>
+
+            <!-- HTMX Container for Dashboard (Default View) -->
+            <div id="htmx-container" hx-get="/api/dashboard" hx-trigger="load, every 60s" hx-target="#htmx-container"
+                hx-swap="innerHTML">
+                <!-- Initial placeholder while loading -->
+                <div class="flex items-center justify-center py-20">
+                    <i data-lucide="loader-2" class="w-10 h-10 text-accent rotator"></i>
+                </div>
+            </div>
+
+            <!-- Legacy Container for non-dashboard views (Leagues, Tracker, etc.) -->
+            <div id="view-container" class="hidden"></div>
+        </main>
     </div>
 
     <!-- Bottom Navigation Mobile -->
