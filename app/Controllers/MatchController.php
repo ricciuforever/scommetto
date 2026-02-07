@@ -326,7 +326,7 @@ class MatchController
                     JOIN teams t1 ON f.team_home_id = t1.id
                     JOIN teams t2 ON f.team_away_id = t2.id
                     JOIN leagues l ON f.league_id = l.id
-                    WHERE f.date >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                    WHERE f.date >= DATE_SUB(NOW(), INTERVAL 4 HOUR)
                     AND f.status_short NOT IN ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD', 'AWD', 'WO')
                     ORDER BY f.date ASC";
             $data = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);

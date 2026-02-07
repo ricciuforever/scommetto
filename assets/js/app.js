@@ -1357,6 +1357,7 @@ function calculateStats() {
 function renderDashboardMatches() {
     const container = document.getElementById('live-matches-list');
     if (!container) return;
+    container.innerHTML = '';
 
     const filteredMatches = liveMatches.filter(m => {
         const countryName = m.league.country || m.league.country_name;
