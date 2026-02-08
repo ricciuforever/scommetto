@@ -3,6 +3,7 @@
 ?>
 <!DOCTYPE html>
 <html lang="it" class="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -45,17 +46,39 @@
             background: rgba(15, 23, 42, 0.8);
             backdrop-filter: blur(12px);
         }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .rotator { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .rotator {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
-<body class="bg-slate-50 dark:bg-darkbg text-slate-900 dark:text-slate-100 min-h-screen transition-colors duration-300 font-sans flex">
+
+<body
+    class="bg-slate-50 dark:bg-darkbg text-slate-900 dark:text-slate-100 min-h-screen transition-colors duration-300 font-sans flex">
 
     <div class="fixed inset-0 pointer-events-none overflow-hidden -z-10">
         <div class="absolute -top-[10%] -right-[10%] w-[40%] h-[40%] bg-accent/10 blur-[120px] rounded-full"></div>
-        <div class="absolute -bottom-[10%] -left-[10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full"></div>
+        <div class="absolute -bottom-[10%] -left-[10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full">
+        </div>
     </div>
 
     <!-- Sidebar Desktop -->
@@ -70,45 +93,82 @@
         </div>
 
         <div class="px-4 py-2 flex-1 overflow-y-auto no-scrollbar">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-4 px-4">Menu Principale</span>
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-4 px-4">Menu
+                Principale</span>
             <nav class="space-y-1">
-                <a href="/dashboard" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="layout-dashboard" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Dashboard</span>
+                <a href="/dashboard"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="layout-dashboard"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Dashboard</span>
                 </a>
-                <a href="/countries" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                <a href="/countries"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
                     <i data-lucide="globe" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Nazioni</span>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Nazioni</span>
                 </a>
-                <a href="/leagues" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="trophy" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Campionati</span>
+                <a href="/leagues"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="trophy"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Campionati</span>
                 </a>
-                <a href="/teams" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                <a href="/teams"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
                     <i data-lucide="users" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Squadre</span>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Squadre</span>
                 </a>
-                <a href="/seasons" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="calendar" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Stagioni</span>
+                <a href="/rounds"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="layers"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Giornate</span>
                 </a>
-                <a href="/venues" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="building-2" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                <a href="/fixtures"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="calendar-days"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Calendario</span>
+                </a>
+                <a href="/seasons"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="calendar"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Stagioni</span>
+                </a>
+                <a href="/venues"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="building-2"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
                     <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Stadi</span>
                 </a>
-                <a href="/predictions" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="brain-circuit" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Pronostici</span>
+                <a href="/predictions"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="brain-circuit"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Pronostici</span>
                 </a>
-                <a href="/tracker" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="bar-chart-3" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Tracker</span>
+                <a href="/tracker"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="bar-chart-3"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Tracker</span>
                 </a>
             </nav>
         </div>
 
         <div class="p-4 border-t border-white/10">
-            <a href="/settings" class="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2">
+            <a href="/settings"
+                class="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2">
                 <i data-lucide="settings" class="w-4 h-4"></i> Impostazioni
             </a>
         </div>
@@ -128,13 +188,16 @@
                 </span>
             </div>
             <div class="flex items-center gap-4">
-                <button id="theme-toggle" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all border border-white/5">
+                <button id="theme-toggle"
+                    class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all border border-white/5">
                     <i data-lucide="sun" class="hidden dark:block w-5 h-5 text-yellow-400"></i>
                     <i data-lucide="moon" class="block dark:hidden w-5 h-5 text-slate-600"></i>
                 </button>
-                <div class="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center relative">
+                <div
+                    class="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center relative">
                     <i data-lucide="bell" class="w-5 h-5 text-accent"></i>
-                    <span class="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full ring-2 ring-darkbg animate-pulse"></span>
+                    <span
+                        class="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full ring-2 ring-darkbg animate-pulse"></span>
                 </div>
             </div>
         </header>

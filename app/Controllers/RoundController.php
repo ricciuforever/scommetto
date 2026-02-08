@@ -9,6 +9,19 @@ use App\Services\FootballApiService;
 class RoundController
 {
     /**
+     * Carica la vista delle giornate
+     */
+    public function index()
+    {
+        $file = __DIR__ . '/../Views/rounds.php';
+        if (file_exists($file)) {
+            require $file;
+        } else {
+            echo "<h1>Vista Giornate non trovata</h1>";
+        }
+    }
+
+    /**
      * Ritorna i round per una lega/stagione con sync on-demand
      */
     public function list()

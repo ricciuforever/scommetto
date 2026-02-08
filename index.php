@@ -31,6 +31,8 @@ try {
         '/leagues' => LeagueController::class,
         '/seasons' => SeasonController::class,
         '/teams' => TeamController::class,
+        '/rounds' => RoundController::class,
+        '/fixtures' => FixtureController::class,
         '/team-stats' => TeamStatsController::class,
         '/venues' => VenueController::class,
         '/standings' => StandingController::class,

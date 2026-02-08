@@ -10,6 +10,19 @@ use App\Services\FootballApiService;
 class FixtureController
 {
     /**
+     * Carica la vista del calendario
+     */
+    public function index()
+    {
+        $file = __DIR__ . '/../Views/fixtures.php';
+        if (file_exists($file)) {
+            require $file;
+        } else {
+            echo "<h1>Vista Calendario non trovata</h1>";
+        }
+    }
+
+    /**
      * Ritorna le partite per una lega e stagione (sincronizza se necessario)
      */
     public function list()
