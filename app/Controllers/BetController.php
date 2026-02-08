@@ -74,14 +74,96 @@ class BetController
         // Balance Check
         $summary = $this->betModel->getBalanceSummary(\App\Config\Config::INITIAL_BANKROLL);
         $stake = (float) ($input['stake'] ?? 0);
+
+        // Verifica disponibilità locale (solo per tracciamento profitto simulato)
+        // Nota: Per bet reali, Betfair farà il controllo saldo reale
         if ($stake > $summary['available_balance']) {
-            echo json_encode(['error' => 'Insufficient balance. Available: ' . $summary['available_balance'] . '€']);
-            return;
+            // Opzionale: Bloccare o solo avvisare? Proseguiamo per ora
+            // echo json_encode(['error' => 'Insufficient balance...']); return;
         }
+
+        // --- BETFAIR INTEGRATION START ---
+        $betfairId = null;
+        $status = 'pending';
+        $note = '';
+
+        try {
+            // Instanzia servizio
+            $bf = new \App\Services\BetfairService();
+
+            // Cerchiamo l'evento su Betfair usando i nomi squadre (input ha 'match_name' o 'teams')
+            // Assumiamo che input['match_name'] sia tipo "Inter v Milan"
+
+            // FILTRO CONFIDENZA: Solo bet con confidence > 80% vanno su Betfair REALE
+            $confidence = (int) ($input['confidence'] ?? 0);
+
+            if (($bf->isConfigured() || \App\Config\Config::get('BETFAIR_SESSION_TOKEN')) && $confidence > 80) {
+                $matchName = $input['match_name'] ?? '';
+                // Se manca match_name, prova a costruirlo
+                if (!$matchName && isset($input['home_team']) && isset($input['away_team'])) {
+                    $matchName = $input['home_team'] . ' v ' . $input['away_team'];
+                }
+
+                if ($matchName) {
+                    // 1. Trova Mercato (Es. MATCH_ODDS)
+                    // TODO: Gestire altri mercati (Over/Under). Per ora default MATCH_ODDS se input['market'] è "1X2" o simile
+                    $marketType = 'MATCH_ODDS'; // Default
+                    if (strpos(strtoupper($input['market'] ?? ''), 'OVER') !== false || strpos(strtoupper($input['market'] ?? ''), 'UNDER') !== false) {
+                        // TODO: Implementare logica complessa per O/U. Per ora saltiamo se non è 1X2
+                        $note .= "[WARN] Mercati O/U non ancora supportati per auto-bet. ";
+                    } else {
+                        $market = $bf->findMarket($matchName, $marketType);
+
+                        if ($market) {
+                            // 2. Trova Selezione (Es. "Inter")
+                            $selectionId = $bf->mapAdviceToSelection($input['prediction'] ?? $input['advice'] ?? '', $market['runners']);
+
+                            if ($selectionId) {
+                                // 3. Piazza Scommessa
+                                // Prezzo e Size dall'input
+                                $price = (float) ($input['odds'] ?? 1.01);
+                                if ($price < 1.01)
+                                    $price = 1.01;
+
+                                $order = $bf->placeBet($market['marketId'], $selectionId, $price, $stake);
+
+                                if (isset($order['result']) && $order['result']['status'] === 'SUCCESS') {
+                                    $instruction = $order['result']['instructionReports'][0];
+                                    if ($instruction['status'] === 'SUCCESS') {
+                                        $betfairId = $instruction['betId'];
+                                        $status = 'placed'; // Conferma che è su Betfair
+                                        $note .= "[BETFAIR] Ordine piazzato! ID: $betfairId. ";
+                                    } else {
+                                        $errorCode = $instruction['errorCode'] ?? 'UNKNOWN';
+                                        $note .= "[BETFAIR ERROR] $errorCode. ";
+                                    }
+                                } elseif (isset($order['error'])) {
+                                    $note .= "[BETFAIR API ERROR] " . $order['error']['message'] . " (" . ($order['error']['data']['APINGException']['errorCode'] ?? '') . ")";
+                                }
+                            } else {
+                                $note .= "[BETFAIR] Selezione non trovata per '{$input['prediction']}'. ";
+                            }
+                        } else {
+                            $note .= "[BETFAIR] Mercato non trovato per '$matchName'. ";
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            $note .= "[BETFAIR EXCEPTION] " . $e->getMessage();
+        }
+        // --- BETFAIR INTEGRATION END ---
+
+        // Saliamo l'ID Betfair nel DB locale se disponibile
+        if ($betfairId) {
+            $input['betfair_id'] = $betfairId;
+        }
+        $input['status'] = $status; // 'placed' se andato a buon fine, 'pending' altrimenti
+        $input['notes'] = ($input['notes'] ?? '') . ' ' . $note;
 
         $id = $this->betModel->create($input);
 
-        echo json_encode(['status' => 'success', 'id' => $id]);
+        echo json_encode(['status' => 'success', 'id' => $id, 'betfair_notes' => $note]);
     }
 
     /**
