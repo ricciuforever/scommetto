@@ -16,12 +16,12 @@ let selectedLeague = localStorage.getItem('selected_league') || 'all';
 let selectedBookmaker = localStorage.getItem('selected_bookmaker') || 'all';
 let allFilterData = { countries: [], bookmakers: [], sports: [] };
 
-const countryFlags = {
+/*const countryFlags = {
     'Italy': '🇮🇹', 'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Spain': '🇪🇸', 'Germany': '🇩🇪',
     'France': '🇫🇷', 'Brazil': '🇧🇷', 'Argentina': '🇦🇷',
     'Belgium': '🇧🇪', 'Netherlands': '🇳🇱', 'Portugal': '🇵🇹', 'Turkey': '🇹🇷',
     'USA': '🇺🇸', 'Japan': '🇯🇵', 'Saudi Arabia': '🇸🇦', 'International': '🌍'
-};
+};*/
 
 // Init UI Elements
 const viewContainer = document.getElementById('view-container');
