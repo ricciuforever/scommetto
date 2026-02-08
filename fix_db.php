@@ -82,6 +82,7 @@ try {
           `team_id` INT,
           `league_id` INT,
           `season` INT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (`team_id`, `league_id`, `season`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
@@ -493,7 +494,7 @@ try {
     ],
     "bets_fix_fixture_id" => [
       "ALTER TABLE bets MODIFY COLUMN fixture_id VARCHAR(100) NOT NULL"
-    ]
+    ],
   ];
 
   // --- 3. CREAZIONE VIEW ANALITICHE ---
