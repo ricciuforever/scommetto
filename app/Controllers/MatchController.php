@@ -58,6 +58,21 @@ class MatchController
         }
     }
 
+    public function getPrediction($id)
+    {
+        header('Content-Type: application/json');
+        try {
+            $data = (new \App\Models\Prediction())->getByFixtureId($id);
+            if (!$data) {
+                echo json_encode(['error' => 'Prediction not found']);
+                return;
+            }
+            echo json_encode($data);
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
     public function getUpcoming()
     {
         header('Content-Type: application/json');

@@ -55,7 +55,21 @@ class BetController
 
             if ($bf->isConfigured() && $confidence >= $threshold) {
                 $logMsg .= "Procedo su Betfair. ";
+
+                $fixtureId = (int) $input['fixture_id'];
+                $db = \App\Services\Database::getInstance()->getConnection();
+                $stmt = $db->prepare("SELECT f.*, t1.name as home_name, t2.name as away_name
+                                     FROM fixtures f
+                                     JOIN teams t1 ON f.team_home_id = t1.id
+                                     JOIN teams t2 ON f.team_away_id = t2.id
+                                     WHERE f.id = ?");
+                $stmt->execute([$fixtureId]);
+                $fixture = $stmt->fetch(\PDO::FETCH_ASSOC);
+
                 $matchName = $input['match_name'] ?? ($input['match'] ?? '');
+                if (!$matchName && $fixture) {
+                    $matchName = $fixture['home_name'] . ' vs ' . $fixture['away_name'];
+                }
                 if (!$matchName && isset($input['home_team']) && isset($input['away_team'])) {
                     $matchName = $input['home_team'] . ' v ' . $input['away_team'];
                 }
@@ -63,7 +77,8 @@ class BetController
                 if ($matchName) {
                     $market = $bf->findMarket($matchName);
                     if ($market) {
-                        $selectionId = $bf->mapAdviceToSelection($input['prediction'] ?? $input['advice'] ?? '', $market['runners']);
+                        $advice = $input['prediction'] ?? $input['advice'] ?? '';
+                        $selectionId = $bf->mapAdviceToSelection($advice, $market['runners'], $fixture['home_name'] ?? '', $fixture['away_name'] ?? '');
                         if ($selectionId) {
                             $price = (float)($input['odds'] ?? 1.01);
                             $order = $bf->placeBet($market['marketId'], $selectionId, $price, $stake);
@@ -104,16 +119,51 @@ class BetController
         try {
             $status = $_GET['status'] ?? 'all';
             $db = \App\Services\Database::getInstance()->getConnection();
+
+            // Fetch ALL bets for stats calculation
+            $sqlAll = "SELECT * FROM bets";
+            $allBetsRaw = $db->query($sqlAll)->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Calculation (Replicating JS logic)
+            $initialBalance = 100;
+            $wonBets = array_filter($allBetsRaw, fn($b) => $b['status'] === 'won');
+            $lostBets = array_filter($allBetsRaw, fn($b) => $b['status'] === 'lost');
+            $pendingBets = array_filter($allBetsRaw, fn($b) => in_array($b['status'], ['pending', 'placed']));
+
+            $totalProfit = array_reduce($wonBets, fn($sum, $b) => $sum + ($b['stake'] * ($b['odds'] - 1)), 0);
+            $totalLoss = array_reduce($lostBets, fn($sum, $b) => $sum + $b['stake'], 0);
+            $netProfit = $totalProfit - $totalLoss;
+            $currentPortfolio = array_reduce($pendingBets, fn($sum, $b) => $sum + $b['stake'], 0);
+            $availableBalance = $initialBalance + $netProfit - $currentPortfolio;
+
+            $settledBets = array_filter($allBetsRaw, fn($b) => in_array($b['status'], ['won', 'lost']));
+            $totalStake = array_reduce($settledBets, fn($sum, $b) => $sum + $b['stake'], 0);
+            $roi = $totalStake > 0 ? ($netProfit / $totalStake) * 100 : 0;
+
+            $statsSummary = [
+                'netProfit' => $netProfit,
+                'roi' => $roi,
+                'winCount' => count($wonBets),
+                'lossCount' => count($lostBets),
+                'currentPortfolio' => $currentPortfolio,
+                'available_balance' => $availableBalance
+            ];
+
+            // Fetch filtered bets for display
             $sql = "SELECT b.*, l.country_name as country, bk.name as bookmaker_name_full
                     FROM bets b
                     LEFT JOIN fixtures f ON b.fixture_id = f.id
                     LEFT JOIN leagues l ON f.league_id = l.id
-                    LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id
-                    ORDER BY b.timestamp DESC LIMIT 1000";
-            $allBets = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
+                    LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id " .
+                ($status !== 'all' ? "WHERE b.status = " . $db->quote($status) : "") .
+                " ORDER BY b.timestamp DESC LIMIT 1000";
+
+            $bets = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
 
             require __DIR__ . '/../Views/partials/tracker.php';
-        } catch (\Throwable $e) { echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>'; }
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
     }
 
     public function getRealBalance()
