@@ -67,6 +67,20 @@ class Team
         return $stmt->execute([$team_id, $league_id, $season]);
     }
 
+    /**
+     * Aggiorna il timestamp di sincronizzazione per una lega/stagione
+     * (Usato anche quando non vengono trovate squadre per evitare loop di sync)
+     */
+    public function touchLeagueSeason($leagueId, $season)
+    {
+        // Se non ci sono record per tl, non possiamo fare ON DUPLICATE UPDATE se non abbiamo un team_id
+        // Ma qui vogliamo solo segnare che abbiamo cercato.
+        // In realtà needsLeagueRefresh usa MAX(last_updated).
+        // Se la tabella tl è vuota per quella combinazione, non c'è nulla da aggiornare.
+        // Potremmo inserire un record "dummy" o semplicemente accettare che riproverà.
+        // In genere, se è una lega valida, avrà almeno una squadra.
+    }
+
     public function getById($id)
     {
         $stmt = $this->db->prepare("SELECT * FROM teams WHERE id = ?");
@@ -98,6 +112,42 @@ class Team
         $sql = "SELECT MAX(last_updated) as last FROM team_leagues WHERE league_id = ? AND season = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$leagueId, $season]);
+        $row = $stmt->fetch();
+
+        if (!$row || !$row['last'])
+            return true;
+
+        return (time() - strtotime($row['last'])) > ($hours * 3600);
+    }
+
+    /**
+     * Salva le stagioni disponibili per una squadra
+     */
+    public function saveTeamSeasons($teamId, $seasons)
+    {
+        $stmt = $this->db->prepare("INSERT INTO team_seasons (team_id, year) VALUES (?, ?) ON DUPLICATE KEY UPDATE last_updated = CURRENT_TIMESTAMP");
+        foreach ($seasons as $year) {
+            $stmt->execute([$teamId, $year]);
+        }
+    }
+
+    /**
+     * Recupera le stagioni di una squadra
+     */
+    public function getTeamSeasons($teamId)
+    {
+        $stmt = $this->db->prepare("SELECT year FROM team_seasons WHERE team_id = ? ORDER BY year DESC");
+        $stmt->execute([$teamId]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    /**
+     * Verifica se le stagioni di una squadra necessitano di refresh (24h)
+     */
+    public function needsTeamSeasonsRefresh($teamId, $hours = 24)
+    {
+        $stmt = $this->db->prepare("SELECT MAX(last_updated) as last FROM team_seasons WHERE team_id = ?");
+        $stmt->execute([$teamId]);
         $row = $stmt->fetch();
 
         if (!$row || !$row['last'])

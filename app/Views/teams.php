@@ -94,7 +94,9 @@ require __DIR__ . '/layout/top.php';
                     setSelectedLeague(serieA.id);
                 }
                 if (seasonsData.response && seasonsData.response.length > 0) {
-                    setSelectedSeason(seasonsData.response[0]);
+                    // Usa la stagione corrente fornita dal server, altrimenti la prima disponibile
+                    const current = seasonsData.current || seasonsData.response[0];
+                    setSelectedSeason(current);
                 }
                 setInitLoading(false);
             }).catch(err => {

@@ -35,7 +35,18 @@ class SeasonController
             }
 
             $seasons = $model->getAll();
-            echo json_encode(['response' => $seasons]);
+            // Filtra solo anni sensati (es. >= 2010 e <= anno attuale + 2)
+            $thisYear = (int)date('Y');
+            $seasons = array_filter($seasons, function($y) use ($thisYear) {
+                return $y >= 2010 && $y <= ($thisYear + 1);
+            });
+            $seasons = array_values($seasons);
+
+            $current = \App\Config\Config::getCurrentSeason();
+            echo json_encode([
+                'response' => $seasons,
+                'current' => $current
+            ]);
         } catch (\Throwable $e) {
             http_response_code(500);
             echo json_encode(['error' => $e->getMessage()]);

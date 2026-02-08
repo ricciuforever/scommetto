@@ -51,6 +51,8 @@ try {
         (new SeasonController())->list();
     } elseif ($path === '/api/teams') {
         (new TeamController())->list();
+    } elseif ($path === '/api/team/seasons') {
+        (new TeamController())->seasons();
     } elseif ($path === '/api/team-stats') {
         (new TeamStatsController())->show();
     } elseif ($path === '/api/dashboard' || $path === '/api/view/dashboard') {
