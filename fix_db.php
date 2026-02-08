@@ -244,6 +244,9 @@ try {
           `status` ENUM('pending','won','lost','void') DEFAULT 'pending',
           `timestamp` DATETIME DEFAULT CURRENT_TIMESTAMP,
           `result` VARCHAR(50),
+          `betfair_id` VARCHAR(100) NULL,
+          `adm_id` VARCHAR(100) NULL,
+          `notes` TEXT NULL,
           INDEX (`fixture_id`),
           INDEX (`status`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
@@ -482,6 +485,11 @@ try {
     ],
     "squads_indexes" => [
       "CREATE INDEX idx_squads_player ON squads(player_id)"
+    ],
+    "bets_identifiers" => [
+      "ALTER TABLE bets ADD COLUMN betfair_id VARCHAR(100) NULL AFTER result",
+      "ALTER TABLE bets ADD COLUMN adm_id VARCHAR(100) NULL AFTER betfair_id",
+      "ALTER TABLE bets ADD COLUMN notes TEXT NULL AFTER adm_id"
     ]
   ];
 

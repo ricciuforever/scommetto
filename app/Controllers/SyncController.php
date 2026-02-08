@@ -331,9 +331,9 @@ class SyncController
                         // Execute Real Bet on Betfair if configured
                         if ($this->betfairService->isConfigured()) {
                             echo "Attempting Betfair placement for $matchName...\n";
-                            $marketInfo = $this->betfairService->findMarket($matchName);
+                            $marketInfo = $this->betfairService->findMarket($matchName, $betData['advice']);
                             if ($marketInfo) {
-                                $selectionId = $this->betfairService->mapAdviceToSelection($betData['advice'], $marketInfo['runners']);
+                                $selectionId = $this->betfairService->mapAdviceToSelection($betData['advice'], $marketInfo['runners'], $m['teams']['home']['name'], $m['teams']['away']['name']);
                                 if ($selectionId) {
                                     $bfResult = $this->betfairService->placeBet($marketInfo['marketId'], $selectionId, $betData['odds'], $betData['stake']);
                                     if (isset($bfResult['result']['status']) && $bfResult['result']['status'] === 'SUCCESS') {

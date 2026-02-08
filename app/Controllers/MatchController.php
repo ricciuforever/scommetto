@@ -154,6 +154,17 @@ class MatchController
             $fix = $stmt->fetch(\PDO::FETCH_ASSOC);
 
             if (!$fix) {
+                // Fallback: tenta di recuperare la partita dall'API se non è nel DB
+                $apiService = new \App\Services\FootballApiService();
+                $data = $apiService->request("/fixtures?id=$id");
+                if (isset($data['response'][0])) {
+                    (new Fixture())->save($data['response'][0]);
+                    $stmt->execute(['id' => $id]);
+                    $fix = $stmt->fetch(\PDO::FETCH_ASSOC);
+                }
+            }
+
+            if (!$fix) {
                 echo json_encode(['error' => 'Partita non trovata.']);
                 return;
             }
