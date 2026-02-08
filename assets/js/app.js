@@ -1620,7 +1620,7 @@ function renderDashboardMatches() {
         card.className = `glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer relative overflow-hidden mb-6 ${isHighlighted ? 'pinned-match' : ''}`;
 
         // Link to match detail
-        const goToMatch = () => navigate('match', ${m.fixture.id});
+        const goToMatch = () => navigate('match', m.fixture.id);
         card.onclick = goToMatch;
 
         const homeName = m.teams.home.name;
