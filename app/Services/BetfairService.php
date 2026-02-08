@@ -16,6 +16,7 @@ class BetfairService
     private $ssoUrl;
     private $apiUrl = 'https://api.betfair.it/exchange/betting/json-rpc/v1';
     private $lastRequestTime = 0;
+    private $logFile;
 
     public function __construct()
     {
@@ -29,6 +30,23 @@ class BetfairService
 
         // Permetti l'uso di un token manuale per bypassare l'autenticazione con certificati
         $this->sessionToken = Config::get('BETFAIR_SESSION_TOKEN');
+
+        $this->logFile = __DIR__ . '/../../logs/betfair_debug.log';
+    }
+
+    private function log($message, $data = null)
+    {
+        $dir = dirname($this->logFile);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+
+        $timestamp = date('Y-m-d H:i:s');
+        $logEntry = "[$timestamp] $message";
+        if ($data !== null) {
+            $logEntry .= " | Data: " . json_encode($data);
+        }
+        file_put_contents($this->logFile, $logEntry . PHP_EOL, FILE_APPEND);
     }
 
     public function isConfigured(): bool
@@ -78,8 +96,10 @@ class BetfairService
     public function request(string $method, array $params = [])
     {
         $token = $this->authenticate();
-        if (!$token)
+        if (!$token) {
+            $this->log("Request Failed: No Auth Token for method $method");
             return null;
+        }
 
         // Rate Limiting: max 5 requests per second (0.2s interval)
         $now = microtime(true);
@@ -111,7 +131,10 @@ class BetfairService
         $response = curl_exec($ch);
         curl_close($ch);
 
-        return json_decode($response, true);
+        $decoded = json_decode($response, true);
+        $this->log("JSON-RPC Request: $method", ['params' => $params, 'response' => $decoded]);
+
+        return $decoded;
     }
 
     /**
@@ -119,6 +142,8 @@ class BetfairService
      */
     public function findMarket(string $matchName, string $marketType = 'MATCH_ODDS'): ?array
     {
+        $this->log("Finding market for: $matchName (Type: $marketType)");
+
         // 1. List events by name
         $events = $this->request('listEvents', [
             'filter' => [
@@ -141,8 +166,12 @@ class BetfairService
         }
 
         $eventId = $events['result'][0]['event']['id'] ?? null;
-        if (!$eventId)
+        if (!$eventId) {
+            $this->log("Event not found for $matchName");
             return null;
+        }
+
+        $this->log("Event found: " . $events['result'][0]['event']['name'] . " (ID: $eventId)");
 
         // 2. List market catalogues for this event
         $markets = $this->request('listMarketCatalogue', [
@@ -154,8 +183,12 @@ class BetfairService
             'maxResults' => 1
         ]);
 
-        if (empty($markets['result']))
+        if (empty($markets['result'])) {
+            $this->log("Market $marketType not found for event ID $eventId");
             return null;
+        }
+
+        $this->log("Market found: " . $markets['result'][0]['marketId']);
 
         return [
             'marketId' => $markets['result'][0]['marketId'],
@@ -168,6 +201,7 @@ class BetfairService
      */
     public function mapAdviceToSelection(string $advice, array $runners): ?string
     {
+        $this->log("Mapping advice to selection: $advice");
         $advice = strtolower($advice);
 
         // Handle common Match Odds advice
@@ -200,9 +234,12 @@ class BetfairService
 
     public function placeBet(string $marketId, string $selectionId, float $price, float $size): array
     {
+        $this->log("Placing bet: Market=$marketId, Selection=$selectionId, Price=$price, Size=$size");
         $token = $this->authenticate();
-        if (!$token)
+        if (!$token) {
+            $this->log("PlaceBet Failed: No Auth Token");
             return ['status' => 'FAILURE', 'errorCode' => 'NO_AUTH'];
+        }
 
         $marketId = (string) $marketId;
 
@@ -251,11 +288,14 @@ class BetfairService
         if ($response === false) {
             $err = curl_error($ch);
             curl_close($ch);
+            $this->log("PlaceBet CURL Error: $err");
             return ['status' => 'FAILURE', 'errorCode' => 'CURL_ERROR', 'raw' => $err];
         }
         curl_close($ch);
 
         $decoded = json_decode($response, true);
+        $this->log("PlaceBet Response", $decoded);
+
         return $decoded ?: ['status' => 'FAILURE', 'errorCode' => 'API_ERROR_NO_JSON', 'raw' => $response];
     }
 
@@ -301,10 +341,13 @@ class BetfairService
         if ($response === false) {
             $err = curl_error($ch);
             curl_close($ch);
+            $this->log("GetFunds CURL Error: $err");
             return ['error' => 'CURL_ERROR', 'details' => $err];
         }
         curl_close($ch);
 
-        return json_decode($response, true);
+        $decoded = json_decode($response, true);
+        $this->log("GetFunds Response", $decoded);
+        return $decoded;
     }
 }
