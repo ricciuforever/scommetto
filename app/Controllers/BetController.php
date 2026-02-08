@@ -75,9 +75,12 @@ class BetController
         $summary = $this->betModel->getBalanceSummary(\App\Config\Config::INITIAL_BANKROLL);
         $stake = (float) ($input['stake'] ?? 0);
 
+        $confidence = (int) ($input['confidence'] ?? 0);
+
         // Verifica disponibilità locale (solo per tracciamento profitto simulato)
-        // Nota: Per bet reali, Betfair farà il controllo saldo reale
-        if ($stake > $summary['available_balance']) {
+        // Nota: Per bet reali (Confidence > 80), Betfair farà il controllo saldo reale.
+        // Simuliamo il blocco solo per bet a bassa confidenza (che rimangono virtuali) e se c'è un blocco attivo
+        if ($confidence <= 80 && $stake > $summary['available_balance']) {
             // Opzionale: Bloccare o solo avvisare? Proseguiamo per ora
             // echo json_encode(['error' => 'Insufficient balance...']); return;
         }
@@ -237,8 +240,45 @@ class BetController
             // Pass variables to view
             require __DIR__ . '/../Views/partials/tracker.php';
 
-        } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore caricamento tracker: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    /**
+     * API: Get Real Betfair Balance
+     * GET /api/betfair/balance
+     */
+    public function getRealBalance()
+    {
+        header('Content-Type: application/json');
+
+        try {
+            $bf = new \App\Services\BetfairService();
+            if (!$bf->isConfigured() && !\App\Config\Config::get('BETFAIR_SESSION_TOKEN')) {
+                echo json_encode(['error' => 'Betfair not configured']);
+                return;
+            }
+
+            $funds = $bf->getFunds();
+
+            if (isset($funds['result'])) {
+                $avail = $funds['result']['availableToBetBalance'] ?? 0;
+                $exposure = $funds['result']['exposure'] ?? 0;
+                // wallet = disponibile + esposizione (circa)
+                $wallet = $avail + abs($exposure);
+
+                echo json_encode([
+                    'available' => $avail,
+                    'exposure' => $exposure,
+                    'wallet' => $wallet,
+                    'currency' => $funds['result']['currencyCode'] ?? 'EUR'
+                ]);
+            } else {
+                echo json_encode(['error' => 'API Error', 'details' => $funds]);
+            }
+
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
         }
     }
 }

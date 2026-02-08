@@ -90,6 +90,8 @@ try {
         header('Content-Type: application/json');
         $success = (new \App\Models\Bet())->deduplicate();
         echo json_encode(['status' => 'success']);
+    } elseif ($path === '/api/betfair/balance') {
+        (new BetController())->getRealBalance();
     } elseif ($path === '/api/migrate') {
         header('Content-Type: application/json');
         try {

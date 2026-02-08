@@ -1395,27 +1395,74 @@ async function fetchHistory() {
     }
 }
 
-function updateStatsSummary() {
+async function updateStatsSummary() {
     const summary = calculateStats();
     const container = document.getElementById('stats-summary');
     if (!container) return;
 
     const countryLabel = selectedCountry === 'all' ? 'Tutte' : selectedCountry;
     const leagueLabel = selectedLeague === 'all' ? 'Tutti' : (Array.from(document.querySelectorAll('#dash-league-filter option')).find(opt => opt.value === selectedLeague)?.innerText || 'League');
-    const bookmakerLabel = selectedBookmaker === 'all' ? 'Tutti i Book' : (allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker)?.name || 'Filtro');
 
+    // Identifica se stiamo visualizzando Betfair
+    let showingBetfair = false;
+    let bookmakerLabel = 'Tutti i Book';
+
+    if (selectedBookmaker !== 'all') {
+        const b = allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker);
+        bookmakerLabel = b?.name || 'Filtro';
+        if (bookmakerLabel.toLowerCase().includes('betfair')) showingBetfair = true;
+    }
+
+    // Default Values (Virtual)
+    let displayBalance = summary.availableBalance.toFixed(2) + '€';
+    let displayPortfolio = summary.currentPortfolio.toFixed(2) + '€';
+    let balanceLabel = 'Disponibile (Virtual)';
+    let portfolioLabel = 'Portafoglio (Virtual)';
+
+    // Se Betfair è selezionato, fetch Real Data
+    if (showingBetfair) {
+        try {
+            // Mostra loader temporaneo
+            displayBalance = '<span class="animate-pulse">Loading...</span>';
+            displayPortfolio = '<span class="animate-pulse">Loading...</span>';
+
+            // Render immediato col loading
+            renderStatsHTML(container, displayBalance, displayPortfolio, balanceLabel, portfolioLabel, summary, countryLabel, leagueLabel, bookmakerLabel);
+
+            const res = await fetch('/api/betfair/balance');
+            const data = await res.json();
+
+            if (data.available !== undefined) {
+                displayBalance = parseFloat(data.available).toFixed(2) + '€';
+                displayPortfolio = parseFloat(data.wallet).toFixed(2) + '€'; // Wallet include esposizione
+                balanceLabel = 'Disponibile (Reale)';
+                portfolioLabel = 'Portafoglio (Reale)';
+            } else if (data.error) {
+                displayBalance = 'ERR';
+                console.error('Betfair Balance Error:', data.error);
+            }
+        } catch (e) {
+            console.error('Fetch Balance Error', e);
+            displayBalance = 'ERR';
+        }
+    }
+
+    renderStatsHTML(container, displayBalance, displayPortfolio, balanceLabel, portfolioLabel, summary, countryLabel, leagueLabel, bookmakerLabel);
+}
+
+function renderStatsHTML(container, balanceIdx, portfolioIdx, balLabel, portLabel, summary, cLabel, lLabel, bLabel) {
     container.innerHTML = `
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-            <span class="block text-2xl font-black mb-1 ${summary.availableBalance >= 0 ? 'text-white' : 'text-danger'}">${summary.availableBalance.toFixed(2)}€</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Disponibile</span>
+            <span class="block text-2xl font-black mb-1 ${summary.availableBalance >= 0 || balanceIdx.includes('€') ? 'text-white' : 'text-danger'}">${balanceIdx}</span>
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">${balLabel}</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-             <span class="block text-2xl font-black mb-1">${summary.currentPortfolio.toFixed(2)}€</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Portafoglio</span>
+             <span class="block text-2xl font-black mb-1">${portfolioIdx}</span>
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">${portLabel}</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
             <span class="block text-2xl font-black mb-1 ${summary.netProfit >= 0 ? 'text-success' : 'text-danger'}">${summary.netProfit >= 0 ? '+' : ''}${summary.netProfit.toFixed(2)}€</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Utile Netto | ${countryLabel} ${selectedLeague !== 'all' ? '/ ' + leagueLabel : ''}</span>
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Utile Netto | ${cLabel} ${selectedLeague !== 'all' ? '/ ' + lLabel : ''}</span>
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
             <span class="block text-2xl font-black mb-1">${summary.liveCount}</span>
@@ -1427,7 +1474,7 @@ function updateStatsSummary() {
         </div>
         <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
             <span class="block text-2xl font-black mb-1 text-success">${summary.roi.toFixed(1)}%</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">ROI | ${bookmakerLabel}</span>
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">ROI | ${bLabel}</span>
         </div>
     `;
 }

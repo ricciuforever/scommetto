@@ -212,4 +212,49 @@ class BetfairService
             ]
         ]);
     }
+
+    /**
+     * Recupera il saldo del conto Betfair (API Account)
+     */
+    public function getFunds()
+    {
+        // Nota: Account API è su un endpoint diverso, ma molte librerie usano lo stesso URL base per semplicità.
+        // Se necessario, cambiare URL base. Per Betfair Exchange API standard 'SportsAPING' e 'AccountAPING' sono separati.
+        // URL Account: https://api.betfair.com/exchange/account/json-rpc/v1
+
+        $token = $this->authenticate();
+        if (!$token)
+            return null;
+
+        // Rate Limit check (semplificato)
+        $now = microtime(true);
+        if (($now - $this->lastRequestTime) < 0.2)
+            usleep(200000);
+        $this->lastRequestTime = microtime(true);
+
+        $payload = json_encode([
+            "jsonrpc" => "2.0",
+            "method" => "AccountAPING/v1.0/getAccountFunds",
+            "params" => [],
+            "id" => 1
+        ]);
+
+        $ch = curl_init();
+        // Endpoint Account diverso da Betting
+        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/account/json-rpc/v1');
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "X-Application: {$this->appKey}",
+            "X-Authentication: {$token}",
+            "Content-Type: application/json",
+            "Accept: application/json"
+        ]);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        return json_decode($response, true);
+    }
 }
