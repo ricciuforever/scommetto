@@ -18,6 +18,10 @@
             <i data-lucide="trophy" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold uppercase tracking-widest">Leghe</span>
         </a>
+        <a href="/teams" class="flex flex-col items-center gap-1 text-slate-500 hover:text-accent">
+            <i data-lucide="users" class="w-6 h-6"></i>
+            <span class="text-[10px] font-bold uppercase tracking-widest">Squadre</span>
+        </a>
         <a href="/seasons" class="flex flex-col items-center gap-1 text-slate-500 hover:text-accent">
             <i data-lucide="calendar" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold uppercase tracking-widest">Stagioni</span>

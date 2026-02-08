@@ -10,6 +10,7 @@ use App\Controllers\FilterController;
 use App\Controllers\CountryController;
 use App\Controllers\LeagueController;
 use App\Controllers\SeasonController;
+use App\Controllers\TeamController;
 
 $request = $_SERVER['REQUEST_URI'] ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -19,23 +20,24 @@ $path = parse_url($request, PHP_URL_PATH);
 $path = str_replace('/scommetto', '', $path); // Adjust if running in a subdirectory
 
 try {
+    // Gestione viste standard tramite Controller dedicati
+    $viewRoutes = [
+        '/countries' => CountryController::class,
+        '/leagues'   => LeagueController::class,
+        '/seasons'   => SeasonController::class,
+        '/teams'     => TeamController::class,
+    ];
+
+    if (isset($viewRoutes[$path])) {
+        (new $viewRoutes[$path]())->index();
+        return;
+    }
+
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||
-        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/predictions', '/tracker', '/countries', '/seasons']) ||
+        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/predictions', '/tracker']) ||
         preg_match('#^/(match|team|player)/(\d+)$#', $path)
     ) {
-        if ($path === '/countries') {
-            (new CountryController())->index();
-            return;
-        }
-        if ($path === '/leagues') {
-            (new LeagueController())->index();
-            return;
-        }
-        if ($path === '/seasons') {
-            (new SeasonController())->index();
-            return;
-        }
         (new MatchController())->index();
     } elseif ($path === '/api/live') {
         (new MatchController())->getLive();
@@ -45,6 +47,8 @@ try {
         (new LeagueController())->list();
     } elseif ($path === '/api/seasons') {
         (new SeasonController())->list();
+    } elseif ($path === '/api/teams') {
+        (new TeamController())->list();
     } elseif ($path === '/api/dashboard' || $path === '/api/view/dashboard') {
         (new MatchController())->dashboard();
     } elseif ($path === '/api/view/leagues') {
