@@ -49,15 +49,28 @@ class League
 
     public function save($data)
     {
-        $sql = "INSERT INTO leagues (id, name, type, logo, country_name, coverage_json) 
-                VALUES (:id, :name, :type, :logo, :country, :coverage)
+        $sql = "INSERT INTO leagues (id, name, type, logo, country, country_name, coverage_json)
+                VALUES (:id, :name, :type, :logo, :country, :country_name, :coverage)
                 ON DUPLICATE KEY UPDATE 
                     name = VALUES(name), 
                     type = VALUES(type),
                     logo = VALUES(logo), 
+                    country = VALUES(country),
                     country_name = VALUES(country_name),
                     coverage_json = VALUES(coverage_json),
                     last_updated = CURRENT_TIMESTAMP";
+
+        // Trova la stagione corrente per estrarre la coverage
+        $currentSeason = null;
+        foreach ($data['seasons'] ?? [] as $s) {
+            if ($s['current']) {
+                $currentSeason = $s;
+                break;
+            }
+        }
+        if (!$currentSeason && !empty($data['seasons'])) {
+            $currentSeason = end($data['seasons']);
+        }
 
         $stmt = $this->db->prepare($sql);
         $res = $stmt->execute([
@@ -65,8 +78,9 @@ class League
             'name' => $data['league']['name'],
             'type' => $data['league']['type'] ?? 'League',
             'logo' => $data['league']['logo'] ?? null,
-            'country' => $data['country']['name'] ?? $data['league']['country'] ?? null,
-            'coverage' => json_encode($data['seasons'][0]['coverage'] ?? [])
+            'country' => $data['country']['name'] ?? null,
+            'country_name' => $data['country']['name'] ?? null,
+            'coverage' => json_encode($currentSeason['coverage'] ?? [])
         ]);
 
         if (isset($data['seasons'])) {
@@ -110,5 +124,11 @@ class League
         if (!$row || !$row['last'])
             return true;
         return (time() - strtotime($row['last'])) > ($hours * 3600);
+    }
+
+    public function deleteAll()
+    {
+        $this->db->exec("DELETE FROM league_seasons");
+        return $this->db->exec("DELETE FROM leagues");
     }
 }
