@@ -274,6 +274,19 @@ class BetfairService
 
     public function placeBet(string $marketId, string $selectionId, float $price, float $size, $isRetry = false): array
     {
+        // Regole Betfair.it: Minimo 2€, multipli di 0.50€
+        if ($size < \App\Config\Config::MIN_BETFAIR_STAKE) {
+            $this->log("Stake $size aumentato a 2.00€ (minimo IT)");
+            $size = \App\Config\Config::MIN_BETFAIR_STAKE;
+        }
+
+        $roundedStake = floor($size * 2) / 2;
+        if ($roundedStake < \App\Config\Config::MIN_BETFAIR_STAKE) $roundedStake = \App\Config\Config::MIN_BETFAIR_STAKE;
+        if ($roundedStake != $size) {
+            $this->log("Stake $size arrotondato a $roundedStake (multipli 0.50 IT)");
+            $size = $roundedStake;
+        }
+
         $this->log("Placing bet: Market=$marketId, Selection=$selectionId, Price=$price, Size=$size");
         $token = $this->authenticate();
         if (!$token) {
