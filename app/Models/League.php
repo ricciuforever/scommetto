@@ -80,7 +80,7 @@ class League
             'logo' => $data['league']['logo'] ?? null,
             'country' => $data['country']['name'] ?? null,
             'country_name' => $data['country']['name'] ?? null,
-            'coverage' => json_encode($currentSeason['coverage'] ?? [])
+            'coverage' => json_encode($currentSeason ? ($currentSeason['coverage'] ?? []) : [])
         ]);
 
         if (isset($data['seasons'])) {
