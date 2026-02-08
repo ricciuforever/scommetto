@@ -35,7 +35,18 @@ class CountryController
                 $this->sync();
             }
 
-            $countries = $model->getAll();
+            $filters = [
+                'name' => $_GET['name'] ?? null,
+                'code' => $_GET['code'] ?? null,
+                'search' => $_GET['search'] ?? null,
+            ];
+
+            if (array_filter($filters)) {
+                $countries = $model->find($filters);
+            } else {
+                $countries = $model->getAll();
+            }
+
             echo json_encode(['response' => $countries]);
         } catch (\Throwable $e) {
             http_response_code(500);

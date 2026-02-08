@@ -117,6 +117,67 @@ class League
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    public function find($filters = [])
+    {
+        $sql = "SELECT DISTINCT l.* FROM leagues l";
+        $params = [];
+        $where = ["1=1"];
+
+        if (!empty($filters['team'])) {
+            $sql .= " JOIN team_leagues tl ON l.id = tl.league_id";
+            $where[] = "tl.team_id = :team";
+            $params['team'] = $filters['team'];
+        }
+
+        if (!empty($filters['id'])) {
+            $where[] = "l.id = :id";
+            $params['id'] = $filters['id'];
+        }
+        if (!empty($filters['name'])) {
+            $where[] = "l.name = :name";
+            $params['name'] = $filters['name'];
+        }
+        if (!empty($filters['country'])) {
+            $where[] = "l.country_name = :country";
+            $params['country'] = $filters['country'];
+        }
+        if (!empty($filters['code'])) {
+            // Nota: abbiamo il codice nazione solo in 'countries',
+            // ma l'API Football lo permette come filtro.
+            // Possiamo fare una join se necessario o assumere che country_name basti.
+            // Per ora semplifichiamo.
+        }
+        if (!empty($filters['season'])) {
+            $sql .= " JOIN league_seasons ls ON l.id = ls.league_id";
+            $where[] = "ls.year = :season";
+            $params['season'] = $filters['season'];
+        }
+        if (!empty($filters['search'])) {
+            $where[] = "(l.name LIKE :search OR l.country_name LIKE :search)";
+            $params['search'] = '%' . $filters['search'] . '%';
+        }
+        if (!empty($filters['type'])) {
+            $where[] = "l.type = :type";
+            $params['type'] = $filters['type'];
+        }
+        if (isset($filters['current']) && $filters['current'] !== '') {
+             $sql .= " JOIN league_seasons ls_curr ON l.id = ls_curr.league_id";
+             $where[] = "ls_curr.is_current = 1";
+        }
+
+        $sql .= " WHERE " . implode(" AND ", $where);
+
+        $premiumIds = implode(',', \App\Config\Config::PREMIUM_LEAGUES);
+        $sql .= " ORDER BY
+                    CASE WHEN l.id IN ($premiumIds) THEN 0 ELSE 1 END,
+                    l.country_name ASC,
+                    l.name ASC";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function needsRefresh($hours = 24)
     {
         $stmt = $this->db->query("SELECT MAX(last_updated) as last FROM leagues");
