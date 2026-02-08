@@ -1405,8 +1405,8 @@ function renderSportSelectors() {
     if (!container) return;
 
     const icons = {
-        '1': 'trophy', '2': 'target', '4': 'activity', '7': 'flag',
-        '27454': 'activity', '998917': 'activity', '7524': 'activity',
+        '1': 'soccer-ball', '2': 'tennis-ball', '4': 'activity', '7': 'flag', '7522': 'basketball', '5': 'football',
+        '27454': 'activity', '998917': 'activity', '7524': 'activity', '6423': 'football-helmet',
         '4339': 'activity'
     };
 
