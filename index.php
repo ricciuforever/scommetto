@@ -9,6 +9,7 @@ use App\Controllers\SyncController;
 use App\Controllers\FilterController;
 use App\Controllers\CountryController;
 use App\Controllers\LeagueController;
+use App\Controllers\SeasonController;
 
 $request = $_SERVER['REQUEST_URI'] ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -20,7 +21,7 @@ $path = str_replace('/scommetto', '', $path); // Adjust if running in a subdirec
 try {
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||
-        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/predictions', '/tracker', '/countries']) ||
+        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/predictions', '/tracker', '/countries', '/seasons']) ||
         preg_match('#^/(match|team|player)/(\d+)$#', $path)
     ) {
         if ($path === '/countries') {
@@ -31,6 +32,10 @@ try {
             (new LeagueController())->index();
             return;
         }
+        if ($path === '/seasons') {
+            (new SeasonController())->index();
+            return;
+        }
         (new MatchController())->index();
     } elseif ($path === '/api/live') {
         (new MatchController())->getLive();
@@ -38,6 +43,8 @@ try {
         (new CountryController())->list();
     } elseif ($path === '/api/leagues') {
         (new LeagueController())->list();
+    } elseif ($path === '/api/seasons') {
+        (new SeasonController())->list();
     } elseif ($path === '/api/dashboard' || $path === '/api/view/dashboard') {
         (new MatchController())->dashboard();
     } elseif ($path === '/api/view/leagues') {
