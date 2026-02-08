@@ -237,8 +237,17 @@ class BetfairService
             "Content-Type: application/json",
             "Accept: application/json"
         ]);
+        // Fix SSL locale
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
 
         $response = curl_exec($ch);
+
+        if ($response === false) {
+            $err = curl_error($ch);
+            curl_close($ch);
+            return ['status' => 'FAILURE', 'errorCode' => 'CURL_ERROR', 'raw' => $err];
+        }
         curl_close($ch);
 
         $decoded = json_decode($response, true);
@@ -278,8 +287,17 @@ class BetfairService
             "Content-Type: application/json",
             "Accept: application/json"
         ]);
+        // Fix SSL locale
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
 
         $response = curl_exec($ch);
+
+        if ($response === false) {
+            $err = curl_error($ch);
+            curl_close($ch);
+            return ['error' => 'CURL_ERROR', 'details' => $err];
+        }
         curl_close($ch);
 
         return json_decode($response, true);
