@@ -131,7 +131,7 @@ class BetController
             $allBetsRaw = $db->query($sqlAll)->fetchAll(\PDO::FETCH_ASSOC);
 
             // Calculation (Replicating JS logic)
-            $initialBalance = 100;
+            $initialBalance = Config::INITIAL_BANKROLL;
             $wonBets = array_filter($allBetsRaw, fn($b) => $b['status'] === 'won');
             $lostBets = array_filter($allBetsRaw, fn($b) => $b['status'] === 'lost');
             $pendingBets = array_filter($allBetsRaw, fn($b) => in_array($b['status'], ['pending', 'placed']));

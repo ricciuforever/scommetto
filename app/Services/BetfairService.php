@@ -376,7 +376,7 @@ class BetfairService
             $size = \App\Config\Config::MIN_BETFAIR_STAKE;
         }
 
-        $roundedStake = floor($size * 2) / 2;
+        $roundedStake = round($size * 2) / 2;
         if ($roundedStake < \App\Config\Config::MIN_BETFAIR_STAKE) $roundedStake = \App\Config\Config::MIN_BETFAIR_STAKE;
         if ($roundedStake != $size) {
             $this->log("Stake $size arrotondato a $roundedStake (multipli 0.50 IT)");

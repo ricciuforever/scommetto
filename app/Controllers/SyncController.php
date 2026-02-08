@@ -336,9 +336,14 @@ class SyncController
                                 $selectionId = $this->betfairService->mapAdviceToSelection($betData['advice'], $marketInfo['runners'], $m['teams']['home']['name'], $m['teams']['away']['name']);
                                 if ($selectionId) {
                                     $bfResult = $this->betfairService->placeBet($marketInfo['marketId'], $selectionId, $betData['odds'], $betData['stake']);
-                                    if (isset($bfResult['result']['status']) && $bfResult['result']['status'] === 'SUCCESS') {
+
+                                    // Gestione flessibile risposta Betfair (REST o JSON-RPC)
+                                    $res = isset($bfResult['status']) ? $bfResult : ($bfResult['result'] ?? null);
+
+                                    if ($res && isset($res['status']) && $res['status'] === 'SUCCESS') {
                                         echo "REAL BET PLACED ON BETFAIR for $matchName! Market: {$marketInfo['marketId']}, Selection: $selectionId\n";
                                         $betData['status'] = 'placed';
+                                        $betData['betfair_id'] = $res['instructionReports'][0]['betId'] ?? null;
                                     } else {
                                         echo "Betfair placement FAILED for $matchName: " . json_encode($bfResult) . "\n";
                                     }
