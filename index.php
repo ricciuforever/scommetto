@@ -45,6 +45,8 @@ try {
         (new MatchController())->getLive();
     } elseif ($path === '/api/countries') {
         (new CountryController())->list();
+    } elseif ($path === '/api/teams/countries') {
+        (new CountryController())->listTeams();
     } elseif ($path === '/api/leagues') {
         (new LeagueController())->list();
     } elseif ($path === '/api/seasons') {

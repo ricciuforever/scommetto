@@ -69,16 +69,15 @@ class Team
 
     /**
      * Aggiorna il timestamp di sincronizzazione per una lega/stagione
-     * (Usato anche quando non vengono trovate squadre per evitare loop di sync)
+     * (Usato per segnare che il sync è avvenuto, anche se con 0 risultati)
      */
     public function touchLeagueSeason($leagueId, $season)
     {
-        // Se non ci sono record per tl, non possiamo fare ON DUPLICATE UPDATE se non abbiamo un team_id
-        // Ma qui vogliamo solo segnare che abbiamo cercato.
-        // In realtà needsLeagueRefresh usa MAX(last_updated).
-        // Se la tabella tl è vuota per quella combinazione, non c'è nulla da aggiornare.
-        // Potremmo inserire un record "dummy" o semplicemente accettare che riproverà.
-        // In genere, se è una lega valida, avrà almeno una squadra.
+        $sql = "INSERT INTO league_seasons (league_id, year, last_teams_sync)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON DUPLICATE KEY UPDATE last_teams_sync = CURRENT_TIMESTAMP";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([$leagueId, $season]);
     }
 
     public function getById($id)
@@ -109,15 +108,16 @@ class Team
      */
     public function needsLeagueRefresh($leagueId, $season, $hours = 24)
     {
-        $sql = "SELECT MAX(last_updated) as last FROM team_leagues WHERE league_id = ? AND season = ?";
+        // Controlliamo l'ultima sincronizzazione nella tabella league_seasons
+        $sql = "SELECT last_teams_sync FROM league_seasons WHERE league_id = ? AND year = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$leagueId, $season]);
         $row = $stmt->fetch();
 
-        if (!$row || !$row['last'])
+        if (!$row || !$row['last_teams_sync'])
             return true;
 
-        return (time() - strtotime($row['last'])) > ($hours * 3600);
+        return (time() - strtotime($row['last_teams_sync'])) > ($hours * 3600);
     }
 
     /**
