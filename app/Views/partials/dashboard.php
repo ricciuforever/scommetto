@@ -129,51 +129,46 @@ foreach ($history as $h) {
                     <div class="glass p-20 text-center font-black uppercase italic text-slate-500 rounded-[40px]">Nessun
                         match live al momento.</div>
                 <?php else: ?>
-                    <?php foreach ($liveMatches as $m): ?>
-                        <div
-                            class="glass p-6 rounded-[32px] border-white/5 hover:border-accent/30 transition-all group relative overflow-hidden">
+                    <?php 
+                    // Limit to 50 matches to avoid rendering issues if API returns too many
+                    $displayMatches = array_slice($liveMatches, 0, 50);
+                    foreach ($displayMatches as $m): 
+                        $eventId = $m['event_id'] ?? $m['fixture_id'] ?? 0;
+                        $matchLink = "/api/view/match/" . $eventId; 
+                    ?>
+                        <div class="glass p-6 rounded-[32px] border-white/5 hover:border-accent/30 transition-all group relative overflow-hidden cursor-pointer"
+                             hx-get="<?php echo $matchLink; ?>" hx-target="#htmx-container" hx-push-url="true">
+                            
                             <!-- Background Sport Icon -->
-                            <div class="absolute -right-4 -bottom-4 opacity-5 rotate-12 pointer-events-none">
-                                <i data-lucide="trophy" class="w-32 h-32"></i>
+                            <div class="absolute -right-4 -bottom-4 opacity-5 rotate-12 pointer-events-none group-hover:opacity-10 transition-opacity">
+                                <?php 
+                                $sportIcon = 'activity';
+                                if(stripos($m['sport'], 'soccer') !== false) $sportIcon = 'trophy';
+                                elseif(stripos($m['sport'], 'tennis') !== false) $sportIcon = 'circle-dot';
+                                elseif(stripos($m['sport'], 'basket') !== false) $sportIcon = 'dribbble';
+                                ?>
+                                <i data-lucide="<?php echo $sportIcon; ?>" class="w-32 h-32"></i>
                             </div>
 
-                            <div class="relative z-10">
-                                <div class="flex items-center justify-between mb-4">
-                                    <div class="flex items-center gap-2">
-                                        <span
-                                            class="px-2 py-0.5 rounded bg-danger/10 text-danger text-[9px] font-black uppercase tracking-widest border border-danger/20 animate-pulse">LIVE</span>
-                                        <span
-                                            class="text-[9px] font-bold text-slate-500 uppercase tracking-widest"><?php echo $m['sport']; ?>
-                                            | <?php echo $m['market']; ?></span>
+                            <div class="relative z-10 flex items-center justify-between">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span class="px-2 py-0.5 rounded bg-danger/10 text-danger text-[9px] font-black uppercase tracking-widest border border-danger/20 animate-pulse">LIVE</span>
+                                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[200px]"><?php echo $m['series'] ?? $m['sport']; ?></span>
                                     </div>
-                                    <div class="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                        Vol: €<?php echo number_format($m['totalMatched'], 0); ?>
-                                    </div>
+                                    <h3 class="text-xl font-black italic uppercase text-white tracking-tight group-hover:text-accent transition-colors">
+                                        <?php echo $m['event']; ?>
+                                    </h3>
+                                    <?php if(isset($m['score'])): ?>
+                                        <div class="text-xs font-bold text-slate-400 mt-1 font-mono"><?php echo $m['score']; ?></div>
+                                    <?php endif; ?>
                                 </div>
-
-                                <h3 class="text-xl font-black italic uppercase text-white mb-6 tracking-tight">
-                                    <?php echo $m['event']; ?>
-                                </h3>
-
-                                <div class="grid grid-cols-<?php echo count($m['runners']); ?> gap-3">
-                                    <?php foreach ($m['runners'] as $r): ?>
-                                        <div
-                                            class="bg-white/5 p-3 rounded-2xl text-center border border-white/5 group-hover:border-accent/20 transition-all">
-                                            <div class="text-[9px] font-bold text-slate-400 uppercase truncate mb-1">
-                                                <?php echo $r['name']; ?>
-                                            </div>
-                                            <div class="grid grid-cols-2 gap-1">
-                                                <div class="bg-accent/10 rounded-lg py-1">
-                                                    <span
-                                                        class="block text-xs font-black text-accent"><?php echo $r['back'] ?? '-'; ?></span>
-                                                </div>
-                                                <div class="bg-danger/10 rounded-lg py-1">
-                                                    <span
-                                                        class="block text-xs font-black text-danger"><?php echo $r['lay'] ?? '-'; ?></span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
+                                
+                                <div class="flex flex-col items-end gap-1">
+                                    <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-accent group-hover:text-white transition-all text-slate-500">
+                                        <i data-lucide="chevron-right" class="w-6 h-6"></i>
+                                    </div>
+                                    <span class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Dettagli</span>
                                 </div>
                             </div>
                         </div>
