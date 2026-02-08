@@ -26,6 +26,9 @@ class BetfairService
         $this->certPath = Config::get('BETFAIR_CERT_PATH');
         $this->keyPath = Config::get('BETFAIR_KEY_PATH');
         $this->ssoUrl = Config::get('BETFAIR_SSO_URL', 'https://identitysso.betfair.it/api/certlogin');
+
+        // Permetti l'uso di un token manuale per bypassare l'autenticazione con certificati
+        $this->sessionToken = Config::get('BETFAIR_SESSION_TOKEN');
     }
 
     public function isConfigured(): bool
@@ -35,7 +38,8 @@ class BetfairService
 
     private function authenticate()
     {
-        if ($this->sessionToken) return $this->sessionToken;
+        if ($this->sessionToken)
+            return $this->sessionToken;
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $this->ssoUrl);
@@ -69,7 +73,8 @@ class BetfairService
     public function request(string $method, array $params = [])
     {
         $token = $this->authenticate();
-        if (!$token) return null;
+        if (!$token)
+            return null;
 
         // Rate Limiting: max 5 requests per second (0.2s interval)
         $now = microtime(true);
@@ -131,7 +136,8 @@ class BetfairService
         }
 
         $eventId = $events['result'][0]['event']['id'] ?? null;
-        if (!$eventId) return null;
+        if (!$eventId)
+            return null;
 
         // 2. List market catalogues for this event
         $markets = $this->request('listMarketCatalogue', [
@@ -143,7 +149,8 @@ class BetfairService
             'maxResults' => 1
         ]);
 
-        if (empty($markets['result'])) return null;
+        if (empty($markets['result']))
+            return null;
 
         return [
             'marketId' => $markets['result'][0]['marketId'],
