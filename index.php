@@ -26,11 +26,11 @@ try {
     // Gestione viste standard tramite Controller dedicati
     $viewRoutes = [
         '/countries' => CountryController::class,
-        '/leagues'   => LeagueController::class,
-        '/seasons'   => SeasonController::class,
-        '/teams'     => TeamController::class,
+        '/leagues' => LeagueController::class,
+        '/seasons' => SeasonController::class,
+        '/teams' => TeamController::class,
         '/team-stats' => TeamStatsController::class,
-        '/venues'    => VenueController::class,
+        '/venues' => VenueController::class,
         '/standings' => StandingController::class,
     ];
 
@@ -41,11 +41,7 @@ try {
 
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||
-<<<<<<< Updated upstream
-        in_array(rtrim($path, '/'), ['/dashboard', '/predictions', '/tracker']) ||
-=======
         in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/predictions', '/tracker', '/settings']) ||
->>>>>>> Stashed changes
         preg_match('#^/(match|team|player)/(\d+)$#', $path)
     ) {
         (new MatchController())->index();

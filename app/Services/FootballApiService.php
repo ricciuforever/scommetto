@@ -289,21 +289,26 @@ class FootballApiService
         }
 
         // Update Usage if headers are present
-        $limit = $headers['x-ratelimit-requests-limit'] ?? null;
-        $used = $headers['x-ratelimit-requests-used'] ?? $headers['x-ratelimit-used'] ?? $headers['x-ratelimit-requests-limit-used'] ?? null;
-        $remaining = $headers['x-ratelimit-requests-remaining'] ?? $headers['x-ratelimit-remaining'] ?? null;
+        try {
+            $limit = $headers['x-ratelimit-requests-limit'] ?? null;
+            $used = $headers['x-ratelimit-requests-used'] ?? $headers['x-ratelimit-used'] ?? $headers['x-ratelimit-requests-limit-used'] ?? null;
+            $remaining = $headers['x-ratelimit-requests-remaining'] ?? $headers['x-ratelimit-remaining'] ?? null;
 
-        if ($remaining !== null || $used !== null) {
-            $usageModel = new Usage();
-            $currentUsage = $usageModel->getLatest();
+            if ($remaining !== null || $used !== null) {
+                $usageModel = new Usage();
+                $currentUsage = $usageModel->getLatest();
 
-            $limitVal = $limit ?? (is_array($currentUsage) ? ($currentUsage['requests_limit'] ?? 75000) : 75000);
-            $currentLimit = (int) $limitVal;
+                $limitVal = $limit ?? (is_array($currentUsage) ? ($currentUsage['requests_limit'] ?? 75000) : 75000);
+                $currentLimit = (int) $limitVal;
 
-            $currentRem = (int) ($remaining ?? ($currentLimit - (int) ($used ?? 0)));
-            $currentUsed = (int) ($used ?? ($currentLimit - $currentRem));
+                $currentRem = (int) ($remaining ?? ($currentLimit - (int) ($used ?? 0)));
+                $currentUsed = (int) ($used ?? ($currentLimit - $currentRem));
 
-            $usageModel->update($currentUsed, $currentRem, $limit !== null ? (int) $limit : null);
+                $usageModel->update($currentUsed, $currentRem, $limit !== null ? (int) $limit : null);
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore usage update errors (e.g. table missing) to avoid 500s
+            error_log("Usage Tracking Error: " . $e->getMessage());
         }
 
         return json_decode($response, true);

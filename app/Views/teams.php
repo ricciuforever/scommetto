@@ -38,13 +38,13 @@ require __DIR__ . '/layout/top.php';
                     <div className="z-10 pt-3 border-t border-white/5 mt-auto">
                         <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/5 overflow-hidden">
-                                {team.venue_image ? (
-                                    <img src={team.venue_image} className="w-full h-full object-cover" alt="" />
-                                ) : (
-                                    <i data-lucide="building-2" className="w-4 h-4 text-slate-600"></i>
-                                )}
-                            </div>
+                                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/5 overflow-hidden">
+                                    {team.venue_image ? (
+                                        <img src={team.venue_image} className="w-full h-full object-cover" alt="" />
+                                    ) : (
+                                        <i data-lucide="building-2" className="w-4 h-4 text-slate-600"></i>
+                                    )}
+                                </div>
                                 <div className="flex flex-col min-w-0">
                                     <span className="text-[10px] font-bold text-slate-300 truncate leading-tight">{team.venue_name}</span>
                                     <span className="text-[9px] font-medium text-slate-500 truncate uppercase tracking-tighter">{team.venue_city}</span>
@@ -110,7 +110,10 @@ require __DIR__ . '/layout/top.php';
             if (selectedLeague && selectedSeason) {
                 setLoading(true);
                 fetch(`/api/teams?league=${selectedLeague}&season=${selectedSeason}`)
-                    .then(res => res.json())
+                    .then(res => {
+                        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+                        return res.json();
+                    })
                     .then(data => {
                         setTeams(data.response || []);
                         setLoading(false);
