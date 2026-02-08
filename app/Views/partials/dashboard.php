@@ -27,53 +27,6 @@ foreach ($history as $h) {
 <div hx-get="/api/view/dashboard" hx-trigger="every 15s" hx-swap="outerHTML">
 
     <!-- Account Stats Summary -->
-    <?php if (!empty($activeSports)): ?>
-        <div class="flex gap-4 mb-8 overflow-x-auto no-scrollbar pb-2">
-            <?php 
-            $icons = [
-                'soccer' => 'trophy',
-                'tennis' => 'circle-dot',
-                'basket' => 'dribbble',
-                'volley' => 'activity',
-                'pallavolo' => 'activity',
-                'hockey' => 'snowflake',
-                'rugby' => 'citrus',
-                'golf'   => 'flag-triangle-right',
-                'motor'  => 'car-front',
-                'cycl'   => 'bike'
-            ];
-            $currentSport = $selectedSport ?? 'all';
-            ?>
-            <a href="/dashboard?sport=all"
-                class="<?php echo $currentSport === 'all' ? 'bg-accent text-white shadow-lg shadow-accent/20 scale-[1.02]' : 'bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-white'; ?> px-6 py-4 rounded-2xl flex items-center justify-between gap-4 min-w-[140px] transition-all bg-white/5 border border-white/5 shrink-0 block no-underline">
-                <div class="flex items-center gap-3">
-                    <i data-lucide="layout-grid" class="w-5 h-5"></i>
-                    <span class="text-[10px] font-black uppercase tracking-widest">Tutti</span>
-                </div>
-                <span class="<?php echo $currentSport === 'all' ? 'bg-white/20 text-white' : 'bg-slate-900/50 text-slate-500'; ?> text-[10px] font-bold px-2 py-1 rounded-lg"><?php echo isset($allMatches) ? count($allMatches) : count($liveMatches); ?></span>
-            </a>
-            <?php foreach ($activeSports as $sport => $count):
-                $icon = 'activity';
-                foreach($icons as $key => $val) {
-                    if(stripos($sport, $key) !== false) {
-                        $icon = $val;
-                        break;
-                    }
-                }
-                $isActive = (strtolower($currentSport) === strtolower($sport));
-                ?>
-                <a href="/dashboard?sport=<?php echo urlencode($sport); ?>"
-                    class="<?php echo $isActive ? 'bg-accent text-white shadow-lg shadow-accent/20 scale-[1.02]' : 'bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-white'; ?> px-6 py-4 rounded-2xl flex items-center justify-between gap-4 min-w-[140px] transition-all bg-white/5 border border-white/5 group shrink-0 block no-underline">
-                    <div class="flex items-center gap-3">
-                        <i data-lucide="<?php echo $icon; ?>" class="w-5 h-5 <?php echo $isActive ? 'text-white' : 'group-hover:text-accent'; ?> transition-colors"></i>
-                        <span
-                            class="text-[10px] font-black uppercase tracking-widest truncate max-w-[80px]"><?php echo $sport; ?></span>
-                    </div>
-                    <span class="<?php echo $isActive ? 'bg-white/20 text-white' : 'bg-slate-900/50 text-slate-500 group-hover:bg-accent/20 group-hover:text-accent'; ?> text-[10px] font-bold px-2 py-1 rounded-lg transition-colors"><?php echo $count; ?></span>
-                </a>
-            <?php endforeach; ?>
-        </div>
-    <?php endif; ?>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
         <div class="glass p-6 rounded-[32px] border-white/5">

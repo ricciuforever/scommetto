@@ -54,18 +54,76 @@
             </div>
         </div>
 
-        <nav class="flex-1 px-4 py-4 space-y-2">
-            <a href="/dashboard"
-                class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm active-nav"
-                data-view="dashboard">
-                <i data-lucide="home" class="w-5 h-5"></i> Dashboard
-            </a>
-            <a href="/predictions"
-                class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
-                data-view="predictions">
-                <i data-lucide="brain-circuit" class="w-5 h-5"></i> Pronostici
-            </a>
-        </nav>
+        <div class="px-4 py-2">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-4 px-4">Sport
+                Live</span>
+            <nav class="space-y-1">
+                <a href="/dashboard"
+                    class="flex items-center justify-between px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group <?php echo (!isset($_GET['sport']) || $_GET['sport'] === 'all') ? 'bg-white/5' : ''; ?>">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="layout-grid"
+                            class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                        <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Tutti
+                            gli Sport</span>
+                    </div>
+                </a>
+                <?php
+                $sideSports = [];
+                $cacheFile = \App\Config\Config::DATA_PATH . 'betfair_live.json';
+                $translationMap = [
+                    'Soccer' => 'Calcio',
+                    'Tennis' => 'Tennis',
+                    'Basketball' => 'Basket',
+                    'Volleyball' => 'Pallavolo',
+                    'Cricket' => 'Cricket',
+                    'Ice Hockey' => 'Hockey',
+                    'American Football' => 'Football',
+                    'Rugby Union' => 'Rugby',
+                    'Rugby League' => 'Rugby',
+                    'Golf' => 'Golf'
+                ];
+
+                if (file_exists($cacheFile)) {
+                    $cData = json_decode(file_get_contents($cacheFile), true);
+                    foreach (($cData['response'] ?? []) as $cm) {
+                        if (!empty($cm['sport'])) {
+                            $rawS = $cm['sport'];
+                            $trS = $translationMap[$rawS] ?? $rawS;
+                            if (!isset($sideSports[$trS]))
+                                $sideSports[$trS] = 0;
+                            $sideSports[$trS]++;
+                        }
+                    }
+                    ksort($sideSports);
+                }
+
+                $icons = [
+                    'Calcio' => 'trophy',
+                    'Tennis' => 'circle-dot',
+                    'Basket' => 'dribbble',
+                    'Pallavolo' => 'activity',
+                    'Hockey' => 'snowflake',
+                    'Rugby' => 'citrus',
+                    'Golf' => 'flag-triangle-right'
+                ];
+
+                foreach ($sideSports as $sName => $count):
+                    $sIcon = $icons[$sName] ?? 'activity';
+                    ?>
+                    <a href="/dashboard?sport=<?php echo urlencode($sName); ?>"
+                        class="flex items-center justify-between px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="<?php echo $sIcon; ?>"
+                                class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                            <span
+                                class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors"><?php echo $sName; ?></span>
+                        </div>
+                        <span
+                            class="text-[9px] font-black bg-white/5 px-1.5 py-0.5 rounded text-slate-500 group-hover:bg-accent/20 group-hover:text-accent transition-all"><?php echo $count; ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+        </div>
 
         <div class="p-4 border-t border-white/10 space-y-4">
             <div class="flex flex-col gap-1 p-4 rounded-2xl bg-white/5 border border-white/5">
@@ -103,11 +161,17 @@
                     Scommetto<span class="text-accent">.AI</span>
                 </div>
             </div>
-            <div class="hidden lg:block">
-                <!-- Breadcrumbs or Search could go here -->
-                <div id="view-title"
-                    class="text-xl font-black tracking-tight uppercase tracking-widest text-slate-500 text-[10px]">
-                    Dashboard</div>
+            <div class="hidden lg:flex items-center gap-8 ml-8">
+                <a href="/dashboard"
+                    class="flex items-center gap-2 text-xs font-black uppercase tracking-widest <?php echo (strpos($_SERVER['REQUEST_URI'], 'dashboard') !== false || $_SERVER['REQUEST_URI'] === '/') ? 'text-accent' : 'text-slate-400 hover:text-white'; ?> transition-colors">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                    Dashboard
+                </a>
+                <a href="/predictions"
+                    class="flex items-center gap-2 text-xs font-black uppercase tracking-widest <?php echo (strpos($_SERVER['REQUEST_URI'], 'predictions') !== false) ? 'text-accent' : 'text-slate-400 hover:text-white'; ?> transition-colors">
+                    <i data-lucide="brain-circuit" class="w-4 h-4"></i>
+                    Pronostici
+                </a>
             </div>
             <div class="flex items-center gap-4">
 
