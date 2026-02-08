@@ -62,12 +62,57 @@ class TeamController
         $data = $api->fetchTeams(['league' => $leagueId, 'season' => $season]);
 
         if (isset($data['response']) && is_array($data['response'])) {
+            if (empty($data['response'])) {
+                // Se la risposta è vuota, segniamo comunque come sincronizzato (per la stagione futura senza dati)
+                // Usiamo un team_id fittizio o un'altra strategia?
+                // In realtà se non inseriamo nulla in team_leagues, needsLeagueRefresh continuerà a dare true.
+            }
             foreach ($data['response'] as $item) {
                 // Il modello Team::save gestisce internamente anche il Venue
                 $model->save($item);
                 // Collega la squadra alla lega/stagione
                 $model->linkToLeague($item['team']['id'], $leagueId, $season);
             }
+        }
+    }
+
+    /**
+     * Ritorna le stagioni disponibili per una squadra (on-demand 24h)
+     */
+    public function seasons()
+    {
+        header('Content-Type: application/json');
+        try {
+            $teamId = $_GET['team'] ?? null;
+            if (!$teamId) {
+                echo json_encode(['error' => 'Team ID richiesto']);
+                return;
+            }
+
+            $model = new Team();
+            if ($model->needsTeamSeasonsRefresh($teamId, 24)) {
+                $this->syncSeasons($teamId);
+            }
+
+            $seasons = $model->getTeamSeasons($teamId);
+            echo json_encode(['response' => $seasons]);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Sincronizza le stagioni di una squadra dall'API
+     */
+    private function syncSeasons($teamId)
+    {
+        $api = new FootballApiService();
+        $model = new Team();
+        $data = $api->fetchTeamSeasons($teamId);
+
+        if (isset($data['response']) && is_array($data['response'])) {
+            $model->saveTeamSeasons($teamId, $data['response']);
         }
     }
 }

@@ -331,6 +331,13 @@ try {
           PRIMARY KEY (`team_id`, `player_id`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
+    "team_seasons" => "CREATE TABLE IF NOT EXISTS `team_seasons` (
+          `team_id` INT,
+          `year` INT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`team_id`, `year`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
     "bookmakers" => "CREATE TABLE IF NOT EXISTS `bookmakers` (
           `id` INT PRIMARY KEY,
           `name` VARCHAR(100),
