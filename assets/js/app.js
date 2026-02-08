@@ -2163,9 +2163,19 @@ async function placeBet(fixture_id, match, betData) {
         const summary = calculateStats();
         const requestedStake = parseFloat(betData.stake) || 0;
 
-        if (requestedStake > summary.availableBalance) {
-            alert(`Saldo insufficiente! Hai ${summary.availableBalance.toFixed(2)}€ disponibili, ma la scommessa richiede ${requestedStake.toFixed(2)}€.`);
-            return;
+        let isBetfair = false;
+        if (selectedBookmaker !== 'all') {
+            const bookie = allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker);
+            if (bookie && bookie.name.toLowerCase().includes('betfair')) isBetfair = true;
+        }
+
+        if (isBetfair) {
+            if (!confirm(`Stai per piazzare una scommessa SU BETFAIR REALE di ${requestedStake.toFixed(2)}€. Assicurati di avere fondi sufficienti sul conto Betfair. Procedere?`)) return;
+        } else {
+            if (requestedStake > summary.availableBalance) {
+                alert(`Saldo insufficiente (Virtuale)! Hai ${summary.availableBalance.toFixed(2)}€ disponibili, ma la scommessa richiede ${requestedStake.toFixed(2)}€.`);
+                return;
+            }
         }
 
         const matchName = typeof match === 'string' ? match : `${match.teams.home.name} vs ${match.teams.away.name}`;

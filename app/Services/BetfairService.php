@@ -195,22 +195,54 @@ class BetfairService
 
     public function placeBet(string $marketId, string $selectionId, float $price, float $size): array
     {
-        return $this->request('placeOrders', [
+        $token = $this->authenticate();
+        if (!$token)
+            return ['status' => 'FAILURE', 'errorCode' => 'NO_AUTH'];
+
+        $marketId = (string) $marketId;
+
+        // Costruisce il payload REST per placeOrders (no JSON-RPC wrapper)
+        $params = [
             'marketId' => $marketId,
             'instructions' => [
                 [
-                    'selectionId' => $selectionId,
+                    'selectionId' => (string) $selectionId,
                     'handicap' => '0',
-                    'orderType' => 'LIMIT',
                     'side' => 'BACK',
+                    'orderType' => 'LIMIT',
                     'limitOrder' => [
-                        'size' => number_format($size, 2, '.', ''),
-                        'price' => number_format($price, 2, '.', ''),
+                        'size' => number_format((float) $size, 2, '.', ''),
+                        'price' => number_format((float) $price, 2, '.', ''),
                         'persistenceType' => 'LAPSE'
                     ]
                 ]
             ]
+        ];
+
+        // Rate Limit (semplificato)
+        $now = microtime(true);
+        if (($now - $this->lastRequestTime) < 0.2)
+            usleep(200000);
+        $this->lastRequestTime = microtime(true);
+
+        $ch = curl_init();
+        // Endpoint REST Betting per Italia: https://api.betfair.it/exchange/betting/rest/v1.0/placeOrders/
+        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.it/exchange/betting/rest/v1.0/placeOrders/');
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($params));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "X-Application: {$this->appKey}",
+            "X-Authentication: {$token}",
+            "Content-Type: application/json",
+            "Accept: application/json"
         ]);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $decoded = json_decode($response, true);
+        return $decoded ?: ['status' => 'FAILURE', 'errorCode' => 'API_ERROR_NO_JSON', 'raw' => $response];
     }
 
     /**
@@ -232,18 +264,13 @@ class BetfairService
             usleep(200000);
         $this->lastRequestTime = microtime(true);
 
-        $payload = json_encode([
-            "jsonrpc" => "2.0",
-            "method" => "AccountAPING/v1.0/getAccountFunds",
-            "params" => [],
-            "id" => 1
-        ]);
+        // REST Endpoint per Italia (JSON-RPC spesso non supportato o problematico su .it)
+        // Usa: https://api.betfair.it/exchange/account/rest/v1.0/getAccountFunds/
 
         $ch = curl_init();
-        // Endpoint Account diverso da Betting
-        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/account/json-rpc/v1');
+        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.it/exchange/account/rest/v1.0/getAccountFunds/');
         curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, '{}'); // Body vuoto o filtro vuoto
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             "X-Application: {$this->appKey}",

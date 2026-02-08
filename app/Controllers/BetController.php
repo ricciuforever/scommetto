@@ -130,9 +130,13 @@ class BetController
 
                                 $order = $bf->placeBet($market['marketId'], $selectionId, $price, $stake);
 
-                                if (isset($order['result']) && $order['result']['status'] === 'SUCCESS') {
-                                    $instruction = $order['result']['instructionReports'][0];
-                                    if ($instruction['status'] === 'SUCCESS') {
+                                // Normalizza risposta (REST o JSON-RPC)
+                                $result = isset($order['result']) ? $order['result'] : $order;
+
+                                if (isset($result['status']) && $result['status'] === 'SUCCESS') {
+                                    $instruction = $result['instructionReports'][0] ?? null;
+
+                                    if ($instruction && $instruction['status'] === 'SUCCESS') {
                                         $betfairId = $instruction['betId'];
                                         $status = 'placed'; // Conferma che è su Betfair
                                         $note .= "[BETFAIR] Ordine piazzato! ID: $betfairId. ";
@@ -140,8 +144,12 @@ class BetController
                                         $errorCode = $instruction['errorCode'] ?? 'UNKNOWN';
                                         $note .= "[BETFAIR ERROR] $errorCode. ";
                                     }
+                                } elseif (isset($result['errorCode'])) {
+                                    $note .= "[BETFAIR API ERROR] " . $result['errorCode'];
                                 } elseif (isset($order['error'])) {
-                                    $note .= "[BETFAIR API ERROR] " . $order['error']['message'] . " (" . ($order['error']['data']['APINGException']['errorCode'] ?? '') . ")";
+                                    $note .= "[BETFAIR API ERROR] " . ($order['error']['message'] ?? 'Unknown Error');
+                                } else {
+                                    $note .= "[BETFAIR UNKNOWN RESPONSE] " . json_encode($order);
                                 }
                             } else {
                                 $note .= "[BETFAIR] Selezione non trovata per '{$input['prediction']}'. ";
@@ -262,17 +270,18 @@ class BetController
 
             $funds = $bf->getFunds();
 
-            if (isset($funds['result'])) {
-                $avail = $funds['result']['availableToBetBalance'] ?? 0;
-                $exposure = $funds['result']['exposure'] ?? 0;
-                // wallet = disponibile + esposizione (circa)
+            $data = isset($funds['result']) ? $funds['result'] : $funds;
+
+            if (isset($data['availableToBetBalance'])) {
+                $avail = $data['availableToBetBalance'] ?? 0;
+                $exposure = $data['exposure'] ?? 0;
                 $wallet = $avail + abs($exposure);
 
                 echo json_encode([
                     'available' => $avail,
                     'exposure' => $exposure,
                     'wallet' => $wallet,
-                    'currency' => $funds['result']['currencyCode'] ?? 'EUR'
+                    'currency' => $data['currencyCode'] ?? 'EUR'
                 ]);
             } else {
                 echo json_encode(['error' => 'API Error', 'details' => $funds]);
