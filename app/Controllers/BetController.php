@@ -75,30 +75,21 @@ class BetController
         $summary = $this->betModel->getBalanceSummary(\App\Config\Config::INITIAL_BANKROLL);
         $stake = (float) ($input['stake'] ?? 0);
 
-        $confidence = (int) ($input['confidence'] ?? 0);
-
-        // Verifica disponibilità locale (solo per tracciamento profitto simulato)
-        if ($confidence <= 80 && $stake > $summary['available_balance']) {
-            // Opzionale: Bloccare o solo avvisare? Proseguiamo per ora
-        }
-
         // --- BETFAIR INTEGRATION START ---
         $betfairId = null;
         $status = 'pending';
         $note = '';
+        $logMsg = "";
 
         try {
-            // Instanzia servizio
             $bf = new \App\Services\BetfairService();
-
-            // FILTRO CONFIDENZA: Solo bet con confidence > 80% vanno su Betfair REALE
             $confidence = (int) ($input['confidence'] ?? 0);
-            $logMsg = "Processo scommessa per fixture {$input['fixture_id']}. Confidence: $confidence%. ";
+            $threshold = \App\Config\Config::BETFAIR_CONFIDENCE_THRESHOLD;
+            $logMsg = "Processo scommessa per fixture {$input['fixture_id']}. Confidence: $confidence% (Soglia: $threshold%). ";
 
-            if ($bf->isConfigured() && $confidence > 80) {
-                $logMsg .= "Soglia superata (>80%), procedo su Betfair. ";
+            if ($bf->isConfigured() && $confidence >= $threshold) {
+                $logMsg .= "Soglia raggiunta, procedo su Betfair. ";
                 $matchName = $input['match_name'] ?? '';
-                // Se manca match_name, prova a costruirlo
                 if (!$matchName && isset($input['home_team']) && isset($input['away_team'])) {
                     $matchName = $input['home_team'] . ' v ' . $input['away_team'];
                 }
@@ -106,16 +97,26 @@ class BetController
                 if ($matchName) {
                     $marketType = 'MATCH_ODDS';
                     if (strpos(strtoupper($input['market'] ?? ''), 'OVER') !== false || strpos(strtoupper($input['market'] ?? ''), 'UNDER') !== false) {
-                        $note .= "[WARN] Mercati O/U non ancora supportati per auto-bet. ";
+                        $note .= "[WARN] Mercati O/U non supportati. ";
                     } else {
                         $market = $bf->findMarket($matchName, $marketType);
-
                         if ($market) {
                             $selectionId = $bf->mapAdviceToSelection($input['prediction'] ?? $input['advice'] ?? '', $market['runners']);
-
                             if ($selectionId) {
                                 $price = (float) ($input['odds'] ?? 1.01);
                                 if ($price < 1.01) $price = 1.01;
+
+                                // Regole Betfair.it
+                                if ($stake < \App\Config\Config::MIN_BETFAIR_STAKE) {
+                                    $stake = \App\Config\Config::MIN_BETFAIR_STAKE;
+                                    $note .= "[REGOLE] Stake aumentato a 2.00€. ";
+                                }
+                                $roundedStake = floor($stake * 2) / 2;
+                                if ($roundedStake < \App\Config\Config::MIN_BETFAIR_STAKE) $roundedStake = \App\Config\Config::MIN_BETFAIR_STAKE;
+                                if ($roundedStake != $stake) {
+                                    $stake = $roundedStake;
+                                    $note .= "[REGOLE] Stake arrotondato a {$stake}€. ";
+                                }
 
                                 $order = $bf->placeBet($market['marketId'], $selectionId, $price, $stake);
                                 $result = isset($order['result']) ? $order['result'] : $order;
@@ -125,62 +126,46 @@ class BetController
                                     if ($instruction && $instruction['status'] === 'SUCCESS') {
                                         $betfairId = $instruction['betId'];
                                         $status = 'placed';
-                                        $note .= "[BETFAIR] Ordine piazzato! ID: $betfairId. ";
+                                        $note .= "[BETFAIR] OK! ID: $betfairId. ";
                                     } else {
-                                        $errorCode = $instruction['errorCode'] ?? 'UNKNOWN';
-                                        $note .= "[BETFAIR ERROR] $errorCode. ";
+                                        $note .= "[BETFAIR ERROR] " . ($instruction['errorCode'] ?? 'UNKNOWN') . ". ";
                                     }
-                                } elseif (isset($result['errorCode'])) {
-                                    $note .= "[BETFAIR API ERROR] " . $result['errorCode'];
-                                } elseif (isset($order['error'])) {
-                                    $note .= "[BETFAIR API ERROR] " . ($order['error']['message'] ?? 'Unknown Error');
                                 } else {
-                                    $note .= "[BETFAIR UNKNOWN RESPONSE] " . json_encode($order);
+                                    $note .= "[BETFAIR API ERROR] " . json_encode($order);
                                 }
                             } else {
-                                $note .= "[BETFAIR] Selezione non trovata per '{$input['prediction']}'. ";
+                                $note .= "[BETFAIR] Selezione non trovata. ";
                             }
                         } else {
-                            $note .= "[BETFAIR] Mercato non trovato per '$matchName'. ";
+                            $note .= "[BETFAIR] Mercato non trovato. ";
                         }
                     }
                 }
             } else {
-                $logMsg .= "Soglia non superata o Betfair non configurato. Rimane virtuale. ";
+                $logMsg .= "Soglia non raggiunta o non configurato. ";
             }
-
-            // Log decision in main log
-            error_log("[BET_CONTROLLER] " . $logMsg . " Note: $note");
-
         } catch (\Throwable $e) {
             $note .= "[BETFAIR EXCEPTION] " . $e->getMessage();
         }
+
+        // Log decision
+        error_log("[BET_CONTROLLER] " . $logMsg . " Note: $note");
         // --- BETFAIR INTEGRATION END ---
 
-        // Saliamo l'ID Betfair nel DB locale se disponibile
-        if ($betfairId) {
-            $input['betfair_id'] = $betfairId;
-        }
+        if ($betfairId) $input['betfair_id'] = $betfairId;
         $input['status'] = $status;
         $input['notes'] = ($input['notes'] ?? '') . ' ' . $note;
 
         $id = $this->betModel->create($input);
-
         echo json_encode(['status' => 'success', 'id' => $id, 'betfair_notes' => $note]);
     }
 
-    /**
-     * Serves the tracker partial for HTMX
-     */
     public function viewTracker()
     {
         try {
             $status = $_GET['status'] ?? 'all';
-
-            // Reusing logic from getHistory but adapting for PHP view usage
             $db = \App\Services\Database::getInstance()->getConnection();
 
-            // Base query for bets
             try {
                 $sql = "SELECT b.*, l.country_name as country, bk.name as bookmaker_name_full
                         FROM bets b
@@ -190,7 +175,6 @@ class BetController
                         ORDER BY b.timestamp DESC LIMIT 1000";
                 $allBets = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
             } catch (\Throwable $e) {
-                // Fallback for missing bookmaker_id
                 $sql = "SELECT b.*, l.country_name as country
                         FROM bets b
                         LEFT JOIN fixtures f ON b.fixture_id = f.id
@@ -202,9 +186,7 @@ class BetController
                 }
             }
 
-            // Calculate summary stats using the new model method
             $balanceSummary = $this->betModel->getBalanceSummary(\App\Config\Config::INITIAL_BANKROLL);
-
             $statsSummary = [
                 'netProfit' => $balanceSummary['realized_profit'],
                 'roi' => 0,
@@ -217,68 +199,46 @@ class BetController
 
             $totalStakedSet = 0;
             foreach ($allBets as $bet) {
-                if ($bet['status'] === 'won') {
-                    $statsSummary['winCount']++;
-                    $totalStakedSet += $bet['stake'];
-                } elseif ($bet['status'] === 'lost') {
-                    $statsSummary['lossCount']++;
-                    $totalStakedSet += $bet['stake'];
-                }
+                if ($bet['status'] === 'won') { $statsSummary['winCount']++; $totalStakedSet += $bet['stake']; }
+                elseif ($bet['status'] === 'lost') { $statsSummary['lossCount']++; $totalStakedSet += $bet['stake']; }
             }
+            if ($totalStakedSet > 0) $statsSummary['roi'] = ($statsSummary['netProfit'] / $totalStakedSet) * 100;
 
-            if ($totalStakedSet > 0) {
-                $statsSummary['roi'] = ($statsSummary['netProfit'] / $totalStakedSet) * 100;
-            }
-
-            // Filter for display
             $bets = array_filter($allBets, function ($bet) use ($status) {
-                if ($status === 'all')
-                    return true;
+                if ($status === 'all') return true;
                 return ($bet['status'] ?? '') === $status;
             });
 
-            // Pass variables to view
             require __DIR__ . '/../Views/partials/tracker.php';
-
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore caricamento tracker: ' . $e->getMessage() . '</div>';
         }
     }
 
-    /**
-     * API: Get Real Betfair Balance
-     * GET /api/betfair/balance
-     */
     public function getRealBalance()
     {
         header('Content-Type: application/json');
-
         try {
             $bf = new \App\Services\BetfairService();
-            if (!$bf->isConfigured()) {
-                echo json_encode(['error' => 'Betfair not configured']);
-                return;
-            }
+            if (!$bf->isConfigured()) { echo json_encode(['error' => 'Betfair not configured']); return; }
 
             $funds = $bf->getFunds();
-
             $data = isset($funds['result']) ? $funds['result'] : $funds;
 
             if (isset($data['availableToBetBalance'])) {
                 $avail = $data['availableToBetBalance'] ?? 0;
                 $exposure = $data['exposure'] ?? 0;
                 $wallet = $avail + abs($exposure);
-
                 echo json_encode([
                     'available' => $avail,
                     'exposure' => $exposure,
                     'wallet' => $wallet,
-                    'currency' => $data['currencyCode'] ?? 'EUR'
+                    'currency' => $data['currencyCode'] ?? 'EUR',
+                    'wallet_name' => $data['wallet'] ?? 'Unknown'
                 ]);
             } else {
                 echo json_encode(['error' => 'API Error', 'details' => $funds]);
             }
-
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }

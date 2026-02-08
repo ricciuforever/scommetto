@@ -14,7 +14,7 @@ class BetfairService
     private $keyPath;
     private $sessionToken;
     private $ssoUrl;
-    private $apiUrl = 'https://api.betfair.it/exchange/betting/json-rpc/v1';
+    private $apiUrl = 'https://api.betfair.com/exchange/betting/json-rpc/v1';
     private $lastRequestTime = 0;
     private $logFile;
 
@@ -51,49 +51,78 @@ class BetfairService
 
     public function isConfigured(): bool
     {
-        // Configurato se abbiamo la chiave e (credenziali + certificati) OPPURE un session token manuale
+        // Configurato se abbiamo la chiave e le credenziali (username/password)
+        // I certificati sono opzionali per il login API Desktop
         $hasKey = !empty($this->appKey);
-        $hasCerts = !empty($this->username) && !empty($this->password) && !empty($this->certPath);
+        $hasCredentials = !empty($this->username) && !empty($this->password);
         $hasToken = !empty($this->sessionToken);
 
-        return $hasKey && ($hasCerts || $hasToken);
+        return $hasKey && ($hasCredentials || $hasToken);
     }
 
-    private function authenticate()
+    private function authenticate($force = false)
     {
-        if ($this->sessionToken)
+        if ($this->sessionToken && !$force) {
             return $this->sessionToken;
+        }
+
+        // Se abbiamo i certificati, usiamo ssoUrl (certlogin)
+        if (!empty($this->certPath) && file_exists($this->certPath)) {
+            $this->log("Tentativo di login con certificati...");
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $this->ssoUrl);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, "username={$this->username}&password={$this->password}");
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "X-Application: {$this->appKey}",
+                "Content-Type: application/x-www-form-urlencoded"
+            ]);
+            curl_setopt($ch, CURLOPT_SSLCERT, $this->certPath);
+            curl_setopt($ch, CURLOPT_SSLKEY, $this->keyPath);
+
+            $response = curl_exec($ch);
+            curl_close($ch);
+            $data = json_decode($response, true);
+
+            if (isset($data['sessionToken'])) {
+                $this->sessionToken = $data['sessionToken'];
+                $this->log("Login con certificati riuscito.");
+                return $this->sessionToken;
+            }
+            $this->log("Login con certificati fallito.", $data);
+        }
+
+        // Altrimenti proviamo il login interattivo/API Desktop (senza certificati)
+        $this->log("Tentativo di login senza certificati (API Desktop)...");
+        $loginUrl = 'https://identitysso.betfair.it/api/login';
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $this->ssoUrl);
+        curl_setopt($ch, CURLOPT_URL, $loginUrl);
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS, "username={$this->username}&password={$this->password}");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             "X-Application: {$this->appKey}",
-            "Content-Type: application/x-www-form-urlencoded"
+            "Content-Type: application/x-www-form-urlencoded",
+            "Accept: application/json"
         ]);
-        curl_setopt($ch, CURLOPT_SSLCERT, $this->certPath);
-        curl_setopt($ch, CURLOPT_SSLKEY, $this->keyPath);
 
         $response = curl_exec($ch);
-        if (curl_errno($ch)) {
-            error_log("Betfair Auth Error: " . curl_error($ch));
-            return null;
-        }
         curl_close($ch);
-
         $data = json_decode($response, true);
-        if (isset($data['sessionToken'])) {
-            $this->sessionToken = $data['sessionToken'];
+
+        if (isset($data['token'])) {
+            $this->sessionToken = $data['token'];
+            $this->log("Login senza certificati riuscito.");
             return $this->sessionToken;
         }
 
-        error_log("Betfair Auth Failed: " . $response);
+        $this->log("Login senza certificati fallito.", $data);
         return null;
     }
 
-    public function request(string $method, array $params = [])
+    public function request(string $method, array $params = [], $isRetry = false)
     {
         $token = $this->authenticate();
         if (!$token) {
@@ -132,6 +161,17 @@ class BetfairService
         curl_close($ch);
 
         $decoded = json_decode($response, true);
+
+        // Controllo sessione scaduta
+        if (isset($decoded['error']['data']['exceptionname']) && $decoded['error']['data']['exceptionname'] === 'APINGException') {
+             $errorCode = $decoded['error']['data']['APINGException']['errorCode'] ?? '';
+             if ($errorCode === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
+                 $this->log("Sessione scaduta. Tento il refresh...");
+                 $this->sessionToken = null; // Forza ri-autenticazione
+                 return $this->request($method, $params, true);
+             }
+        }
+
         $this->log("JSON-RPC Request: $method", ['params' => $params, 'response' => $decoded]);
 
         return $decoded;
@@ -232,7 +272,7 @@ class BetfairService
         return null;
     }
 
-    public function placeBet(string $marketId, string $selectionId, float $price, float $size): array
+    public function placeBet(string $marketId, string $selectionId, float $price, float $size, $isRetry = false): array
     {
         $this->log("Placing bet: Market=$marketId, Selection=$selectionId, Price=$price, Size=$size");
         $token = $this->authenticate();
@@ -268,8 +308,8 @@ class BetfairService
         $this->lastRequestTime = microtime(true);
 
         $ch = curl_init();
-        // Endpoint REST Betting per Italia: https://api.betfair.it/exchange/betting/rest/v1.0/placeOrders/
-        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.it/exchange/betting/rest/v1.0/placeOrders/');
+        // Endpoint REST Betting (comune per IT se autenticati su .it): https://api.betfair.com/exchange/betting/rest/v1.0/placeOrders/
+        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/placeOrders/');
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($params));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -294,6 +334,14 @@ class BetfairService
         curl_close($ch);
 
         $decoded = json_decode($response, true);
+
+        // Controllo sessione scaduta per REST
+        if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
+            $this->log("Sessione scaduta (REST). Tento il refresh...");
+            $this->sessionToken = null;
+            return $this->placeBet($marketId, $selectionId, $price, $size, true);
+        }
+
         $this->log("PlaceBet Response", $decoded);
 
         return $decoded ?: ['status' => 'FAILURE', 'errorCode' => 'API_ERROR_NO_JSON', 'raw' => $response];
@@ -302,7 +350,7 @@ class BetfairService
     /**
      * Recupera il saldo del conto Betfair (API Account)
      */
-    public function getFunds()
+    public function getFunds($isRetry = false)
     {
         // Nota: Account API è su un endpoint diverso, ma molte librerie usano lo stesso URL base per semplicità.
         // Se necessario, cambiare URL base. Per Betfair Exchange API standard 'SportsAPING' e 'AccountAPING' sono separati.
@@ -318,11 +366,11 @@ class BetfairService
             usleep(200000);
         $this->lastRequestTime = microtime(true);
 
-        // REST Endpoint per Italia (JSON-RPC spesso non supportato o problematico su .it)
-        // Usa: https://api.betfair.it/exchange/account/rest/v1.0/getAccountFunds/
+        // REST Endpoint Account (comune per IT se autenticati su .it)
+        // Usa: https://api.betfair.com/exchange/account/rest/v1.0/getAccountFunds/
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.it/exchange/account/rest/v1.0/getAccountFunds/');
+        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/account/rest/v1.0/getAccountFunds/');
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS, '{}'); // Body vuoto o filtro vuoto
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -347,6 +395,14 @@ class BetfairService
         curl_close($ch);
 
         $decoded = json_decode($response, true);
+
+        // Controllo sessione scaduta per REST Account
+        if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
+            $this->log("Sessione scaduta (Account REST). Tento il refresh...");
+            $this->sessionToken = null;
+            return $this->getFunds(true);
+        }
+
         $this->log("GetFunds Response", $decoded);
         return $decoded;
     }
