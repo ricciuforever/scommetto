@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Creato il: Feb 06, 2026 alle 14:54
+-- Creato il: Feb 08, 2026 alle 19:11
 -- Versione del server: 10.3.39-MariaDB-0ubuntu0.20.04.2
 -- Versione PHP: 8.4.16
 
@@ -55,7 +55,9 @@ CREATE TABLE `api_usage` (
 
 CREATE TABLE `bets` (
   `id` int(11) NOT NULL,
-  `fixture_id` int(11) NOT NULL,
+  `fixture_id` varchar(100) NOT NULL,
+  `bookmaker_id` int(11) DEFAULT NULL,
+  `bookmaker_name` varchar(100) DEFAULT NULL,
   `match_name` varchar(255) NOT NULL,
   `advice` text DEFAULT NULL,
   `market` varchar(100) DEFAULT NULL,
@@ -65,7 +67,10 @@ CREATE TABLE `bets` (
   `confidence` int(11) DEFAULT 0,
   `status` enum('pending','won','lost','void') DEFAULT 'pending',
   `timestamp` datetime DEFAULT current_timestamp(),
-  `result` varchar(50) DEFAULT NULL
+  `result` varchar(50) DEFAULT NULL,
+  `betfair_id` varchar(100) DEFAULT NULL,
+  `adm_id` varchar(100) DEFAULT NULL,
+  `notes` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -566,6 +571,26 @@ CREATE TABLE `venues` (
   `last_updated` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- --------------------------------------------------------
+
+--
+-- Struttura stand-in per le viste `v_match_summary`
+-- (Vedi sotto per la vista effettiva)
+--
+CREATE TABLE `v_match_summary` (
+`id` int(11)
+,`date` datetime
+,`status_short` varchar(10)
+,`home_name` varchar(255)
+,`home_logo` varchar(255)
+,`score_home` int(11)
+,`away_name` varchar(255)
+,`away_logo` varchar(255)
+,`score_away` int(11)
+,`league_name` varchar(255)
+,`country_name` varchar(100)
+);
+
 --
 -- Indici per le tabelle scaricate
 --
@@ -618,7 +643,10 @@ ALTER TABLE `countries`
 -- Indici per le tabelle `fixtures`
 --
 ALTER TABLE `fixtures`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_fixtures_date` (`date`),
+  ADD KEY `idx_fixtures_status` (`status_short`),
+  ADD KEY `idx_fixtures_teams` (`team_home_id`,`team_away_id`);
 
 --
 -- Indici per le tabelle `fixture_events`
@@ -668,7 +696,8 @@ ALTER TABLE `h2h_records`
 -- Indici per le tabelle `leagues`
 --
 ALTER TABLE `leagues`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_leagues_country` (`country_name`);
 
 --
 -- Indici per le tabelle `league_seasons`
@@ -686,7 +715,8 @@ ALTER TABLE `live_odds`
 -- Indici per le tabelle `players`
 --
 ALTER TABLE `players`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_players_name` (`name`);
 
 --
 -- Indici per le tabelle `player_seasons`
@@ -731,7 +761,8 @@ ALTER TABLE `sidelined`
 -- Indici per le tabelle `squads`
 --
 ALTER TABLE `squads`
-  ADD PRIMARY KEY (`team_id`,`player_id`);
+  ADD PRIMARY KEY (`team_id`,`player_id`),
+  ADD KEY `idx_squads_player` (`player_id`);
 
 --
 -- Indici per le tabelle `standings`
@@ -831,6 +862,15 @@ ALTER TABLE `transfers`
 --
 ALTER TABLE `trophies`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+-- --------------------------------------------------------
+
+--
+-- Struttura per vista `v_match_summary`
+--
+DROP TABLE IF EXISTS `v_match_summary`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`scommetto`@`%` SQL SECURITY DEFINER VIEW `v_match_summary`  AS SELECT `f`.`id` AS `id`, `f`.`date` AS `date`, `f`.`status_short` AS `status_short`, `t1`.`name` AS `home_name`, `t1`.`logo` AS `home_logo`, `f`.`score_home` AS `score_home`, `t2`.`name` AS `away_name`, `t2`.`logo` AS `away_logo`, `f`.`score_away` AS `score_away`, `l`.`name` AS `league_name`, `l`.`country_name` AS `country_name` FROM (((`fixtures` `f` join `teams` `t1` on(`f`.`team_home_id` = `t1`.`id`)) join `teams` `t2` on(`f`.`team_away_id` = `t2`.`id`)) join `leagues` `l` on(`f`.`league_id` = `l`.`id`)) ;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
