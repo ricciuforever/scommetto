@@ -123,49 +123,7 @@ class BetController
     public function viewTracker()
     {
         try {
-            $status = $_GET['status'] ?? 'all';
-            $db = \App\Services\Database::getInstance()->getConnection();
-
-            // Fetch ALL bets for stats calculation
-            $sqlAll = "SELECT * FROM bets";
-            $allBetsRaw = $db->query($sqlAll)->fetchAll(\PDO::FETCH_ASSOC);
-
-            // Calculation (Replicating JS logic)
-            $initialBalance = 100;
-            $wonBets = array_filter($allBetsRaw, fn($b) => $b['status'] === 'won');
-            $lostBets = array_filter($allBetsRaw, fn($b) => $b['status'] === 'lost');
-            $pendingBets = array_filter($allBetsRaw, fn($b) => in_array($b['status'], ['pending', 'placed']));
-
-            $totalProfit = array_reduce($wonBets, fn($sum, $b) => $sum + ($b['stake'] * ($b['odds'] - 1)), 0);
-            $totalLoss = array_reduce($lostBets, fn($sum, $b) => $sum + $b['stake'], 0);
-            $netProfit = $totalProfit - $totalLoss;
-            $currentPortfolio = array_reduce($pendingBets, fn($sum, $b) => $sum + $b['stake'], 0);
-            $availableBalance = $initialBalance + $netProfit - $currentPortfolio;
-
-            $settledBets = array_filter($allBetsRaw, fn($b) => in_array($b['status'], ['won', 'lost']));
-            $totalStake = array_reduce($settledBets, fn($sum, $b) => $sum + $b['stake'], 0);
-            $roi = $totalStake > 0 ? ($netProfit / $totalStake) * 100 : 0;
-
-            $statsSummary = [
-                'netProfit' => $netProfit,
-                'roi' => $roi,
-                'winCount' => count($wonBets),
-                'lossCount' => count($lostBets),
-                'currentPortfolio' => $currentPortfolio,
-                'available_balance' => $availableBalance
-            ];
-
-            // Fetch filtered bets for display
-            $sql = "SELECT b.*, l.country_name as country, bk.name as bookmaker_name_full
-                    FROM bets b
-                    LEFT JOIN fixtures f ON b.fixture_id = f.id
-                    LEFT JOIN leagues l ON f.league_id = l.id
-                    LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id " .
-                ($status !== 'all' ? "WHERE b.status = " . $db->quote($status) : "") .
-                " ORDER BY b.timestamp DESC LIMIT 1000";
-
-            $bets = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
-
+            // Versione semplificata: Il rendering dei movimenti Betfair è gestito da JS in app.js
             require __DIR__ . '/../Views/partials/tracker.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';

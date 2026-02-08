@@ -47,7 +47,7 @@
     <aside class="hidden lg:flex flex-col w-64 h-screen sticky top-0 border-r border-white/10 glass z-50">
         <div class="p-6 flex items-center gap-3">
             <div class="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/20">
-                <i data-lucide="layout-dashboard" class="text-white w-6 h-6"></i>
+                <i data-lucide="zap" class="text-white w-6 h-6"></i>
             </div>
             <div class="text-2xl font-black tracking-tighter uppercase italic">
                 Scommetto<span class="text-accent">.AI</span>
@@ -60,11 +60,6 @@
                 data-view="dashboard">
                 <i data-lucide="home" class="w-5 h-5"></i> Dashboard
             </a>
-            <a hx-get="/api/view/leagues" hx-target="#htmx-container" hx-push-url="/leagues"
-                class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
-                data-view="leagues">
-                <i data-lucide="trophy" class="w-5 h-5"></i> Competizioni
-            </a>
             <a hx-get="/api/view/predictions" hx-target="#htmx-container" hx-push-url="/predictions"
                 class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
                 data-view="predictions">
@@ -73,15 +68,14 @@
             <a hx-get="/api/view/tracker" hx-target="#htmx-container" hx-push-url="/tracker"
                 class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
                 data-view="tracker">
-                <i data-lucide="line-chart" class="w-5 h-5"></i> Tracker
+                <i data-lucide="landmark" class="w-5 h-5"></i> Betfair Account
             </a>
         </nav>
 
         <div class="p-4 border-t border-white/10">
             <div class="flex flex-col gap-1 p-4 rounded-2xl bg-white/5 border border-white/5">
-                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">API Status</span>
-                <div class="text-sm font-black"><span id="usage-val" class="text-accent">...</span> / <span
-                        id="limit-val">75000</span></div>
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Betfair Status</span>
+                <div class="text-sm font-black"><span class="text-success">CONNECTED</span></div>
             </div>
         </div>
     </aside>
@@ -131,6 +125,11 @@
 
         <!-- Main Content Area -->
         <main id="main-content" class="flex-1 p-6 pb-24 lg:pb-6 max-w-7xl mx-auto w-full">
+            <!-- Multi-Sport Selectors -->
+            <div id="sport-selectors" class="flex gap-3 mb-8 overflow-x-auto no-scrollbar pb-2">
+                <!-- Dynamically populated -->
+            </div>
+
             <!-- Loader (only used for non-HTMX transitions) -->
             <div id="view-loader" class="flex items-center justify-center h-full py-20 hidden">
                 <i data-lucide="loader-2" class="w-10 h-10 text-accent rotator"></i>

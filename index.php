@@ -92,6 +92,10 @@ try {
         echo json_encode(['status' => 'success']);
     } elseif ($path === '/api/betfair/balance') {
         (new BetController())->getRealBalance();
+    } elseif ($path === '/api/betfair/account') {
+        (new MatchController())->getAccount();
+    } elseif ($path === '/api/betfair/sports') {
+        (new MatchController())->getSports();
     } elseif ($path === '/api/migrate') {
         header('Content-Type: application/json');
         try {

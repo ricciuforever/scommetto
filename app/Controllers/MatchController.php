@@ -47,158 +47,90 @@ class MatchController
     {
         header('Content-Type: application/json');
         try {
-            $cacheFile = Config::LIVE_DATA_FILE;
+            // Semplificazione: Leggiamo i dati aggregati di Betfair salvati dal syncLive
+            $cacheFile = Config::DATA_PATH . 'betfair_live.json';
             if (file_exists($cacheFile)) {
                 echo file_get_contents($cacheFile);
             } else {
-                echo json_encode(['response' => [], 'status' => 'waiting_for_sync']);
+                // Fallback a dati API-Football se Betfair non ha ancora sincronizzato
+                $legacyCache = Config::LIVE_DATA_FILE;
+                if (file_exists($legacyCache)) {
+                    echo file_get_contents($legacyCache);
+                } else {
+                    echo json_encode(['response' => [], 'status' => 'waiting_for_sync']);
+                }
             }
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
-    public function getPrediction($id)
+    /**
+     * Recupera tutti gli sport attivi su Betfair
+     */
+    public function getSports()
     {
         header('Content-Type: application/json');
         try {
-            $data = (new \App\Models\Prediction())->getByFixtureId($id);
-            if (!$data) {
-                echo json_encode(['error' => 'Prediction not found']);
-                return;
-            }
-            echo json_encode($data);
+            $bf = new \App\Services\BetfairService();
+            $data = $bf->getEventTypes();
+            echo json_encode($data['result'] ?? []);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
-    public function getUpcoming()
+    /**
+     * Dati Account reali da Betfair
+     */
+    public function getAccount()
     {
         header('Content-Type: application/json');
         try {
-            $db = \App\Services\Database::getInstance()->getConnection();
-            $sql = "SELECT f.id as fixture_id, f.date, f.status_short, f.league_id,
-                           t1.name as home_name, t1.logo as home_logo,
-                           t2.name as away_name, t2.logo as away_logo,
-                           l.name as league_name, l.country_name as country_name
-                    FROM fixtures f
-                    JOIN teams t1 ON f.team_home_id = t1.id
-                    JOIN teams t2 ON f.team_away_id = t2.id
-                    JOIN leagues l ON f.league_id = l.id
-                    WHERE f.date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 24 HOUR)
-                    AND f.status_short = 'NS'
-                    AND EXISTS (SELECT 1 FROM fixture_odds fo WHERE fo.fixture_id = f.id)
-                    ORDER BY f.date ASC LIMIT 20";
-            $data = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
-
-            if (!empty($data)) {
-                $fids = array_column($data, 'fixture_id');
-                $fidsStr = implode(',', array_map('intval', $fids));
-                $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($fidsStr)");
-                $oddsRaw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-                $bookmakersByFixture = [];
-                foreach ($oddsRaw as $row) {
-                    $bookmakersByFixture[$row['fixture_id']][] = (int) $row['bookmaker_id'];
-                }
-                foreach ($data as &$m) {
-                    $m['available_bookmakers'] = $bookmakersByFixture[$m['fixture_id']] ?? [];
-                }
-            }
-            echo json_encode(['response' => $data]);
-        } catch (\Throwable $e) {
-            echo json_encode(['error' => $e->getMessage()]);
-        }
-    }
-
-    public function getMatch($id)
-    {
-        header('Content-Type: application/json');
-        try {
-            $fixtureModel = new Fixture();
-            $fixture = $fixtureModel->getById((int) $id);
-            if (!$fixture) {
-                $apiService = new \App\Services\FootballApiService();
-                $data = $apiService->request("/fixtures?id=$id");
-                if (isset($data['response'][0])) {
-                    $fixtureModel->save($data['response'][0]);
-                    $fixture = $fixtureModel->getById((int) $id);
-                }
-            }
-            if (!$fixture) {
-                echo json_encode(['error' => 'Partita non trovata.']);
-                return;
-            }
+            $bf = new \App\Services\BetfairService();
+            $funds = $bf->getFunds();
+            $statement = $bf->getAccountStatement();
+            $orders = $bf->getCurrentOrders();
 
             echo json_encode([
-                'fixture' => $fixture,
-                'events' => (new FixtureEvent())->getByFixture((int) $id),
-                'statistics' => (new FixtureStatistics())->getByFixture((int) $id),
-                'lineups' => (new FixtureLineup())->getByFixture((int) $id),
-                'injuries' => (new FixtureInjury())->getByFixture((int) $id),
-                'h2h' => (new H2H())->get($fixture['team_home_id'], $fixture['team_away_id']),
-                'odds' => (new FixtureOdds())->getByFixture((int) $id)
+                'funds' => $funds,
+                'statement' => $statement['accountStatement'] ?? [],
+                'orders' => $orders['currentOrders'] ?? []
             ]);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
 
-    public function analyze($id)
+    public function analyze($marketId)
     {
         header('Content-Type: application/json');
         try {
-            $db = \App\Services\Database::getInstance()->getConnection();
-            $stmt = $db->prepare("SELECT f.*, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo, l.name as league_name FROM fixtures f JOIN teams t1 ON f.team_home_id = t1.id JOIN teams t2 ON f.team_away_id = t2.id JOIN leagues l ON f.league_id = l.id WHERE f.id = :id");
-            $stmt->execute(['id' => $id]);
-            $fix = $stmt->fetch(\PDO::FETCH_ASSOC);
+            // Analisi basata su dati Betfair passati da cache o API
+            $bf = new \App\Services\BetfairService();
+            $cacheFile = Config::DATA_PATH . 'betfair_live.json';
+            $event = null;
 
-            if (!$fix) {
-                // Fallback: tenta di recuperare la partita dall'API se non è nel DB
-                $apiService = new \App\Services\FootballApiService();
-                $data = $apiService->request("/fixtures?id=$id");
-                if (isset($data['response'][0])) {
-                    (new Fixture())->save($data['response'][0]);
-
-                    // Recupera anche le quote pre-match per dare contesto a Gemini
-                    $oddsData = $apiService->fetchOdds(['fixture' => $id]);
-                    if (isset($oddsData['response'][0]['bookmakers'])) {
-                        foreach ($oddsData['response'][0]['bookmakers'] as $bm) {
-                            foreach ($bm['bets'] as $bet) {
-                                (new FixtureOdds())->save($id, $bm['id'], $bet['id'], $bet['values']);
-                            }
-                        }
-                    }
-
-                    $stmt->execute(['id' => $id]);
-                    $fix = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if (file_exists($cacheFile)) {
+                $data = json_decode(file_get_contents($cacheFile), true);
+                foreach ($data['response'] ?? [] as $m) {
+                    if ($m['marketId'] === $marketId) { $event = $m; break; }
                 }
             }
 
-            if (!$fix) {
-                echo json_encode(['error' => 'Partita non trovata.']);
+            if (!$event) {
+                echo json_encode(['error' => 'Evento non trovato.']);
                 return;
             }
 
-            $match = [
-                'fixture' => ['id' => $fix['id'], 'date' => $fix['date'], 'status' => ['short' => $fix['status_short']]],
-                'league' => ['id' => $fix['league_id'], 'name' => $fix['league_name']],
-                'teams' => [
-                    'home' => ['id' => $fix['team_home_id'], 'name' => $fix['home_name'], 'logo' => $fix['home_logo']],
-                    'away' => ['id' => $fix['team_away_id'], 'name' => $fix['away_name'], 'logo' => $fix['away_logo']]
-                ],
-                'goals' => ['home' => $fix['score_home'], 'away' => $fix['score_away']],
-                'odds_context' => [
-                    'pre_match' => (new FixtureOdds())->getByFixture((int) $id),
-                    'live' => ($lo = (new \App\Models\LiveOdds())->get((int) $id)) ? json_decode($lo['odds_json'], true) : null
-                ]
+            $funds = $bf->getFunds();
+            $balance = [
+                'available_balance' => $funds['availableToBetBalance'] ?? 0,
+                'current_portfolio' => ($funds['availableToBetBalance'] ?? 0) + abs($funds['exposure'] ?? 0)
             ];
 
-            $balance = (new \App\Models\Bet())->getBalanceSummary(Config::INITIAL_BANKROLL);
-            $prediction = $this->geminiService->analyze($match, $balance);
-            (new Analysis())->log((int) $id, $prediction);
-
-            echo json_encode(['prediction' => $prediction, 'match' => $match]);
+            $prediction = $this->geminiService->analyze($event, $balance);
+            echo json_encode(['prediction' => $prediction, 'match' => $event]);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
