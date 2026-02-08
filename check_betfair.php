@@ -13,7 +13,8 @@ $bf = new BetfairService();
 
 if (!$bf->isConfigured()) {
     echo "[ERRORE] Betfair non è configurato correttamente nel file .env\n";
-    echo "Controlla: BETFAIR_APP_KEY_DELAY, BETFAIR_USERNAME, BETFAIR_PASSWORD, BETFAIR_CERT_PATH\n";
+    echo "Controlla: BETFAIR_APP_KEY, BETFAIR_USERNAME, BETFAIR_PASSWORD\n";
+    echo "Opzionale: BETFAIR_CERT_PATH (necessario solo per login automatizzato sicuro)\n";
     exit(1);
 }
 

@@ -13,6 +13,8 @@ class Config
     const BETS_HISTORY_FILE = self::DATA_PATH . 'bets_history.json';
     const USAGE_FILE = self::DATA_PATH . 'usage.json';
     const INITIAL_BANKROLL = 100.00;
+    const MIN_BETFAIR_STAKE = 2.00;
+    const BETFAIR_CONFIDENCE_THRESHOLD = 50;
 
     // Popular League IDs
     const LEAGUE_SERIE_A = 135;
