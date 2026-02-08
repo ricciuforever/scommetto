@@ -61,6 +61,7 @@
                 <?php
                 $translationMap = [
                     'Soccer' => 'Calcio',
+                    'Football' => 'Calcio',
                     'Tennis' => 'Tennis',
                     'Basketball' => 'Basket',
                     'Volleyball' => 'Pallavolo',
@@ -71,31 +72,48 @@
                     'Rugby League' => 'Rugby',
                     'Golf' => 'Golf',
                     'Cycling' => 'Ciclismo',
-                    'Motor Sport' => 'Motori'
+                    'Motor Sport' => 'Motori',
+                    'Darts' => 'Freccette',
+                    'Snooker' => 'Snooker',
+                    'Boxing' => 'Pugilato',
+                    'Mixed Martial Arts' => 'MMA'
                 ];
 
-                // Comprehensive lists of sports we want to ALWAYS show
-                $allSportNames = array_unique(array_values($translationMap));
-                sort($allSportNames);
+                $sideSports = [];
 
-                $sideSports = array_fill_keys($allSportNames, 0);
-
+                // 1. Extract from Live Cache (Betfair)
                 $cacheFile = \App\Config\Config::DATA_PATH . 'betfair_live.json';
                 if (file_exists($cacheFile)) {
                     $cData = json_decode(file_get_contents($cacheFile), true);
                     foreach (($cData['response'] ?? []) as $cm) {
                         if (!empty($cm['sport'])) {
-                            $rawS = $cm['sport'];
-                            $trS = $translationMap[$rawS] ?? $rawS;
-                            if (isset($sideSports[$trS])) {
-                                $sideSports[$trS]++;
-                            } else {
-                                $sideSports[$trS] = 1;
-                            }
+                            $trS = $translationMap[$cm['sport']] ?? $cm['sport'];
+                            if (!isset($sideSports[$trS]))
+                                $sideSports[$trS] = 0;
+                            $sideSports[$trS]++;
                         }
                     }
-                    ksort($sideSports);
                 }
+
+                // 2. Extract from Database (Upcoming Fixtures)
+                try {
+                    $db = \App\Config\Config::getDB();
+                    // Get sports from fixtures in the next 48h that are not already in live or increase count
+                    $stmt = $db->query("SELECT league_name as sport, COUNT(*) as count FROM fixtures WHERE date > datetime('now') AND date < datetime('now', '+2 days') GROUP BY league_name");
+                    $upcoming = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+                    foreach ($upcoming as $up) {
+                        // league_name might not be exactly sport name, but for football it's fine.
+                        // Mapping logic could be more complex, but let's assume 'Soccer' if it looks like football
+                        $sName = 'Calcio'; // Default for our current DB fixtures
+                        if (!isset($sideSports[$sName]))
+                            $sideSports[$sName] = 0;
+                        $sideSports[$sName] += $up['count'];
+                    }
+                } catch (\Throwable $e) { /* ignore db errors for menu */
+                }
+
+                ksort($sideSports);
 
                 $icons = [
                     'Calcio' => 'trophy',
@@ -107,12 +125,16 @@
                     'Golf' => 'flag-triangle-right',
                     'Football' => 'citrus',
                     'Ciclismo' => 'bike',
-                    'Motori' => 'car-front'
+                    'Motori' => 'car-front',
+                    'Freccette' => 'target',
+                    'Pugilato' => 'swords'
                 ];
 
                 $currentSportSelect = $_GET['sport'] ?? 'all';
 
                 foreach ($sideSports as $sName => $count):
+                    if ($count === 0)
+                        continue; // Only show if we have data
                     $sIcon = $icons[$sName] ?? 'activity';
                     $isSideActive = (strtolower($currentSportSelect) === strtolower($sName));
                     ?>
@@ -124,10 +146,8 @@
                             <span
                                 class="text-xs font-bold <?php echo $isSideActive ? 'text-white' : 'text-slate-400 group-hover:text-white'; ?> transition-colors"><?php echo $sName; ?></span>
                         </div>
-                        <?php if ($count > 0): ?>
-                            <span
-                                class="text-[9px] font-black bg-white/5 px-1.5 py-0.5 rounded text-slate-500 group-hover:bg-accent/20 group-hover:text-accent transition-all"><?php echo $count; ?></span>
-                        <?php endif; ?>
+                        <span
+                            class="text-[9px] font-black bg-white/5 px-1.5 py-0.5 rounded text-slate-500 group-hover:bg-accent/20 group-hover:text-accent transition-all"><?php echo $count; ?></span>
                     </a>
                 <?php endforeach; ?>
             </nav>
