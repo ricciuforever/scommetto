@@ -52,6 +52,7 @@ try {
           `is_current` TINYINT(1) DEFAULT 0,
           `start_date` DATE,
           `end_date` DATE,
+          `last_teams_sync` TIMESTAMP NULL,
           PRIMARY KEY (`league_id`, `year`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
@@ -412,12 +413,20 @@ try {
     echo "✅ Tabella '$name' verificata/creata.\n";
   }
 
+  // Inizializza api_usage se vuota
+  $count = $db->query("SELECT COUNT(*) FROM api_usage")->fetchColumn();
+  if ($count == 0) {
+      $db->exec("INSERT INTO api_usage (id, requests_limit, requests_used, requests_remaining) VALUES (1, 75000, 0, 75000)");
+      echo "✅ Tabella 'api_usage' inizializzata.\n";
+  }
+
   // --- 2. PATCHING COLONNE MANCANTI ---
 
   $patches = [
     "leagues_updates" => [
       "ALTER TABLE leagues ADD COLUMN type VARCHAR(50) AFTER name",
       "ALTER TABLE leagues ADD COLUMN country VARCHAR(100) AFTER type",
+      "ALTER TABLE league_seasons ADD COLUMN last_teams_sync TIMESTAMP NULL",
       "ALTER TABLE leagues ADD COLUMN logo VARCHAR(255) AFTER country",
       "ALTER TABLE leagues ADD COLUMN country_name VARCHAR(100) AFTER logo",
       "ALTER TABLE leagues ADD COLUMN coverage_json TEXT AFTER country_name",

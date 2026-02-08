@@ -292,8 +292,8 @@ class FootballApiService
             $usageModel = new Usage();
             $currentUsage = $usageModel->getLatest();
 
-            $currentLimit = (int) ($limit ?? $currentUsage['requests_limit'] ?? 7500);
-            $currentRem = (int) ($remaining ?? ($currentLimit - (int) $used));
+            $currentLimit = (int) ($limit ?? ($currentUsage['requests_limit'] ?? 7500));
+            $currentRem = (int) ($remaining ?? ($currentLimit - (int) ($used ?? 0)));
             $currentUsed = (int) ($used ?? ($currentLimit - $currentRem));
 
             $usageModel->update($currentUsed, $currentRem, $limit !== null ? (int) $limit : null);

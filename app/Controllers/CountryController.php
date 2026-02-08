@@ -55,11 +55,47 @@ class CountryController
 
         if (isset($data['response']) && is_array($data['response'])) {
             foreach ($data['response'] as $item) {
-                $model->save([
-                    'name' => $item['name'],
-                    'code' => $item['code'] ?? null,
-                    'flag' => $item['flag'] ?? null
-                ]);
+                $model->save($item);
+            }
+        }
+    }
+
+    /**
+     * Ritorna i dati JSON dei paesi per i team con aggiornamento on-demand (24h)
+     */
+    public function listTeams()
+    {
+        header('Content-Type: application/json');
+        try {
+            $model = new Country();
+
+            // Verifica se i dati nel DB sono scaduti (default 24 ore)
+            // Nota: stiamo usando la stessa tabella, quindi la scadenza è condivisa
+            if ($model->needsRefresh(24)) {
+                $this->syncTeams();
+            }
+
+            $countries = $model->getAll();
+            echo json_encode(['response' => $countries]);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Sincronizza i paesi dei team dall'API al Database
+     */
+    private function syncTeams()
+    {
+        $api = new FootballApiService();
+        $model = new Country();
+
+        $data = $api->fetchTeamCountries();
+
+        if (isset($data['response']) && is_array($data['response'])) {
+            foreach ($data['response'] as $item) {
+                $model->save($item);
             }
         }
     }

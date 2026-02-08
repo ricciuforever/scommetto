@@ -62,17 +62,14 @@ class TeamController
         $data = $api->fetchTeams(['league' => $leagueId, 'season' => $season]);
 
         if (isset($data['response']) && is_array($data['response'])) {
-            if (empty($data['response'])) {
-                // Se la risposta è vuota, segniamo comunque come sincronizzato (per la stagione futura senza dati)
-                // Usiamo un team_id fittizio o un'altra strategia?
-                // In realtà se non inseriamo nulla in team_leagues, needsLeagueRefresh continuerà a dare true.
-            }
             foreach ($data['response'] as $item) {
                 // Il modello Team::save gestisce internamente anche il Venue
                 $model->save($item);
                 // Collega la squadra alla lega/stagione
                 $model->linkToLeague($item['team']['id'], $leagueId, $season);
             }
+            // Segniamo che il sync è avvenuto per questa lega/stagione
+            $model->touchLeagueSeason($leagueId, $season);
         }
     }
 
