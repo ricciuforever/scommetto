@@ -202,12 +202,12 @@ class BetfairService
 
         // Controllo sessione scaduta
         if (isset($decoded['error']['data']['exceptionname']) && $decoded['error']['data']['exceptionname'] === 'APINGException') {
-             $errorCode = $decoded['error']['data']['APINGException']['errorCode'] ?? '';
-             if ($errorCode === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
-                 $this->log("Sessione scaduta (JSON-RPC). Tento il refresh...");
-                 $this->clearPersistentToken();
-                 return $this->request($method, $params, true);
-             }
+            $errorCode = $decoded['error']['data']['APINGException']['errorCode'] ?? '';
+            if ($errorCode === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
+                $this->log("Sessione scaduta (JSON-RPC). Tento il refresh...");
+                $this->clearPersistentToken();
+                return $this->request($method, $params, true);
+            }
         }
 
         $this->log("JSON-RPC Request: $method", ['params' => $params, 'response' => $decoded]);
@@ -293,44 +293,56 @@ class BetfairService
         // 1. Exact Name Matching (Best for multi-sport)
         foreach ($runners as $r) {
             $name = trim(strtolower($r['runnerName']));
-            if ($advice === $name) return (string)$r['selectionId'];
+            if ($advice === $name)
+                return (string) $r['selectionId'];
         }
 
         // 2. Handle Over/Under and BTS
         if (strpos($advice, 'over 2.5') !== false) {
-            foreach ($runners as $r) { if (stripos($r['runnerName'], 'over') !== false) return (string)$r['selectionId']; }
+            foreach ($runners as $r) {
+                if (stripos($r['runnerName'], 'over') !== false)
+                    return (string) $r['selectionId'];
+            }
         }
         if (strpos($advice, 'under 2.5') !== false) {
-            foreach ($runners as $r) { if (stripos($r['runnerName'], 'under') !== false) return (string)$r['selectionId']; }
+            foreach ($runners as $r) {
+                if (stripos($r['runnerName'], 'under') !== false)
+                    return (string) $r['selectionId'];
+            }
         }
         if (strpos($advice, 'bts') !== false || strpos($advice, 'both teams to score') !== false || strpos($advice, 'yes') !== false) {
-             foreach ($runners as $r) { if (stripos($r['runnerName'], 'yes') !== false) return (string)$r['selectionId']; }
+            foreach ($runners as $r) {
+                if (stripos($r['runnerName'], 'yes') !== false)
+                    return (string) $r['selectionId'];
+            }
         }
 
         // 3. Handle explicit 1, X, 2 or Home, Away, Draw
         if ($advice === '1' || $advice === 'home' || $advice === 'casa' || ($homeTeam && strpos($advice, strtolower($homeTeam)) !== false)) {
             if ($homeTeam) {
                 foreach ($runners as $r) {
-                    if (stripos($r['runnerName'], $homeTeam) !== false) return (string)$r['selectionId'];
+                    if (stripos($r['runnerName'], $homeTeam) !== false)
+                        return (string) $r['selectionId'];
                 }
             }
-            return (string)($runners[0]['selectionId'] ?? null);
+            return (string) ($runners[0]['selectionId'] ?? null);
         }
 
         if ($advice === '2' || $advice === 'away' || $advice === 'trasferta' || ($awayTeam && strpos($advice, strtolower($awayTeam)) !== false)) {
             if ($awayTeam) {
                 foreach ($runners as $r) {
-                    if (stripos($r['runnerName'], $awayTeam) !== false) return (string)$r['selectionId'];
+                    if (stripos($r['runnerName'], $awayTeam) !== false)
+                        return (string) $r['selectionId'];
                 }
             }
-            return (string)($runners[1]['selectionId'] ?? null);
+            return (string) ($runners[1]['selectionId'] ?? null);
         }
 
         // 4. Fuzzy Fallback
         foreach ($runners as $r) {
             $name = strtolower($r['runnerName']);
             if (strpos($advice, $name) !== false || strpos($name, $advice) !== false) {
-                return (string)$r['selectionId'];
+                return (string) $r['selectionId'];
             }
         }
 
@@ -346,7 +358,8 @@ class BetfairService
         }
 
         $roundedStake = round($size * 2) / 2;
-        if ($roundedStake < \App\Config\Config::MIN_BETFAIR_STAKE) $roundedStake = \App\Config\Config::MIN_BETFAIR_STAKE;
+        if ($roundedStake < \App\Config\Config::MIN_BETFAIR_STAKE)
+            $roundedStake = \App\Config\Config::MIN_BETFAIR_STAKE;
         if ($roundedStake != $size) {
             $this->log("Stake $size arrotondato a $roundedStake (multipli 0.50 IT)");
             $size = $roundedStake;
@@ -431,7 +444,8 @@ class BetfairService
     public function getFunds($isRetry = false)
     {
         $token = $this->authenticate();
-        if (!$token) return null;
+        if (!$token)
+            return null;
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/account/rest/v1.0/getAccountFunds/');
@@ -452,7 +466,8 @@ class BetfairService
 
         $decoded = json_decode($response, true);
         $isExpired = isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION';
-        if (isset($decoded['detail']['AccountAPINGException']['errorCode']) && $decoded['detail']['AccountAPINGException']['errorCode'] === 'INVALID_SESSION_INFORMATION') $isExpired = true;
+        if (isset($decoded['detail']['AccountAPINGException']['errorCode']) && $decoded['detail']['AccountAPINGException']['errorCode'] === 'INVALID_SESSION_INFORMATION')
+            $isExpired = true;
 
         if ($isExpired && !$isRetry) {
             $this->clearPersistentToken();
@@ -508,7 +523,8 @@ class BetfairService
             'priceProjection' => [
                 'priceData' => ['EX_BEST_OFFERS'],
                 'virtualise' => true
-            ]
+            ],
+            'includeMarketDefinition' => true
         ]);
     }
 
@@ -518,7 +534,8 @@ class BetfairService
     public function getAccountStatement($isRetry = false)
     {
         $token = $this->authenticate();
-        if (!$token) return null;
+        if (!$token)
+            return null;
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/account/rest/v1.0/getAccountStatement/');
@@ -550,7 +567,8 @@ class BetfairService
     public function getClearedOrders($isRetry = false)
     {
         $token = $this->authenticate();
-        if (!$token) return null;
+        if (!$token)
+            return null;
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/listClearedOrders/');
@@ -582,7 +600,8 @@ class BetfairService
     public function getCurrentOrders($isRetry = false)
     {
         $token = $this->authenticate();
-        if (!$token) return null;
+        if (!$token)
+            return null;
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/listCurrentOrders/');

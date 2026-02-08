@@ -41,7 +41,11 @@ try {
 
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||
+<<<<<<< Updated upstream
         in_array(rtrim($path, '/'), ['/dashboard', '/predictions', '/tracker']) ||
+=======
+        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/predictions', '/tracker', '/settings']) ||
+>>>>>>> Stashed changes
         preg_match('#^/(match|team|player)/(\d+)$#', $path)
     ) {
         (new MatchController())->index();

@@ -81,44 +81,72 @@ foreach ($history as $h) {
                     <div class="glass p-20 text-center font-black uppercase italic text-slate-500 rounded-[40px]">Nessun
                         match live al momento.</div>
                 <?php else: ?>
-                    <?php 
+                    <?php
                     // Limit to 50 matches to avoid rendering issues if API returns too many
                     $displayMatches = array_slice($liveMatches, 0, 50);
-                    foreach ($displayMatches as $m): 
+                    foreach ($displayMatches as $m):
                         $eventId = $m['event_id'] ?? $m['fixture_id'] ?? 0;
                         $matchLink = "/match/" . $eventId; // Direct link
                         // Identify sport icon
                         $sportIcon = 'activity';
                         $lowSport = strtolower($m['sport'] ?? '');
-                        if(stripos($lowSport, 'soccer') !== false || stripos($lowSport, 'calcio') !== false) $sportIcon = 'trophy';
-                        elseif(stripos($lowSport, 'tennis') !== false) $sportIcon = 'circle-dot';
-                        elseif(stripos($lowSport, 'basket') !== false) $sportIcon = 'dribbble';
-                        elseif(stripos($lowSport, 'volley') !== false || stripos($lowSport, 'pallavolo') !== false) $sportIcon = 'activity'; // Lucide has no 'volleyball' sometimes, 'activity' is safe fallback or use custom
-                        elseif(stripos($lowSport, 'football') !== false) $sportIcon = 'citrus'; // American football
+                        if (stripos($lowSport, 'soccer') !== false || stripos($lowSport, 'calcio') !== false)
+                            $sportIcon = 'trophy';
+                        elseif (stripos($lowSport, 'tennis') !== false)
+                            $sportIcon = 'circle-dot';
+                        elseif (stripos($lowSport, 'basket') !== false)
+                            $sportIcon = 'dribbble';
+                        elseif (stripos($lowSport, 'volley') !== false || stripos($lowSport, 'pallavolo') !== false)
+                            $sportIcon = 'activity'; // Lucide has no 'volleyball' sometimes, 'activity' is safe fallback or use custom
+                        elseif (stripos($lowSport, 'football') !== false)
+                            $sportIcon = 'citrus'; // American football
                         ?>
-                        <a href="<?php echo $matchLink; ?>" class="glass p-6 rounded-[32px] border-white/5 hover:border-accent/30 transition-all group relative overflow-hidden cursor-pointer block no-underline">
-                            
+                        <a href="<?php echo $matchLink; ?>"
+                            class="glass p-6 rounded-[32px] border-white/5 hover:border-accent/30 transition-all group relative overflow-hidden cursor-pointer block no-underline">
+
                             <!-- Background Sport Icon -->
-                            <div class="absolute -right-4 -bottom-4 opacity-5 rotate-12 pointer-events-none group-hover:opacity-10 transition-opacity">
+                            <div
+                                class="absolute -right-4 -bottom-4 opacity-5 rotate-12 pointer-events-none group-hover:opacity-10 transition-opacity">
                                 <i data-lucide="<?php echo $sportIcon; ?>" class="w-32 h-32"></i>
                             </div>
 
                             <div class="relative z-10 flex items-center justify-between">
                                 <div>
                                     <div class="flex items-center gap-2 mb-2">
-                                        <span class="px-2 py-0.5 rounded bg-danger/10 text-danger text-[9px] font-black uppercase tracking-widest border border-danger/20 animate-pulse">LIVE</span>
-                                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[200px]"><?php echo $m['competition'] ?? $m['sport'] ?? 'Scommetto Live'; ?></span>
+                                        <span
+                                            class="px-2 py-0.5 rounded bg-danger/10 text-danger text-[9px] font-black uppercase tracking-widest border border-danger/20 animate-pulse">LIVE</span>
+                                        <span
+                                            class="text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[200px]"><?php echo $m['competition'] ?? $m['sport'] ?? 'Scommetto Live'; ?></span>
                                     </div>
-                                    <h3 class="text-xl font-black italic uppercase text-white tracking-tight group-hover:text-accent transition-colors">
+                                    <h3
+                                        class="text-xl font-black italic uppercase text-white tracking-tight group-hover:text-accent transition-colors">
                                         <?php echo $m['event']; ?>
                                     </h3>
-                                    <?php if(isset($m['score'])): ?>
-                                        <div class="text-xs font-bold text-slate-400 mt-1 font-mono"><?php echo $m['score']; ?></div>
-                                    <?php endif; ?>
+
+                                    <div class="flex items-center gap-4 mt-2">
+                                        <?php if (isset($m['score']) || (isset($m['score_home']) && isset($m['score_away']))): ?>
+                                            <?php
+                                            $score = $m['score'] ?? ($m['score_home'] . ' - ' . $m['score_away']);
+                                            ?>
+                                            <div
+                                                class="px-3 py-1 rounded bg-white/5 border border-white/10 text-lg font-black tabular-nums text-accent italic">
+                                                <?php echo $score; ?>
+                                            </div>
+                                        <?php endif; ?>
+
+                                        <?php if (isset($m['elapsed'])): ?>
+                                            <div
+                                                class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                                <i data-lucide="clock" class="w-3 h-3 text-success"></i>
+                                                <?php echo $m['elapsed']; ?>'
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
-                                
+
                                 <div class="flex flex-col items-end gap-1">
-                                    <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-accent group-hover:text-white transition-all text-slate-500">
+                                    <div
+                                        class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-accent group-hover:text-white transition-all text-slate-500">
                                         <i data-lucide="chevron-right" class="w-6 h-6"></i>
                                     </div>
                                     <span class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Dettagli</span>
@@ -141,11 +169,12 @@ foreach ($history as $h) {
                             class="glass p-8 rounded-3xl text-center text-slate-500 font-bold text-[10px] uppercase italic">
                             Nessun consiglio disponibile</div>
                     <?php else: ?>
-                        <?php foreach (array_slice($predictions, 0, 5) as $p): 
+                        <?php foreach (array_slice($predictions, 0, 5) as $p):
                             $pEventId = is_array($p['event']) ? $p['event']['id'] : $p['fixture_id'];
                             $pLink = "/match/" . $pEventId;
-                        ?>
-                            <div onclick="window.location.href='<?php echo $pLink; ?>'" class="glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all group cursor-pointer">
+                            ?>
+                            <div onclick="window.location.href='<?php echo $pLink; ?>'"
+                                class="glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all group cursor-pointer">
                                 <div class="flex items-center justify-between mb-4">
                                     <span
                                         class="text-[8px] font-black uppercase text-slate-500 tracking-widest"><?php echo $p['competition']['name'] ?? $p['sport']; ?></span>
