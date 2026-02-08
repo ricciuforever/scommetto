@@ -9,7 +9,7 @@ require __DIR__ . '/layout/top.php';
 <script type="text/babel">
     const { useState, useEffect } = React;
 
-    function TeamCard({ team }) {
+    function TeamCard({ team, leagueId, season }) {
         return (
             <div className="glass border border-white/10 rounded-2xl p-5 flex flex-col gap-4 hover:scale-[1.02] transition-all cursor-pointer group relative overflow-hidden">
                 <div className="flex justify-between items-start z-10">
@@ -36,7 +36,8 @@ require __DIR__ . '/layout/top.php';
 
                 {team.venue_name && (
                     <div className="z-10 pt-3 border-t border-white/5 mt-auto">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/5 overflow-hidden">
                                 {team.venue_image ? (
                                     <img src={team.venue_image} className="w-full h-full object-cover" alt="" />
@@ -44,10 +45,18 @@ require __DIR__ . '/layout/top.php';
                                     <i data-lucide="building-2" className="w-4 h-4 text-slate-600"></i>
                                 )}
                             </div>
-                            <div className="flex flex-col min-w-0">
-                                <span className="text-[10px] font-bold text-slate-300 truncate leading-tight">{team.venue_name}</span>
-                                <span className="text-[9px] font-medium text-slate-500 truncate uppercase tracking-tighter">{team.venue_city}</span>
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-[10px] font-bold text-slate-300 truncate leading-tight">{team.venue_name}</span>
+                                    <span className="text-[9px] font-medium text-slate-500 truncate uppercase tracking-tighter">{team.venue_city}</span>
+                                </div>
                             </div>
+                            <a
+                                href={`/team-stats?team=${team.id}&league=${leagueId}&season=${season}`}
+                                className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center text-accent hover:bg-accent hover:text-white transition-all shadow-lg shadow-accent/10"
+                                title="Statistiche Avanzate"
+                            >
+                                <i data-lucide="bar-chart-2" className="w-4 h-4"></i>
+                            </a>
                         </div>
                     </div>
                 )}
@@ -197,7 +206,7 @@ require __DIR__ . '/layout/top.php';
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {filteredTeams.map(t => (
-                            <TeamCard key={t.id} team={t} />
+                            <TeamCard key={t.id} team={t} leagueId={selectedLeague} season={selectedSeason} />
                         ))}
                     </div>
                 )}

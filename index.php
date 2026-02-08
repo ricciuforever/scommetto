@@ -11,6 +11,7 @@ use App\Controllers\CountryController;
 use App\Controllers\LeagueController;
 use App\Controllers\SeasonController;
 use App\Controllers\TeamController;
+use App\Controllers\TeamStatsController;
 
 $request = $_SERVER['REQUEST_URI'] ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -26,6 +27,7 @@ try {
         '/leagues'   => LeagueController::class,
         '/seasons'   => SeasonController::class,
         '/teams'     => TeamController::class,
+        '/team-stats' => TeamStatsController::class,
     ];
 
     if (isset($viewRoutes[$path])) {
@@ -35,7 +37,7 @@ try {
 
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||
-        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/predictions', '/tracker']) ||
+        in_array(rtrim($path, '/'), ['/dashboard', '/predictions', '/tracker']) ||
         preg_match('#^/(match|team|player)/(\d+)$#', $path)
     ) {
         (new MatchController())->index();
@@ -49,6 +51,8 @@ try {
         (new SeasonController())->list();
     } elseif ($path === '/api/teams') {
         (new TeamController())->list();
+    } elseif ($path === '/api/team-stats') {
+        (new TeamStatsController())->show();
     } elseif ($path === '/api/dashboard' || $path === '/api/view/dashboard') {
         (new MatchController())->dashboard();
     } elseif ($path === '/api/view/leagues') {
