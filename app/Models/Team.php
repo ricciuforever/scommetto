@@ -87,6 +87,55 @@ class Team
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
+    public function find($filters = [])
+    {
+        $sql = "SELECT DISTINCT t.*, v.name as venue_name, v.city as venue_city, v.image as venue_image
+                FROM teams t
+                LEFT JOIN venues v ON t.venue_id = v.id";
+
+        $params = [];
+        $where = ["1=1"];
+
+        if (!empty($filters['league']) && !empty($filters['season'])) {
+            $sql .= " JOIN team_leagues tl ON t.id = tl.team_id";
+            $where[] = "tl.league_id = :league AND tl.season = :season";
+            $params['league'] = $filters['league'];
+            $params['season'] = $filters['season'];
+        }
+
+        if (!empty($filters['id'])) {
+            $where[] = "t.id = :id";
+            $params['id'] = $filters['id'];
+        }
+        if (!empty($filters['name'])) {
+            $where[] = "t.name = :name";
+            $params['name'] = $filters['name'];
+        }
+        if (!empty($filters['country'])) {
+            $where[] = "t.country = :country";
+            $params['country'] = $filters['country'];
+        }
+        if (!empty($filters['code'])) {
+            $where[] = "t.code = :code";
+            $params['code'] = $filters['code'];
+        }
+        if (!empty($filters['venue'])) {
+            $where[] = "t.venue_id = :venue";
+            $params['venue'] = $filters['venue'];
+        }
+        if (!empty($filters['search'])) {
+            $where[] = "(t.name LIKE :search OR t.country LIKE :search)";
+            $params['search'] = '%' . $filters['search'] . '%';
+        }
+
+        $sql .= " WHERE " . implode(" AND ", $where);
+        $sql .= " ORDER BY t.name ASC";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     /**
      * Recupera le squadre per una specifica lega e stagione
      */

@@ -31,19 +31,34 @@ class TeamController
             $leagueId = $_GET['league'] ?? null;
             $season = $_GET['season'] ?? null;
 
-            if (!$leagueId || !$season) {
-                echo json_encode(['response' => [], 'message' => 'Lega e Stagione sono richieste.']);
+            $model = new Team();
+
+            // Se abbiamo league e season, proviamo a sincronizzare se necessario
+            if ($leagueId && $season) {
+                if ($model->needsLeagueRefresh($leagueId, $season, 24)) {
+                    $this->sync($leagueId, $season);
+                }
+            }
+
+            $filters = [
+                'league' => $leagueId,
+                'season' => $season,
+                'id' => $_GET['id'] ?? null,
+                'name' => $_GET['name'] ?? null,
+                'country' => $_GET['country'] ?? null,
+                'code' => $_GET['code'] ?? null,
+                'venue' => $_GET['venue'] ?? null,
+                'search' => $_GET['search'] ?? null,
+            ];
+
+            if (array_filter($filters)) {
+                $teams = $model->find($filters);
+            } else {
+                // Se non ci sono filtri, non restituiamo tutto (troppo pesante)
+                echo json_encode(['response' => [], 'message' => 'Filtri richiesti per le squadre.']);
                 return;
             }
 
-            $model = new Team();
-
-            // Verifica se i dati per questa lega/stagione sono scaduti (24 ore)
-            if ($model->needsLeagueRefresh($leagueId, $season, 24)) {
-                $this->sync($leagueId, $season);
-            }
-
-            $teams = $model->getByLeagueAndSeason($leagueId, $season);
             echo json_encode(['response' => $teams]);
         } catch (\Throwable $e) {
             http_response_code(500);
@@ -62,13 +77,20 @@ class TeamController
         $data = $api->fetchTeams(['league' => $leagueId, 'season' => $season]);
 
         if (isset($data['response']) && is_array($data['response'])) {
-            foreach ($data['response'] as $item) {
-                // Il modello Team::save gestisce internamente anche il Venue
-                $model->save($item);
-                // Collega la squadra alla lega/stagione
-                $model->linkToLeague($item['team']['id'], $leagueId, $season);
+            if (!empty($data['response'])) {
+                foreach ($data['response'] as $item) {
+                    // Il modello Team::save gestisce internamente anche il Venue
+                    $model->save($item);
+                    // Collega la squadra alla lega/stagione
+                    $model->linkToLeague($item['team']['id'], $leagueId, $season);
+                }
             }
-            // Segniamo che il sync è avvenuto per questa lega/stagione
+            // Segniamo che il sync è avvenuto per questa lega/stagione (anche se vuoto)
+            // per evitare di riprovare ad ogni richiesta
+            $model->touchLeagueSeason($leagueId, $season);
+        } elseif (isset($data['errors']) && !empty($data['errors'])) {
+            // In caso di errore esplicito dall'API (es: stagione non valida),
+            // segniamo comunque il sync come tentato per evitare loop
             $model->touchLeagueSeason($leagueId, $season);
         }
     }

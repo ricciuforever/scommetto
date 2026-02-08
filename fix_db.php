@@ -53,6 +53,7 @@ try {
           `start_date` DATE,
           `end_date` DATE,
           `last_teams_sync` TIMESTAMP NULL,
+          `last_standings_sync` TIMESTAMP NULL,
           PRIMARY KEY (`league_id`, `year`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
@@ -102,6 +103,7 @@ try {
     "standings" => "CREATE TABLE IF NOT EXISTS `standings` (
           `league_id` INT,
           `team_id` INT,
+          `season` INT,
           `rank` INT,
           `points` INT,
           `goals_diff` INT,
@@ -117,7 +119,7 @@ try {
           `home_stats_json` TEXT,
           `away_stats_json` TEXT,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (`league_id`, `team_id`),
+          PRIMARY KEY (`league_id`, `team_id`, `season`),
           INDEX (`team_id`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
@@ -217,6 +219,7 @@ try {
           `team_id` INT,
           `league_id` INT,
           `season` INT,
+          `date` DATE DEFAULT '0000-00-00',
           `played` INT,
           `wins` INT,
           `draws` INT,
@@ -229,7 +232,7 @@ try {
           `avg_goals_against` DECIMAL(8,2),
           `full_stats_json` LONGTEXT,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (`team_id`, `league_id`, `season`)
+          PRIMARY KEY (`team_id`, `league_id`, `season`, `date`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
     "bets" => "CREATE TABLE IF NOT EXISTS `bets` (
@@ -428,6 +431,7 @@ try {
       "ALTER TABLE leagues ADD COLUMN type VARCHAR(50) AFTER name",
       "ALTER TABLE leagues ADD COLUMN country VARCHAR(100) AFTER type",
       "ALTER TABLE league_seasons ADD COLUMN last_teams_sync TIMESTAMP NULL",
+      "ALTER TABLE league_seasons ADD COLUMN last_standings_sync TIMESTAMP NULL",
       "ALTER TABLE leagues ADD COLUMN logo VARCHAR(255) AFTER country",
       "ALTER TABLE leagues ADD COLUMN country_name VARCHAR(100) AFTER logo",
       "ALTER TABLE leagues ADD COLUMN coverage_json TEXT AFTER country_name",
@@ -458,6 +462,8 @@ try {
       "ALTER TABLE fixtures ADD COLUMN last_detailed_update TIMESTAMP NULL"
     ],
     "standings_updates" => [
+      "ALTER TABLE standings ADD COLUMN season INT AFTER team_id",
+      "ALTER TABLE standings DROP PRIMARY KEY, ADD PRIMARY KEY (league_id, team_id, season)",
       "ALTER TABLE standings ADD COLUMN group_name VARCHAR(100) AFTER form",
       "ALTER TABLE standings ADD COLUMN description TEXT AFTER group_name",
       "ALTER TABLE standings ADD COLUMN played INT DEFAULT 0 AFTER description",
@@ -470,6 +476,8 @@ try {
       "ALTER TABLE standings ADD COLUMN away_stats_json TEXT AFTER home_stats_json"
     ],
     "team_stats_updates" => [
+      "ALTER TABLE team_stats ADD COLUMN date DATE DEFAULT '0000-00-00' AFTER season",
+      "ALTER TABLE team_stats DROP PRIMARY KEY, ADD PRIMARY KEY (team_id, league_id, season, date)",
       "ALTER TABLE team_stats ADD COLUMN full_stats_json LONGTEXT AFTER avg_goals_against"
     ],
     "venues_updates" => [

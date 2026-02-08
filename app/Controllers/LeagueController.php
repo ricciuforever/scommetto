@@ -35,7 +35,24 @@ class LeagueController
                 $this->sync();
             }
 
-            $leagues = $model->getAll();
+            $filters = [
+                'id' => $_GET['id'] ?? null,
+                'name' => $_GET['name'] ?? null,
+                'country' => $_GET['country'] ?? null,
+                'code' => $_GET['code'] ?? null,
+                'season' => $_GET['season'] ?? null,
+                'team' => $_GET['team'] ?? null,
+                'search' => $_GET['search'] ?? null,
+                'type' => $_GET['type'] ?? null,
+                'current' => $_GET['current'] ?? null,
+            ];
+
+            if (array_filter($filters)) {
+                $leagues = $model->find($filters);
+            } else {
+                $leagues = $model->getAll();
+            }
+
             echo json_encode(['response' => $leagues]);
         } catch (\Throwable $e) {
             http_response_code(500);

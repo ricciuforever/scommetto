@@ -29,29 +29,31 @@ class VenueController
         header('Content-Type: application/json');
         try {
             $model = new Venue();
-            $id = $_GET['id'] ?? null;
-            $country = $_GET['country'] ?? null;
-            $city = $_GET['city'] ?? null;
-            $name = $_GET['name'] ?? null;
 
-            if ($id) {
-                if ($model->needsRefresh($id, 24)) {
-                    $this->sync(['id' => $id]);
-                }
-                $result = $model->getById($id);
-            } elseif ($country) {
-                // Per semplicità facciamo sync solo se la tabella è vuota o forzato
-                // L'endpoint richiede almeno un parametro.
-                $result = $model->getByCountry($country);
-                if (empty($result)) {
-                    $this->sync(['country' => $country]);
-                    $result = $model->getByCountry($country);
+            $filters = [
+                'id' => $_GET['id'] ?? null,
+                'name' => $_GET['name'] ?? null,
+                'city' => $_GET['city'] ?? null,
+                'country' => $_GET['country'] ?? null,
+                'search' => $_GET['search'] ?? null,
+            ];
+
+            // On-demand sync se i risultati sono vuoti per i filtri forniti (e non è solo getAll)
+            if (array_filter($filters)) {
+                $venues = $model->find($filters);
+                if (empty($venues)) {
+                    // Proviamo a sincronizzare con i filtri forniti all'API
+                    $apiParams = array_filter($filters, fn($k) => in_array($k, ['id', 'name', 'city', 'country']), ARRAY_FILTER_USE_KEY);
+                    if (!empty($apiParams)) {
+                        $this->sync($apiParams);
+                        $venues = $model->find($filters);
+                    }
                 }
             } else {
-                $result = $model->getAll(100);
+                $venues = $model->getAll(100);
             }
 
-            echo json_encode(['response' => $result]);
+            echo json_encode(['response' => $venues]);
         } catch (\Throwable $e) {
             http_response_code(500);
             echo json_encode(['error' => $e->getMessage()]);

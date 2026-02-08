@@ -349,7 +349,6 @@ class BetController
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
-    }
 
     public function viewBetModal($id)
     {

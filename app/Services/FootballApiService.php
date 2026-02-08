@@ -99,9 +99,12 @@ class FootballApiService
         return $this->request("/fixtures?id=$id");
     }
 
-    public function fetchStandings($leagueId, $season)
+    public function fetchStandings($leagueId, $season, $teamId = null)
     {
-        return $this->request("/standings?league=$leagueId&season=$season");
+        $url = "/standings?season=$season";
+        if ($leagueId) $url .= "&league=$leagueId";
+        if ($teamId) $url .= "&team=$teamId";
+        return $this->request($url);
     }
 
     public function fetchTeam($id)
@@ -135,9 +138,11 @@ class FootballApiService
         return $this->request("/teams/countries");
     }
 
-    public function fetchTeamStatistics($teamId, $leagueId, $season)
+    public function fetchTeamStatistics($teamId, $leagueId, $season, $date = null)
     {
-        return $this->request("/teams/statistics?team=$teamId&league=$leagueId&season=$season");
+        $url = "/teams/statistics?team=$teamId&league=$leagueId&season=$season";
+        if ($date) $url .= "&date=$date";
+        return $this->request($url);
     }
 
     public function fetchVenues($params)

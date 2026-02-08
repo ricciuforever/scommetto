@@ -33,6 +33,7 @@ class TeamStatsController
             $teamId = $_GET['team'] ?? null;
             $leagueId = $_GET['league'] ?? null;
             $season = $_GET['season'] ?? null;
+            $date = $_GET['date'] ?? null;
 
             if (!$teamId || !$leagueId || !$season) {
                 echo json_encode(['error' => 'Parametri mancanti (team, league, season).']);
@@ -41,12 +42,15 @@ class TeamStatsController
 
             $model = new TeamStats();
 
-            // Verifica se i dati sono scaduti (24 ore)
-            if ($model->needsRefresh($teamId, $leagueId, $season, 24)) {
-                $this->sync($teamId, $leagueId, $season);
+            // Se c'è una data specifica, non ha scadenza (è uno snapshot storico)
+            // Se non c'è, usiamo il TTL di 24 ore
+            $ttl = $date ? 999999 : 24;
+
+            if ($model->needsRefresh($teamId, $leagueId, $season, $ttl, $date)) {
+                $this->sync($teamId, $leagueId, $season, $date);
             }
 
-            $stats = $model->get($teamId, $leagueId, $season);
+            $stats = $model->get($teamId, $leagueId, $season, $date);
 
             // Recupera info base squadra e lega per la vista
             $team = (new Team())->getById($teamId);
@@ -67,15 +71,15 @@ class TeamStatsController
     /**
      * Sincronizza le statistiche dall'API al Database
      */
-    private function sync($teamId, $leagueId, $season)
+    private function sync($teamId, $leagueId, $season, $date = null)
     {
         $api = new FootballApiService();
         $model = new TeamStats();
 
-        $data = $api->fetchTeamStatistics($teamId, $leagueId, $season);
+        $data = $api->fetchTeamStatistics($teamId, $leagueId, $season, $date);
 
         if (isset($data['response']) && !empty($data['response'])) {
-            $model->save($teamId, $leagueId, $season, $data['response']);
+            $model->save($teamId, $leagueId, $season, $data['response'], $date);
         }
     }
 }

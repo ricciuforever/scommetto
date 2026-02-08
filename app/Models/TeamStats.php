@@ -15,10 +15,10 @@ class TeamStats
         $this->db = Database::getInstance()->getConnection();
     }
 
-    public function save($team_id, $league_id, $season, $data)
+    public function save($team_id, $league_id, $season, $data, $date = '0000-00-00')
     {
-        $sql = "INSERT INTO team_stats (team_id, league_id, season, played, wins, draws, losses, goals_for, goals_against, clean_sheets, failed_to_score, avg_goals_for, avg_goals_against, full_stats_json) 
-                VALUES (:tid, :lid, :season, :played, :wins, :draws, :losses, :gf, :ga, :cs, :fts, :avgfc, :avgac, :full) 
+        $sql = "INSERT INTO team_stats (team_id, league_id, season, date, played, wins, draws, losses, goals_for, goals_against, clean_sheets, failed_to_score, avg_goals_for, avg_goals_against, full_stats_json)
+                VALUES (:tid, :lid, :season, :date, :played, :wins, :draws, :losses, :gf, :ga, :cs, :fts, :avgfc, :avgac, :full)
                 ON DUPLICATE KEY UPDATE 
                     played = VALUES(played), wins = VALUES(wins), draws = VALUES(draws), losses = VALUES(losses),
                     goals_for = VALUES(goals_for), goals_against = VALUES(goals_against),
@@ -32,6 +32,7 @@ class TeamStats
             'tid' => $team_id,
             'lid' => $league_id,
             'season' => $season,
+            'date' => $date ?: '0000-00-00',
             'played' => $data['fixtures']['played']['total'] ?? 0,
             'wins' => $data['fixtures']['wins']['total'] ?? 0,
             'draws' => $data['fixtures']['draws']['total'] ?? 0,
@@ -46,17 +47,19 @@ class TeamStats
         ]);
     }
 
-    public function get($team_id, $league_id, $season)
+    public function get($team_id, $league_id, $season, $date = '0000-00-00')
     {
-        $stmt = $this->db->prepare("SELECT * FROM team_stats WHERE team_id = ? AND league_id = ? AND season = ?");
-        $stmt->execute([$team_id, $league_id, $season]);
+        $sql = "SELECT * FROM team_stats WHERE team_id = ? AND league_id = ? AND season = ? AND date = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$team_id, $league_id, $season, $date ?: '0000-00-00']);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    public function needsRefresh($team_id, $league_id, $season, $hours = 24)
+    public function needsRefresh($team_id, $league_id, $season, $hours = 24, $date = '0000-00-00')
     {
-        $stmt = $this->db->prepare("SELECT last_updated FROM team_stats WHERE team_id = ? AND league_id = ? AND season = ?");
-        $stmt->execute([$team_id, $league_id, $season]);
+        $sql = "SELECT last_updated FROM team_stats WHERE team_id = ? AND league_id = ? AND season = ? AND date = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$team_id, $league_id, $season, $date ?: '0000-00-00']);
         $row = $stmt->fetch();
 
         if (!$row)
