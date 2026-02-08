@@ -1402,102 +1402,40 @@ async function fetchHistory() {
 }
 
 async function updateStatsSummary() {
-    const summary = calculateStats();
     const container = document.getElementById('stats-summary');
     if (!container) return;
 
-    const countryLabel = selectedCountry === 'all' ? 'Tutte' : selectedCountry;
-    const leagueLabel = selectedLeague === 'all' ? 'Tutti' : (Array.from(document.querySelectorAll('#dash-league-filter option')).find(opt => opt.value === selectedLeague)?.innerText || 'League');
+    try {
+        const res = await fetch('/api/betfair/balance');
+        const data = await res.json();
 
-    // Identifica se stiamo visualizzando Betfair
-    let showingBetfair = false;
-    let bookmakerLabel = 'Tutti i Book';
+        if (data.available !== undefined) {
+            const available = parseFloat(data.available);
+            const portfolio = parseFloat(data.wallet);
+            const exposure = Math.abs(parseFloat(data.exposure));
+            const initialBankroll = 100;
+            const netProfit = portfolio - initialBankroll;
 
-    if (selectedBookmaker !== 'all') {
-        const b = allFilterData.bookmakers.find(b => b.id.toString() === selectedBookmaker);
-        bookmakerLabel = b?.name || 'Filtro';
-        if (bookmakerLabel.toLowerCase().includes('betfair')) showingBetfair = true;
-    }
-
-    // Default Values (Virtual)
-    let displayBalance = summary.availableBalance.toFixed(2) + '€';
-    let displayPortfolio = summary.currentPortfolio.toFixed(2) + '€';
-    let balanceLabel = 'Disponibile (Virtual)';
-    let portfolioLabel = 'Portafoglio (Virtual)';
-
-    // Se Betfair è selezionato, fetch Real Data
-    if (showingBetfair) {
-        balanceLabel = 'Disponibile (Reale)';
-        portfolioLabel = 'Portafoglio (Reale)';
-
-        try {
-            // Mostra loader temporaneo
-            displayBalance = '<span class="animate-pulse">Loading...</span>';
-            displayPortfolio = '<span class="animate-pulse">Loading...</span>';
-
-            // Render immediato col loading
-            renderStatsHTML(container, displayBalance, displayPortfolio, balanceLabel, portfolioLabel, summary, countryLabel, leagueLabel, bookmakerLabel);
-
-            const res = await fetch('/api/betfair/balance');
-            const data = await res.json();
-
-            if (data.available !== undefined) {
-                displayBalance = parseFloat(data.available).toFixed(2) + '€';
-                displayPortfolio = parseFloat(data.wallet).toFixed(2) + '€'; // Wallet include esposizione
-
-                // CALCOLO REALE AL VOLO: Utile Netto = Portafoglio Reale - Bankroll Iniziale (100€)
-                const realPortfolio = parseFloat(data.wallet);
-                const initialBankroll = 100;
-                summary.netProfit = realPortfolio - initialBankroll;
-                if (summary.totalStake > 0) {
-                    summary.roi = (summary.netProfit / summary.totalStake) * 100;
-                }
-
-                // Aggiorna anche i valori nel summary per la coerenza del rendering
-                summary.availableBalance = parseFloat(data.available);
-                summary.currentPortfolio = realPortfolio;
-            } else if (data.error) {
-                displayBalance = 'ERR';
-                displayPortfolio = 'ERR';
-                console.error('Betfair Balance Error Response:', data);
-            }
-        } catch (e) {
-            console.error('Fetch Balance Exception:', e);
-            displayBalance = 'ERR';
-            displayPortfolio = 'ERR';
+            container.innerHTML = `
+                <div class="glass p-5 rounded-3xl border-white/5">
+                    <span class="block text-2xl font-black mb-1 text-white">${available.toFixed(2)}€</span>
+                    <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Disponibile Reale</span>
+                </div>
+                <div class="glass p-5 rounded-3xl border-white/5">
+                     <span class="block text-2xl font-black mb-1 text-white">${portfolio.toFixed(2)}€</span>
+                    <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Portafoglio Reale</span>
+                </div>
+                <div class="glass p-5 rounded-3xl border-white/5">
+                    <span class="block text-2xl font-black mb-1 ${netProfit >= 0 ? 'text-success' : 'text-danger'}">${netProfit >= 0 ? '+' : ''}${netProfit.toFixed(2)}€</span>
+                    <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Utile Netto Reale</span>
+                </div>
+                <div class="glass p-5 rounded-3xl border-white/5">
+                    <span class="block text-2xl font-black mb-1 text-warning">${exposure.toFixed(2)}€</span>
+                    <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">In Gioco (Esposizione)</span>
+                </div>
+            `;
         }
-    }
-
-    renderStatsHTML(container, displayBalance, displayPortfolio, balanceLabel, portfolioLabel, summary, countryLabel, leagueLabel, bookmakerLabel);
-}
-
-function renderStatsHTML(container, balanceIdx, portfolioIdx, balLabel, portLabel, summary, cLabel, lLabel, bLabel) {
-    container.innerHTML = `
-        <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-            <span class="block text-2xl font-black mb-1 ${summary.availableBalance >= 0 || balanceIdx.includes('€') ? 'text-white' : 'text-danger'}">${balanceIdx}</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">${balLabel}</span>
-        </div>
-        <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-             <span class="block text-2xl font-black mb-1">${portfolioIdx}</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">${portLabel}</span>
-        </div>
-        <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-            <span class="block text-2xl font-black mb-1 ${summary.netProfit >= 0 ? 'text-success' : 'text-danger'}">${summary.netProfit >= 0 ? '+' : ''}${summary.netProfit.toFixed(2)}€</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Utile Netto | ${cLabel} ${selectedLeague !== 'all' ? '/ ' + lLabel : ''}</span>
-        </div>
-        <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-            <span class="block text-2xl font-black mb-1">${summary.liveCount}</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">Live Now</span>
-        </div>
-        <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-            <span class="block text-2xl font-black mb-1 text-warning">${summary.pendingCount} (${summary.pendingStakes.toFixed(0)}€)</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">In Sospeso</span>
-        </div>
-        <div class="glass p-5 rounded-3xl border-white/5 relative overflow-hidden group">
-            <span class="block text-2xl font-black mb-1 text-success">${summary.roi.toFixed(1)}%</span>
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-black">ROI | ${bLabel}</span>
-        </div>
-    `;
+    } catch (e) { console.error('Fetch Balance Error:', e); }
 }
 
 function calculateStats() {
