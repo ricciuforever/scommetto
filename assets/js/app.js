@@ -1439,10 +1439,10 @@ async function updateStatsSummary() {
                 portfolioLabel = 'Portafoglio (Reale)';
             } else if (data.error) {
                 displayBalance = 'ERR';
-                console.error('Betfair Balance Error:', data.error);
+                console.error('Betfair Balance Error Response:', data); // Logga tutto l'oggetto risposta, non solo .error
             }
         } catch (e) {
-            console.error('Fetch Balance Error', e);
+            console.error('Fetch Balance Exception:', e);
             displayBalance = 'ERR';
         }
     }
