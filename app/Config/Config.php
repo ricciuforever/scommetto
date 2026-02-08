@@ -12,6 +12,7 @@ class Config
     const LIVE_DATA_FILE = self::DATA_PATH . 'live_matches.json';
     const BETS_HISTORY_FILE = self::DATA_PATH . 'bets_history.json';
     const USAGE_FILE = self::DATA_PATH . 'usage.json';
+    const SETTINGS_FILE = self::DATA_PATH . 'settings.json'; // New Settings File
     const INITIAL_BANKROLL = 100.00;
     const MIN_BETFAIR_STAKE = 2.00;
     const BETFAIR_CONFIDENCE_THRESHOLD = 80;
@@ -62,5 +63,19 @@ class Config
     public static function getCurrentSeason()
     {
         return (int) date('m') <= 6 ? (int) date('Y') - 1 : (int) date('Y');
+    }
+
+    public static function isSimulationMode()
+    {
+        if (!file_exists(self::SETTINGS_FILE))
+            return true; // Default True
+        $settings = json_decode(file_get_contents(self::SETTINGS_FILE), true);
+        return $settings['simulation_mode'] ?? true;
+    }
+
+    public static function setSimulationMode($enabled)
+    {
+        $settings = ['simulation_mode' => (bool) $enabled];
+        file_put_contents(self::SETTINGS_FILE, json_encode($settings));
     }
 }

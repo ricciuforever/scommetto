@@ -164,7 +164,7 @@ class SyncController
             'current_portfolio' => ($funds['availableToBetBalance'] ?? 0) + abs($funds['exposure'] ?? 0)
         ];
 
-        if ($balance['available_balance'] < Config::MIN_BETFAIR_STAKE)
+        if ($balance['available_balance'] < Config::MIN_BETFAIR_STAKE && !Config::isSimulationMode())
             return;
 
         // Limita a 20 candidati più liquidi per non saturare il prompt
@@ -215,11 +215,14 @@ class SyncController
                             return; // Exit function since we only process one bet per call
                         }
 
-                        $bfRes = $this->betfairService->placeBet($event['marketId'], $selectionId, $finalPrice, $betData['stake']);
-                        $res = isset($bfRes['status']) ? $bfRes : ($bfRes['result'] ?? null);
+                        $isSimulation = Config::isSimulationMode();
+                        $status = 'pending';
+                        $betfairId = null;
+                        $note = '';
 
-                        if ($res && isset($res['status']) && $res['status'] === 'SUCCESS') {
-                            $results['bets_placed']++;
+                        if ($isSimulation) {
+                            $status = 'placed';
+                            $note = '[SIMULAZIONE] Bet Virtuale';
                             $this->betModel->create([
                                 'fixture_id' => $event['marketId'],
                                 'match_name' => $event['event']['name'],
@@ -227,11 +230,31 @@ class SyncController
                                 'market' => $event['marketName'],
                                 'odds' => $finalPrice,
                                 'stake' => $betData['stake'],
-                                'betfair_id' => $res['instructionReports'][0]['betId'] ?? null,
-                                'status' => 'placed',
+                                'status' => $status,
+                                'notes' => $note,
                                 'bookmaker_name' => 'Betfair.it'
                             ]);
-                            echo "SCOMMESSA PIAZZATA: " . $event['event']['name'] . " - " . $betData['advice'] . " @ $finalPrice\n";
+                            echo "SCOMMESSA SIMULATA: " . $event['event']['name'] . " - " . $betData['advice'] . " @ $finalPrice\n";
+                            $results['bets_placed']++;
+                        } else {
+                            $bfRes = $this->betfairService->placeBet($event['marketId'], $selectionId, $finalPrice, $betData['stake']);
+                            $res = isset($bfRes['status']) ? $bfRes : ($bfRes['result'] ?? null);
+
+                            if ($res && isset($res['status']) && $res['status'] === 'SUCCESS') {
+                                $results['bets_placed']++;
+                                $this->betModel->create([
+                                    'fixture_id' => $event['marketId'],
+                                    'match_name' => $event['event']['name'],
+                                    'advice' => $betData['advice'],
+                                    'market' => $event['marketName'],
+                                    'odds' => $finalPrice,
+                                    'stake' => $betData['stake'],
+                                    'betfair_id' => $res['instructionReports'][0]['betId'] ?? null,
+                                    'status' => 'placed',
+                                    'bookmaker_name' => 'Betfair.it'
+                                ]);
+                                echo "SCOMMESSA PIAZZATA: " . $event['event']['name'] . " - " . $betData['advice'] . " @ $finalPrice\n";
+                            }
                         }
                     }
                 }

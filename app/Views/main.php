@@ -72,10 +72,29 @@
             </a>
         </nav>
 
-        <div class="p-4 border-t border-white/10">
+        <div class="p-4 border-t border-white/10 space-y-4">
             <div class="flex flex-col gap-1 p-4 rounded-2xl bg-white/5 border border-white/5">
                 <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Betfair Status</span>
                 <div class="text-sm font-black"><span class="text-success">CONNECTED</span></div>
+            </div>
+
+            <div class="flex flex-col gap-2 p-4 rounded-2xl bg-white/5 border border-white/5">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Modalità</span>
+                <label class="flex items-center justify-between cursor-pointer group">
+                    <span id="sim-mode-label"
+                        class="text-xs font-black uppercase italic text-white transition-colors">Simulazione</span>
+                    <input type="checkbox" id="sim-mode-toggle" class="sr-only peer"
+                        onchange="toggleSimulationMode(this)">
+                    <div
+                        class="relative w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent">
+                    </div>
+                </label>
+            </div>
+
+            <div id="reset-sim-container" class="hidden">
+                <button onclick="resetSimulation()"
+                    class="w-full py-2 rounded-xl bg-danger/10 text-danger text-[10px] font-black uppercase tracking-widest hover:bg-danger/20 transition-all border border-danger/20">Reset
+                    Simul.</button>
             </div>
         </div>
     </aside>

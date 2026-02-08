@@ -29,7 +29,9 @@ class BetController
                     ORDER BY b.timestamp DESC LIMIT 1000";
             $history = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
             echo json_encode($history);
-        } catch (\Throwable $e) { echo json_encode([]); }
+        } catch (\Throwable $e) {
+            echo json_encode([]);
+        }
     }
 
     public function placeBet()
@@ -58,8 +60,10 @@ class BetController
 
         try {
             $bf = new BetfairService();
+            $isSimulation = Config::isSimulationMode();
+            $logMsg .= $isSimulation ? "[SIMULAZIONE] " : "[REAL] ";
 
-            if ($bf->isConfigured() && $confidence >= $threshold) {
+            if ($bf->isConfigured() && $confidence >= $threshold && !$isSimulation) {
                 $logMsg .= "Procedo su Betfair. ";
 
                 $fixtureId = (int) $input['fixture_id'];
@@ -86,7 +90,7 @@ class BetController
                     if ($market) {
                         $selectionId = $bf->mapAdviceToSelection($advice, $market['runners'], $fixture['home_name'] ?? '', $fixture['away_name'] ?? '');
                         if ($selectionId) {
-                            $price = (float)($input['odds'] ?? 1.01);
+                            $price = (float) ($input['odds'] ?? 1.01);
                             $order = $bf->placeBet($market['marketId'], $selectionId, $price, $stake);
 
                             // Gestione flessibile risposta Betfair (REST o RPC)
@@ -100,11 +104,20 @@ class BetController
                             } else {
                                 $note .= "[BETFAIR ERROR] " . json_encode($order);
                             }
-                        } else { $note .= "[BETFAIR] Selezione non trovata. "; }
-                    } else { $note .= "[BETFAIR] Mercato non trovato. "; }
+                        } else {
+                            $note .= "[BETFAIR] Selezione non trovata. ";
+                        }
+                    } else {
+                        $note .= "[BETFAIR] Mercato non trovato. ";
+                    }
                 }
             } else {
-                $logMsg .= "Soglia non raggiunta o non configurato. ";
+                $logMsg .= "Soglia non raggiunta, non configurato, o modo simulazione. ";
+                // In simulazione, settiamo betfair_id a NULL ma status a 'placed' se confidence OK
+                if ($isSimulation && $confidence >= 60) {
+                    $status = 'placed';
+                    $note .= "[SIMULAZIONE] Scommessa virtuale piazzata.";
+                }
             }
         } catch (\Throwable $e) {
             $note .= "[BETFAIR EXCEPTION] " . $e->getMessage();
@@ -112,7 +125,8 @@ class BetController
 
         error_log("[BET_CONTROLLER] " . $logMsg . " Note: $note");
 
-        if ($betfairId) $input['betfair_id'] = $betfairId;
+        if ($betfairId)
+            $input['betfair_id'] = $betfairId;
         $input['status'] = $status;
         $input['notes'] = ($input['notes'] ?? '') . ' ' . $note;
 
@@ -135,7 +149,10 @@ class BetController
         header('Content-Type: application/json');
         try {
             $bf = new BetfairService();
-            if (!$bf->isConfigured()) { echo json_encode(['error' => 'Not configured']); return; }
+            if (!$bf->isConfigured()) {
+                echo json_encode(['error' => 'Not configured']);
+                return;
+            }
             $funds = $bf->getFunds();
             $data = $funds['result'] ?? $funds;
             if (isset($data['availableToBetBalance'])) {
@@ -146,8 +163,12 @@ class BetController
                     'currency' => $data['currencyCode'] ?? 'EUR',
                     'wallet_name' => $data['wallet'] ?? 'Unknown'
                 ]);
-            } else { echo json_encode(['error' => 'API Error', 'details' => $funds]); }
-        } catch (\Throwable $e) { echo json_encode(['error' => $e->getMessage()]); }
+            } else {
+                echo json_encode(['error' => 'API Error', 'details' => $funds]);
+            }
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
     }
 
     public function getOrders()
@@ -155,9 +176,14 @@ class BetController
         header('Content-Type: application/json');
         try {
             $bf = new BetfairService();
-            if (!$bf->isConfigured()) { echo json_encode(['response' => []]); return; }
+            if (!$bf->isConfigured()) {
+                echo json_encode(['response' => []]);
+                return;
+            }
             $res = $bf->getCurrentOrders();
             echo json_encode(['response' => $res['currentOrders'] ?? []]);
-        } catch (\Throwable $e) { echo json_encode(['error' => $e->getMessage()]); }
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
     }
 }

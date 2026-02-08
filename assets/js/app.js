@@ -145,6 +145,73 @@ async function renderDashboard() {
     // Legacy placeholder, now handled by HTMX mostly
 }
 
+// --- SIMULATION MODE ---
+async function initSimulationMode() {
+    try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        const toggle = document.getElementById('sim-mode-toggle');
+        const container = document.getElementById('reset-sim-container');
+
+        if (toggle) {
+            toggle.checked = data.simulation_mode;
+            updateSimLabel(data.simulation_mode);
+        }
+        if (container) {
+            container.classList.toggle('hidden', !data.simulation_mode);
+        }
+    } catch (e) { console.error("Error loading settings", e); }
+}
+
+async function toggleSimulationMode(el) {
+    const enabled = el.checked;
+    updateSimLabel(enabled);
+
+    // Show/Hide Reset Button
+    const container = document.getElementById('reset-sim-container');
+    if (container) container.classList.toggle('hidden', !enabled);
+
+    try {
+        await fetch('/api/settings/update', {
+            method: 'POST',
+            body: JSON.stringify({ simulation_mode: enabled }),
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        // Refresh dashboard to reflect new mode?
+        // navigate('dashboard'); 
+    } catch (e) {
+        console.error("Error updating simulation mode", e);
+        el.checked = !enabled; // Revert on error
+    }
+}
+
+function updateSimLabel(enabled) {
+    const label = document.getElementById('sim-mode-label');
+    if (label) {
+        label.textContent = enabled ? 'Simulazione' : 'Denaro Reale';
+        label.className = enabled
+            ? "text-xs font-black uppercase italic text-accent transition-colors"
+            : "text-xs font-black uppercase italic text-danger transition-colors";
+    }
+}
+
+async function resetSimulation() {
+    if (!confirm("Sei sicuro di voler cancellare tutte le scommesse SIMULATE? Il saldo verrà ripristinato a 100€.")) return;
+
+    try {
+        await fetch('/api/simulation/reset', { method: 'POST' });
+        alert("Simulazione resettata!");
+        navigate('tracker');
+    } catch (e) { alert("Errore durante il reset"); }
+}
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', initSimulationMode);
+// Also re-check when HTMX loads content, though sidebar is static usually
+document.addEventListener('htmx:load', initSimulationMode);
+
+
 async function renderDashboardPredictions() {
     const container = document.getElementById('dashboard-predictions');
     if (!container) return;

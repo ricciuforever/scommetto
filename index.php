@@ -109,6 +109,12 @@ try {
         } catch (\Throwable $e) {
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
+    } elseif ($path === '/api/settings' && $method === 'GET') {
+        (new \App\Controllers\SystemController())->getSettings();
+    } elseif ($path === '/api/settings/update' && $method === 'POST') {
+        (new \App\Controllers\SystemController())->updateSettings();
+    } elseif ($path === '/api/simulation/reset' && $method === 'POST') {
+        (new \App\Controllers\SystemController())->resetSimulation();
     } else {
         http_response_code(404);
         echo json_encode(['error' => 'Not Found', 'path' => $path]);
