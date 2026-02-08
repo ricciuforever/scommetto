@@ -202,6 +202,28 @@ class MatchController
                 }
             }
 
+            // 4. Sport Extraction (for filters)
+            $availableSports = [];
+            foreach ($liveMatches as $m) {
+                if (!empty($m['sport'])) {
+                    $availableSports[$m['sport']] = true;
+                }
+            }
+            $activeSports = array_keys($availableSports);
+            sort($activeSports);
+
+            // 5. Open Bets Count
+            $openBetsCount = 0;
+            if (Config::isSimulationMode()) {
+                $stmt = $db->query("SELECT COUNT(*) as count FROM bets WHERE betfair_id IS NULL AND status IN ('placed', 'pending')");
+                $openBetsCount = (int) $stmt->fetchColumn();
+            } else {
+                // For real mode, count bets in DB that are pending/placed
+                // Alternatively could try API listCurrentOrders, but DB is faster for dashboard
+                $stmt = $db->query("SELECT COUNT(*) as count FROM bets WHERE betfair_id IS NOT NULL AND status IN ('placed', 'pending')");
+                $openBetsCount = (int) $stmt->fetchColumn();
+            }
+
             require __DIR__ . '/../Views/partials/dashboard.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore Dashboard: ' . $e->getMessage() . '</div>';

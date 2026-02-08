@@ -27,16 +27,54 @@ foreach ($history as $h) {
 <div hx-get="/api/view/dashboard" hx-trigger="every 15s" hx-swap="outerHTML">
 
     <!-- Account Stats Summary -->
+    <?php if (!empty($activeSports)): ?>
+        <div class="flex gap-4 mb-8 overflow-x-auto no-scrollbar pb-2">
+            <button
+                class="bg-accent text-white px-6 py-4 rounded-2xl flex flex-col items-center gap-2 min-w-[80px] shadow-lg shadow-accent/20">
+                <i data-lucide="layout-grid" class="w-6 h-6"></i>
+                <span class="text-[9px] font-black uppercase tracking-widest">Tutti</span>
+            </button>
+            <?php foreach ($activeSports as $sport):
+                $icon = 'activity';
+                if (stripos($sport, 'soccer') !== false)
+                    $icon = 'trophy';
+                elseif (stripos($sport, 'tennis') !== false)
+                    $icon = 'circle-dot'; // approximates tennis ball
+                elseif (stripos($sport, 'basket') !== false)
+                    $icon = 'dribbble'; // basketball not standard in lucide yet? uses dribbble usually
+                elseif (stripos($sport, 'volley') !== false)
+                    $icon = 'activity';
+                ?>
+                <button
+                    class="bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white px-6 py-4 rounded-2xl flex flex-col items-center gap-2 min-w-[80px] transition-all border border-white/5">
+                    <i data-lucide="<?php echo $icon; ?>" class="w-6 h-6"></i>
+                    <span
+                        class="text-[9px] font-black uppercase tracking-widest truncate max-w-[80px]"><?php echo $sport; ?></span>
+                </button>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
         <div class="glass p-6 rounded-[32px] border-white/5">
             <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Disponibile</div>
             <div class="text-2xl font-black tabular-nums text-white">
-                €<?php echo number_format($account['available'], 2); ?></div>
+                €<?php echo number_format($account['available'], 2); ?>
+            </div>
         </div>
         <div class="glass p-6 rounded-[32px] border-white/5">
             <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">In Gioco</div>
-            <div class="text-2xl font-black tabular-nums text-warning">
-                €<?php echo number_format($account['exposure'], 2); ?></div>
+            <div class="flex items-baseline gap-2">
+                <div class="text-2xl font-black tabular-nums text-warning">
+                    €<?php echo number_format($account['exposure'], 2); ?>
+                </div>
+                <?php if (isset($openBetsCount) && $openBetsCount > 0): ?>
+                    <span
+                        class="text-[10px] font-bold text-slate-500 bg-white/5 px-2 py-0.5 rounded-lg border border-white/5">
+                        <?php echo $openBetsCount; ?> attive
+                    </span>
+                <?php endif; ?>
+            </div>
         </div>
         <div class="glass p-6 rounded-[32px] border-white/5">
             <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Profitto Netto</div>
@@ -46,9 +84,9 @@ foreach ($history as $h) {
             </div>
         </div>
         <div class="glass p-6 rounded-[32px] border-white/5">
-            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Win Rate</div>
+            <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Portafoglio Totale</div>
             <div class="text-2xl font-black tabular-nums text-accent">
-                <?php echo ($wonBets + $lostBets) > 0 ? number_format(($wonBets / ($wonBets + $lostBets)) * 100, 1) : '0.0'; ?>%
+                €<?php echo number_format($account['wallet'], 2); ?>
             </div>
         </div>
     </div>
