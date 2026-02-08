@@ -4,6 +4,8 @@
 namespace App\Controllers;
 
 use App\Models\Bet;
+use App\Services\BetfairService;
+use App\Config\Config;
 
 class BetController
 {
@@ -41,7 +43,7 @@ class BetController
 
         $stake = (float) ($input['stake'] ?? 0);
         $confidence = (int) ($input['confidence'] ?? 0);
-        $threshold = \App\Config\Config::BETFAIR_CONFIDENCE_THRESHOLD;
+        $threshold = Config::BETFAIR_CONFIDENCE_THRESHOLD;
 
         $betfairId = null;
         $status = 'pending';
@@ -49,7 +51,7 @@ class BetController
         $logMsg = "Manuale: Fixture {$input['fixture_id']}, Conf: $confidence% (Threshold: $threshold%). ";
 
         try {
-            $bf = new \App\Services\BetfairService();
+            $bf = new BetfairService();
 
             if ($bf->isConfigured() && $confidence >= $threshold) {
                 $logMsg .= "Procedo su Betfair. ";
@@ -63,21 +65,29 @@ class BetController
                     if ($market) {
                         $selectionId = $bf->mapAdviceToSelection($input['prediction'] ?? $input['advice'] ?? '', $market['runners']);
                         if ($selectionId) {
-                            $order = $bf->placeBet($market['marketId'], $selectionId, (float)($input['odds'] ?? 1.01), $stake);
+                            $price = (float)($input['odds'] ?? 1.01);
+                            $order = $bf->placeBet($market['marketId'], $selectionId, $price, $stake);
+
+                            // Gestione flessibile risposta Betfair (REST o RPC)
                             $res = isset($order['status']) ? $order : ($order['result'] ?? null);
 
                             if ($res && $res['status'] === 'SUCCESS') {
-                                $betfairId = $res['instructionReports'][0]['betId'] ?? null;
+                                $reports = $res['instructionReports'] ?? ($res['result']['instructionReports'] ?? []);
+                                $betfairId = $reports[0]['betId'] ?? null;
                                 $status = 'placed';
-                                $note .= "[BETFAIR] Scommessa piazzata con successo. ";
+                                $note .= "[BETFAIR] Scommessa piazzata! ID: $betfairId. ";
                             } else {
                                 $note .= "[BETFAIR ERROR] " . json_encode($order);
                             }
                         } else { $note .= "[BETFAIR] Selezione non trovata. "; }
                     } else { $note .= "[BETFAIR] Mercato non trovato. "; }
                 }
-            } else { $logMsg .= "Soglia non raggiunta o non configurato. "; }
-        } catch (\Throwable $e) { $note .= "[BETFAIR EXCEPTION] " . $e->getMessage(); }
+            } else {
+                $logMsg .= "Soglia non raggiunta o non configurato. ";
+            }
+        } catch (\Throwable $e) {
+            $note .= "[BETFAIR EXCEPTION] " . $e->getMessage();
+        }
 
         error_log("[BET_CONTROLLER] " . $logMsg . " Note: $note");
 
@@ -102,12 +112,6 @@ class BetController
                     ORDER BY b.timestamp DESC LIMIT 1000";
             $allBets = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
 
-            $balanceSummary = $this->betModel->getBalanceSummary(\App\Config\Config::INITIAL_BANKROLL);
-            $bets = array_filter($allBets, function ($bet) use ($status) {
-                if ($status === 'all') return true;
-                return ($bet['status'] ?? '') === $status;
-            });
-
             require __DIR__ . '/../Views/partials/tracker.php';
         } catch (\Throwable $e) { echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>'; }
     }
@@ -116,7 +120,7 @@ class BetController
     {
         header('Content-Type: application/json');
         try {
-            $bf = new \App\Services\BetfairService();
+            $bf = new BetfairService();
             if (!$bf->isConfigured()) { echo json_encode(['error' => 'Not configured']); return; }
             $funds = $bf->getFunds();
             $data = $funds['result'] ?? $funds;

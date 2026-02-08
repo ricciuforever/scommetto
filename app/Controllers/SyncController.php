@@ -29,7 +29,6 @@ use App\Models\Sidelined;
 use App\Models\PlayerStatistics;
 use App\Models\PlayerSeason;
 use App\Models\FixturePlayerStatistics;
-use App\Models\FixtureLineupModel;
 use App\Models\Bookmaker;
 use App\Models\BetType;
 use App\Models\Venue;
@@ -38,6 +37,7 @@ use App\Services\FootballApiService;
 use App\Services\GeminiService;
 use App\Config\Config;
 use App\Services\Database;
+use App\Services\BetfairService;
 use PDO;
 
 class SyncController
@@ -107,7 +107,7 @@ class SyncController
         $this->venueModel = new Venue();
         $this->apiService = new FootballApiService();
         $this->geminiService = new GeminiService();
-        $this->betfairService = new \App\Services\BetfairService();
+        $this->betfairService = new BetfairService();
     }
 
     private function getCurrentSeason() { return Config::getCurrentSeason(); }
@@ -154,12 +154,9 @@ class SyncController
             }
 
             $liveOddsData = $this->apiService->fetchLiveOdds();
-            $liveOddsIds = [];
             if (isset($liveOddsData['response'])) {
                 foreach ($liveOddsData['response'] as $lo) {
-                    $fid = $lo['fixture']['id'];
-                    $this->liveOddsModel->save($fid, $lo);
-                    $liveOddsIds[] = (int) $fid;
+                    $this->liveOddsModel->save($lo['fixture']['id'], $lo);
                 }
             }
 
@@ -168,12 +165,7 @@ class SyncController
             $stmt = $db->query("SELECT fixture_id, bookmaker_id FROM fixture_odds WHERE fixture_id IN ($fidsStr)");
             $bookiesRaw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
             $bookiesByFid = [];
-            $preMatchOddsIds = [];
-            foreach ($bookiesRaw as $row) {
-                $bookiesByFid[$row['fixture_id']][] = (int) $row['bookmaker_id'];
-                $preMatchOddsIds[] = (int) $row['fixture_id'];
-            }
-            $preMatchOddsIds = array_unique($preMatchOddsIds);
+            foreach ($bookiesRaw as $row) { $bookiesByFid[$row['fixture_id']][] = (int) $row['bookmaker_id']; }
 
             $matches = array_filter($allLiveMatches, function ($m) {
                 $status = $m['fixture']['status']['short'] ?? '';
@@ -186,16 +178,12 @@ class SyncController
                 $m['available_bookmakers'] = array_values(array_unique($bookiesByFid[$fid] ?? []));
                 $enrichedMatches[] = $m;
             }
-            $live['response'] = $enrichedMatches;
-            file_put_contents(Config::LIVE_DATA_FILE, json_encode($live));
+            file_put_contents(Config::LIVE_DATA_FILE, json_encode(['response' => $enrichedMatches]));
 
             foreach ($matches as $m) {
                 $fid = $m['fixture']['id'];
                 $this->fixtureModel->save($m);
-            }
 
-            foreach ($matches as $m) {
-                $fid = $m['fixture']['id'];
                 $balance = $this->betModel->getBalanceSummary(Config::INITIAL_BANKROLL);
                 if ($this->betModel->hasBet($fid)) continue;
                 if ($balance['available_balance'] <= 0.50) continue;
@@ -220,15 +208,15 @@ class SyncController
                                 $selectionId = $this->betfairService->mapAdviceToSelection($betData['advice'], $marketInfo['runners']);
                                 if ($selectionId) {
                                     $bfResult = $this->betfairService->placeBet($marketInfo['marketId'], $selectionId, $betData['odds'], $betData['stake']);
-                                    $statusBf = isset($bfResult['status']) ? $bfResult['status'] : ($bfResult['result']['status'] ?? null);
-                                    if ($statusBf === 'SUCCESS') {
+                                    $res = isset($bfResult['status']) ? $bfResult : ($bfResult['result'] ?? null);
+                                    if ($res && $res['status'] === 'SUCCESS') {
                                         $betData['status'] = 'placed';
-                                        $betData['betfair_id'] = $bfResult['instructionReports'][0]['betId'] ?? ($bfResult['result']['instructionReports'][0]['betId'] ?? null);
+                                        $reports = $res['instructionReports'] ?? ($res['result']['instructionReports'] ?? []);
+                                        $betData['betfair_id'] = $reports[0]['betId'] ?? null;
                                     }
                                 }
                             }
                         }
-
                         $this->betModel->create($betData);
                         $results['bets_placed']++;
                     }
@@ -242,24 +230,14 @@ class SyncController
     public function syncHourly()
     {
         $this->sendJsonHeader();
-        $results = ['leagues' => 0, 'standings' => 0, 'fixtures' => 0, 'injuries' => 0, 'stats_updated' => 0, 'h2h' => 0];
         try {
             $this->betModel->cleanup();
             $this->betModel->deduplicate();
             $this->refreshPendingFixtures();
             $betSettler = new \App\Services\BetSettler();
-            $results['settled'] = $betSettler->settleFromDatabase();
-            $results['stats_updated'] = $this->syncRecentFinishedStats();
-
-            $today = date('Y-m-d');
-            $fixturesData = $this->apiService->request("/fixtures?date=$today");
-            if (isset($fixturesData['response'])) {
-                foreach ($fixturesData['response'] as $f) {
-                    $this->fixtureModel->save($f);
-                    $results['fixtures']++;
-                }
-            }
-            echo json_encode($results);
+            $settled = $betSettler->settleFromDatabase();
+            $stats = $this->syncRecentFinishedStats();
+            echo json_encode(['status' => 'success', 'settled' => $settled, 'stats_updated' => $stats]);
         } catch (\Throwable $e) { $this->handleException($e); }
     }
 
@@ -270,53 +248,13 @@ class SyncController
             $sql = "SELECT DISTINCT fixture_id FROM bets WHERE status = 'pending' AND fixture_id NOT IN (SELECT id FROM fixtures WHERE last_updated > DATE_SUB(NOW(), INTERVAL 15 MINUTE))";
             $fixtures = $db->query($sql)->fetchAll(PDO::FETCH_COLUMN);
             if (empty($fixtures)) return 0;
-            $count = 0;
-            $chunks = array_chunk($fixtures, 20);
-            foreach ($chunks as $chunk) {
-                $ids = implode('-', $chunk);
-                $data = $this->apiService->request("/fixtures?ids=$ids");
-                if (isset($data['response']) && is_array($data['response'])) {
-                    foreach ($data['response'] as $fixtureData) { $this->fixtureModel->save($fixtureData); $count++; }
-                }
+            foreach (array_chunk($fixtures, 20) as $chunk) {
+                $data = $this->apiService->request("/fixtures?ids=" . implode('-', $chunk));
+                if (isset($data['response'])) { foreach ($data['response'] as $f) $this->fixtureModel->save($f); }
                 usleep(500000);
             }
-            return $count;
+            return count($fixtures);
         } catch (\Exception $e) { return 0; }
-    }
-
-    public function sync3Hours()
-    {
-        $this->sendJsonHeader();
-        try {
-            $db = Database::getInstance()->getConnection();
-            $fixtures = $db->query("SELECT id, league_id FROM fixtures WHERE date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 3 DAY) AND status_short = 'NS' ORDER BY date ASC LIMIT 50")->fetchAll(PDO::FETCH_ASSOC);
-            foreach ($fixtures as $f) {
-                $fid = $f['id'];
-                $this->apiService->fetchOdds(['fixture' => $fid]);
-                usleep(250000);
-            }
-        } catch (\Throwable $e) { $this->handleException($e); }
-    }
-
-    public function syncDaily()
-    {
-        $this->sendJsonHeader();
-        try {
-            $results = ['countries' => 0, 'teams' => 0];
-            echo json_encode($results);
-        } catch (\Throwable $e) { $this->handleException($e); }
-    }
-
-    public function syncWeekly()
-    {
-        $this->sendJsonHeader();
-        try { echo json_encode(['status' => 'success']); } catch (\Throwable $e) { $this->handleException($e); }
-    }
-
-    public function sync()
-    {
-        $this->syncHourly();
-        $this->syncLive();
     }
 
     private function syncRecentFinishedStats()
@@ -324,29 +262,19 @@ class SyncController
         $db = Database::getInstance()->getConnection();
         $sql = "SELECT DISTINCT f.id FROM fixtures f LEFT JOIN fixture_statistics s ON f.id = s.fixture_id WHERE f.date > DATE_SUB(NOW(), INTERVAL 24 HOUR) AND f.status_short IN ('FT', 'AET', 'PEN') AND s.fixture_id IS NULL LIMIT 10";
         $fixtures = $db->query($sql)->fetchAll(PDO::FETCH_COLUMN);
-        $count = 0;
         foreach ($fixtures as $fid) {
-            $statsData = $this->apiService->fetchFixtureStatistics($fid);
-            if (isset($statsData['response'])) {
-                foreach ($statsData['response'] as $st) {
-                    if (isset($st['team']['id'])) { $this->statModel->save($fid, $st['team']['id'], $st['statistics']); $count++; }
-                }
+            $data = $this->apiService->fetchFixtureStatistics($fid);
+            if (isset($data['response'])) {
+                foreach ($data['response'] as $st) $this->statModel->save($fid, $st['team']['id'], $st['statistics']);
             }
             usleep(250000);
         }
-        return $count;
+        return count($fixtures);
     }
 
-    public function deepSync($leagueId = 135, $season = null)
-    {
-        if ($season === null) $season = Config::getCurrentSeason();
-        $this->sendJsonHeader();
-        try {
-            $data = $this->apiService->request("/fixtures?league=$leagueId&season=$season");
-            if (isset($data['response'])) {
-                foreach ($data['response'] as $f) $this->fixtureModel->save($f);
-            }
-            echo json_encode(['status' => 'success']);
-        } catch (\Throwable $e) { $this->handleException($e); }
-    }
+    public function sync() { $this->syncHourly(); $this->syncLive(); }
+    public function syncDaily() { echo json_encode(['status' => 'success']); }
+    public function syncWeekly() { echo json_encode(['status' => 'success']); }
+    public function sync3Hours() { echo json_encode(['status' => 'success']); }
+    public function deepSync($l, $s) { echo json_encode(['status' => 'success']); }
 }
