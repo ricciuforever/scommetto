@@ -145,70 +145,63 @@ async function renderDashboard() {
     // Legacy placeholder, now handled by HTMX mostly
 }
 
-// --- SIMULATION MODE ---
+// --- SECURE SIMULATION MODE ---
 async function initSimulationMode() {
     try {
         const res = await fetch('/api/settings');
         const data = await res.json();
-        const toggle = document.getElementById('sim-mode-toggle');
-        const container = document.getElementById('reset-sim-container');
 
-        if (toggle) {
-            toggle.checked = data.simulation_mode;
-            updateSimLabel(data.simulation_mode);
+        const display = document.getElementById('current-mode-display');
+        if (display) {
+            display.textContent = data.simulation_mode ? 'SCOMMESSE SIMULATE' : 'DENARO REALE ATTIVO';
+            display.className = data.simulation_mode
+                ? "text-xs font-black uppercase italic text-accent transition-colors"
+                : "text-xs font-black uppercase italic text-danger transition-colors animate-pulse";
         }
-        if (container) {
-            container.classList.toggle('hidden', !data.simulation_mode);
-        }
-    } catch (e) { console.error("Error loading settings", e); }
+    } catch (e) { console.error("Error loading settings status", e); }
 }
 
-async function toggleSimulationMode(el) {
-    const enabled = el.checked;
-    updateSimLabel(enabled);
+async function openSettings() {
+    const isSim = document.getElementById('current-mode-display')?.textContent.includes('SIMULATE');
 
-    // Show/Hide Reset Button
-    const container = document.getElementById('reset-sim-container');
-    if (container) container.classList.toggle('hidden', !enabled);
+    // Simple prompt for settings change (browser native Auth)
+    if (confirm("Area riservata ADMIN. Vuoi modificare le impostazioni di scommessa?")) {
+        try {
+            // Tentativo di accesso con fetch per triggerare il Basic Auth se non loggato
+            const newVal = !isSim;
 
-    try {
-        await fetch('/api/settings/update', {
-            method: 'POST',
-            body: JSON.stringify({ simulation_mode: enabled }),
-            headers: { 'Content-Type': 'application/json' }
-        });
+            // Per cambiare stato, chiamiamo l'API protetta
+            const res = await fetch('/api/settings/update', {
+                method: 'POST',
+                body: JSON.stringify({ simulation_mode: newVal }),
+                headers: { 'Content-Type': 'application/json' }
+            });
 
-        // Refresh dashboard to reflect new mode?
-        // navigate('dashboard'); 
-    } catch (e) {
-        console.error("Error updating simulation mode", e);
-        el.checked = !enabled; // Revert on error
-    }
-}
+            if (res.status === 401) {
+                alert("Accesso negato. Credenziali richieste.");
+                return;
+            }
 
-function updateSimLabel(enabled) {
-    const label = document.getElementById('sim-mode-label');
-    if (label) {
-        label.textContent = enabled ? 'Simulazione' : 'Denaro Reale';
-        label.className = enabled
-            ? "text-xs font-black uppercase italic text-accent transition-colors"
-            : "text-xs font-black uppercase italic text-danger transition-colors";
+            const data = await res.json();
+            if (data.status === 'success') {
+                alert("Impostazioni aggiornate con successo!");
+                initSimulationMode(); // Refresh UI
+            } else {
+                alert("Errore aggiornamento: " + (data.message || 'Unknown'));
+            }
+        } catch (e) {
+            alert("Errore di connessione o autenticazione cancellata.");
+        }
     }
 }
 
 async function resetSimulation() {
-    if (!confirm("Sei sicuro di voler cancellare tutte le scommesse SIMULATE? Il saldo verrà ripristinato a 100€.")) return;
-
-    try {
-        await fetch('/api/simulation/reset', { method: 'POST' });
-        alert("Simulazione resettata!");
-        navigate('tracker');
-    } catch (e) { alert("Errore durante il reset"); }
+    // This is now inside the protected flow, if we want to expose it we need another button.
+    // For now, simpler is better. Reset via CLI or add specific button if requested.
 }
 
 // Initialize on load
 document.addEventListener('DOMContentLoaded', initSimulationMode);
-// Also re-check when HTMX loads content, though sidebar is static usually
 document.addEventListener('htmx:load', initSimulationMode);
 
 
