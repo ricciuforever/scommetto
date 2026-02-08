@@ -149,4 +149,15 @@ class BetController
             } else { echo json_encode(['error' => 'API Error', 'details' => $funds]); }
         } catch (\Throwable $e) { echo json_encode(['error' => $e->getMessage()]); }
     }
+
+    public function getOrders()
+    {
+        header('Content-Type: application/json');
+        try {
+            $bf = new BetfairService();
+            if (!$bf->isConfigured()) { echo json_encode(['response' => []]); return; }
+            $res = $bf->getCurrentOrders();
+            echo json_encode(['response' => $res['currentOrders'] ?? []]);
+        } catch (\Throwable $e) { echo json_encode(['error' => $e->getMessage()]); }
+    }
 }

@@ -52,13 +52,7 @@ class MatchController
             if (file_exists($cacheFile)) {
                 echo file_get_contents($cacheFile);
             } else {
-                // Fallback a dati API-Football se Betfair non ha ancora sincronizzato
-                $legacyCache = Config::LIVE_DATA_FILE;
-                if (file_exists($legacyCache)) {
-                    echo file_get_contents($legacyCache);
-                } else {
-                    echo json_encode(['response' => [], 'status' => 'waiting_for_sync']);
-                }
+                echo json_encode(['response' => [], 'status' => 'waiting_for_sync']);
             }
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
@@ -137,6 +131,31 @@ class MatchController
     }
 
     public function dashboard()
+    {
+        try {
+            // Dashboard semplificata focalizzata su Betfair. Il rendering è gestito via JS in app.js
+            require __DIR__ . '/../Views/partials/dashboard.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function getUpcoming()
+    {
+        header('Content-Type: application/json');
+        try {
+            $cacheFile = Config::DATA_PATH . 'betfair_upcoming.json';
+            if (file_exists($cacheFile)) {
+                echo file_get_contents($cacheFile);
+            } else {
+                echo json_encode(['response' => [], 'status' => 'waiting_for_sync']);
+            }
+        } catch (\Throwable $e) {
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    private function legacy_dashboard()
     {
         try {
             $selectedCountry = $_GET['country'] ?? 'all';
@@ -510,16 +529,20 @@ class MatchController
     {
         header('Content-Type: application/json');
         try {
-            $db = \App\Services\Database::getInstance()->getConnection();
-            $sql = "SELECT p.*, f.date, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo, l.name as league_name 
-                    FROM predictions p 
-                    JOIN fixtures f ON p.fixture_id = f.id 
-                    JOIN teams t1 ON f.team_home_id = t1.id 
-                    JOIN teams t2 ON f.team_away_id = t2.id 
-                    JOIN leagues l ON f.league_id = l.id 
-                    WHERE f.date > NOW() ORDER BY f.date ASC LIMIT " . (int) $limit;
-            $data = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
-            echo json_encode(['response' => $data]);
+            $cacheFile = Config::DATA_PATH . 'betfair_hot_predictions.json';
+            if (file_exists($cacheFile)) {
+                $data = json_decode(file_get_contents($cacheFile), true);
+                echo json_encode(['response' => array_slice($data['response'] ?? [], 0, $limit)]);
+            } else {
+                // Fallback a upcoming se non c'è ancora l'analisi
+                $upcomingFile = Config::DATA_PATH . 'betfair_upcoming.json';
+                if (file_exists($upcomingFile)) {
+                    $data = json_decode(file_get_contents($upcomingFile), true);
+                    echo json_encode(['response' => array_slice($data['response'] ?? [], 0, $limit)]);
+                } else {
+                    echo json_encode(['response' => []]);
+                }
+            }
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }

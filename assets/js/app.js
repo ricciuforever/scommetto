@@ -71,8 +71,8 @@ document.addEventListener('htmx:afterRequest', async function (evt) {
 
         // Run view-specific JS initialization
         if (view === 'dashboard') {
-            await fetchSports();
             await fetchLive();
+            await fetchSports();
             updateStatsSummary();
             renderDashboardMatches();
         } else if (view === 'tracker') {
@@ -159,27 +159,26 @@ async function renderDashboardPredictions() {
     try {
         const res = await fetch('/api/predictions/all');
         const data = await res.json();
+        const predictions = data.response || [];
 
-        if (!data || data.error || !data.length) {
+        if (predictions.length === 0) {
             container.innerHTML = '<div class="glass p-8 rounded-3xl text-center text-slate-500 font-bold text-[10px] uppercase italic">Nessun consiglio disponibile</div>';
             return;
         }
 
-        data.slice(0, 3).forEach(p => {
+        container.innerHTML = '';
+        predictions.slice(0, 5).forEach(p => {
+            const eventName = typeof p.event === 'object' ? p.event.name : (p.event || 'Unknown');
             const item = document.createElement('div');
-            item.className = "glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all cursor-pointer group";
-            item.onclick = () => navigate('match', p.fixture_id);
+            item.className = "glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all cursor-pointer group mb-4";
+            item.onclick = () => analyzeBetfairMatch(p.marketId);
             item.innerHTML = `
                 <div class="flex items-center justify-between mb-4">
-                    <span class="text-[8px] font-black uppercase text-slate-500 tracking-widest">${p.league_name}</span>
+                    <span class="text-[8px] font-black uppercase text-slate-500 tracking-widest">${p.competition?.name || p.sport}</span>
                     <i data-lucide="brain-circuit" class="w-3 h-3 text-accent"></i>
                 </div>
-                <div class="flex items-center gap-2 mb-3">
-                    <span class="text-[10px] font-black uppercase italic truncate max-w-[80px]">${p.home_name}</span>
-                    <span class="text-[8px] opacity-20 italic font-black">VS</span>
-                    <span class="text-[10px] font-black uppercase italic truncate max-w-[80px]">${p.away_name}</span>
-                </div>
-                <div class="text-xs font-black text-white italic uppercase">${p.advice}</div>
+                <div class="text-[10px] font-black text-white italic uppercase mb-2 truncate">${eventName}</div>
+                <div class="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Vol: €${Math.round(p.totalMatched).toLocaleString()}</div>
             `;
             container.appendChild(item);
         });
@@ -441,6 +440,52 @@ async function renderLeagueStats(leagueId) {
 }
 
 async function renderPredictions() {
+    viewContainer.innerHTML = `
+        <div class="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <h2 class="text-4xl font-black italic uppercase tracking-tighter text-white leading-none">AI Predictions <span class="text-accent">.</span></h2>
+            <div class="flex items-center gap-3">
+                 <span class="px-4 py-2 bg-accent/10 text-accent rounded-2xl text-[10px] font-black uppercase tracking-widest border border-accent/20">Betfair Exchange Data</span>
+            </div>
+        </div>
+        <div id="predictions-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div class="col-span-full py-20 text-center"><i data-lucide="loader-2" class="w-10 h-10 text-accent rotator mx-auto"></i></div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch('/api/predictions/all');
+        const data = await res.json();
+        const predictions = data.response || [];
+
+        const grid = document.getElementById('predictions-grid');
+        if (predictions.length === 0) {
+            grid.innerHTML = '<div class="col-span-full py-40 glass rounded-[48px] text-center font-black uppercase italic text-slate-500">Nessun pronostico futuro trovato su Betfair.</div>';
+            return;
+        }
+
+        grid.innerHTML = predictions.map(p => {
+             const eventName = typeof p.event === 'object' ? p.event.name : (p.event || 'Unknown');
+             const dateStr = new Date(p.startTime || p.date).toLocaleString('it-IT', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+             return `
+                <div onclick="analyzeBetfairMatch('${p.marketId}')" class="glass p-8 rounded-[48px] border-white/5 hover:border-accent/30 transition-all cursor-pointer group relative overflow-hidden">
+                    <div class="flex items-center justify-between mb-8">
+                        <span class="text-[10px] font-black uppercase text-accent tracking-widest">${p.competition?.name || p.sport}</span>
+                        <span class="text-[10px] font-bold text-slate-500 uppercase">${dateStr}</span>
+                    </div>
+                    <h3 class="text-2xl font-black text-white italic uppercase tracking-tight mb-8">${eventName}</h3>
+                    <div class="bg-white/5 rounded-3xl p-6 border border-white/5 group-hover:border-accent/20 transition-all">
+                        <div class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Volume Mercato</div>
+                        <div class="text-xl font-black text-white italic tracking-tighter">€${Math.round(p.totalMatched).toLocaleString()}</div>
+                    </div>
+                </div>
+             `;
+        }).join('');
+        if (window.lucide) lucide.createIcons();
+    } catch (e) { console.error("Error rendering predictions", e); }
+}
+
+async function legacy_renderPredictions() {
     const res = await fetch('/api/predictions/all');
     const predictions = await res.json();
 
@@ -1360,17 +1405,23 @@ function renderSportSelectors() {
     if (!container) return;
 
     const icons = {
-        '1': 'soccer', '2': 'tennis', '4': 'basketball', '7': 'horse-racing',
-        '27454': 'volleyball', '998917': 'table-tennis', '7524': 'ice-hockey'
+        '1': 'football', '2': 'tennis', '4': 'basketball', '7': 'flag',
+        '27454': 'activity', '998917': 'activity', '7524': 'activity',
+        '4339': 'activity'
     };
 
-    container.innerHTML = allFilterData.sports.map(s => `
-        <button onclick="selectSport('${s.eventType.id}')" class="flex flex-col items-center gap-2 p-4 rounded-3xl transition-all border ${selectedSport === s.eventType.id ? 'border-accent bg-accent/10 text-white' : 'border-white/5 bg-white/5 text-slate-500 hover:bg-white/10'}">
-             <i data-lucide="${icons[s.eventType.id] || 'trophy'}" class="w-6 h-6"></i>
-             <span class="text-[10px] font-black uppercase tracking-tighter">${s.eventType.name}</span>
-             ${s.marketCount ? `<span class="px-2 py-0.5 rounded-full bg-white/10 text-[8px] font-bold">${s.marketCount}</span>` : ''}
-        </button>
-    `).join('');
+    container.innerHTML = allFilterData.sports.map(s => {
+        // Conta eventi attivi per questo sport dai dati live caricati
+        const activeCount = liveMatches.filter(m => m.sportId === s.eventType.id).length;
+
+        return `
+            <button onclick="selectSport('${s.eventType.id}')" class="flex flex-col items-center gap-2 p-4 rounded-3xl transition-all border ${selectedSport === s.eventType.id ? 'border-accent bg-accent/10 text-white' : 'border-white/5 bg-white/5 text-slate-500 hover:bg-white/10'}">
+                 <i data-lucide="${icons[s.eventType.id] || 'trophy'}" class="w-6 h-6"></i>
+                 <span class="text-[10px] font-black uppercase tracking-tighter">${s.eventType.name}</span>
+                 ${activeCount > 0 ? `<span class="px-2 py-0.5 rounded-full bg-accent text-[8px] font-bold text-white animate-pulse">${activeCount}</span>` : `<span class="px-2 py-0.5 rounded-full bg-white/10 text-[8px] font-bold">0</span>`}
+            </button>
+        `;
+    }).join('');
     if (window.lucide) lucide.createIcons();
 }
 
@@ -1379,6 +1430,10 @@ async function selectSport(id) {
     localStorage.setItem('selected_sport', id);
     renderSportSelectors();
     renderDashboardMatches();
+
+    // Aggiorna anche gli eventi futuri per lo sport selezionato
+    const upcomingContainer = document.getElementById('upcoming-matches-container');
+    if (upcomingContainer) fetchAndRenderUpcoming(upcomingContainer, 10);
 }
 window.selectSport = selectSport;
 
@@ -1589,6 +1644,9 @@ function renderDashboardMatches() {
     const filtered = liveMatches.filter(m => m.sportId === selectedSport);
     container.innerHTML = '';
 
+    const activeCount = document.getElementById('live-active-count');
+    if (activeCount) activeCount.textContent = filtered.length;
+
     if (filtered.length === 0) {
         container.innerHTML = '<div class="glass p-20 text-center font-black uppercase italic text-slate-500">Nessun match live per questo sport.</div>';
         return;
@@ -1613,11 +1671,13 @@ function renderDashboardMatches() {
             `;
         }).join('');
 
+        const eventName = typeof m.event === 'object' ? m.event.name : (m.event || 'Unknown Event');
+
         card.innerHTML = `
             <div class="flex items-center justify-between mb-8">
                 <div class="flex flex-col">
-                    <span class="text-[10px] font-black text-accent uppercase tracking-widest italic mb-1">${m.sport} | ${m.marketName}</span>
-                    <h3 class="text-2xl font-black text-white italic uppercase tracking-tight">${m.event.name}</h3>
+                    <span class="text-[10px] font-black text-accent uppercase tracking-widest italic mb-1">${m.sport} | ${m.market || 'Match Odds'}</span>
+                    <h3 class="text-2xl font-black text-white italic uppercase tracking-tight">${eventName}</h3>
                 </div>
                 <div class="px-4 py-1.5 rounded-full bg-danger/10 text-danger text-[10px] font-black uppercase border border-danger/20 animate-pulse">LIVE</div>
             </div>
@@ -1669,14 +1729,7 @@ async function fetchAndRenderUpcoming(container, limit) {
         }
 
         const filtered = data.response.filter(m => {
-            const countryName = m.country_name || 'International';
-            const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
-            const leagueId = (m.league_id || m.league?.id || '').toString();
-            const matchesLeague = selectedLeague === 'all' || leagueId === selectedLeague;
-            const matchesBookie = selectedBookmaker === 'all'
-                ? true
-                : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
-            return matchesCountry && matchesLeague && matchesBookie;
+            return m.sportId === selectedSport;
         });
 
         if (filtered.length === 0) {
@@ -1698,33 +1751,24 @@ async function fetchAndRenderUpcoming(container, limit) {
 }
 
 function upcomingMatchCardHtml(m) {
-    const d = new Date(m.date);
-    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = new Date(m.startTime || m.date).toLocaleString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const eventName = typeof m.event === 'object' ? m.event.name : (m.event || 'Unknown Event');
 
     return `
-    <div onclick="navigate('match', m.fixture_id)" class="glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all cursor-pointer group relative overflow-hidden h-full">
-        <div class="absolute top-0 right-0 p-4 opacity-50"><i data-lucide="calendar-clock" class="w-4 h-4 text-slate-500"></i></div>
-        <div class="flex items-center gap-2 mb-4">
-             <span class="text-[8px] font-black uppercase text-accent tracking-widest truncate max-w-[150px]">${m.league_name}</span>
-             <span class="text-[8px] font-bold text-slate-500">${time}</span>
-        </div>
-        
-        <div class="flex items-center justify-between gap-4">
-            <div class="flex flex-col items-center gap-2 flex-1 min-w-0">
-                <img src="${m.home_logo}" class="w-8 h-8 object-contain">
-                <span class="text-[9px] font-black uppercase text-center leading-tight truncate w-full">${m.home_name}</span>
+        <div onclick="analyzeBetfairMatch('${m.marketId}')" class="glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all cursor-pointer group relative overflow-hidden h-full">
+            <div class="absolute top-0 right-0 p-4 opacity-50"><i data-lucide="calendar-clock" class="w-4 h-4 text-slate-500"></i></div>
+            <div class="flex items-center gap-2 mb-4">
+                <span class="text-[8px] font-black uppercase text-accent tracking-widest truncate max-w-[150px]">${m.competition?.name || m.sport}</span>
+                <span class="text-[8px] font-bold text-slate-500">${dateStr}</span>
             </div>
-            <div class="text-[10px] font-black text-slate-600 italic">VS</div>
-            <div class="flex flex-col items-center gap-2 flex-1 min-w-0">
-                <img src="${m.away_logo}" class="w-8 h-8 object-contain">
-                <span class="text-[9px] font-black uppercase text-center leading-tight truncate w-full">${m.away_name}</span>
+
+            <h3 class="text-md font-black text-white italic uppercase tracking-tight mb-4">${eventName}</h3>
+
+            <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5">
+                <button class="text-[8px] font-black uppercase tracking-widest text-accent hover:text-white transition-colors">AI Forecast</button>
+                <button class="text-[8px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Analizza</button>
             </div>
         </div>
-        <div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5">
-             <button onclick="event.stopPropagation(); analyzeMatch(${m.fixture_id})" class="text-[8px] font-black uppercase tracking-widest text-accent hover:text-white transition-colors">AI Forecast</button>
-             <button onclick="event.stopPropagation(); navigate('match', m.fixture_id)" class="text-[8px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Pronostico</button>
-        </div>
-    </div>
     `;
 }
 
@@ -1732,26 +1776,10 @@ function renderDashboardHistory() {
     const container = document.getElementById('dashboard-history');
     if (!container) return;
 
-    // Filtra in base al bookmaker selezionato
     let filteredHistory = (Array.isArray(historyData) ? historyData : []);
 
-    if (selectedBookmaker !== 'all') {
-        // Se è selezionato Betfair, includiamo scommesse che hanno betfair_id (reali) 
-        // oppure quelle che hanno bookmaker_id corrispondente al filtro.
-        // Assumiamo che il filtro passi un ID numerico
-        const sId = selectedBookmaker.toString();
-
-        filteredHistory = filteredHistory.filter(h => {
-            // Caso speciale: Se filtro Betfair e la scommessa ha un betfair_id (quindi è reale), mostrala sempre
-            // Nota: Bisognerebbe sapere l'ID Betfair nel DB. 
-            // Per sicurezza controlliamo se bookmaker_id corrisponde
-            return (h.bookmaker_id && h.bookmaker_id.toString() === sId) ||
-                (h.betfair_id && allFilterData.bookmakers.find(b => b.id.toString() === sId)?.name.toLowerCase().includes('betfair'));
-        });
-    }
-
     if (filteredHistory.length === 0) {
-        container.innerHTML = '<div class="p-10 text-center text-slate-500 font-bold text-xs">Nessuna attività recente per questo filtro.</div>';
+        container.innerHTML = '<div class="p-10 text-center text-slate-500 font-bold text-[10px] uppercase italic">Nessuna attività recente.</div>';
         return;
     }
 
@@ -2081,6 +2109,17 @@ function setTrackerFilter(status) {
 async function renderTracker() {
     viewContainer.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12" id="tracker-real-summary"></div>
+
+        <div class="glass rounded-[48px] border-white/5 overflow-hidden mb-12">
+            <div class="p-8 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                <h3 class="text-xl font-black italic uppercase tracking-tight">Scommesse Aperte / Non Abbinate</h3>
+                <i data-lucide="clock" class="w-6 h-6 text-warning"></i>
+            </div>
+            <div id="open-orders-list" class="divide-y divide-white/5">
+                 <div class="text-center py-10 italic text-slate-500 uppercase font-black text-[10px]">Caricamento ordini...</div>
+            </div>
+        </div>
+
         <div class="glass rounded-[48px] border-white/5 overflow-hidden">
             <div class="p-8 border-b border-white/5 bg-white/5 flex items-center justify-between">
                 <h3 class="text-xl font-black italic uppercase tracking-tight">Movimenti Reali Betfair</h3>
@@ -2090,6 +2129,7 @@ async function renderTracker() {
         </div>
     `;
 
+    // Fetch account info
     try {
         const res = await fetch('/api/betfair/account');
         const data = await res.json();
@@ -2097,44 +2137,79 @@ async function renderTracker() {
         // Summary
         const f = data.funds;
         const summary = document.getElementById('tracker-real-summary');
-        summary.innerHTML = `
-            <div class="glass p-10 rounded-[48px] border-white/5">
-                <span class="text-[10px] font-black uppercase text-slate-500 block mb-2 tracking-widest">Saldo Disponibile</span>
-                <div class="text-4xl font-black text-white italic tabular-nums">€${f.availableToBetBalance}</div>
-            </div>
-            <div class="glass p-10 rounded-[48px] border-white/5">
-                <span class="text-[10px] font-black uppercase text-slate-500 block mb-2 tracking-widest">In Gioco (Esposizione)</span>
-                <div class="text-4xl font-black text-danger italic tabular-nums">€${Math.abs(f.exposure)}</div>
-            </div>
-            <div class="glass p-10 rounded-[48px] border-white/5">
-                <span class="text-[10px] font-black uppercase text-slate-500 block mb-2 tracking-widest">Totale Portafoglio</span>
-                <div class="text-4xl font-black text-success italic tabular-nums">€${(parseFloat(f.availableToBetBalance) + Math.abs(f.exposure)).toFixed(2)}</div>
-            </div>
-        `;
+        if (summary && f) {
+            summary.innerHTML = `
+                <div class="glass p-10 rounded-[48px] border-white/5">
+                    <span class="text-[10px] font-black uppercase text-slate-500 block mb-2 tracking-widest">Saldo Disponibile</span>
+                    <div class="text-4xl font-black text-white italic tabular-nums">€${f.availableToBetBalance}</div>
+                </div>
+                <div class="glass p-10 rounded-[48px] border-white/5">
+                    <span class="text-[10px] font-black uppercase text-slate-500 block mb-2 tracking-widest">In Gioco (Esposizione)</span>
+                    <div class="text-4xl font-black text-danger italic tabular-nums">€${Math.abs(f.exposure)}</div>
+                </div>
+                <div class="glass p-10 rounded-[48px] border-white/5">
+                    <span class="text-[10px] font-black uppercase text-slate-500 block mb-2 tracking-widest">Totale Portafoglio</span>
+                    <div class="text-4xl font-black text-success italic tabular-nums">€${(parseFloat(f.availableToBetBalance) + Math.abs(f.exposure)).toFixed(2)}</div>
+                </div>
+            `;
+        }
 
         // List Statements
         const list = document.getElementById('real-tracker-list');
-        list.innerHTML = (data.statement || []).map(s => `
-            <div class="p-8 flex items-center justify-between hover:bg-white/5 transition-all">
-                <div class="flex items-center gap-6">
-                    <div class="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-slate-500">
-                        <i data-lucide="activity" class="w-5 h-5"></i>
+        if (list) {
+            list.innerHTML = (data.statement || []).map(s => `
+                <div class="p-8 flex items-center justify-between hover:bg-white/5 transition-all">
+                    <div class="flex items-center gap-6">
+                        <div class="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-slate-500">
+                            <i data-lucide="activity" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <div class="text-lg font-black text-white uppercase italic tracking-tight">${s.itemClass}</div>
+                            <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">${new Date(s.itemDate).toLocaleString()}</div>
+                        </div>
                     </div>
-                    <div>
-                        <div class="text-lg font-black text-white uppercase italic tracking-tight">${s.itemClass}</div>
-                        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">${new Date(s.itemDate).toLocaleString()}</div>
+                    <div class="text-right">
+                        <div class="text-2xl font-black italic tracking-tighter ${s.amount >= 0 ? 'text-success' : 'text-danger'}">
+                            ${s.amount >= 0 ? '+' : ''}${s.amount}€
+                        </div>
+                        <div class="text-[9px] font-black uppercase text-slate-500">Balance: €${s.balance}</div>
                     </div>
                 </div>
-                <div class="text-right">
-                    <div class="text-2xl font-black italic tracking-tighter ${s.amount >= 0 ? 'text-success' : 'text-danger'}">
-                        ${s.amount >= 0 ? '+' : ''}${s.amount}€
+            `).join('');
+        }
+    } catch(e) { console.error("Error fetching account", e); }
+
+    // Fetch Open Orders
+    try {
+        const orderRes = await fetch('/api/betfair/orders');
+        const orderData = await orderRes.json();
+        const ordersList = document.getElementById('open-orders-list');
+        if (ordersList) {
+            if (orderData.response && orderData.response.length > 0) {
+                ordersList.innerHTML = orderData.response.map(o => `
+                    <div class="p-8 flex items-center justify-between hover:bg-white/5 transition-all">
+                        <div class="flex items-center gap-6">
+                            <div class="w-12 h-12 rounded-2xl bg-warning/10 flex items-center justify-center text-warning border border-warning/20">
+                                <i data-lucide="clock" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <div class="text-lg font-black text-white uppercase italic tracking-tight">BetID: ${o.betId}</div>
+                                <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">${o.side} | Quota: ${o.priceSize.price} | Stake: ${o.priceSize.size}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-2xl font-black italic tracking-tighter text-warning uppercase">${o.status}</div>
+                            <div class="text-[9px] font-black uppercase text-slate-500">Matched: €${o.sizeMatched}</div>
+                        </div>
                     </div>
-                    <div class="text-[9px] font-black uppercase text-slate-500">Balance: €${s.balance}</div>
-                </div>
-            </div>
-        `).join('');
-        if (window.lucide) lucide.createIcons();
-    } catch(e) {}
+                `).join('');
+            } else {
+                ordersList.innerHTML = '<div class="p-20 text-center italic text-slate-500 uppercase font-black text-[10px]">Nessun ordine aperto.</div>';
+            }
+        }
+    } catch(e) { console.error("Error fetching orders", e); }
+
+    if (window.lucide) lucide.createIcons();
 }
 
 function updateTrackerSummary() {
