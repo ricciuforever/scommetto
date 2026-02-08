@@ -181,9 +181,25 @@ class SyncController
                 }
 
                 if ($event) {
+                    // Refetch the specific market to get the freshest price before betting
+                    $freshBook = $this->betfairService->getMarketBooks([$event['marketId']]);
+                    $finalPrice = $betData['odds'];
+
+                    if (!empty($freshBook['result'][0]['runners'])) {
+                        foreach ($freshBook['result'][0]['runners'] as $fr) {
+                            $selectionId = $this->betfairService->mapAdviceToSelection($betData['advice'], $event['runners']);
+                            if ($fr['selectionId'] == $selectionId) {
+                                // Use the best available back price if it moved in our favor or slightly against
+                                $bestBack = $fr['ex']['availableToBack'][0]['price'] ?? null;
+                                if ($bestBack) $finalPrice = $bestBack;
+                                break;
+                            }
+                        }
+                    }
+
                     $selectionId = $this->betfairService->mapAdviceToSelection($betData['advice'], $event['runners']);
                     if ($selectionId) {
-                        $bfRes = $this->betfairService->placeBet($event['marketId'], $selectionId, $betData['odds'], $betData['stake']);
+                        $bfRes = $this->betfairService->placeBet($event['marketId'], $selectionId, $finalPrice, $betData['stake']);
                         $res = isset($bfRes['status']) ? $bfRes : ($bfRes['result'] ?? null);
 
                         if ($res && isset($res['status']) && $res['status'] === 'SUCCESS') {
@@ -193,12 +209,13 @@ class SyncController
                                  'match_name' => $event['event']['name'],
                                  'advice' => $betData['advice'],
                                  'market' => $event['marketName'],
-                                 'odds' => $betData['odds'],
+                                 'odds' => $finalPrice,
                                  'stake' => $betData['stake'],
                                  'betfair_id' => $res['instructionReports'][0]['betId'] ?? null,
-                                 'status' => 'placed'
+                                 'status' => 'placed',
+                                 'bookmaker_name' => 'Betfair.it'
                              ]);
-                             echo "SCOMMESSA PIAZZATA: " . $event['event']['name'] . " - " . $betData['advice'] . "\n";
+                             echo "SCOMMESSA PIAZZATA: " . $event['event']['name'] . " - " . $betData['advice'] . " @ $finalPrice\n";
                         }
                     }
                 }
@@ -212,8 +229,36 @@ class SyncController
         try {
             $this->betModel->cleanup();
             $this->betModel->deduplicate();
-            echo json_encode(['status' => 'maintenance_ok']);
-        } catch (\Throwable $e) { $this->handleException($e); }
+
+            // 1. Settle ALL sports from Betfair Real Orders
+            $realSettled = $this->settleBetfairBets();
+
+            echo json_encode(['status' => 'maintenance_ok', 'real_settled' => $realSettled]);
+        } catch (\Throwable $e) {
+            $this->handleException($e);
+        }
+    }
+
+    private function settleBetfairBets()
+    {
+        if (!$this->betfairService->isConfigured()) return 0;
+
+        $cleared = $this->betfairService->getClearedOrders();
+        if (empty($cleared['clearedOrders'])) return 0;
+
+        $count = 0;
+        $db = Database::getInstance()->getConnection();
+
+        foreach ($cleared['clearedOrders'] as $order) {
+            $betId = $order['betId'];
+            $status = ($order['lastMatchedPrice'] > 0 && $order['profit'] > 0) ? 'won' : (($order['profit'] < 0) ? 'lost' : 'void');
+
+            // Update local DB status based on real betfair outcome
+            $stmt = $db->prepare("UPDATE bets SET status = ?, result = ? WHERE betfair_id = ? AND status = 'placed'");
+            $stmt->execute([$status, $status === 'won' ? 'WIN' : 'LOSS', $betId]);
+            if ($stmt->rowCount() > 0) $count++;
+        }
+        return $count;
     }
 
     public function sync() { $this->syncLive(); }
