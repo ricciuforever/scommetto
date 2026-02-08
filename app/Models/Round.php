@@ -32,8 +32,20 @@ class Round
 
     public function getByLeagueSeason($leagueId, $season)
     {
-        $stmt = $this->db->prepare("SELECT * FROM rounds WHERE league_id = ? AND season = ? ORDER BY round_name");
+        $stmt = $this->db->prepare("SELECT round_name FROM rounds WHERE league_id = ? AND season = ? ORDER BY last_updated DESC");
         $stmt->execute([$leagueId, $season]);
-        return $stmt->fetchAll();
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    public function needsRefresh($leagueId, $season, $hours = 24)
+    {
+        // Controlliamo l'ultima sincronizzazione per questa combinazione
+        $stmt = $this->db->prepare("SELECT MAX(last_updated) as last FROM rounds WHERE league_id = ? AND season = ?");
+        $stmt->execute([$leagueId, $season]);
+        $row = $stmt->fetch();
+
+        if (!$row || !$row['last'])
+            return true;
+        return (time() - strtotime($row['last'])) > ($hours * 3600);
     }
 }
