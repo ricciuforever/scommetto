@@ -79,6 +79,9 @@ class TeamController
         if (isset($data['response']) && is_array($data['response'])) {
             if (!empty($data['response'])) {
                 foreach ($data['response'] as $item) {
+                    // Assicuriamoci che i dati minimi siano presenti
+                    if (!isset($item['team']['id'])) continue;
+
                     // Il modello Team::save gestisce internamente anche il Venue
                     $model->save($item);
                     // Collega la squadra alla lega/stagione

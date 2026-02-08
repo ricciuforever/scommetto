@@ -89,7 +89,8 @@ class Team
 
     public function find($filters = [])
     {
-        $sql = "SELECT DISTINCT t.*, v.name as venue_name, v.city as venue_city, v.image as venue_image
+        $sql = "SELECT DISTINCT t.id, t.name, t.code, t.logo, t.venue_id, t.country, t.founded, t.national,
+                       v.name as venue_name, v.city as venue_city, v.image as venue_image
                 FROM teams t
                 LEFT JOIN venues v ON t.venue_id = v.id";
 
@@ -141,7 +142,8 @@ class Team
      */
     public function getByLeagueAndSeason($leagueId, $season)
     {
-        $sql = "SELECT t.*, v.name as venue_name, v.city as venue_city, v.image as venue_image
+        $sql = "SELECT t.id, t.name, t.code, t.logo, t.venue_id, t.country, t.founded, t.national,
+                       v.name as venue_name, v.city as venue_city, v.image as venue_image
                 FROM teams t
                 JOIN team_leagues tl ON t.id = tl.team_id
                 LEFT JOIN venues v ON t.venue_id = v.id
