@@ -138,21 +138,58 @@ class MatchController
         try {
             // 1. Live Matches
             $liveMatches = [];
+            $allMatches = [];
             $cacheFile = Config::DATA_PATH . 'betfair_live.json';
+
             if (file_exists($cacheFile)) {
-                $data = json_decode(file_get_contents($cacheFile), true);
-                // Flatten aggregated data if needed, or use as is based on SyncController structure
-                // SyncController saves: ['response' => $betfairAggregated]
-                $liveMatches = $data['response'] ?? [];
+                $content = file_get_contents($cacheFile);
+                if ($content) {
+                    $data = json_decode($content, true);
+                    $raw = $data['response'] ?? [];
+
+                    // Deduplicate by Event ID
+                    $uniqueEvents = [];
+                    foreach ($raw as $m) {
+                        $evtId = $m['event_id'] ?? ($m['event']['id'] ?? null);
+                        if (!$evtId)
+                            continue;
+
+                        // Keep best market (e.g. Match Odds) or first one found
+                        if (!isset($uniqueEvents[$evtId])) {
+                            $uniqueEvents[$evtId] = $m;
+                            $uniqueEvents[$evtId]['event_id'] = $evtId; // Ensure ID is set at top level
+                        } elseif (stripos($m['market'], 'Match Odds') !== false) {
+                            // Prefer Match Odds market if we have multiple
+                            $uniqueEvents[$evtId] = $m;
+                            $uniqueEvents[$evtId]['event_id'] = $evtId;
+                        }
+                    }
+                    $allMatches = array_values($uniqueEvents);
+                }
             }
 
-            // Filter by Sport if requested
+            // Filter
             $selectedSport = $_GET['sport'] ?? 'all';
-            $allMatches = $liveMatches; // Keep copy for counting
+            $liveMatches = $allMatches;
+
+            $translationMap = [
+                'Soccer' => 'Calcio',
+                'Tennis' => 'Tennis',
+                'Basketball' => 'Basket',
+                'Volleyball' => 'Pallavolo',
+                'Cricket' => 'Cricket',
+                'Ice Hockey' => 'Hockey',
+                'American Football' => 'Football',
+                'Rugby Union' => 'Rugby',
+                'Rugby League' => 'Rugby',
+                'Golf' => 'Golf'
+            ];
 
             if ($selectedSport !== 'all') {
-                $liveMatches = array_filter($liveMatches, function ($m) use ($selectedSport) {
-                    return stripos($m['sport'], $selectedSport) !== false;
+                $liveMatches = array_filter($allMatches, function ($m) use ($selectedSport, $translationMap) {
+                    $s = $m['sport'] ?? '';
+                    $translated = $translationMap[$s] ?? $s;
+                    return stripos($s, $selectedSport) !== false || stripos($translated, $selectedSport) !== false;
                 });
             }
 
@@ -214,15 +251,30 @@ class MatchController
 
             // 4. Sport Extraction (for filters)
             $activeSports = [];
+            // Map Betfair standard names to Italian if they appear
+            $translationMap = [
+                'Soccer' => 'Calcio',
+                'Tennis' => 'Tennis',
+                'Basketball' => 'Basket',
+                'Volleyball' => 'Pallavolo',
+                'Cricket' => 'Cricket',
+                'Ice Hockey' => 'Hockey',
+                'American Football' => 'Football',
+                'Rugby Union' => 'Rugby',
+                'Rugby League' => 'Rugby',
+                'Golf' => 'Golf'
+            ];
+
             // Use allMatches here to calculate counts even when filtered view is active
             $source = isset($allMatches) ? $allMatches : $liveMatches;
 
             foreach ($source as $m) {
                 if (!empty($m['sport'])) {
-                    if (!isset($activeSports[$m['sport']])) {
-                        $activeSports[$m['sport']] = 0;
+                    $sportName = $translationMap[$m['sport']] ?? $m['sport'];
+                    if (!isset($activeSports[$sportName])) {
+                        $activeSports[$sportName] = 0;
                     }
-                    $activeSports[$m['sport']]++;
+                    $activeSports[$sportName]++;
                 }
             }
             ksort($activeSports);
@@ -609,21 +661,110 @@ class MatchController
     {
         try {
             $db = \App\Services\Database::getInstance()->getConnection();
+
+            // 1. Try Local DB (API-Football ID)
             $fixture = $db->query("SELECT f.*, t1.name as team_home_name, t1.logo as team_home_logo, t2.name as team_away_name, t2.logo as team_away_logo, l.name as league_name, l.logo as league_logo FROM fixtures f JOIN teams t1 ON f.team_home_id = t1.id JOIN teams t2 ON f.team_away_id = t2.id JOIN leagues l ON f.league_id = l.id WHERE f.id = " . (int) $id)->fetch(\PDO::FETCH_ASSOC);
+
+            $isBetfair = false;
+
+            // 2. If Not Found, Try Betfair (Live/Upcoming) via Sync Cache or API
             if (!$fixture) {
-                echo '<div class="glass p-20 text-center italic">Match non trovato.</div>';
+                // Check if it's in the live cache first (faster)
+                $cacheFile = Config::DATA_PATH . 'betfair_live.json';
+                if (file_exists($cacheFile)) {
+                    $data = json_decode(file_get_contents($cacheFile), true);
+                    $liveMatches = $data['response'] ?? [];
+                    foreach ($liveMatches as $m) {
+                        if ((isset($m['event_id']) && $m['event_id'] == $id) || (isset($m['event']['id']) && $m['event']['id'] == $id)) {
+                            // Found in live cache
+                            $parts = explode(' v ', $m['event'] ?? ($m['event']['name'] ?? 'Unknown v Unknown'));
+                            $fixture = [
+                                'id' => $id,
+                                'is_betfair' => true,
+                                'league_name' => $m['competition'] ?? $m['sport'] ?? 'Betfair Live',
+                                'league_logo' => '',
+                                'team_home_name' => $parts[0] ?? 'Home',
+                                'team_away_name' => $parts[1] ?? 'Away',
+                                'team_home_logo' => '', // placeholders
+                                'team_away_logo' => '',
+                                'date' => date('Y-m-d H:i:s'), // live
+                                'status_short' => 'LIVE',
+                                'elapsed' => null,
+                                'score_home' => null,
+                                'score_away' => null
+                            ];
+                            $isBetfair = true;
+                            break;
+                        }
+                    }
+                }
+
+                // If still not found, could try API lookup... skipping for now to avoid complexity without strict requirement
+            }
+
+            if (!$fixture) {
+                echo '<div class="glass p-20 text-center italic">Match non trovato (ID: ' . htmlspecialchars($id) . '). Attendi il prossimo ciclo di sync.</div>';
                 return;
             }
 
+            // Load Data
             $matchData = [
                 'fixture' => $fixture,
-                'events' => (new FixtureEvent())->getByFixture((int) $id),
-                'lineups' => (new FixtureLineup())->getByFixture((int) $id),
-                'statistics' => (new FixtureStatistics())->getByFixture((int) $id),
-                'odds' => (new FixtureOdds())->getByFixture((int) $id),
-                'injuries' => (new FixtureInjury())->getByFixture((int) $id),
-                'h2h' => (new H2H())->get($fixture['team_home_id'], $fixture['team_away_id'])
+                'events' => ($isBetfair) ? [] : (new FixtureEvent())->getByFixture((int) $id),
+                'lineups' => ($isBetfair) ? [] : (new FixtureLineup())->getByFixture((int) $id),
+                'statistics' => ($isBetfair) ? [] : (new FixtureStatistics())->getByFixture((int) $id),
+                'odds' => [],
+                'injuries' => ($isBetfair) ? [] : (new FixtureInjury())->getByFixture((int) $id),
+                'h2h' => ($isBetfair) ? [] : (new H2H())->get($fixture['team_home_id'] ?? 0, $fixture['team_away_id'] ?? 0)
             ];
+
+            // Load Odds
+            if ($isBetfair) {
+                // Fetch Live Odds from Betfair Service
+                $bf = new \App\Services\BetfairService();
+                // Get Market Book for this event. We need marketIds first.
+                // We likely found it in cache, so we might have price data there?
+                // The cache structure has 'runners' with Back/Lay.
+                // Re-find in cache to extract odds
+                if (isset($liveMatches)) {
+                    foreach ($liveMatches as $m) {
+                        if ((isset($m['event_id']) && $m['event_id'] == $id)) {
+                            // Map Betfair runners to generic odds format
+                            // Expected format by view: [['value' => 'Home', 'odd' => 1.50], ...]
+                            foreach ($m['runners'] as $r) {
+                                // Find best back price
+                                $price = 0;
+                                if (isset($m['prices'])) {
+                                    // Search in 'prices' for this selectionId
+                                    foreach ($m['prices'] as $p) {
+                                        if ($p['selectionId'] == $r['selectionId']) {
+                                            $price = $p['ex']['availableToBack'][0]['price'] ?? 0;
+                                            break;
+                                        }
+                                    }
+                                }
+                                // Fallback to simple structure if 'prices' not present
+                                if (!$price && isset($r['back']))
+                                    $price = $r['back'];
+
+                                if ($price) {
+                                    $matchData['odds'][] = [
+                                        'value' => $r['runnerName'] ?? $r['name'],
+                                        'odd' => $price,
+                                        'bookmaker' => 'Betfair Exchange',
+                                        // Pass extra data for betting modal
+                                        'fixture_id' => $id,
+                                        'bet_name' => $m['market'] ?? 'Match Odds'
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                $matchData['odds'] = (new FixtureOdds())->getByFixture((int) $id);
+            }
+
             require __DIR__ . '/../Views/partials/match.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';

@@ -35,6 +35,7 @@ foreach ($history as $h) {
                 'tennis' => 'circle-dot',
                 'basket' => 'dribbble',
                 'volley' => 'activity',
+                'pallavolo' => 'activity',
                 'hockey' => 'snowflake',
                 'rugby' => 'citrus',
                 'golf'   => 'flag-triangle-right',
@@ -43,15 +44,14 @@ foreach ($history as $h) {
             ];
             $currentSport = $selectedSport ?? 'all';
             ?>
-            <button
-                class="<?php echo $currentSport === 'all' ? 'bg-accent text-white shadow-lg shadow-accent/20 scale-[1.02]' : 'bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-white'; ?> px-6 py-4 rounded-2xl flex items-center justify-between gap-4 min-w-[140px] transition-all bg-white/5 border border-white/5 shrink-0"
-                hx-get="/api/view/dashboard?sport=all" hx-target="#htmx-container" hx-push-url="true">
+            <a href="/dashboard?sport=all"
+                class="<?php echo $currentSport === 'all' ? 'bg-accent text-white shadow-lg shadow-accent/20 scale-[1.02]' : 'bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-white'; ?> px-6 py-4 rounded-2xl flex items-center justify-between gap-4 min-w-[140px] transition-all bg-white/5 border border-white/5 shrink-0 block no-underline">
                 <div class="flex items-center gap-3">
                     <i data-lucide="layout-grid" class="w-5 h-5"></i>
                     <span class="text-[10px] font-black uppercase tracking-widest">Tutti</span>
                 </div>
                 <span class="<?php echo $currentSport === 'all' ? 'bg-white/20 text-white' : 'bg-slate-900/50 text-slate-500'; ?> text-[10px] font-bold px-2 py-1 rounded-lg"><?php echo isset($allMatches) ? count($allMatches) : count($liveMatches); ?></span>
-            </button>
+            </a>
             <?php foreach ($activeSports as $sport => $count):
                 $icon = 'activity';
                 foreach($icons as $key => $val) {
@@ -62,16 +62,15 @@ foreach ($history as $h) {
                 }
                 $isActive = (strtolower($currentSport) === strtolower($sport));
                 ?>
-                <button
-                    class="<?php echo $isActive ? 'bg-accent text-white shadow-lg shadow-accent/20 scale-[1.02]' : 'bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-white'; ?> px-6 py-4 rounded-2xl flex items-center justify-between gap-4 min-w-[140px] transition-all bg-white/5 border border-white/5 group shrink-0"
-                    hx-get="/api/view/dashboard?sport=<?php echo urlencode($sport); ?>" hx-target="#htmx-container" hx-push-url="true">
+                <a href="/dashboard?sport=<?php echo urlencode($sport); ?>"
+                    class="<?php echo $isActive ? 'bg-accent text-white shadow-lg shadow-accent/20 scale-[1.02]' : 'bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-white'; ?> px-6 py-4 rounded-2xl flex items-center justify-between gap-4 min-w-[140px] transition-all bg-white/5 border border-white/5 group shrink-0 block no-underline">
                     <div class="flex items-center gap-3">
                         <i data-lucide="<?php echo $icon; ?>" class="w-5 h-5 <?php echo $isActive ? 'text-white' : 'group-hover:text-accent'; ?> transition-colors"></i>
                         <span
                             class="text-[10px] font-black uppercase tracking-widest truncate max-w-[80px]"><?php echo $sport; ?></span>
                     </div>
                     <span class="<?php echo $isActive ? 'bg-white/20 text-white' : 'bg-slate-900/50 text-slate-500 group-hover:bg-accent/20 group-hover:text-accent'; ?> text-[10px] font-bold px-2 py-1 rounded-lg transition-colors"><?php echo $count; ?></span>
-                </button>
+                </a>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>
@@ -134,19 +133,20 @@ foreach ($history as $h) {
                     $displayMatches = array_slice($liveMatches, 0, 50);
                     foreach ($displayMatches as $m): 
                         $eventId = $m['event_id'] ?? $m['fixture_id'] ?? 0;
-                        $matchLink = "/api/view/match/" . $eventId; 
-                    ?>
-                        <div class="glass p-6 rounded-[32px] border-white/5 hover:border-accent/30 transition-all group relative overflow-hidden cursor-pointer"
-                             hx-get="<?php echo $matchLink; ?>" hx-target="#htmx-container" hx-push-url="true">
+                        $matchLink = "/match/" . $eventId; // Direct link
+                        // Identify sport icon
+                        $sportIcon = 'activity';
+                        $lowSport = strtolower($m['sport'] ?? '');
+                        if(stripos($lowSport, 'soccer') !== false || stripos($lowSport, 'calcio') !== false) $sportIcon = 'trophy';
+                        elseif(stripos($lowSport, 'tennis') !== false) $sportIcon = 'circle-dot';
+                        elseif(stripos($lowSport, 'basket') !== false) $sportIcon = 'dribbble';
+                        elseif(stripos($lowSport, 'volley') !== false || stripos($lowSport, 'pallavolo') !== false) $sportIcon = 'activity'; // Lucide has no 'volleyball' sometimes, 'activity' is safe fallback or use custom
+                        elseif(stripos($lowSport, 'football') !== false) $sportIcon = 'citrus'; // American football
+                        ?>
+                        <a href="<?php echo $matchLink; ?>" class="glass p-6 rounded-[32px] border-white/5 hover:border-accent/30 transition-all group relative overflow-hidden cursor-pointer block no-underline">
                             
                             <!-- Background Sport Icon -->
                             <div class="absolute -right-4 -bottom-4 opacity-5 rotate-12 pointer-events-none group-hover:opacity-10 transition-opacity">
-                                <?php 
-                                $sportIcon = 'activity';
-                                if(stripos($m['sport'], 'soccer') !== false) $sportIcon = 'trophy';
-                                elseif(stripos($m['sport'], 'tennis') !== false) $sportIcon = 'circle-dot';
-                                elseif(stripos($m['sport'], 'basket') !== false) $sportIcon = 'dribbble';
-                                ?>
                                 <i data-lucide="<?php echo $sportIcon; ?>" class="w-32 h-32"></i>
                             </div>
 
@@ -154,7 +154,7 @@ foreach ($history as $h) {
                                 <div>
                                     <div class="flex items-center gap-2 mb-2">
                                         <span class="px-2 py-0.5 rounded bg-danger/10 text-danger text-[9px] font-black uppercase tracking-widest border border-danger/20 animate-pulse">LIVE</span>
-                                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[200px]"><?php echo $m['series'] ?? $m['sport']; ?></span>
+                                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[200px]"><?php echo $m['competition'] ?? $m['sport'] ?? 'Scommetto Live'; ?></span>
                                     </div>
                                     <h3 class="text-xl font-black italic uppercase text-white tracking-tight group-hover:text-accent transition-colors">
                                         <?php echo $m['event']; ?>
@@ -171,7 +171,7 @@ foreach ($history as $h) {
                                     <span class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Dettagli</span>
                                 </div>
                             </div>
-                        </div>
+                        </a>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
@@ -188,11 +188,11 @@ foreach ($history as $h) {
                             class="glass p-8 rounded-3xl text-center text-slate-500 font-bold text-[10px] uppercase italic">
                             Nessun consiglio disponibile</div>
                     <?php else: ?>
-                        <?php foreach (array_slice($predictions, 0, 5) as $p): ?>
-                            <div class="glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all group cursor-pointer"
-                                hx-get="/api/view/match/<?php echo is_array($p['event']) ? $p['event']['id'] : $p['fixture_id']; ?>"
-                                hx-target="#htmx-container"
-                                hx-push-url="/match/<?php echo is_array($p['event']) ? $p['event']['id'] : $p['fixture_id']; ?>">
+                        <?php foreach (array_slice($predictions, 0, 5) as $p): 
+                            $pEventId = is_array($p['event']) ? $p['event']['id'] : $p['fixture_id'];
+                            $pLink = "/match/" . $pEventId;
+                        ?>
+                            <div onclick="window.location.href='<?php echo $pLink; ?>'" class="glass p-6 rounded-3xl border-white/5 hover:border-accent/30 transition-all group cursor-pointer">
                                 <div class="flex items-center justify-between mb-4">
                                     <span
                                         class="text-[8px] font-black uppercase text-slate-500 tracking-widest"><?php echo $p['competition']['name'] ?? $p['sport']; ?></span>

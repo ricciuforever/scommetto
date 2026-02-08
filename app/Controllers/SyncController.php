@@ -87,6 +87,7 @@ class SyncController
                         'sport' => $sportName,
                         'sportId' => $sportId,
                         'event' => $cat['event'],
+                        'competition' => $cat['competition'] ?? null,
                         'marketName' => $cat['marketName'],
                         'runners' => $cat['runners']
                     ];
@@ -108,7 +109,9 @@ class SyncController
                         $eventData = [
                             'marketId' => $mId,
                             'sport' => $meta['sport'],
+                            'event_id' => $meta['event']['id'], // Add Betfair Event ID
                             'event' => $meta['event']['name'],
+                            'competition' => $meta['competition']['name'] ?? $meta['sport'],
                             'market' => $meta['marketName'],
                             'totalMatched' => $book['totalMatched'],
                             'runners' => array_map(function ($r) use ($meta) {

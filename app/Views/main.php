@@ -55,17 +55,17 @@
         </div>
 
         <nav class="flex-1 px-4 py-4 space-y-2">
-            <a hx-get="/api/view/dashboard" hx-target="#htmx-container" hx-push-url="/dashboard"
+            <a href="/dashboard"
                 class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm active-nav"
                 data-view="dashboard">
                 <i data-lucide="home" class="w-5 h-5"></i> Dashboard
             </a>
-            <a hx-get="/api/view/predictions" hx-target="#htmx-container" hx-push-url="/predictions"
+            <a href="/predictions"
                 class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
                 data-view="predictions">
                 <i data-lucide="brain-circuit" class="w-5 h-5"></i> Pronostici
             </a>
-            <a hx-get="/api/view/tracker" hx-target="#htmx-container" hx-push-url="/tracker"
+            <a href="/tracker"
                 class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
                 data-view="tracker">
                 <i data-lucide="landmark" class="w-5 h-5"></i> Betfair Account
@@ -92,7 +92,7 @@
                 </div>
             </div>
 
-            <a hx-get="/api/view/settings" hx-target="#htmx-container" hx-push-url="/settings"
+            <a href="/settings"
                 class="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2 cursor-pointer">
                 <i data-lucide="settings" class="w-4 h-4"></i> Admin Panel
             </a>
@@ -186,23 +186,19 @@
     <!-- Bottom Navigation Mobile -->
     <nav
         class="lg:hidden fixed bottom-0 left-0 right-0 glass border-t border-white/10 px-6 py-3 flex justify-between items-center z-50">
-        <a hx-get="/api/view/dashboard" hx-target="#htmx-container" hx-push-url="/dashboard"
-            class="flex flex-col items-center gap-1 text-accent" data-view="dashboard">
+        <a href="/dashboard" class="flex flex-col items-center gap-1 text-accent" data-view="dashboard">
             <i data-lucide="home" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold uppercase tracking-widest">Home</span>
         </a>
-        <a hx-get="/api/view/leagues" hx-target="#htmx-container" hx-push-url="/leagues"
-            class="flex flex-col items-center gap-1 text-slate-500" data-view="leagues">
+        <a href="/leagues" class="flex flex-col items-center gap-1 text-slate-500" data-view="leagues">
             <i data-lucide="trophy" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold uppercase tracking-widest">Leghe</span>
         </a>
-        <a hx-get="/api/view/predictions" hx-target="#htmx-container" hx-push-url="/predictions"
-            class="flex flex-col items-center gap-1 text-slate-500" data-view="predictions">
+        <a href="/predictions" class="flex flex-col items-center gap-1 text-slate-500" data-view="predictions">
             <i data-lucide="brain-circuit" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold uppercase tracking-widest">AI Tips</span>
         </a>
-        <a hx-get="/api/view/tracker" hx-target="#htmx-container" hx-push-url="/tracker"
-            class="flex flex-col items-center gap-1 text-slate-500" data-view="tracker">
+        <a href="/tracker" class="flex flex-col items-center gap-1 text-slate-500" data-view="tracker">
             <i data-lucide="line-chart" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold uppercase tracking-widest">Tracker</span>
         </a>
