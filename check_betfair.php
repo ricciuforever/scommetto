@@ -38,11 +38,36 @@ if (isset($result['result'])) {
         ]
     ]);
 
-    if (isset($events['result'])) {
+    if (isset($events['result']) && !empty($events['result'])) {
         echo "[SUCCESSO] Trovati " . count($events['result']) . " eventi nelle prossime 24 ore.\n";
-        foreach (array_slice($events['result'], 0, 5) as $e) {
+        $firstEvent = $events['result'][0]['event'];
+        echo "[INFO] Test findMarket per: " . $firstEvent['name'] . "\n";
+
+        $market = $bf->findMarket($firstEvent['name'], 'MATCH_ODDS');
+        if ($market) {
+            echo "[SUCCESSO] Mercato trovato! ID: " . $market['marketId'] . "\n";
+            echo "[INFO] Runners trovati: " . count($market['runners']) . "\n";
+            foreach($market['runners'] as $r) {
+                echo "   - " . $r['runnerName'] . " (ID: " . $r['selectionId'] . ")\n";
+            }
+
+            // Test mapping
+            $testAdvice = "Winner: " . $market['runners'][0]['runnerName'];
+            $sid = $bf->mapAdviceToSelection($testAdvice, $market['runners']);
+            if ($sid) {
+                echo "[SUCCESSO] Mapping riuscito per '$testAdvice' -> Selection ID: $sid\n";
+            } else {
+                echo "[ERRORE] Mapping fallito per '$testAdvice'\n";
+            }
+        } else {
+            echo "[ERRORE] Mercato MATCH_ODDS non trovato per questo evento.\n";
+        }
+
+        foreach (array_slice($events['result'], 1, 4) as $e) {
             echo " - " . $e['event']['name'] . " (ID: " . $e['event']['id'] . ")\n";
         }
+    } elseif (isset($events['result'])) {
+        echo "[AVVISO] Nessun evento trovato nelle prossime 24 ore.\n";
     } else {
         echo "[AVVISO] Nessun evento trovato o errore nella query eventi.\n";
         print_r($events);
