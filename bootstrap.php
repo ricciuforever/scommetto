@@ -6,6 +6,7 @@ require_once __DIR__ . '/app/Config/Config.php';
 use App\Config\Config;
 
 Config::init();
+date_default_timezone_set(Config::DEFAULT_TIMEZONE);
 
 // Enable Error Logging
 ini_set('display_errors', 0);

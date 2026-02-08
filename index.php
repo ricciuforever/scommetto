@@ -7,6 +7,7 @@ use App\Controllers\MatchController;
 use App\Controllers\BetController;
 use App\Controllers\SyncController;
 use App\Controllers\FilterController;
+use App\Controllers\CountryController;
 
 $request = $_SERVER['REQUEST_URI'] ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -18,12 +19,18 @@ $path = str_replace('/scommetto', '', $path); // Adjust if running in a subdirec
 try {
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||
-        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/predictions', '/tracker']) ||
+        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/predictions', '/tracker', '/countries']) ||
         preg_match('#^/(match|team|player)/(\d+)$#', $path)
     ) {
+        if ($path === '/countries') {
+            (new CountryController())->index();
+            return;
+        }
         (new MatchController())->index();
     } elseif ($path === '/api/live') {
         (new MatchController())->getLive();
+    } elseif ($path === '/api/countries') {
+        (new CountryController())->list();
     } elseif ($path === '/api/dashboard' || $path === '/api/view/dashboard') {
         (new MatchController())->dashboard();
     } elseif ($path === '/api/view/leagues') {
