@@ -1421,6 +1421,9 @@ async function updateStatsSummary() {
 
     // Se Betfair è selezionato, fetch Real Data
     if (showingBetfair) {
+        balanceLabel = 'Disponibile (Reale)';
+        portfolioLabel = 'Portafoglio (Reale)';
+
         try {
             // Mostra loader temporaneo
             displayBalance = '<span class="animate-pulse">Loading...</span>';
@@ -1435,15 +1438,15 @@ async function updateStatsSummary() {
             if (data.available !== undefined) {
                 displayBalance = parseFloat(data.available).toFixed(2) + '€';
                 displayPortfolio = parseFloat(data.wallet).toFixed(2) + '€'; // Wallet include esposizione
-                balanceLabel = 'Disponibile (Reale)';
-                portfolioLabel = 'Portafoglio (Reale)';
             } else if (data.error) {
                 displayBalance = 'ERR';
-                console.error('Betfair Balance Error Response:', data); // Logga tutto l'oggetto risposta, non solo .error
+                displayPortfolio = 'ERR';
+                console.error('Betfair Balance Error Response:', data);
             }
         } catch (e) {
             console.error('Fetch Balance Exception:', e);
             displayBalance = 'ERR';
+            displayPortfolio = 'ERR';
         }
     }
 

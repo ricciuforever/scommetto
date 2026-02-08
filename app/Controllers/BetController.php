@@ -100,7 +100,7 @@ class BetController
             // FILTRO CONFIDENZA: Solo bet con confidence > 80% vanno su Betfair REALE
             $confidence = (int) ($input['confidence'] ?? 0);
 
-            if (($bf->isConfigured() || \App\Config\Config::get('BETFAIR_SESSION_TOKEN')) && $confidence > 80) {
+            if ($bf->isConfigured() && $confidence > 80) {
                 $matchName = $input['match_name'] ?? '';
                 // Se manca match_name, prova a costruirlo
                 if (!$matchName && isset($input['home_team']) && isset($input['away_team'])) {
@@ -263,7 +263,7 @@ class BetController
 
         try {
             $bf = new \App\Services\BetfairService();
-            if (!$bf->isConfigured() && !\App\Config\Config::get('BETFAIR_SESSION_TOKEN')) {
+            if (!$bf->isConfigured()) {
                 echo json_encode(['error' => 'Betfair not configured']);
                 return;
             }

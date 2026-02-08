@@ -14,13 +14,13 @@ class BetfairService
     private $keyPath;
     private $sessionToken;
     private $ssoUrl;
-    private $apiUrl = 'https://api.betfair.com/exchange/betting/json-rpc/v1';
+    private $apiUrl = 'https://api.betfair.it/exchange/betting/json-rpc/v1';
     private $lastRequestTime = 0;
 
     public function __construct()
     {
-        // Prioritize Delayed Key as requested
-        $this->appKey = Config::get('BETFAIR_APP_KEY_DELAY') ?: Config::get('BETFAIR_APP_KEY_LIVE');
+        // Prioritize generic key, then Delayed Key as requested
+        $this->appKey = Config::get('BETFAIR_APP_KEY') ?: (Config::get('BETFAIR_APP_KEY_DELAY') ?: Config::get('BETFAIR_APP_KEY_LIVE'));
         $this->username = Config::get('BETFAIR_USERNAME');
         $this->password = Config::get('BETFAIR_PASSWORD');
         $this->certPath = Config::get('BETFAIR_CERT_PATH');
@@ -33,7 +33,12 @@ class BetfairService
 
     public function isConfigured(): bool
     {
-        return !empty($this->appKey) && !empty($this->username) && !empty($this->password) && !empty($this->certPath);
+        // Configurato se abbiamo la chiave e (credenziali + certificati) OPPURE un session token manuale
+        $hasKey = !empty($this->appKey);
+        $hasCerts = !empty($this->username) && !empty($this->password) && !empty($this->certPath);
+        $hasToken = !empty($this->sessionToken);
+
+        return $hasKey && ($hasCerts || $hasToken);
     }
 
     private function authenticate()
