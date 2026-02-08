@@ -16,6 +16,7 @@ class Config
     const INITIAL_BANKROLL = 100.00;
     const MIN_BETFAIR_STAKE = 2.00;
     const BETFAIR_CONFIDENCE_THRESHOLD = 80;
+    const DEFAULT_TIMEZONE = 'Europe/Rome';
 
     // Popular League IDs
     const LEAGUE_SERIE_A = 135;
