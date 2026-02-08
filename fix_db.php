@@ -231,7 +231,7 @@ try {
 
     "bets" => "CREATE TABLE IF NOT EXISTS `bets` (
           `id` INT AUTO_INCREMENT PRIMARY KEY,
-          `fixture_id` INT NOT NULL,
+          `fixture_id` VARCHAR(100) NOT NULL,
           `bookmaker_id` INT NULL,
           `bookmaker_name` VARCHAR(100) NULL,
           `match_name` VARCHAR(255) NOT NULL,
@@ -490,6 +490,9 @@ try {
       "ALTER TABLE bets ADD COLUMN betfair_id VARCHAR(100) NULL AFTER result",
       "ALTER TABLE bets ADD COLUMN adm_id VARCHAR(100) NULL AFTER betfair_id",
       "ALTER TABLE bets ADD COLUMN notes TEXT NULL AFTER adm_id"
+    ],
+    "bets_fix_fixture_id" => [
+      "ALTER TABLE bets MODIFY COLUMN fixture_id VARCHAR(100) NOT NULL"
     ]
   ];
 

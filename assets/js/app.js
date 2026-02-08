@@ -176,7 +176,10 @@ async function renderDashboardPredictions() {
             container.appendChild(item);
         });
         if (window.lucide) lucide.createIcons();
-    } catch (e) { console.error("Error fetching dashboard predictions", e); }
+    } catch (e) {
+        console.error("Error fetching dashboard predictions", e);
+        if (container) container.innerHTML = '<div class="glass p-8 rounded-3xl text-center text-danger font-bold text-[10px] uppercase italic">Errore caricamento AI</div>';
+    }
 }
 
 async function renderLeagues(leagueId) {
@@ -457,10 +460,10 @@ async function renderPredictions() {
         }
 
         grid.innerHTML = predictions.map(p => {
-             const eventName = typeof p.event === 'object' ? p.event.name : (p.event || 'Unknown');
-             const dateStr = new Date(p.startTime || p.date).toLocaleString('it-IT', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+            const eventName = typeof p.event === 'object' ? p.event.name : (p.event || 'Unknown');
+            const dateStr = new Date(p.startTime || p.date).toLocaleString('it-IT', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-             return `
+            return `
                 <div onclick="analyzeBetfairMatch('${p.marketId}')" class="glass p-8 rounded-[48px] border-white/5 hover:border-accent/30 transition-all cursor-pointer group relative overflow-hidden">
                     <div class="flex items-center justify-between mb-8">
                         <span class="text-[10px] font-black uppercase text-accent tracking-widest">${p.competition?.name || p.sport}</span>
@@ -1435,7 +1438,11 @@ async function fetchLive() {
         const res = await fetch('/api/live');
         const data = await res.json();
         liveMatches = data.response || [];
-    } catch (e) { console.error("Error fetching live data", e); }
+    } catch (e) {
+        console.error("Error fetching live data", e);
+        // Force retry in 5s
+        setTimeout(fetchLive, 5000);
+    }
 }
 
 async function fetchHistory() {
@@ -1707,7 +1714,7 @@ async function analyzeBetfairMatch(marketId) {
     try {
         const res = await fetch(`/api/analyze/${marketId}?betfair=true`); // Passiamo un flag
         // ... (resto della logica modal simile a quella esistente)
-    } catch(e) {}
+    } catch (e) { }
 }
 
 
@@ -2170,7 +2177,7 @@ async function renderTracker() {
                 </div>
             `).join('');
         }
-    } catch(e) { console.error("Error fetching account", e); }
+    } catch (e) { console.error("Error fetching account", e); }
 
     // Fetch Open Orders
     try {
@@ -2200,7 +2207,7 @@ async function renderTracker() {
                 ordersList.innerHTML = '<div class="p-20 text-center italic text-slate-500 uppercase font-black text-[10px]">Nessun ordine aperto.</div>';
             }
         }
-    } catch(e) { console.error("Error fetching orders", e); }
+    } catch (e) { console.error("Error fetching orders", e); }
 
     if (window.lucide) lucide.createIcons();
 }

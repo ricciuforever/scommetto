@@ -28,7 +28,7 @@ class Bet
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
-            'fixture_id' => (int) $data['fixture_id'],
+            'fixture_id' => $data['fixture_id'],
             'bookmaker_id' => isset($data['bookmaker_id']) ? (int) $data['bookmaker_id'] : null,
             'bookmaker_name' => $data['bookmaker_name'] ?? null,
             'match_name' => $data['match'] ?? $data['match_name'],

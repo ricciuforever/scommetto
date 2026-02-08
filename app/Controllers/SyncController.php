@@ -60,7 +60,8 @@ class SyncController
 
             // 1. Discover all Sports (Event Types)
             $sports = $this->betfairService->getEventTypes();
-            if (empty($sports['result'])) throw new \Exception("Errore recupero sport Betfair");
+            if (empty($sports['result']))
+                throw new \Exception("Errore recupero sport Betfair");
 
             $allMarketIds = [];
             $marketToEventMap = [];
@@ -70,12 +71,14 @@ class SyncController
                 $sportName = $sport['eventType']['name'];
 
                 $events = $this->betfairService->getLiveEvents([$sportId]);
-                if (empty($events['result'])) continue;
+                if (empty($events['result']))
+                    continue;
 
                 $eventIds = array_map(fn($e) => $e['event']['id'], $events['result']);
 
                 $catalogues = $this->betfairService->getMarketCatalogues($eventIds, 100);
-                if (empty($catalogues['result'])) continue;
+                if (empty($catalogues['result']))
+                    continue;
 
                 foreach ($catalogues['result'] as $cat) {
                     $mId = $cat['marketId'];
@@ -108,7 +111,7 @@ class SyncController
                             'event' => $meta['event']['name'],
                             'market' => $meta['marketName'],
                             'totalMatched' => $book['totalMatched'],
-                            'runners' => array_map(function($r) use ($meta) {
+                            'runners' => array_map(function ($r) use ($meta) {
                                 $m = array_filter($meta['runners'], fn($rm) => $rm['selectionId'] === $r['selectionId']);
                                 $name = reset($m)['runnerName'] ?? 'Unknown';
                                 return [
@@ -124,9 +127,9 @@ class SyncController
 
                         // Aggiungi ai candidati per Gemini se ha volume minimo (>100€) e mercato principale
                         if ($book['totalMatched'] > 100 && (stripos($meta['marketName'], 'Match Odds') !== false || count($meta['runners']) <= 3)) {
-                             if (!$this->betModel->hasBet($mId)) {
-                                 $candidates[] = $eventData;
-                             }
+                            if (!$this->betModel->hasBet($mId)) {
+                                $candidates[] = $eventData;
+                            }
                         }
                     }
                 }
@@ -138,7 +141,7 @@ class SyncController
 
             // 5. Throttling: 1 analisi al minuto
             $cooldownFile = Config::DATA_PATH . 'gemini_cooldown.txt';
-            $lastRun = file_exists($cooldownFile) ? (int)file_get_contents($cooldownFile) : 0;
+            $lastRun = file_exists($cooldownFile) ? (int) file_get_contents($cooldownFile) : 0;
 
             if (time() - $lastRun >= 60 && !empty($candidates)) {
                 file_put_contents($cooldownFile, time());
@@ -148,7 +151,9 @@ class SyncController
             }
 
             echo json_encode($results);
-        } catch (\Throwable $e) { $this->handleException($e); }
+        } catch (\Throwable $e) {
+            $this->handleException($e);
+        }
     }
 
     private function executeGlobalAnalysis(array $candidates, &$results)
@@ -159,7 +164,8 @@ class SyncController
             'current_portfolio' => ($funds['availableToBetBalance'] ?? 0) + abs($funds['exposure'] ?? 0)
         ];
 
-        if ($balance['available_balance'] < Config::MIN_BETFAIR_STAKE) return;
+        if ($balance['available_balance'] < Config::MIN_BETFAIR_STAKE)
+            return;
 
         // Limita a 20 candidati più liquidi per non saturare il prompt
         usort($candidates, fn($a, $b) => $b['totalMatched'] <=> $a['totalMatched']);
@@ -177,7 +183,10 @@ class SyncController
                 $fullData = json_decode(file_get_contents($cacheFile), true);
                 $event = null;
                 foreach ($fullData['response'] as $m) {
-                    if ($m['marketId'] === $betData['marketId']) { $event = $m; break; }
+                    if ($m['marketId'] === $betData['marketId']) {
+                        $event = $m;
+                        break;
+                    }
                 }
 
                 if ($event) {
@@ -191,7 +200,8 @@ class SyncController
                             if ($fr['selectionId'] == $selectionId) {
                                 // Use the best available back price if it moved in our favor or slightly against
                                 $bestBack = $fr['ex']['availableToBack'][0]['price'] ?? null;
-                                if ($bestBack) $finalPrice = $bestBack;
+                                if ($bestBack)
+                                    $finalPrice = $bestBack;
                                 break;
                             }
                         }
@@ -199,23 +209,29 @@ class SyncController
 
                     $selectionId = $this->betfairService->mapAdviceToSelection($betData['advice'], $event['runners']);
                     if ($selectionId) {
+                        // CRITICAL: Double check if we already have a bet on this market
+                        if ($this->betModel->hasBet($event['marketId'])) {
+                            echo "SKIP: Bet already exists for market " . $event['marketId'] . "\n";
+                            return; // Exit function since we only process one bet per call
+                        }
+
                         $bfRes = $this->betfairService->placeBet($event['marketId'], $selectionId, $finalPrice, $betData['stake']);
                         $res = isset($bfRes['status']) ? $bfRes : ($bfRes['result'] ?? null);
 
                         if ($res && isset($res['status']) && $res['status'] === 'SUCCESS') {
-                             $results['bets_placed']++;
-                             $this->betModel->create([
-                                 'fixture_id' => $event['marketId'],
-                                 'match_name' => $event['event']['name'],
-                                 'advice' => $betData['advice'],
-                                 'market' => $event['marketName'],
-                                 'odds' => $finalPrice,
-                                 'stake' => $betData['stake'],
-                                 'betfair_id' => $res['instructionReports'][0]['betId'] ?? null,
-                                 'status' => 'placed',
-                                 'bookmaker_name' => 'Betfair.it'
-                             ]);
-                             echo "SCOMMESSA PIAZZATA: " . $event['event']['name'] . " - " . $betData['advice'] . " @ $finalPrice\n";
+                            $results['bets_placed']++;
+                            $this->betModel->create([
+                                'fixture_id' => $event['marketId'],
+                                'match_name' => $event['event']['name'],
+                                'advice' => $betData['advice'],
+                                'market' => $event['marketName'],
+                                'odds' => $finalPrice,
+                                'stake' => $betData['stake'],
+                                'betfair_id' => $res['instructionReports'][0]['betId'] ?? null,
+                                'status' => 'placed',
+                                'bookmaker_name' => 'Betfair.it'
+                            ]);
+                            echo "SCOMMESSA PIAZZATA: " . $event['event']['name'] . " - " . $betData['advice'] . " @ $finalPrice\n";
                         }
                     }
                 }
@@ -244,11 +260,13 @@ class SyncController
 
     public function syncUpcoming()
     {
-        if (!$this->betfairService->isConfigured()) return;
+        if (!$this->betfairService->isConfigured())
+            return;
 
         try {
             $sports = $this->betfairService->getEventTypes();
-            if (empty($sports['result'])) return;
+            if (empty($sports['result']))
+                return;
 
             $upcomingEvents = [];
             $allMarketIds = [];
@@ -272,7 +290,8 @@ class SyncController
                     ]
                 ]);
 
-                if (empty($events['result'])) continue;
+                if (empty($events['result']))
+                    continue;
 
                 $eventIds = array_map(fn($e) => $e['event']['id'], $events['result']);
 
@@ -286,12 +305,14 @@ class SyncController
                     'marketProjection' => ['RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION', 'EVENT', 'COMPETITION']
                 ]);
 
-                if (empty($catalogues['result'])) continue;
+                if (empty($catalogues['result']))
+                    continue;
 
                 foreach ($catalogues['result'] as $cat) {
                     // Filtriamo per mercati principali o con volume
                     $mName = $cat['marketName'];
-                    if (stripos($mName, 'Match Odds') === false && stripos($mName, 'Esito Finale') === false && count($cat['runners']) > 3) continue;
+                    if (stripos($mName, 'Match Odds') === false && stripos($mName, 'Esito Finale') === false && count($cat['runners']) > 3)
+                        continue;
 
                     $mId = $cat['marketId'];
                     $allMarketIds[] = $mId;
@@ -323,7 +344,7 @@ class SyncController
                             'competition' => $meta['competition'],
                             'marketName' => $meta['marketName'],
                             'totalMatched' => $book['totalMatched'],
-                            'runners' => array_map(function($r) use ($meta) {
+                            'runners' => array_map(function ($r) use ($meta) {
                                 $m = array_filter($meta['runners'], fn($rm) => $rm['selectionId'] === $r['selectionId']);
                                 $name = reset($m)['runnerName'] ?? 'Unknown';
                                 return [
@@ -374,10 +395,12 @@ class SyncController
 
     private function settleBetfairBets()
     {
-        if (!$this->betfairService->isConfigured()) return 0;
+        if (!$this->betfairService->isConfigured())
+            return 0;
 
         $cleared = $this->betfairService->getClearedOrders();
-        if (empty($cleared['clearedOrders'])) return 0;
+        if (empty($cleared['clearedOrders']))
+            return 0;
 
         $count = 0;
         $db = Database::getInstance()->getConnection();
@@ -389,12 +412,16 @@ class SyncController
             // Update local DB status based on real betfair outcome
             $stmt = $db->prepare("UPDATE bets SET status = ?, result = ? WHERE betfair_id = ? AND status = 'placed'");
             $stmt->execute([$status, $status === 'won' ? 'WIN' : 'LOSS', $betId]);
-            if ($stmt->rowCount() > 0) $count++;
+            if ($stmt->rowCount() > 0)
+                $count++;
         }
         return $count;
     }
 
-    public function sync() { $this->syncLive(); }
+    public function sync()
+    {
+        $this->syncLive();
+    }
 
     public function getUsage()
     {
