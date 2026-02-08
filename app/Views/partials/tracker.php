@@ -61,7 +61,7 @@ function getIcon($s)
             ?>
             <button
                 class="tracker-filter-btn px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap <?php echo $bgClass; ?>"
-                onclick="setTrackerFilterPHP('<?php echo $k; ?>')">
+                hx-get="/api/view/tracker?status=<?php echo $k; ?>" hx-target="#htmx-container" hx-push-url="false">
                 <?php echo $label; ?>
             </button>
         <?php endforeach; ?>
@@ -86,7 +86,7 @@ function getIcon($s)
                 $icon = getIcon($bet['status']);
                 ?>
                 <div class="p-8 hover:bg-white/5 cursor-pointer transition-all flex items-center justify-between group"
-                    onclick='showBetDetails(<?php echo json_encode($bet); ?>)'>
+                    hx-get="/api/view/modal/bet/<?php echo $bet['id']; ?>" hx-target="#global-modal-container">
                     <!-- Reuse existing JS modal function for now -->
                     <div class="flex items-center gap-6">
                         <div class="w-12 h-12 rounded-2xl flex items-center justify-center border <?php echo $borderClass; ?>">

@@ -56,7 +56,9 @@ $selectedLeague = $selectedLeague ?? 'all';
                 ?>
                 <div
                     class="glass p-8 rounded-[40px] border-white/5 hover:border-accent/30 transition-all group relative overflow-hidden prediction-card active-card cursor-pointer"
-                    onclick="navigate('match', '<?php echo $p['fixture_id']; ?>')">
+                    hx-get="/api/view/match/<?php echo $p['fixture_id']; ?>"
+                    hx-target="#htmx-container"
+                    hx-push-url="/match/<?php echo $p['fixture_id']; ?>">
                     <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-all scale-150">
                         <i data-lucide="brain-circuit" class="w-20 h-20"></i>
                     </div>
@@ -72,7 +74,10 @@ $selectedLeague = $selectedLeague ?? 'all';
 
                     <div class="flex items-center justify-between gap-4 mb-8">
                         <div class="flex-1 flex flex-col items-center gap-3 cursor-pointer group/team"
-                            onclick="event.stopPropagation(); navigate('team', '<?php echo $p['home_id']; ?>')">
+                             hx-get="/api/view/team/<?php echo $p['home_id']; ?>"
+                             hx-target="#htmx-container"
+                             hx-push-url="/team/<?php echo $p['home_id']; ?>"
+                             onclick="event.stopPropagation()">
                             <img src="<?php echo $p['home_logo']; ?>"
                                 class="w-12 h-12 object-contain group-hover/team:scale-110 transition-transform">
                             <span
@@ -84,7 +89,10 @@ $selectedLeague = $selectedLeague ?? 'all';
                             <span class="text-2xl font-black italic opacity-20">VS</span>
                         </div>
                         <div class="flex-1 flex flex-col items-center gap-3 cursor-pointer group/team"
-                            onclick="event.stopPropagation(); navigate('team', '<?php echo $p['away_id']; ?>')">
+                             hx-get="/api/view/team/<?php echo $p['away_id']; ?>"
+                             hx-target="#htmx-container"
+                             hx-push-url="/team/<?php echo $p['away_id']; ?>"
+                             onclick="event.stopPropagation()">
                             <img src="<?php echo $p['away_logo']; ?>"
                                 class="w-12 h-12 object-contain group-hover/team:scale-110 transition-transform">
                             <span

@@ -37,10 +37,14 @@ class BetController
     public function placeBet()
     {
         header('Content-Type: application/json');
+        
         $input = json_decode(file_get_contents('php://input'), true);
+        if (!$input) {
+            $input = $_POST;
+        }
 
         if (!$input || !isset($input['fixture_id'])) {
-            echo json_encode(['error' => 'Invalid input']);
+            echo json_encode(['error' => 'Invalid input', 'received' => $input]);
             return;
         }
 
@@ -131,16 +135,132 @@ class BetController
         $input['notes'] = ($input['notes'] ?? '') . ' ' . $note;
 
         $id = $this->betModel->create($input);
-        echo json_encode(['status' => 'success', 'id' => $id, 'betfair_notes' => $note]);
+        
+        if(isset($_SERVER['HTTP_HX_REQUEST'])) {
+            echo '<div class="p-10 text-center"><h3 class="text-3xl font-black text-success uppercase italic mb-4">Scommessa Piazzata!</h3><p class="text-slate-400 mb-8">La tua giocata è stata registrata con successo.</p><button onclick="document.getElementById(\'place-bet-modal\').remove()" class="bg-white/10 hover:bg-white/20 px-8 py-3 rounded-xl text-white font-bold uppercase transition-all">Chiudi</button></div>';
+        } else {
+            echo json_encode(['status' => 'success', 'id' => $id, 'betfair_notes' => $note]);
+        }
     }
 
     public function viewTracker()
     {
         try {
-            // Versione semplificata: Il rendering dei movimenti Betfair è gestito da JS in app.js
+            $status = $_GET['status'] ?? 'all';
+            $db = \App\Services\Database::getInstance()->getConnection();
+
+            // 1. Fetch Bets
+            $sql = "SELECT b.*, f.name as match_name_fixture 
+                    FROM bets b 
+                    LEFT JOIN fixtures f ON b.fixture_id = f.id 
+                    WHERE 1=1";
+            $params = [];
+
+            if ($status !== 'all') {
+                $sql .= " AND b.status = ?";
+                $params[] = $status;
+            }
+
+            $sql .= " ORDER BY b.timestamp DESC";
+
+            $stmt = $db->prepare($sql);
+            $stmt->execute($params);
+            $bets = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Normalize match name
+            foreach ($bets as &$b) {
+                if (empty($b['match_name']) && !empty($b['match_name_fixture'])) {
+                    $b['match_name'] = $b['match_name_fixture'];
+                }
+            }
+            unset($b);
+
+            // 2. Calculate Balance & Stats (Unified Logic)
+            $statsSummary = [
+                'available_balance' => 0,
+                'currentPortfolio' => 0,
+                'netProfit' => 0,
+                'roi' => 0,
+                'winCount' => 0,
+                'lossCount' => 0
+            ];
+
+            // ROI & Profit from history
+            $totalStake = 0;
+            $totalReturn = 0;
+
+            // Re-fetch all for stats if filtered
+            $allBetsStmt = $db->query("SELECT status, stake, odds, betfair_id FROM bets");
+            $allBets = $allBetsStmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Calculate ROI/Profit based on Mode (Sim/Real separation in history? 
+            // Currently dashboard mixes them or filters. Let's assume we show ALL local history stats
+            // but Balance reflects current mode.)
+
+            // To be precise: If Sim Mode, show Sim Balance. If Real, Real Balance.
+            // But History usually mixes unless we filter by `betfair_id` presence.
+            // Let's stick to showing ALL DB history for ROI, but Mode-Specific Balance.
+
+            foreach ($allBets as $b) {
+                if ($b['status'] === 'won') {
+                    $profit = $b['stake'] * ($b['odds'] - 1);
+                    $statsSummary['netProfit'] += $profit;
+                    $totalReturn += ($b['stake'] + $profit);
+                    $statsSummary['winCount']++;
+                } elseif ($b['status'] === 'lost') {
+                    $statsSummary['netProfit'] -= $b['stake'];
+                    $statsSummary['lossCount']++;
+                }
+                if (in_array($b['status'], ['won', 'lost'])) {
+                    $totalStake += $b['stake'];
+                }
+            }
+
+            if ($totalStake > 0) {
+                $statsSummary['roi'] = ($statsSummary['netProfit'] / $totalStake) * 100;
+            }
+
+            // Balance
+            if (Config::isSimulationMode()) {
+                // Sim Logic
+                $initial = Config::INITIAL_BANKROLL;
+
+                // Recalculate Sim-Only Profit
+                $simProfit = 0;
+                $simExposure = 0;
+                foreach ($allBets as $b) {
+                    if (empty($b['betfair_id'])) { // Sim Bet
+                        if ($b['status'] === 'won')
+                            $simProfit += $b['stake'] * ($b['odds'] - 1);
+                        elseif ($b['status'] === 'lost')
+                            $simProfit -= $b['stake'];
+                        elseif (in_array($b['status'], ['placed', 'pending']))
+                            $simExposure += $b['stake'];
+                    }
+                }
+
+                $statsSummary['currentPortfolio'] = $simExposure;
+                $statsSummary['available_balance'] = ($initial + $simProfit) - $simExposure;
+                // Override NetProfit to show Sim Profit in Sim Mode? Or Global? 
+                // Let's show Global Profit in history, but Sim Balance.
+            } else {
+                // Real Logic
+                try {
+                    $bf = new BetfairService();
+                    if ($bf->isConfigured()) {
+                        $funds = $bf->getFunds();
+                        if (isset($funds['result']))
+                            $funds = $funds['result'];
+                        $statsSummary['available_balance'] = $funds['availableToBetBalance'] ?? 0;
+                        $statsSummary['currentPortfolio'] = abs($funds['exposure'] ?? 0);
+                    }
+                } catch (\Throwable $e) {
+                }
+            }
+
             require __DIR__ . '/../Views/partials/tracker.php';
         } catch (\Throwable $e) {
-            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+            echo '<div class="text-danger p-4">Errore Tracker: ' . $e->getMessage() . '</div>';
         }
     }
 
@@ -227,5 +347,47 @@ class BetController
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);
         }
+    }
+    }
+
+    public function viewBetModal($id)
+    {
+        try {
+            $db = \App\Services\Database::getInstance()->getConnection();
+            $stmt = $db->prepare("SELECT b.*, f.name as match_name_fixture 
+                                  FROM bets b 
+                                  LEFT JOIN fixtures f ON b.fixture_id = f.id 
+                                  WHERE b.id = ?");
+            $stmt->execute([$id]);
+            $bet = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            if($bet) {
+                if(empty($bet['match_name']) && !empty($bet['match_name_fixture'])) {
+                    $bet['match_name'] = $bet['match_name_fixture'];
+                }
+                require __DIR__ . '/../Views/partials/modals/bet_details.php';
+            } else {
+                echo '<div class="text-white">Scommessa non trovata</div>';
+            }
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function viewPlaceBetModal()
+    {
+        $fixtureId = $_GET['fixture_id'] ?? 0;
+        $market = $_GET['market'] ?? '';
+        $selection = $_GET['selection'] ?? '';
+        $odd = $_GET['odd'] ?? 0;
+        
+        // Load fixture details for display
+        $db = \App\Services\Database::getInstance()->getConnection();
+        $stmt = $db->prepare("SELECT name FROM fixtures WHERE id = ?");
+        $stmt->execute([$fixtureId]);
+        $fixture = $stmt->fetch(\PDO::FETCH_ASSOC);
+        $eventName = $fixture['name'] ?? 'Evento Sconosciuto';
+
+        require __DIR__ . '/../Views/partials/modals/place_bet.php';
     }
 }

@@ -208,45 +208,10 @@
         </a>
     </nav>
 
-    <!-- Analysis Modal (Global) -->
-    <div id="analysis-modal"
-        class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
-        <div
-            class="bg-slate-900 w-full max-w-2xl rounded-[40px] border border-white/10 shadow-2xl overflow-hidden relative">
-            <button onclick="closeModal()"
-                class="absolute top-6 right-6 w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all text-white">
-                <i data-lucide="x" class="w-6 h-6"></i>
-            </button>
-            <div class="p-10">
-                <h3 id="modal-title" class="text-3xl font-black mb-8 tracking-tight text-white uppercase italic">
-                    Scommetto<span class="text-accent">.AI</span> Intelligence</h3>
-                <div id="modal-body" class="mb-10 text-slate-400 leading-relaxed font-medium text-sm">
-                    Auto-Generating intelligence...
-                </div>
-                <div class="flex flex-col sm:flex-row justify-between items-center gap-6">
-                    <div id="confidence-indicator"
-                        class="hidden flex items-center gap-3 bg-accent/10 px-5 py-3 rounded-2xl border border-accent/20 w-full sm:w-auto">
-                        <div class="flex flex-col">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500">AI
-                                Confidence</span>
-                            <span id="confidence-val" class="text-lg font-black text-accent leading-none">90%</span>
-                        </div>
-                        <div class="flex-1 h-2 bg-white/10 rounded-full overflow-hidden min-w-[80px]">
-                            <div id="confidence-bar" class="h-full bg-accent transition-all duration-1000"
-                                style="width: 90%"></div>
-                        </div>
-                    </div>
-                    <div id="modal-footer-actions" class="flex items-center gap-4 w-full sm:w-auto justify-end">
-                        <button onclick="closeModal()"
-                            class="px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-slate-500 hover:text-white transition-colors">Chiudi</button>
-                        <button id="place-bet-btn"
-                            class="hidden bg-accent hover:bg-sky-500 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-accent/30 hover:scale-105">Conferma
-                            Giocata</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Global Modal Container -->
+    <div id="global-modal-container"></div>
+
+
 
 
 
@@ -294,10 +259,31 @@
         }
     </style>
 
-    <script src="/assets/js/app.js?v=<?php echo time(); ?>"></script>
     <script>
-        // Init Lucide
-        lucide.createIcons();
+        // Minimal JS for Theme Toggle & basic UI
+        const themeToggle = document.getElementById('theme-toggle');
+        const html = document.documentElement;
+
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            html.classList.add('dark');
+        } else {
+            html.classList.remove('dark');
+        }
+
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                html.classList.toggle('dark');
+                localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+            });
+        }
+
+        // Re-init Icons on HTMX swap
+        document.body.addEventListener('htmx:afterSwap', function (evt) {
+            if (window.lucide) lucide.createIcons();
+        });
+
+        // Initial Icons
+        if (window.lucide) lucide.createIcons();
     </script>
 </body>
 

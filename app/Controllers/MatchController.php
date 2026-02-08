@@ -108,7 +108,10 @@ class MatchController
             if (file_exists($cacheFile)) {
                 $data = json_decode(file_get_contents($cacheFile), true);
                 foreach ($data['response'] ?? [] as $m) {
-                    if ($m['marketId'] === $marketId) { $event = $m; break; }
+                    if ($m['marketId'] === $marketId) {
+                        $event = $m;
+                        break;
+                    }
                 }
             }
 
@@ -133,10 +136,75 @@ class MatchController
     public function dashboard()
     {
         try {
-            // Dashboard semplificata focalizzata su Betfair. Il rendering è gestito via JS in app.js
+            // 1. Live Matches
+            $liveMatches = [];
+            $cacheFile = Config::DATA_PATH . 'betfair_live.json';
+            if (file_exists($cacheFile)) {
+                $data = json_decode(file_get_contents($cacheFile), true);
+                // Flatten aggregated data if needed, or use as is based on SyncController structure
+                // SyncController saves: ['response' => $betfairAggregated]
+                $liveMatches = $data['response'] ?? [];
+            }
+
+            // 2. Predictions
+            $predictions = [];
+            $predProps = Config::DATA_PATH . 'betfair_hot_predictions.json';
+            if (file_exists($predProps)) {
+                $data = json_decode(file_get_contents($predProps), true);
+                $predictions = $data['response'] ?? [];
+            }
+
+            // 3. History & Account Stats
+            $db = \App\Services\Database::getInstance()->getConnection();
+
+            // History (Last 10 bets)
+            $stmt = $db->query("SELECT * FROM bets ORDER BY timestamp DESC LIMIT 10");
+            $history = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Account Balance calculation (Unified Real/Sim logic)
+            $account = ['available' => 0, 'exposure' => 0, 'wallet' => 0];
+
+            if (Config::isSimulationMode()) {
+                // Simulation Logic
+                $stmt = $db->query("SELECT status, odds, stake FROM bets WHERE betfair_id IS NULL AND status IN ('won', 'lost')");
+                $closedBets = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+                $profit = 0;
+                foreach ($closedBets as $b) {
+                    if ($b['status'] === 'won')
+                        $profit += $b['stake'] * ($b['odds'] - 1);
+                    else
+                        $profit -= $b['stake'];
+                }
+
+                $stmt = $db->query("SELECT SUM(stake) as exposure FROM bets WHERE betfair_id IS NULL AND status IN ('placed', 'pending')");
+                $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+                $exposure = (float) ($row['exposure'] ?? 0);
+
+                $initial = Config::INITIAL_BANKROLL;
+                $account['wallet'] = $initial + $profit;
+                $account['exposure'] = $exposure;
+                $account['available'] = $account['wallet'] - $exposure;
+            } else {
+                // Real Betfair Logic
+                try {
+                    $bf = new \App\Services\BetfairService();
+                    if ($bf->isConfigured()) {
+                        $funds = $bf->getFunds();
+                        if (isset($funds['result']))
+                            $funds = $funds['result']; // Handle RPC vs REST wrapper diffs
+
+                        $account['available'] = $funds['availableToBetBalance'] ?? 0;
+                        $account['exposure'] = abs($funds['exposure'] ?? 0);
+                        $account['wallet'] = $account['available'] + $account['exposure'];
+                    }
+                } catch (\Throwable $e) { /* Ignore API errors for dashboard rendering, show 0 */
+                }
+            }
+
             require __DIR__ . '/../Views/partials/dashboard.php';
         } catch (\Throwable $e) {
-            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+            echo '<div class="text-danger p-4">Errore Dashboard: ' . $e->getMessage() . '</div>';
         }
     }
 

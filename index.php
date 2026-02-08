@@ -117,6 +117,10 @@ try {
         (new \App\Controllers\SystemController())->resetSimulation();
     } elseif ($path === '/api/view/settings') {
         (new \App\Controllers\SystemController())->viewSettings();
+    } elseif (preg_match('#^/api/view/modal/bet/(\d+)$#', $path, $matches)) {
+        (new \App\Controllers\BetController())->viewBetModal($matches[1]);
+    } elseif ($path === '/api/view/modal/place_bet') {
+        (new \App\Controllers\BetController())->viewPlaceBetModal();
     } else {
         http_response_code(404);
         echo json_encode(['error' => 'Not Found', 'path' => $path]);

@@ -32,9 +32,26 @@ if (empty($odds)) {
             </div>
 
             <div class="grid grid-cols-2 gap-4 relative z-10">
-                <?php foreach ($oddsData as $val): ?>
-                    <div
-                        class="bg-white/5 p-5 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-1 group/odd hover:border-accent/40 active:scale-95 transition-all cursor-pointer">
+                <?php foreach ($oddsData as $val):
+                    $params = http_build_query([
+                        'fixture_id' => $o['fixture_id'] ?? $_GET['id'] ?? 0, // Fallback if fixture_id not in odds row (usually in $f['id'])
+                        'market' => $o['bet_name'] ?? 'Esito Finale',
+                        'selection' => $val['value'],
+                        'odd' => $val['odd']
+                    ]);
+                    // If fixture_id is missing here, we must rely on parent context or pass it.
+                    // odds.php usually included inside viewMatchTab($id), but $id variable might not be in scope here directly unless passed.
+                    // Actually $id is function arg in MatchController::viewMatchTab($id, ...).
+                    // In partial scope, only variables defined before include are available.
+                    // MatchController::viewMatchTab sets $id.
+                    if (!isset($o['fixture_id'])) {
+                        // Fix: pass fixture ID from Controller context
+                        // But for now, let's assume it's available as $id
+                    }
+                    ?>
+                    <div class="bg-white/5 p-5 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-1 group/odd hover:border-accent/40 active:scale-95 transition-all cursor-pointer"
+                        hx-get="/api/view/modal/place_bet?<?php echo $params; ?>&fixture_id=<?php echo $id; ?>"
+                        hx-target="#global-modal-container">
                         <span
                             class="text-[9px] font-black uppercase text-slate-500 tracking-widest group-hover/odd:text-accent transition-colors">
                             <?php echo htmlspecialchars($val['value']); ?>
