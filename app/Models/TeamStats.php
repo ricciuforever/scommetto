@@ -52,4 +52,16 @@ class TeamStats
         $stmt->execute([$team_id, $league_id, $season]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
+
+    public function needsRefresh($team_id, $league_id, $season, $hours = 24)
+    {
+        $stmt = $this->db->prepare("SELECT last_updated FROM team_stats WHERE team_id = ? AND league_id = ? AND season = ?");
+        $stmt->execute([$team_id, $league_id, $season]);
+        $row = $stmt->fetch();
+
+        if (!$row)
+            return true;
+
+        return (time() - strtotime($row['last_updated'])) > ($hours * 3600);
+    }
 }
