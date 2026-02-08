@@ -239,13 +239,45 @@ class BetfairService
     /**
      * Map AI advice to a selectionId
      */
-    public function mapAdviceToSelection(string $advice, array $runners): ?string
+    public function mapAdviceToSelection(string $advice, array $runners, string $homeTeam = '', string $awayTeam = ''): ?string
     {
-        $this->log("Mapping advice to selection: $advice");
-        $advice = strtolower($advice);
+        $this->log("Mapping advice to selection: $advice", ['runners' => $runners, 'home' => $homeTeam, 'away' => $awayTeam]);
+        $advice = trim(strtolower($advice));
 
-        // Handle common Match Odds advice
-        if (strpos($advice, 'winner:') !== false) {
+        // 1. Handle explicit 1, X, 2 or Home, Away, Draw
+        if ($advice === '1' || $advice === 'home' || $advice === 'casa') {
+            if ($homeTeam) {
+                foreach ($runners as $r) {
+                    if (strpos(strtolower($r['runnerName']), strtolower($homeTeam)) !== false) return $r['selectionId'];
+                }
+            }
+            // Fallback: usually the first runner is Home
+            return $runners[0]['selectionId'] ?? null;
+        }
+
+        if ($advice === '2' || $advice === 'away' || $advice === 'trasferta') {
+            if ($awayTeam) {
+                foreach ($runners as $r) {
+                    if (strpos(strtolower($r['runnerName']), strtolower($awayTeam)) !== false) return $r['selectionId'];
+                }
+            }
+            // Fallback: usually the second runner is Away
+            return $runners[1]['selectionId'] ?? null;
+        }
+
+        if ($advice === 'x' || $advice === 'draw' || $advice === 'pareggio' || $advice === 'the draw') {
+            foreach ($runners as $r) {
+                $name = strtolower($r['runnerName']);
+                if ($name === 'the draw' || $name === 'pareggio' || $name === 'draw' || $name === 'x') {
+                    return $r['selectionId'];
+                }
+            }
+            // Fallback: usually the third runner is Draw
+            return $runners[2]['selectionId'] ?? null;
+        }
+
+        // 2. Handle common Match Odds advice with prefixes
+        if (strpos($advice, 'winner:') !== false || strpos($advice, 'vincente:') !== false) {
             $teamName = trim(explode(':', $advice)[1]);
             foreach ($runners as $r) {
                 if (strpos(strtolower($r['runnerName']), strtolower($teamName)) !== false) {
@@ -254,18 +286,22 @@ class BetfairService
             }
         }
 
-        if (strpos($advice, 'draw') !== false) {
-            foreach ($runners as $r) {
-                if (strtolower($r['runnerName']) === 'the draw' || strtolower($r['runnerName']) === 'pareggio') {
-                    return $r['selectionId'];
-                }
-            }
-        }
-
-        // Generic fallback: check if advice contains any runner name
+        // 3. Generic fallback: check if advice contains any runner name
         foreach ($runners as $r) {
             if (strpos($advice, strtolower($r['runnerName'])) !== false) {
                 return $r['selectionId'];
+            }
+        }
+
+        // 4. If advice is a team name directly
+        if ($homeTeam && strpos($advice, strtolower($homeTeam)) !== false) {
+             foreach ($runners as $r) {
+                if (strpos(strtolower($r['runnerName']), strtolower($homeTeam)) !== false) return $r['selectionId'];
+            }
+        }
+        if ($awayTeam && strpos($advice, strtolower($awayTeam)) !== false) {
+             foreach ($runners as $r) {
+                if (strpos(strtolower($r['runnerName']), strtolower($awayTeam)) !== false) return $r['selectionId'];
             }
         }
 

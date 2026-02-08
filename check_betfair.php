@@ -60,6 +60,18 @@ if (isset($result['result'])) {
             } else {
                 echo "[ERRORE] Mapping fallito per '$testAdvice'\n";
             }
+
+            echo "[INFO] Test mapping '1': ";
+            $sid1 = $bf->mapAdviceToSelection('1', $market['runners']);
+            echo $sid1 ? "OK ($sid1)\n" : "FALLITO\n";
+
+            echo "[INFO] Test mapping 'X': ";
+            $sidX = $bf->mapAdviceToSelection('X', $market['runners']);
+            echo $sidX ? "OK ($sidX)\n" : "FALLITO\n";
+
+            echo "[INFO] Test mapping '2': ";
+            $sid2 = $bf->mapAdviceToSelection('2', $market['runners']);
+            echo $sid2 ? "OK ($sid2)\n" : "FALLITO\n";
         } else {
             echo "[ERRORE] Mercato MATCH_ODDS non trovato per questo evento.\n";
         }
