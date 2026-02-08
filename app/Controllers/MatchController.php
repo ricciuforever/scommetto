@@ -129,7 +129,7 @@ class MatchController
                 'current_portfolio' => ($funds['availableToBetBalance'] ?? 0) + abs($funds['exposure'] ?? 0)
             ];
 
-            $prediction = $this->geminiService->analyze($event, $balance);
+            $prediction = $this->geminiService->analyze([$event], $balance);
             echo json_encode(['prediction' => $prediction, 'match' => $event]);
         } catch (\Throwable $e) {
             echo json_encode(['error' => $e->getMessage()]);

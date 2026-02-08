@@ -14,7 +14,7 @@ class GeminiService
         $this->apiKey = Config::get('GEMINI_API_KEY');
     }
 
-    public function analyze($betfairEvent, $balanceInfo = null)
+    public function analyze($candidates, $balanceInfo = null)
     {
         if (!$this->apiKey) return "Error: Missing Gemini API Key";
 
@@ -23,27 +23,28 @@ class GeminiService
         $balanceText = "";
         if ($balanceInfo) {
             $balanceText = "SITUAZIONE PORTAFOGLIO:\n" .
-                "- Portfolio Reale (Saldo+Esposizione): " . number_format($balanceInfo['current_portfolio'], 2) . "€\n" .
-                "- Disponibilità Immediata: " . number_format($balanceInfo['available_balance'], 2) . "€\n\n";
+                "- Portfolio Reale: " . number_format($balanceInfo['current_portfolio'], 2) . "€\n" .
+                "- Disponibilità: " . number_format($balanceInfo['available_balance'], 2) . "€\n\n";
         }
 
-        $prompt = "Sei un TRADER PROFESSIONISTA DI SCOMMESSE LIVE. Il tuo obiettivo è il profitto tramite l'analisi di volumi e quote Betfair.\n\n" .
+        $prompt = "Sei un TRADER ELITE di Betfair. Il tuo compito è analizzare il mercato live multi-sport e scovare la scommessa migliore tra quelle fornite.\n\n" .
             $balanceText .
-            "DATI EVENTO LIVE BETFAIR (Sport: " . ($betfairEvent['sport'] ?? 'Unknown') . "):\n" . json_encode($betfairEvent) . "\n\n" .
-            "REGOLE DI ANALISI:\n" .
-            "1. Analizza i volumi abbinati (totalMatched) e la discrepanza tra Back e Lay.\n" .
-            "2. USA SOLO I RUNNER E LE QUOTE FORNITI NEI PREZZI BETFAIR. NON INVENTARE NULLA.\n" .
-            "3. Valuta la 'confidence' (0-100) basandoti sull'andamento del mercato.\n" .
-            "4. Bankroll: Stake suggerito 1-3% della disponibilità.\n" .
-            "5. Se l'evento è illiquido (volumi bassi) o rischioso, NON scommettere (confidence < 70).\n\n" .
+            "LISTA EVENTI LIVE CANDIDATI:\n" . json_encode($candidates) . "\n\n" .
+            "REGOLE RIGIDE:\n" .
+            "1. Analizza i volumi (totalMatched) e le quote Back/Lay.\n" .
+            "2. SCEGLI SOLO 1 EVENTO dalla lista che ritieni più profittevole.\n" .
+            "3. Se nessun evento è convincente (risk/reward scarso), non scegliere nulla.\n" .
+            "4. NON INVENTARE QUOTE: usa solo quelle presenti nel JSON per il runner scelto.\n" .
+            "5. Stake: 1-5% del portfolio.\n\n" .
             "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
-            "Analisi rapida in ITALIANO focalizzata sui mercati Betfair.\n" .
+            "Breve analisi tecnica e poi il JSON:\n" .
             "```json\n" .
             "{\n" .
+            "  \"marketId\": \"1.XXXXX\",\n" .
             "  \"advice\": \"Runner Name\",\n" .
             "  \"odds\": 1.80,\n" .
             "  \"stake\": 2.0,\n" .
-            "  \"confidence\": 85\n" .
+            "  \"confidence\": 90\n" .
             "}\n" .
             "```";
 
