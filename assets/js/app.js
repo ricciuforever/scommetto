@@ -1438,6 +1438,18 @@ async function updateStatsSummary() {
             if (data.available !== undefined) {
                 displayBalance = parseFloat(data.available).toFixed(2) + '€';
                 displayPortfolio = parseFloat(data.wallet).toFixed(2) + '€'; // Wallet include esposizione
+
+                // CALCOLO REALE AL VOLO: Utile Netto = Portafoglio Reale - Bankroll Iniziale (100€)
+                const realPortfolio = parseFloat(data.wallet);
+                const initialBankroll = 100;
+                summary.netProfit = realPortfolio - initialBankroll;
+                if (summary.totalStake > 0) {
+                    summary.roi = (summary.netProfit / summary.totalStake) * 100;
+                }
+
+                // Aggiorna anche i valori nel summary per la coerenza del rendering
+                summary.availableBalance = parseFloat(data.available);
+                summary.currentPortfolio = realPortfolio;
             } else if (data.error) {
                 displayBalance = 'ERR';
                 displayPortfolio = 'ERR';
@@ -1561,6 +1573,7 @@ function calculateStats() {
         netProfit: netProfitFiltered,
         liveCount,
         roi: totalStakeFiltered > 0 ? (netProfitFiltered / totalStakeFiltered) * 100 : 0,
+        totalStake: totalStakeFiltered,
         currentPortfolio,
         availableBalance
     };

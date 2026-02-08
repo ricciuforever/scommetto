@@ -178,11 +178,19 @@ class BetfairService
     }
 
     /**
-     * Finds the Market ID and Runners for a given fixture and market name (e.g. 'MATCH_ODDS')
+     * Finds the Market ID and Runners for a given fixture and advice (determines market type)
      */
-    public function findMarket(string $matchName, string $marketType = 'MATCH_ODDS'): ?array
+    public function findMarket(string $matchName, string $advice = ''): ?array
     {
-        $this->log("Finding market for: $matchName (Type: $marketType)");
+        $marketType = 'MATCH_ODDS';
+        $advice = strtolower($advice);
+        if (strpos($advice, 'over') !== false || strpos($advice, 'under') !== false) {
+            $marketType = 'OVER_UNDER_25';
+        } elseif (strpos($advice, 'both teams to score') !== false || strpos($advice, 'bts') !== false || strpos($advice, 'gol/nogol') !== false) {
+            $marketType = 'BOTH_TEAMS_TO_SCORE';
+        }
+
+        $this->log("Finding market for: $matchName (Detected Type: $marketType for advice: $advice)");
 
         // 1. List events by name
         $events = $this->request('listEvents', [
@@ -243,6 +251,20 @@ class BetfairService
     {
         $this->log("Mapping advice to selection: $advice", ['runners' => $runners, 'home' => $homeTeam, 'away' => $awayTeam]);
         $advice = trim(strtolower($advice));
+
+        // 0. Handle Over/Under and BTS
+        if (strpos($advice, 'over 2.5') !== false) {
+            foreach ($runners as $r) { if (stripos($r['runnerName'], 'over') !== false) return $r['selectionId']; }
+        }
+        if (strpos($advice, 'under 2.5') !== false) {
+            foreach ($runners as $r) { if (stripos($r['runnerName'], 'under') !== false) return $r['selectionId']; }
+        }
+        if (strpos($advice, 'bts') !== false || strpos($advice, 'both teams to score') !== false || strpos($advice, 'yes') !== false) {
+             foreach ($runners as $r) { if (stripos($r['runnerName'], 'yes') !== false) return $r['selectionId']; }
+        }
+        if (strpos($advice, 'no bts') !== false || strpos($advice, 'no') !== false) {
+             foreach ($runners as $r) { if (stripos($r['runnerName'], 'no') !== false) return $r['selectionId']; }
+        }
 
         // 1. Handle explicit 1, X, 2 or Home, Away, Draw
         if ($advice === '1' || $advice === 'home' || $advice === 'casa') {
@@ -445,8 +467,15 @@ class BetfairService
 
         $decoded = json_decode($response, true);
 
-        // Controllo sessione scaduta per REST Account
-        if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
+        // Controllo sessione scaduta per REST Account (gestisce sia top-level errorCode che nested fault structure)
+        $isExpired = false;
+        if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION') {
+            $isExpired = true;
+        } elseif (isset($decoded['detail']['AccountAPINGException']['errorCode']) && $decoded['detail']['AccountAPINGException']['errorCode'] === 'INVALID_SESSION_INFORMATION') {
+            $isExpired = true;
+        }
+
+        if ($isExpired && !$isRetry) {
             $this->log("Sessione scaduta (Account REST). Tento il refresh...");
             $this->sessionToken = null;
             return $this->getFunds(true);

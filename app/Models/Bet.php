@@ -23,8 +23,8 @@ class Bet
 
     public function create($data): string
     {
-        $sql = "INSERT INTO bets (fixture_id, bookmaker_id, bookmaker_name, match_name, advice, market, odds, stake, urgency, confidence, status, timestamp) 
-                VALUES (:fixture_id, :bookmaker_id, :bookmaker_name, :match_name, :advice, :market, :odds, :stake, :urgency, :confidence, :status, :timestamp)";
+        $sql = "INSERT INTO bets (fixture_id, bookmaker_id, bookmaker_name, match_name, advice, market, odds, stake, urgency, confidence, status, timestamp, betfair_id, adm_id, notes, result)
+                VALUES (:fixture_id, :bookmaker_id, :bookmaker_name, :match_name, :advice, :market, :odds, :stake, :urgency, :confidence, :status, :timestamp, :betfair_id, :adm_id, :notes, :result)";
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
@@ -39,7 +39,11 @@ class Bet
             'urgency' => $data['urgency'] ?? 'Medium',
             'confidence' => (int) ($data['confidence'] ?? 0),
             'status' => $data['status'] ?? 'pending',
-            'timestamp' => $data['timestamp'] ?? date('Y-m-d H:i:s')
+            'timestamp' => $data['timestamp'] ?? date('Y-m-d H:i:s'),
+            'betfair_id' => $data['betfair_id'] ?? null,
+            'adm_id' => $data['adm_id'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'result' => $data['result'] ?? null
         ]);
 
         return $this->db->lastInsertId();

@@ -21,7 +21,13 @@ class BetController
         header('Content-Type: application/json');
         $db = \App\Services\Database::getInstance()->getConnection();
         try {
-            $history = $db->query("SELECT * FROM bets ORDER BY timestamp DESC LIMIT 1000")->fetchAll(\PDO::FETCH_ASSOC);
+            $sql = "SELECT b.*, l.country_name as country, bk.name as bookmaker_name_full
+                    FROM bets b
+                    LEFT JOIN fixtures f ON b.fixture_id = f.id
+                    LEFT JOIN leagues l ON f.league_id = l.id
+                    LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id
+                    ORDER BY b.timestamp DESC LIMIT 1000";
+            $history = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
             echo json_encode($history);
         } catch (\Throwable $e) { echo json_encode([]); }
     }
@@ -75,9 +81,9 @@ class BetController
                 }
 
                 if ($matchName) {
-                    $market = $bf->findMarket($matchName);
+                    $advice = $input['prediction'] ?? $input['advice'] ?? '';
+                    $market = $bf->findMarket($matchName, $advice);
                     if ($market) {
-                        $advice = $input['prediction'] ?? $input['advice'] ?? '';
                         $selectionId = $bf->mapAdviceToSelection($advice, $market['runners'], $fixture['home_name'] ?? '', $fixture['away_name'] ?? '');
                         if ($selectionId) {
                             $price = (float)($input['odds'] ?? 1.01);
