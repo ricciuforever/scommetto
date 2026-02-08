@@ -174,6 +174,7 @@ class MatchController
 
             $translationMap = [
                 'Soccer' => 'Calcio',
+                'Football' => 'Calcio',
                 'Tennis' => 'Tennis',
                 'Basketball' => 'Basket',
                 'Volleyball' => 'Pallavolo',
@@ -182,7 +183,13 @@ class MatchController
                 'American Football' => 'Football',
                 'Rugby Union' => 'Rugby',
                 'Rugby League' => 'Rugby',
-                'Golf' => 'Golf'
+                'Golf' => 'Golf',
+                'Cycling' => 'Ciclismo',
+                'Motor Sport' => 'Motori',
+                'Darts' => 'Freccette',
+                'Snooker' => 'Snooker',
+                'Boxing' => 'Pugilato',
+                'Mixed Martial Arts' => 'MMA'
             ];
 
             if ($selectedSport !== 'all') {
@@ -254,6 +261,7 @@ class MatchController
             // Map Betfair standard names to Italian if they appear
             $translationMap = [
                 'Soccer' => 'Calcio',
+                'Football' => 'Calcio',
                 'Tennis' => 'Tennis',
                 'Basketball' => 'Basket',
                 'Volleyball' => 'Pallavolo',
@@ -262,7 +270,13 @@ class MatchController
                 'American Football' => 'Football',
                 'Rugby Union' => 'Rugby',
                 'Rugby League' => 'Rugby',
-                'Golf' => 'Golf'
+                'Golf' => 'Golf',
+                'Cycling' => 'Ciclismo',
+                'Motor Sport' => 'Motori',
+                'Darts' => 'Freccette',
+                'Snooker' => 'Snooker',
+                'Boxing' => 'Pugilato',
+                'Mixed Martial Arts' => 'MMA'
             ];
 
             // Use allMatches here to calculate counts even when filtered view is active
@@ -277,7 +291,7 @@ class MatchController
                     $activeSports[$sportName]++;
                 }
             }
-            ksort($activeSports);
+            arsort($activeSports);
 
             // 5. Open Bets Count
             $openBetsCount = 0;

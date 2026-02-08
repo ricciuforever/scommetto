@@ -113,7 +113,7 @@
                 } catch (\Throwable $e) { /* ignore db errors for menu */
                 }
 
-                ksort($sideSports);
+                arsort($sideSports);
 
                 $icons = [
                     'Calcio' => 'trophy',
@@ -138,17 +138,17 @@
                     $sIcon = $icons[$sName] ?? 'activity';
                     $isSideActive = (strtolower($currentSportSelect) === strtolower($sName));
                     ?>
-                    <a href="/dashboard?sport=<?php echo urlencode($sName); ?>"
-                        class="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all group <?php echo $isSideActive ? 'bg-accent/10 border border-accent/20' : 'hover:bg-white/5'; ?>">
-                        <div class="flex items-center gap-3">
-                            <i data-lucide="<?php echo $sIcon; ?>"
-                                class="w-4 h-4 <?php echo $isSideActive ? 'text-accent' : 'text-slate-500 group-hover:text-accent'; ?> transition-colors"></i>
+                        <a href="/dashboard?sport=<?php echo urlencode($sName); ?>"
+                            class="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all group <?php echo $isSideActive ? 'bg-accent/10 border border-accent/20' : 'hover:bg-white/5'; ?>">
+                            <div class="flex items-center gap-3">
+                                <i data-lucide="<?php echo $sIcon; ?>"
+                                    class="w-4 h-4 <?php echo $isSideActive ? 'text-accent' : 'text-slate-500 group-hover:text-accent'; ?> transition-colors"></i>
+                                <span
+                                    class="text-xs font-bold <?php echo $isSideActive ? 'text-white' : 'text-slate-400 group-hover:text-white'; ?> transition-colors"><?php echo $sName; ?></span>
+                            </div>
                             <span
-                                class="text-xs font-bold <?php echo $isSideActive ? 'text-white' : 'text-slate-400 group-hover:text-white'; ?> transition-colors"><?php echo $sName; ?></span>
-                        </div>
-                        <span
-                            class="text-[9px] font-black bg-white/5 px-1.5 py-0.5 rounded text-slate-500 group-hover:bg-accent/20 group-hover:text-accent transition-all"><?php echo $count; ?></span>
-                    </a>
+                                class="text-[9px] font-black bg-white/5 px-1.5 py-0.5 rounded text-slate-500 group-hover:bg-accent/20 group-hover:text-accent transition-all"><?php echo $count; ?></span>
+                        </a>
                 <?php endforeach; ?>
             </nav>
         </div>
@@ -253,6 +253,11 @@
             } elseif (preg_match('#^/player/(\d+)$#', $currentPath, $m)) {
                 $initialApi = "/api/view/player/{$m[1]}";
                 $initialTitle = 'Dettagli Giocatore';
+            }
+
+            // Manteniamo i filtri (es. ?sport=Calcio) anche nella chiamata HTMX
+            if (!empty($_SERVER['QUERY_STRING'])) {
+                $initialApi .= '?' . $_SERVER['QUERY_STRING'];
             }
             ?>
             <script>document.getElementById('view-title').textContent = '<?php echo $initialTitle; ?>';</script>
