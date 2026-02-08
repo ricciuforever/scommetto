@@ -18,7 +18,7 @@ $path = str_replace('/scommetto', '', $path); // Adjust if running in a subdirec
 try {
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||
-        in_array($path, ['/dashboard', '/leagues', '/predictions', '/tracker']) ||
+        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/predictions', '/tracker']) ||
         preg_match('#^/(match|team|player)/(\d+)$#', $path)
     ) {
         (new MatchController())->index();

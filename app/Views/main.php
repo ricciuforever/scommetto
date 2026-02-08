@@ -55,7 +55,8 @@
         </div>
 
         <div class="px-4 py-2">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-4 px-4">Sport Disponibili</span>
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-4 px-4">Sport
+                Disponibili</span>
             <nav class="space-y-1">
                 <?php
                 $translationMap = [
@@ -69,8 +70,8 @@
                     'Rugby Union' => 'Rugby',
                     'Rugby League' => 'Rugby',
                     'Golf' => 'Golf',
-                    'Horse Racing' => 'Ippica',
-                    'Greyhound Racing' => 'Levrieri'
+                    'Cycling' => 'Ciclismo',
+                    'Motor Sport' => 'Motori'
                 ];
 
                 // Comprehensive lists of sports we want to ALWAYS show
@@ -78,7 +79,7 @@
                 sort($allSportNames);
 
                 $sideSports = array_fill_keys($allSportNames, 0);
-                
+
                 $cacheFile = \App\Config\Config::DATA_PATH . 'betfair_live.json';
                 if (file_exists($cacheFile)) {
                     $cData = json_decode(file_get_contents($cacheFile), true);
@@ -89,7 +90,6 @@
                             if (isset($sideSports[$trS])) {
                                 $sideSports[$trS]++;
                             } else {
-                                // For sports not in our predefined list but active
                                 $sideSports[$trS] = 1;
                             }
                         }
@@ -104,9 +104,10 @@
                     'Pallavolo' => 'activity',
                     'Hockey' => 'snowflake',
                     'Rugby' => 'citrus',
-                    'Golf'   => 'flag-triangle-right',
-                    'Ippica' => 'horse',
-                    'Cricket' => 'pipette'
+                    'Golf' => 'flag-triangle-right',
+                    'Football' => 'citrus',
+                    'Ciclismo' => 'bike',
+                    'Motori' => 'car-front'
                 ];
 
                 $currentSportSelect = $_GET['sport'] ?? 'all';
@@ -114,15 +115,18 @@
                 foreach ($sideSports as $sName => $count):
                     $sIcon = $icons[$sName] ?? 'activity';
                     $isSideActive = (strtolower($currentSportSelect) === strtolower($sName));
-                ?>
-                    <a href="/dashboard/?sport=<?php echo urlencode($sName); ?>" 
-                       class="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all group <?php echo $isSideActive ? 'bg-accent/10 border border-accent/20' : 'hover:bg-white/5'; ?>">
+                    ?>
+                    <a href="/dashboard?sport=<?php echo urlencode($sName); ?>"
+                        class="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all group <?php echo $isSideActive ? 'bg-accent/10 border border-accent/20' : 'hover:bg-white/5'; ?>">
                         <div class="flex items-center gap-3">
-                            <i data-lucide="<?php echo $sIcon; ?>" class="w-4 h-4 <?php echo $isSideActive ? 'text-accent' : 'text-slate-500 group-hover:text-accent'; ?> transition-colors"></i>
-                            <span class="text-xs font-bold <?php echo $isSideActive ? 'text-white' : 'text-slate-400 group-hover:text-white'; ?> transition-colors"><?php echo $sName; ?></span>
+                            <i data-lucide="<?php echo $sIcon; ?>"
+                                class="w-4 h-4 <?php echo $isSideActive ? 'text-accent' : 'text-slate-500 group-hover:text-accent'; ?> transition-colors"></i>
+                            <span
+                                class="text-xs font-bold <?php echo $isSideActive ? 'text-white' : 'text-slate-400 group-hover:text-white'; ?> transition-colors"><?php echo $sName; ?></span>
                         </div>
-                        <?php if($count > 0): ?>
-                            <span class="text-[9px] font-black bg-white/5 px-1.5 py-0.5 rounded text-slate-500 group-hover:bg-accent/20 group-hover:text-accent transition-all"><?php echo $count; ?></span>
+                        <?php if ($count > 0): ?>
+                            <span
+                                class="text-[9px] font-black bg-white/5 px-1.5 py-0.5 rounded text-slate-500 group-hover:bg-accent/20 group-hover:text-accent transition-all"><?php echo $count; ?></span>
                         <?php endif; ?>
                     </a>
                 <?php endforeach; ?>
