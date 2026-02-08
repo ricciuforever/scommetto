@@ -14,59 +14,35 @@ class GeminiService
         $this->apiKey = Config::get('GEMINI_API_KEY');
     }
 
-    public function analyze($matchData, $balanceInfo = null)
+    public function analyze($betfairEvent, $balanceInfo = null)
     {
-        if (!$this->apiKey) {
-            return "Error: Missing Gemini API Key";
-        }
-
-        $fid = $matchData['fixture']['id'];
-        $home_id = $matchData['teams']['home']['id'];
-        $away_id = $matchData['teams']['away']['id'];
-        $league_id = $matchData['league']['id'];
-
-        // Recupero Intelligenza dal DB Locale
-        $intelService = new \App\Services\IntelligenceService();
-        $dbContent = $intelService->getDeepContext($fid, $home_id, $away_id, $league_id);
+        if (!$this->apiKey) return "Error: Missing Gemini API Key";
 
         $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=" . $this->apiKey;
 
         $balanceText = "";
         if ($balanceInfo) {
             $balanceText = "SITUAZIONE PORTAFOGLIO:\n" .
-                "- Portfolio Attuale: " . number_format($balanceInfo['current_portfolio'], 2) . "€\n" .
-                "- Disponibilità per Nuove Scommesse: " . number_format($balanceInfo['available_balance'], 2) . "€\n" .
-                "- Stake Totale in Sospeso: " . number_format($balanceInfo['pending_stakes'], 2) . "€\n\n";
+                "- Portfolio Reale (Saldo+Esposizione): " . number_format($balanceInfo['current_portfolio'], 2) . "€\n" .
+                "- Disponibilità Immediata: " . number_format($balanceInfo['available_balance'], 2) . "€\n\n";
         }
 
-        $prompt = "Sei un analista scommesse PROFESSIONALE (Senior Tipster). Il tuo obiettivo è il profitto a lungo termine.\n\n" .
+        $prompt = "Sei un TRADER PROFESSIONISTA DI SCOMMESSE LIVE. Il tuo obiettivo è il profitto tramite l'analisi di volumi e quote Betfair.\n\n" .
             $balanceText .
-            "SITUAZIONE LIVE:\n" . json_encode($matchData) . "\n\n" .
-            "INTELLIGENZA NEL DATABASE (Storico, Classifica, Predictions):\n" . json_encode($dbContent) . "\n\n" .
-            "REGOLE RIGIDE DI ANALISI E BANKROLL:\n" .
-            "1. USA SOLO LE QUOTE REALI fornite nel campo 'odds_context'. NON INVENTARE MAI LE QUOTE.\n" .
-            "2. Se non ci sono quote disponibili o non sono vantaggiose, NON consigliare la scommessa.\n" .
-            "3. Analizza se l'andamento LIVE conferma o smentisce i dati storici.\n" .
-            "4. Valuta la 'confidence' (fiducia) da 0 a 100.\n" .
-            "5. DEVI RISPETTARE IL BUDGET. Non consigliare MAI uno stake superiore alla disponibilità attuale.\n" .
-            "6. Stake suggerito normalmente: 1-5% del portfolio. Sii più aggressivo (fino al 10%) SOLO se la confidence è > 85.\n" .
-            "7. Se confidence < 60, non consigliare alcuna scommessa.\n\n" .
-            "VOCABOLARIO JSON CONTROLLATO (OBBLIGATORIO):\n" .
-            "- Market: USA SOLO: '1X2', 'Double Chance', 'Over/Under', 'Both Teams to Score', 'Correct Score'.\n" .
-            "- Advice (1X2): '1', 'X', '2'\n" .
-            "- Advice (Double Chance): '1X', 'X2', '12'\n" .
-            "- Advice (Over/Under): 'Over 0.5 Goals', 'Over 1.5 Goals', 'Over 2.5 Goals', 'Under 2.5 Goals', etc.\n" .
-            "- Advice (BTTS): 'Yes' (Goal/Goal), 'No' (No Goal)\n" .
-            "- Advice (Correct Score): '1-0', '2-1', etc.\n" .
-            "FORMATO RISPOSTA:\n" .
-            "Analisi tecnica in ITALIANO.\n" .
+            "DATI EVENTO LIVE BETFAIR (Sport: " . ($betfairEvent['sport'] ?? 'Unknown') . "):\n" . json_encode($betfairEvent) . "\n\n" .
+            "REGOLE DI ANALISI:\n" .
+            "1. Analizza i volumi abbinati (totalMatched) e la discrepanza tra Back e Lay.\n" .
+            "2. USA SOLO I RUNNER E LE QUOTE FORNITI NEI PREZZI BETFAIR. NON INVENTARE NULLA.\n" .
+            "3. Valuta la 'confidence' (0-100) basandoti sull'andamento del mercato.\n" .
+            "4. Bankroll: Stake suggerito 1-3% della disponibilità.\n" .
+            "5. Se l'evento è illiquido (volumi bassi) o rischioso, NON scommettere (confidence < 70).\n\n" .
+            "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
+            "Analisi rapida in ITALIANO focalizzata sui mercati Betfair.\n" .
             "```json\n" .
             "{\n" .
-            "  \"advice\": \"Over 2.5 Goals\",\n" .
-            "  \"market\": \"Over/Under\",\n" .
+            "  \"advice\": \"Runner Name\",\n" .
             "  \"odds\": 1.80,\n" .
-            "  \"stake\": 3.0,\n" .
-            "  \"urgency\": \"High\",\n" .
+            "  \"stake\": 2.0,\n" .
             "  \"confidence\": 85\n" .
             "}\n" .
             "```";

@@ -461,27 +461,13 @@ class BetfairService
      */
     public function getFunds($isRetry = false)
     {
-        // Nota: Account API è su un endpoint diverso, ma molte librerie usano lo stesso URL base per semplicità.
-        // Se necessario, cambiare URL base. Per Betfair Exchange API standard 'SportsAPING' e 'AccountAPING' sono separati.
-        // URL Account: https://api.betfair.com/exchange/account/json-rpc/v1
-
         $token = $this->authenticate();
-        if (!$token)
-            return null;
-
-        // Rate Limit check (semplificato)
-        $now = microtime(true);
-        if (($now - $this->lastRequestTime) < 0.2)
-            usleep(200000);
-        $this->lastRequestTime = microtime(true);
-
-        // REST Endpoint Account (comune per IT se autenticati su .it)
-        // Usa: https://api.betfair.com/exchange/account/rest/v1.0/getAccountFunds/
+        if (!$token) return null;
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/account/rest/v1.0/getAccountFunds/');
         curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, '{}'); // Body vuoto o filtro vuoto
+        curl_setopt($ch, CURLOPT_POSTFIELDS, '{}');
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             "X-Application: {$this->appKey}",
@@ -489,37 +475,135 @@ class BetfairService
             "Content-Type: application/json",
             "Accept: application/json"
         ]);
-        // Fix SSL locale
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
 
         $response = curl_exec($ch);
-
-        if ($response === false) {
-            $err = curl_error($ch);
-            curl_close($ch);
-            $this->log("GetFunds CURL Error: $err");
-            return ['error' => 'CURL_ERROR', 'details' => $err];
-        }
         curl_close($ch);
 
         $decoded = json_decode($response, true);
-
-        // Controllo sessione scaduta per REST Account (gestisce sia top-level errorCode che nested fault structure)
-        $isExpired = false;
-        if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION') {
-            $isExpired = true;
-        } elseif (isset($decoded['detail']['AccountAPINGException']['errorCode']) && $decoded['detail']['AccountAPINGException']['errorCode'] === 'INVALID_SESSION_INFORMATION') {
-            $isExpired = true;
-        }
+        $isExpired = isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION';
+        if (isset($decoded['detail']['AccountAPINGException']['errorCode']) && $decoded['detail']['AccountAPINGException']['errorCode'] === 'INVALID_SESSION_INFORMATION') $isExpired = true;
 
         if ($isExpired && !$isRetry) {
-            $this->log("Sessione scaduta (Account REST). Tento il refresh...");
             $this->clearPersistentToken();
             return $this->getFunds(true);
         }
 
-        $this->log("GetFunds Response", $decoded);
+        return $decoded;
+    }
+
+    /**
+     * Multi-Sport Discovery: List all sport types
+     */
+    public function getEventTypes()
+    {
+        return $this->request('listEventTypes', ['filter' => new \stdClass()]);
+    }
+
+    /**
+     * Fetch all live events for specific sport IDs
+     */
+    public function getLiveEvents(array $eventTypeIds = ["1"])
+    {
+        return $this->request('listEvents', [
+            'filter' => [
+                'eventTypeIds' => $eventTypeIds,
+                'inPlayOnly' => true
+            ]
+        ]);
+    }
+
+    /**
+     * Get Market Catalogues for a list of Event IDs
+     */
+    public function getMarketCatalogues(array $eventIds, int $maxResults = 50)
+    {
+        return $this->request('listMarketCatalogue', [
+            'filter' => [
+                'eventIds' => $eventIds,
+                'marketBettingTypes' => ['ODDS']
+            ],
+            'maxResults' => $maxResults,
+            'marketProjection' => ['RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION', 'EVENT']
+        ]);
+    }
+
+    /**
+     * Get Prices for specific Market IDs
+     */
+    public function getMarketBooks(array $marketIds)
+    {
+        return $this->request('listMarketBook', [
+            'marketIds' => $marketIds,
+            'priceProjection' => [
+                'priceData' => ['EX_BEST_OFFERS'],
+                'virtualise' => true
+            ]
+        ]);
+    }
+
+    /**
+     * Get Account Statement for tracker
+     */
+    public function getAccountStatement($isRetry = false)
+    {
+        $token = $this->authenticate();
+        if (!$token) return null;
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/account/rest/v1.0/getAccountStatement/');
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['itemClass' => 'TRANSACTION']));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "X-Application: {$this->appKey}",
+            "X-Authentication: {$token}",
+            "Content-Type: application/json",
+            "Accept: application/json"
+        ]);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $decoded = json_decode($response, true);
+        if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
+            $this->clearPersistentToken();
+            return $this->getAccountStatement(true);
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Get Open Bets
+     */
+    public function getCurrentOrders($isRetry = false)
+    {
+        $token = $this->authenticate();
+        if (!$token) return null;
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/listCurrentOrders/');
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, '{}');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "X-Application: {$this->appKey}",
+            "X-Authentication: {$token}",
+            "Content-Type: application/json",
+            "Accept: application/json"
+        ]);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $decoded = json_decode($response, true);
+        if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
+            $this->clearPersistentToken();
+            return $this->getCurrentOrders(true);
+        }
+
         return $decoded;
     }
 }

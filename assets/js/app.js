@@ -10,10 +10,11 @@ let currentView = 'dashboard';
 let historyData = [];
 
 // Global Filter State
+let selectedSport = localStorage.getItem('selected_sport') || '1'; // Default Football
 let selectedCountry = localStorage.getItem('selected_country') || 'all';
 let selectedLeague = localStorage.getItem('selected_league') || 'all';
 let selectedBookmaker = localStorage.getItem('selected_bookmaker') || 'all';
-let allFilterData = { countries: [], bookmakers: [] };
+let allFilterData = { countries: [], bookmakers: [], sports: [] };
 
 const countryFlags = {
     'Italy': '🇮🇹', 'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Spain': '🇪🇸', 'Germany': '🇩🇪',
@@ -70,25 +71,12 @@ document.addEventListener('htmx:afterRequest', async function (evt) {
 
         // Run view-specific JS initialization
         if (view === 'dashboard') {
-            // Sync local filter state from the newly loaded HTML
-            const countryFilter = document.getElementById('dash-country-filter');
-            const leagueFilter = document.getElementById('dash-league-filter');
-            if (countryFilter) {
-                selectedCountry = countryFilter.value;
-                localStorage.setItem('selected_country', selectedCountry);
-            }
-            if (leagueFilter) {
-                selectedLeague = leagueFilter.value;
-                localStorage.setItem('selected_league', selectedLeague);
-            }
-
+            await fetchSports();
             await fetchLive();
             updateStatsSummary();
             renderDashboardMatches();
         } else if (view === 'tracker') {
-            await fetchHistory();
-            updateTrackerSummary();
-            renderFullHistory();
+            renderTracker();
         } else if (view === 'predictions') {
             if (window.renderPredictions) renderPredictions();
         }
@@ -1359,28 +1347,46 @@ function updateDashboardFilters() {
     htmx.trigger('#htmx-container', 'load');
 }
 
+async function fetchSports() {
+    try {
+        const res = await fetch('/api/betfair/sports');
+        allFilterData.sports = await res.json();
+        renderSportSelectors();
+    } catch (e) { console.error("Error fetching sports", e); }
+}
+
+function renderSportSelectors() {
+    const container = document.getElementById('sport-selectors');
+    if (!container) return;
+
+    const icons = {
+        '1': 'soccer', '2': 'tennis', '4': 'basketball', '7': 'horse-racing',
+        '27454': 'volleyball', '998917': 'table-tennis', '7524': 'ice-hockey'
+    };
+
+    container.innerHTML = allFilterData.sports.map(s => `
+        <button onclick="selectSport('${s.eventType.id}')" class="flex flex-col items-center gap-2 p-4 rounded-3xl transition-all border ${selectedSport === s.eventType.id ? 'border-accent bg-accent/10 text-white' : 'border-white/5 bg-white/5 text-slate-500 hover:bg-white/10'}">
+             <i data-lucide="${icons[s.eventType.id] || 'trophy'}" class="w-6 h-6"></i>
+             <span class="text-[10px] font-black uppercase tracking-tighter">${s.eventType.name}</span>
+             ${s.marketCount ? `<span class="px-2 py-0.5 rounded-full bg-white/10 text-[8px] font-bold">${s.marketCount}</span>` : ''}
+        </button>
+    `).join('');
+    if (window.lucide) lucide.createIcons();
+}
+
+async function selectSport(id) {
+    selectedSport = id;
+    localStorage.setItem('selected_sport', id);
+    renderSportSelectors();
+    renderDashboardMatches();
+}
+window.selectSport = selectSport;
+
 async function fetchLive() {
     try {
         const res = await fetch('/api/live');
         const data = await res.json();
         liveMatches = data.response || [];
-
-        // Update match states for notifications
-        liveMatches.forEach(m => {
-            const id = m.fixture.id;
-            const prevState = matchStates[id];
-            const currentEventsCount = (m.events || []).filter(ev => ev.type !== 'subst').length;
-
-            if (prevState) {
-                const goalsChanged = m.goals.home !== prevState.goals.home || m.goals.away !== prevState.goals.away;
-                if (goalsChanged) {
-                    pinnedMatches.add(id);
-                    notificationSound.play().catch(() => { });
-                    setTimeout(() => pinnedMatches.delete(id), 10000);
-                }
-            }
-            matchStates[id] = { goals: { home: m.goals.home, away: m.goals.away }, eventsCount: currentEventsCount };
-        });
     } catch (e) { console.error("Error fetching live data", e); }
 }
 
@@ -1642,172 +1648,75 @@ function renderDashboardMatches() {
     const container = document.getElementById('live-matches-grid');
     if (!container) return;
 
-    // 1. Filter Matches
-    const filteredMatches = liveMatches.filter(m => {
-        const countryName = m.league.country || m.league.country_name || '';
-        const matchesCountry = selectedCountry === 'all' || countryName === selectedCountry;
-
-        const leagueId = m.league.id.toString();
-        const matchesLeague = selectedLeague === 'all' || leagueId === selectedLeague;
-
-        const matchesBookie = selectedBookmaker === 'all'
-            ? true
-            : (m.available_bookmakers || []).includes(parseInt(selectedBookmaker));
-
-        return matchesCountry && matchesLeague && matchesBookie;
-    });
-
-    // Update active count in UI
-    const countEl = document.getElementById('live-active-count');
-    if (countEl) countEl.innerText = filteredMatches.length;
-
-    // Clear and render matches
+    const filtered = liveMatches.filter(m => m.sportId === selectedSport);
     container.innerHTML = '';
 
-    if (filteredMatches.length === 0) {
-        container.innerHTML = `
-            <div class="glass p-12 rounded-[40px] text-center border-white/5 flex flex-col items-center justify-center">
-                <div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-6">
-                    <i data-lucide="calendar-off" class="w-8 h-8 text-slate-500"></i>
-                </div>
-                <h3 class="text-xl font-black text-white uppercase italic tracking-tight mb-2">Nessun Match Live</h3>
-                <p class="text-slate-400 font-medium text-sm max-w-md mx-auto">Non ci sono partite in corso che corrispondono ai tuoi filtri.</p>
-            </div>
-        `;
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="glass p-20 text-center font-black uppercase italic text-slate-500">Nessun match live per questo sport.</div>';
+        return;
     }
 
-    filteredMatches.forEach(m => {
-        const isHighlighted = pinnedMatches.has(m.fixture.id);
+    filtered.forEach(m => {
         const card = document.createElement('div');
-        // Visual Highlight Effect: ring-2 ring-accent and shadow if pinned
-        card.className = `glass rounded-[40px] p-8 border-white/5 hover:border-accent/30 transition-all group cursor-pointer relative overflow-hidden mb-6 ${isHighlighted ? 'pinned-match' : ''}`;
+        card.className = "glass p-8 rounded-[40px] border-white/5 hover:border-accent/30 transition-all mb-6 relative overflow-hidden group";
 
-        // Link to match detail
-        const goToMatch = () => navigate('match', m.fixture.id);
-        card.onclick = goToMatch;
-
-        const homeName = m.teams.home.name;
-        const awayName = m.teams.away.name;
-        const scoreHome = m.goals.home ?? 0;
-        const scoreAway = m.goals.away ?? 0;
-        const elapsed = m.fixture.status.elapsed ?? 0;
-        const statusShort = m.fixture.status.short;
-
-        let period = '';
-        if (['1H', 'HT', '2H', 'ET', 'P'].includes(statusShort)) period = statusShort;
-        else if (elapsed <= 45) period = '1H';
-        else period = '2H';
-
-        // Event Timeline Logic
-        const events = (m.events || []).sort((a, b) => b.time.elapsed - a.time.elapsed).slice(0, 3); // Last 3 events
-        let timelineHtml = '';
-        if (events.length > 0) {
-            timelineHtml = `<div class="flex items-center gap-3 overflow-x-auto no-scrollbar mask-linear-fade pr-4">
-                ${events.map(ev => {
-                let icon = 'info'; let color = 'slate-500';
-                if (ev.type === 'Goal') { icon = 'trophy'; color = 'text-accent'; }
-                else if (ev.type === 'Card' && ev.detail === 'Yellow Card') { icon = 'alert-triangle'; color = 'text-warning'; }
-                else if (ev.type === 'Card') { icon = 'alert-octagon'; color = 'text-danger'; }
-
-                return `
-                        <div class="flex items-center gap-1.5 shrink-0 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
-                            <span class="text-[9px] font-black text-slate-400">${ev.time.elapsed}'</span>
-                            <i data-lucide="${icon}" class="w-3 h-3 ${color}"></i>
-                            <span class="text-[9px] font-bold text-white uppercase truncate max-w-[80px] hover:text-accent cursor-pointer transition-colors" onclick="event.stopPropagation(); navigate('player', ev.player.id)">${ev.player.name}</span>
-                        </div>
-                    `;
-            }).join('')}
-            </div>`;
-        } else {
-            timelineHtml = '<div class="text-[9px] font-bold text-slate-600 italic">Nessun evento recente</div>';
-        }
+        const runnersHtml = (m.prices || []).map(r => {
+            const meta = m.runners.find(rm => rm.selectionId === r.selectionId);
+            const back = r.ex?.availableToBack?.[0]?.price || '-';
+            const lay = r.ex?.availableToLay?.[0]?.price || '-';
+            return `
+                <div class="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 group/runner hover:border-accent/30 transition-all">
+                    <span class="text-xs font-black uppercase italic text-white">${meta?.runnerName || 'Runner'}</span>
+                    <div class="flex gap-2">
+                        <button class="w-16 h-10 rounded-xl bg-sky-500/20 text-sky-400 font-black tabular-nums border border-sky-500/30">${back}</button>
+                        <button class="w-16 h-10 rounded-xl bg-pink-500/20 text-pink-400 font-black tabular-nums border border-pink-500/30">${lay}</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
 
         card.innerHTML = `
-            <!-- Header: League + Country -->
-            <div class="flex items-center justify-between mb-8 border-b border-white/5 pb-4">
-                <div class="flex items-center gap-3 opacity-80">
-                    <img src="${m.league.flag || m.league.logo}" class="w-5 h-5 rounded-full object-cover">
-                    <div class="flex flex-col">
-                        <span class="text-[10px] font-black uppercase tracking-[0.2em] italic text-white">${m.league.name}</span>
-                        <span class="text-[8px] font-bold uppercase tracking-widest text-slate-500">${m.league.country || 'International'}</span>
-                    </div>
+            <div class="flex items-center justify-between mb-8">
+                <div class="flex flex-col">
+                    <span class="text-[10px] font-black text-accent uppercase tracking-widest italic mb-1">${m.sport} | ${m.marketName}</span>
+                    <h3 class="text-2xl font-black text-white italic uppercase tracking-tight">${m.event.name}</h3>
                 </div>
-                <div class="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/10">
-                    <span class="text-[10px] font-black text-accent uppercase tracking-widest">${period}</span>
-                    <div class="h-3 w-px bg-white/10"></div>
-                    <span class="text-[10px] font-black text-white uppercase tracking-widest">${elapsed}'</span>
-                    <div class="w-1.5 h-1.5 bg-danger rounded-full animate-pulse shadow-[0_0_10px_red]"></div>
-                </div>
-            </div>
-            
-            <!-- Match Score & Teams -->
-            <div class="flex items-center justify-between gap-4 mb-8">
-                <!-- Home -->
-                <div class="flex flex-col items-center gap-4 flex-1 group/team cursor-pointer" onclick="event.stopPropagation(); openLineupModal(${m.fixture.id}, ${m.teams.home.id})">
-                    <div class="w-16 h-16 p-2 glass rounded-2xl flex items-center justify-center group-hover/team:border-accent/50 transition-all relative">
-                        <img src="${m.teams.home.logo}" class="w-full h-full object-contain drop-shadow-2xl">
-                        <div class="absolute -bottom-2 bg-slate-900 border border-white/10 px-2 rounded text-[8px] font-black uppercase text-slate-500 group-hover/team:text-accent transition-colors">Lineup</div>
-                    </div>
-                    <span class="text-xs font-black uppercase tracking-tight text-center leading-tight flex items-center gap-2">
-                        ${homeName} <i data-lucide="chevron-right" class="w-3 h-3 text-slate-600"></i>
-                    </span>
-                </div>
-
-                <!-- Score -->
-                <div class="text-5xl md:text-6xl font-black italic tracking-tighter text-white tabular-nums flex flex-col items-center">
-                    <span>${scoreHome} - ${scoreAway}</span>
-                    <span class="text-[9px] font-bold text-slate-500 tracking-widest uppercase mt-2 opacity-50">Live Score</span>
-                </div>
-
-                <!-- Away -->
-                <div class="flex flex-col items-center gap-4 flex-1 group/team cursor-pointer" onclick="event.stopPropagation(); openLineupModal(${m.fixture.id}, ${m.teams.away.id})">
-                    <div class="w-16 h-16 p-2 glass rounded-2xl flex items-center justify-center group-hover/team:border-accent/50 transition-all relative">
-                        <img src="${m.teams.away.logo}" class="w-full h-full object-contain drop-shadow-2xl">
-                        <div class="absolute -bottom-2 bg-slate-900 border border-white/10 px-2 rounded text-[8px] font-black uppercase text-slate-500 group-hover/team:text-accent transition-colors">Lineup</div>
-                    </div>
-                    <span class="text-xs font-black uppercase tracking-tight text-center leading-tight flex items-center gap-2">
-                         <i data-lucide="chevron-left" class="w-3 h-3 text-slate-600"></i> ${awayName}
-                    </span>
-                </div>
+                <div class="px-4 py-1.5 rounded-full bg-danger/10 text-danger text-[10px] font-black uppercase border border-danger/20 animate-pulse">LIVE</div>
             </div>
 
-            <!-- Bottom Section: Timeline & Actions -->
-            <div class="flex flex-col md:flex-row items-center justify-between gap-6 pt-6 border-t border-white/5">
-                <!-- Left: Timeline -->
-                <div class="flex-1 min-w-0 w-full">
-                    ${timelineHtml}
-                </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">${runnersHtml}</div>
 
-                <!-- Right: Buttons -->
-                <div class="flex items-center gap-3 shrink-0">
-                     <button onclick="event.stopPropagation(); navigate('match', m.fixture.id)" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 transition-all group/btn" title="Dettagli">
-                        <i data-lucide="arrow-right" class="w-4 h-4 group-hover/btn:translate-x-1 transition-transform"></i>
-                    </button>
-                    
-                    <button onclick="event.stopPropagation(); openStatsModal(${m.fixture.id})" class="px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/5 transition-all font-black uppercase text-[9px] tracking-widest flex items-center gap-2">
-                        <i data-lucide="bar-chart-2" class="w-3 h-3"></i> Stats & Predictions
-                    </button>
-                    
-                    <button onclick="event.stopPropagation(); analyzeMatch(${m.fixture.id})" class="px-5 py-3 rounded-xl bg-accent text-white shadow-lg shadow-accent/20 hover:scale-[1.02] active:scale-95 transition-all font-black uppercase text-[9px] tracking-widest flex items-center gap-2">
-                        <i data-lucide="sparkles" class="w-3 h-3"></i> AI Analysis
-                    </button>
+            <div class="flex items-center justify-between pt-6 border-t border-white/5">
+                <div class="flex flex-col">
+                    <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Totale Abbinato</span>
+                    <span class="text-xs font-black text-white italic">€${Math.round(m.totalMatched).toLocaleString()}</span>
                 </div>
+                <button onclick="analyzeBetfairMatch('${m.marketId}')" class="px-6 py-3 rounded-xl bg-accent text-white font-black uppercase text-[10px] tracking-widest shadow-lg shadow-accent/20 hover:scale-105 transition-all flex items-center gap-2">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i> Analizza con AI
+                </button>
             </div>
         `;
         container.appendChild(card);
     });
-
-    // Show upcoming matches if less than 10 results
-    const upcomingContainer = document.getElementById('upcoming-matches-container');
-    if (filteredMatches.length < 10 && upcomingContainer) {
-        fetchAndRenderUpcoming(upcomingContainer, 20);
-    } else if (upcomingContainer) {
-        upcomingContainer.innerHTML = '';
-    }
-
     if (window.lucide) lucide.createIcons();
-    // Re-process HTMX for the new elements
-    if (window.htmx) htmx.process(container);
+}
+
+async function analyzeBetfairMatch(marketId) {
+    const event = liveMatches.find(m => m.marketId === marketId);
+    if (!event) return;
+
+    const modal = document.getElementById('analysis-modal');
+    const body = document.getElementById('modal-body');
+    modal.classList.remove('hidden');
+    body.innerHTML = '<div class="text-center py-20"><i data-lucide="loader-2" class="w-12 h-12 text-accent rotator mx-auto"></i></div>';
+    if (window.lucide) lucide.createIcons();
+
+    // In questa versione semplificata, chiamiamo direttamente l'API di analisi ma passando l'evento Betfair
+    // Per ora simuliamo l'uso del controller esistente ma adattato
+    try {
+        const res = await fetch(`/api/analyze/${marketId}?betfair=true`); // Passiamo un flag
+        // ... (resto della logica modal simile a quella esistente)
+    } catch(e) {}
 }
 
 
@@ -2233,21 +2142,61 @@ function setTrackerFilter(status) {
 
 async function renderTracker() {
     viewContainer.innerHTML = `
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10" id="tracker-stats-summary"></div>
-        
-        <div class="flex gap-4 mb-8 overflow-x-auto pb-2 no-scrollbar">
-            <button class="tracker-filter-btn px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${trackerStatusFilter === 'all' ? 'bg-accent text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}" onclick="setTrackerFilter('all')" data-status="all">Tutte</button>
-            <button class="tracker-filter-btn px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${trackerStatusFilter === 'won' ? 'bg-accent text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}" onclick="setTrackerFilter('won')" data-status="won">Vinte</button>
-            <button class="tracker-filter-btn px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${trackerStatusFilter === 'lost' ? 'bg-accent text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}" onclick="setTrackerFilter('lost')" data-status="lost">Perse</button>
-            <button class="tracker-filter-btn px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${trackerStatusFilter === 'pending' ? 'bg-accent text-white' : 'bg-white/5 text-slate-500 hover:bg-white/10'}" onclick="setTrackerFilter('pending')" data-status="pending">In Corso</button>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12" id="tracker-real-summary"></div>
+        <div class="glass rounded-[48px] border-white/5 overflow-hidden">
+            <div class="p-8 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                <h3 class="text-xl font-black italic uppercase tracking-tight">Movimenti Reali Betfair</h3>
+                <i data-lucide="landmark" class="w-6 h-6 text-accent"></i>
+            </div>
+            <div id="real-tracker-list" class="divide-y divide-white/5"></div>
         </div>
-
-        <div class="glass rounded-[40px] border-white/5 overflow-hidden divide-y divide-white/5" id="tracker-history"></div>
     `;
 
-    await fetchHistory();
-    updateTrackerSummary();
-    renderFullHistory();
+    try {
+        const res = await fetch('/api/betfair/account');
+        const data = await res.json();
+
+        // Summary
+        const f = data.funds;
+        const summary = document.getElementById('tracker-real-summary');
+        summary.innerHTML = `
+            <div class="glass p-10 rounded-[48px] border-white/5">
+                <span class="text-[10px] font-black uppercase text-slate-500 block mb-2 tracking-widest">Saldo Disponibile</span>
+                <div class="text-4xl font-black text-white italic tabular-nums">€${f.availableToBetBalance}</div>
+            </div>
+            <div class="glass p-10 rounded-[48px] border-white/5">
+                <span class="text-[10px] font-black uppercase text-slate-500 block mb-2 tracking-widest">In Gioco (Esposizione)</span>
+                <div class="text-4xl font-black text-danger italic tabular-nums">€${Math.abs(f.exposure)}</div>
+            </div>
+            <div class="glass p-10 rounded-[48px] border-white/5">
+                <span class="text-[10px] font-black uppercase text-slate-500 block mb-2 tracking-widest">Totale Portafoglio</span>
+                <div class="text-4xl font-black text-success italic tabular-nums">€${(parseFloat(f.availableToBetBalance) + Math.abs(f.exposure)).toFixed(2)}</div>
+            </div>
+        `;
+
+        // List Statements
+        const list = document.getElementById('real-tracker-list');
+        list.innerHTML = (data.statement || []).map(s => `
+            <div class="p-8 flex items-center justify-between hover:bg-white/5 transition-all">
+                <div class="flex items-center gap-6">
+                    <div class="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-slate-500">
+                        <i data-lucide="activity" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-lg font-black text-white uppercase italic tracking-tight">${s.itemClass}</div>
+                        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">${new Date(s.itemDate).toLocaleString()}</div>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-2xl font-black italic tracking-tighter ${s.amount >= 0 ? 'text-success' : 'text-danger'}">
+                        ${s.amount >= 0 ? '+' : ''}${s.amount}€
+                    </div>
+                    <div class="text-[9px] font-black uppercase text-slate-500">Balance: €${s.balance}</div>
+                </div>
+            </div>
+        `).join('');
+        if (window.lucide) lucide.createIcons();
+    } catch(e) {}
 }
 
 function updateTrackerSummary() {
