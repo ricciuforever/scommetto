@@ -90,8 +90,8 @@ foreach ($history as $h) {
                         // Identify sport icon
                         $sportIcon = 'activity';
                         $lowSport = strtolower($m['sport'] ?? '');
-                        if(stripos($lowSport, 'soccer') !== false || stripos($lowSport, 'calcio') !== false) $sportIcon = 'trophy';
-                        elseif(stripos($lowSport, 'tennis') !== false) $sportIcon = 'circle-dot';
+                        if(stripos($lowSport, 'soccer') !== false || stripos($lowSport, 'calcio') !== false) $sportIcon = 'football';
+                        elseif(stripos($lowSport, 'tennis') !== false) $sportIcon = 'tennis';
                         elseif(stripos($lowSport, 'basket') !== false) $sportIcon = 'dribbble';
                         elseif(stripos($lowSport, 'volley') !== false || stripos($lowSport, 'pallavolo') !== false) $sportIcon = 'activity'; // Lucide has no 'volleyball' sometimes, 'activity' is safe fallback or use custom
                         elseif(stripos($lowSport, 'football') !== false) $sportIcon = 'citrus'; // American football

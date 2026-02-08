@@ -116,8 +116,8 @@
                 arsort($sideSports);
 
                 $icons = [
-                    'Calcio' => 'trophy',
-                    'Tennis' => 'circle-dot',
+                    'Calcio' => 'football',
+                    'Tennis' => 'tennis',
                     'Basket' => 'dribbble',
                     'Pallavolo' => 'activity',
                     'Hockey' => 'snowflake',
@@ -138,17 +138,17 @@
                     $sIcon = $icons[$sName] ?? 'activity';
                     $isSideActive = (strtolower($currentSportSelect) === strtolower($sName));
                     ?>
-                        <a href="/dashboard?sport=<?php echo urlencode($sName); ?>"
-                            class="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all group <?php echo $isSideActive ? 'bg-accent/10 border border-accent/20' : 'hover:bg-white/5'; ?>">
-                            <div class="flex items-center gap-3">
-                                <i data-lucide="<?php echo $sIcon; ?>"
-                                    class="w-4 h-4 <?php echo $isSideActive ? 'text-accent' : 'text-slate-500 group-hover:text-accent'; ?> transition-colors"></i>
-                                <span
-                                    class="text-xs font-bold <?php echo $isSideActive ? 'text-white' : 'text-slate-400 group-hover:text-white'; ?> transition-colors"><?php echo $sName; ?></span>
-                            </div>
+                    <a href="/dashboard?sport=<?php echo urlencode($sName); ?>"
+                        class="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all group <?php echo $isSideActive ? 'bg-accent/10 border border-accent/20' : 'hover:bg-white/5'; ?>">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="<?php echo $sIcon; ?>"
+                                class="w-4 h-4 <?php echo $isSideActive ? 'text-accent' : 'text-slate-500 group-hover:text-accent'; ?> transition-colors"></i>
                             <span
-                                class="text-[9px] font-black bg-white/5 px-1.5 py-0.5 rounded text-slate-500 group-hover:bg-accent/20 group-hover:text-accent transition-all"><?php echo $count; ?></span>
-                        </a>
+                                class="text-xs font-bold <?php echo $isSideActive ? 'text-white' : 'text-slate-400 group-hover:text-white'; ?> transition-colors"><?php echo $sName; ?></span>
+                        </div>
+                        <span
+                            class="text-[9px] font-black bg-white/5 px-1.5 py-0.5 rounded text-slate-500 group-hover:bg-accent/20 group-hover:text-accent transition-all"><?php echo $count; ?></span>
+                    </a>
                 <?php endforeach; ?>
             </nav>
         </div>
