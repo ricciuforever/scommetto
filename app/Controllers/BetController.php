@@ -240,6 +240,7 @@ class BetController
             // Pass variables to view
             require __DIR__ . '/../Views/partials/tracker.php';
 
+        } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore caricamento tracker: ' . $e->getMessage() . '</div>';
         }
     }
