@@ -116,8 +116,8 @@
                 arsort($sideSports);
 
                 $icons = [
-                    'Calcio' => 'football',
-                    'Tennis' => 'tennis',
+                    'Calcio' => 'trophy',
+                    'Tennis' => 'circle-dot',
                     'Basket' => 'dribbble',
                     'Pallavolo' => 'activity',
                     'Hockey' => 'snowflake',
@@ -219,6 +219,7 @@
 
         <!-- Main Content Area -->
         <main id="main-content" class="flex-1 p-6 pb-24 lg:pb-6 max-w-7xl mx-auto w-full">
+            <h1 id="view-title" class="text-2xl font-black italic uppercase text-white mb-6"></h1>
             <!-- Multi-Sport Selectors -->
             <div id="sport-selectors" class="flex gap-3 mb-8 overflow-x-auto no-scrollbar pb-2">
                 <!-- Dynamically populated -->

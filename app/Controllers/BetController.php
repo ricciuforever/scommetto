@@ -229,7 +229,7 @@ class BetController
                 $simProfit = 0;
                 $simExposure = 0;
                 foreach ($allBets as $b) {
-                    if (empty($b['betfair_id'])) { 
+                    if (empty($b['betfair_id'])) {
                         if ($b['status'] === 'won') {
                             $simProfit += $b['stake'] * ($b['odds'] - 1);
                         } elseif ($b['status'] === 'lost') {
