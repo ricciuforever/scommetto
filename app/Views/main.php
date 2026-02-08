@@ -65,11 +65,6 @@
                 data-view="predictions">
                 <i data-lucide="brain-circuit" class="w-5 h-5"></i> Pronostici
             </a>
-            <a href="/tracker"
-                class="nav-link flex items-center gap-3 px-4 py-3 rounded-2xl transition-all hover:bg-white/5 font-bold text-sm"
-                data-view="tracker">
-                <i data-lucide="landmark" class="w-5 h-5"></i> Betfair Account
-            </a>
         </nav>
 
         <div class="p-4 border-t border-white/10 space-y-4">
@@ -197,10 +192,6 @@
         <a href="/predictions" class="flex flex-col items-center gap-1 text-slate-500" data-view="predictions">
             <i data-lucide="brain-circuit" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold uppercase tracking-widest">AI Tips</span>
-        </a>
-        <a href="/tracker" class="flex flex-col items-center gap-1 text-slate-500" data-view="tracker">
-            <i data-lucide="line-chart" class="w-6 h-6"></i>
-            <span class="text-[10px] font-bold uppercase tracking-widest">Tracker</span>
         </a>
     </nav>
 
