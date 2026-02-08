@@ -43,12 +43,14 @@ class GeminiService
             $balanceText .
             "SITUAZIONE LIVE:\n" . json_encode($matchData) . "\n\n" .
             "INTELLIGENZA NEL DATABASE (Storico, Classifica, Predictions):\n" . json_encode($dbContent) . "\n\n" .
-            "REGOLE RIGIDE DI BANKROLL MANAGEMENT:\n" .
-            "1. Analizza se l'andamento LIVE conferma o smentisce i dati storici.\n" .
-            "2. Valuta la 'confidence' (fiducia) da 0 a 100.\n" .
-            "3. DEVI RISPETTARE IL BUDGET. Non consigliare MAI uno stake superiore alla disponibilità attuale.\n" .
-            "4. Stake suggerito normalmente: 1-5% del portfolio. Sii più aggressivo (fino al 10%) SOLO se la confidence è > 85.\n" .
-            "5. Se confidence < 60, non consigliare alcuna scommessa.\n\n" .
+            "REGOLE RIGIDE DI ANALISI E BANKROLL:\n" .
+            "1. USA SOLO LE QUOTE REALI fornite nel campo 'odds_context'. NON INVENTARE MAI LE QUOTE.\n" .
+            "2. Se non ci sono quote disponibili o non sono vantaggiose, NON consigliare la scommessa.\n" .
+            "3. Analizza se l'andamento LIVE conferma o smentisce i dati storici.\n" .
+            "4. Valuta la 'confidence' (fiducia) da 0 a 100.\n" .
+            "5. DEVI RISPETTARE IL BUDGET. Non consigliare MAI uno stake superiore alla disponibilità attuale.\n" .
+            "6. Stake suggerito normalmente: 1-5% del portfolio. Sii più aggressivo (fino al 10%) SOLO se la confidence è > 85.\n" .
+            "7. Se confidence < 60, non consigliare alcuna scommessa.\n\n" .
             "VOCABOLARIO JSON CONTROLLATO (OBBLIGATORIO):\n" .
             "- Market: USA SOLO: '1X2', 'Double Chance', 'Over/Under', 'Both Teams to Score', 'Correct Score'.\n" .
             "- Advice (1X2): '1', 'X', '2'\n" .

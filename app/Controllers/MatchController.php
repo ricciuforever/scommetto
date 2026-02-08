@@ -159,6 +159,17 @@ class MatchController
                 $data = $apiService->request("/fixtures?id=$id");
                 if (isset($data['response'][0])) {
                     (new Fixture())->save($data['response'][0]);
+
+                    // Recupera anche le quote pre-match per dare contesto a Gemini
+                    $oddsData = $apiService->fetchOdds(['fixture' => $id]);
+                    if (isset($oddsData['response'][0]['bookmakers'])) {
+                        foreach ($oddsData['response'][0]['bookmakers'] as $bm) {
+                            foreach ($bm['bets'] as $bet) {
+                                (new FixtureOdds())->save($id, $bm['id'], $bet['id'], $bet['values']);
+                            }
+                        }
+                    }
+
                     $stmt->execute(['id' => $id]);
                     $fix = $stmt->fetch(\PDO::FETCH_ASSOC);
                 }
@@ -176,10 +187,15 @@ class MatchController
                     'home' => ['id' => $fix['team_home_id'], 'name' => $fix['home_name'], 'logo' => $fix['home_logo']],
                     'away' => ['id' => $fix['team_away_id'], 'name' => $fix['away_name'], 'logo' => $fix['away_logo']]
                 ],
-                'goals' => ['home' => $fix['score_home'], 'away' => $fix['score_away']]
+                'goals' => ['home' => $fix['score_home'], 'away' => $fix['score_away']],
+                'odds_context' => [
+                    'pre_match' => (new FixtureOdds())->getByFixture((int) $id),
+                    'live' => ($lo = (new \App\Models\LiveOdds())->get((int) $id)) ? json_decode($lo['odds_json'], true) : null
+                ]
             ];
 
-            $prediction = $this->geminiService->analyze($match);
+            $balance = (new \App\Models\Bet())->getBalanceSummary(Config::INITIAL_BANKROLL);
+            $prediction = $this->geminiService->analyze($match, $balance);
             (new Analysis())->log((int) $id, $prediction);
 
             echo json_encode(['prediction' => $prediction, 'match' => $match]);
