@@ -112,4 +112,31 @@ class Fixture
         $sql = "SELECT * FROM fixtures WHERE status_short NOT IN ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD')";
         return $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    /**
+     * Verifica se le partite di una lega/stagione necessitano di refresh
+     */
+    public function needsLeagueRefresh($leagueId, $season, $hours = 24)
+    {
+        $sql = "SELECT last_fixtures_sync FROM league_seasons WHERE league_id = ? AND year = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$leagueId, $season]);
+        $row = $stmt->fetch();
+
+        if (!$row || !$row['last_fixtures_sync'])
+            return true;
+        return (time() - strtotime($row['last_fixtures_sync'])) > ($hours * 3600);
+    }
+
+    /**
+     * Aggiorna il timestamp di sincronizzazione per una lega/stagione
+     */
+    public function touchLeagueSeason($leagueId, $season)
+    {
+        $sql = "INSERT INTO league_seasons (league_id, year, last_fixtures_sync)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON DUPLICATE KEY UPDATE last_fixtures_sync = CURRENT_TIMESTAMP";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([$leagueId, $season]);
+    }
 }

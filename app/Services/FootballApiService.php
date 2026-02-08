@@ -51,6 +51,11 @@ class FootballApiService
         return $this->request($url);
     }
 
+    public function fetchLeaguesFixtures($leagueId, $season)
+    {
+        return $this->request("/fixtures?league=$leagueId&season=$season");
+    }
+
     public function fetchH2H($h2h)
     {
         return $this->request("/fixtures/headtohead?h2h=$h2h");
@@ -102,8 +107,10 @@ class FootballApiService
     public function fetchStandings($leagueId, $season, $teamId = null)
     {
         $url = "/standings?season=$season";
-        if ($leagueId) $url .= "&league=$leagueId";
-        if ($teamId) $url .= "&team=$teamId";
+        if ($leagueId)
+            $url .= "&league=$leagueId";
+        if ($teamId)
+            $url .= "&team=$teamId";
         return $this->request($url);
     }
 
@@ -141,7 +148,8 @@ class FootballApiService
     public function fetchTeamStatistics($teamId, $leagueId, $season, $date = null)
     {
         $url = "/teams/statistics?team=$teamId&league=$leagueId&season=$season";
-        if ($date) $url .= "&date=$date";
+        if ($date)
+            $url .= "&date=$date";
         return $this->request($url);
     }
 

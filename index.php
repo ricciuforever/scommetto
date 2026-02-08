@@ -12,6 +12,7 @@ use App\Controllers\LeagueController;
 use App\Controllers\SeasonController;
 use App\Controllers\TeamController;
 use App\Controllers\RoundController;
+use App\Controllers\FixtureController;
 use App\Controllers\TeamStatsController;
 use App\Controllers\VenueController;
 use App\Controllers\StandingController;
@@ -58,6 +59,8 @@ try {
         (new SeasonController())->list();
     } elseif ($path === '/api/rounds') {
         (new RoundController())->list();
+    } elseif ($path === '/api/fixtures') {
+        (new FixtureController())->list();
     } elseif ($path === '/api/teams') {
         (new TeamController())->list();
     } elseif ($path === '/api/team/seasons') {
