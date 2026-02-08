@@ -92,6 +92,10 @@
                     <i data-lucide="calendar" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
                     <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Stagioni</span>
                 </a>
+                <a href="/venues" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="building-2" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Stadi</span>
+                </a>
                 <a href="/predictions" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
                     <i data-lucide="brain-circuit" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
                     <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Pronostici</span>

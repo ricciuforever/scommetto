@@ -92,6 +92,7 @@ try {
           `name` VARCHAR(255),
           `address` VARCHAR(255),
           `city` VARCHAR(100),
+          `country` VARCHAR(100),
           `capacity` INT,
           `surface` VARCHAR(50),
           `image` VARCHAR(255),
@@ -470,6 +471,9 @@ try {
     ],
     "team_stats_updates" => [
       "ALTER TABLE team_stats ADD COLUMN full_stats_json LONGTEXT AFTER avg_goals_against"
+    ],
+    "venues_updates" => [
+      "ALTER TABLE venues ADD COLUMN country VARCHAR(100) AFTER city"
     ],
     "coaches_updates" => [
       "ALTER TABLE coaches ADD COLUMN birth_date DATE AFTER age",

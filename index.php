@@ -12,6 +12,7 @@ use App\Controllers\LeagueController;
 use App\Controllers\SeasonController;
 use App\Controllers\TeamController;
 use App\Controllers\TeamStatsController;
+use App\Controllers\VenueController;
 
 $request = $_SERVER['REQUEST_URI'] ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -28,6 +29,7 @@ try {
         '/seasons'   => SeasonController::class,
         '/teams'     => TeamController::class,
         '/team-stats' => TeamStatsController::class,
+        '/venues'    => VenueController::class,
     ];
 
     if (isset($viewRoutes[$path])) {
@@ -57,6 +59,8 @@ try {
         (new TeamController())->seasons();
     } elseif ($path === '/api/team-stats') {
         (new TeamStatsController())->show();
+    } elseif ($path === '/api/venues') {
+        (new VenueController())->list();
     } elseif ($path === '/api/dashboard' || $path === '/api/view/dashboard') {
         (new MatchController())->dashboard();
     } elseif ($path === '/api/view/leagues') {

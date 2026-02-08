@@ -33,7 +33,7 @@ class Season
     {
         $stmt = $this->db->query("SELECT MAX(last_updated) as last FROM seasons");
         $row = $stmt->fetch();
-        if (!$row['last'])
+        if (!$row || !$row['last'])
             return true;
         return (time() - strtotime($row['last'])) > ($hours * 3600);
     }
