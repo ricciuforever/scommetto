@@ -1869,21 +1869,52 @@ function renderDashboardHistory() {
     const container = document.getElementById('dashboard-history');
     if (!container) return;
 
-    if (historyData.length === 0) {
-        container.innerHTML = '<div class="p-10 text-center text-slate-500 font-bold text-xs">Nessuna attività recente.</div>';
+    // Filtra in base al bookmaker selezionato
+    let filteredHistory = (Array.isArray(historyData) ? historyData : []);
+
+    if (selectedBookmaker !== 'all') {
+        // Se è selezionato Betfair, includiamo scommesse che hanno betfair_id (reali) 
+        // oppure quelle che hanno bookmaker_id corrispondente al filtro.
+        // Assumiamo che il filtro passi un ID numerico
+        const sId = selectedBookmaker.toString();
+
+        filteredHistory = filteredHistory.filter(h => {
+            // Caso speciale: Se filtro Betfair e la scommessa ha un betfair_id (quindi è reale), mostrala sempre
+            // Nota: Bisognerebbe sapere l'ID Betfair nel DB. 
+            // Per sicurezza controlliamo se bookmaker_id corrisponde
+            return (h.bookmaker_id && h.bookmaker_id.toString() === sId) ||
+                (h.betfair_id && allFilterData.bookmakers.find(b => b.id.toString() === sId)?.name.toLowerCase().includes('betfair'));
+        });
+    }
+
+    if (filteredHistory.length === 0) {
+        container.innerHTML = '<div class="p-10 text-center text-slate-500 font-bold text-xs">Nessuna attività recente per questo filtro.</div>';
         return;
     }
 
-    historyData.slice(0, 5).forEach(h => {
+    container.innerHTML = ''; // Clear previous
+
+    filteredHistory.slice(0, 5).forEach(h => {
         const item = document.createElement('div');
-        item.className = "p-6 hover:bg-white/5 cursor-pointer transition-all";
+        item.className = "p-6 hover:bg-white/5 cursor-pointer transition-all border-b border-white/5 last:border-0";
         item.onclick = () => showBetDetails(h);
+
+        // Formatta data
+        const date = new Date(h.timestamp).toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+        const time = new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
         item.innerHTML = `
-            <div class="flex justify-between items-start mb-1">
-                <span class="font-black text-xs uppercase tracking-tight italic truncate max-w-[120px] text-white">${h.match_name}</span>
-                <span class="text-[9px] font-black uppercase italic ${h.status === 'won' ? 'text-success' : h.status === 'lost' ? 'text-danger' : 'text-warning'}">${h.status}</span>
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex flex-col">
+                    <span class="font-black text-xs uppercase tracking-tight italic text-white truncate max-w-[150px]">${h.match_name || 'Evento'}</span>
+                    <span class="text-[9px] font-bold text-slate-500">${date} ${time}</span>
+                </div>
+                <span class="text-[9px] font-black uppercase italic px-2 py-1 rounded bg-white/5 ${h.status === 'won' ? 'text-success' : h.status === 'lost' ? 'text-danger' : 'text-warning'}">${h.status}</span>
             </div>
-            <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">${h.market} @ ${h.odds}</div>
+            <div class="flex justify-between items-center text-[10px] uppercase font-black tracking-widest text-slate-400">
+                <span>${h.market || '1X2'} @ <span class="text-white">${h.odds}</span></span>
+                <span class="${h.betfair_id ? 'text-accent' : ''}">${h.betfair_id ? 'Real Bet' : (h.bookmaker_name_full || 'Simulated')}</span>
+            </div>
         `;
         container.appendChild(item);
     });

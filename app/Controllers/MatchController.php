@@ -264,8 +264,27 @@ class MatchController
                 }
             }
 
-            $db = \App\Services\Database::getInstance()->getConnection();
-            $hotPredictions = $db->query("SELECT p.*, f.date, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo, l.name as league_name FROM predictions p JOIN fixtures f ON p.fixture_id = f.id JOIN teams t1 ON f.team_home_id = t1.id JOIN teams t2 ON f.team_away_id = t2.id JOIN leagues l ON f.league_id = l.id WHERE f.date > NOW() ORDER BY f.date ASC LIMIT 3")->fetchAll(\PDO::FETCH_ASSOC);
+            // 6. Fetch Hot Predictions with Filters
+            $sqlHot = "SELECT p.*, f.date, t1.name as home_name, t1.logo as home_logo, t2.name as away_name, t2.logo as away_logo, l.name as league_name, l.country_name 
+                       FROM predictions p 
+                       JOIN fixtures f ON p.fixture_id = f.id 
+                       JOIN teams t1 ON f.team_home_id = t1.id 
+                       JOIN teams t2 ON f.team_away_id = t2.id 
+                       JOIN leagues l ON f.league_id = l.id 
+                       WHERE f.date > NOW()";
+
+            if ($selectedCountry !== 'all') {
+                $sqlHot .= " AND l.country_name = " . $db->quote($selectedCountry);
+            }
+            if ($selectedLeague !== 'all') {
+                $sqlHot .= " AND l.id = " . (int) $selectedLeague;
+            }
+            if ($selectedBookmaker !== 'all') {
+                $sqlHot .= " AND EXISTS (SELECT 1 FROM fixture_odds fo WHERE fo.fixture_id = f.id AND fo.bookmaker_id = " . (int) $selectedBookmaker . ")";
+            }
+
+            $sqlHot .= " ORDER BY f.date ASC LIMIT 3";
+            $hotPredictions = $db->query($sqlHot)->fetchAll(\PDO::FETCH_ASSOC);
 
             try {
                 // Base query for bets
@@ -275,7 +294,20 @@ class MatchController
                             LEFT JOIN fixtures f ON b.fixture_id = f.id
                             LEFT JOIN leagues l ON f.league_id = l.id
                             LEFT JOIN bookmakers bk ON b.bookmaker_id = bk.id
-                            ORDER BY b.timestamp DESC LIMIT 5"; // Changed limit to 5 for recentActivity
+                            WHERE 1=1";
+
+                    if ($selectedCountry !== 'all') {
+                        $sql .= " AND (l.country_name = " . $db->quote($selectedCountry) . " OR b.country = " . $db->quote($selectedCountry) . ")";
+                    }
+                    // League filter is tricky for bets, maybe skip or use strict
+
+                    if ($selectedBookmaker !== 'all') {
+                        // Se selezioniamo "Betfair", controlliamo betfair_id (se salvato) o bookmaker_id
+                        // Assumiamo che il filtro passi un ID numerico
+                        $sql .= " AND b.bookmaker_id = " . (int) $selectedBookmaker;
+                    }
+
+                    $sql .= " ORDER BY b.timestamp DESC LIMIT 5";
                     $recentActivity = $db->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
                 } catch (\Throwable $e) {
                     // Fallback if bookmaker_id or bookmakers table is missing
