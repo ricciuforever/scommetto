@@ -82,14 +82,20 @@
             <div class="p-4 rounded-2xl bg-white/5 border border-white/5" id="settings-status-card">
                 <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Modalità
                     Attuale</span>
-                <div id="current-mode-display" class="text-xs font-black uppercase italic text-white">Caricamento...
+                <?php
+                $stmSettings = json_decode(file_get_contents(\App\Config\Config::DATA_PATH . 'settings.json') ?: '{"simulation_mode":true}', true);
+                $isSim = $stmSettings['simulation_mode'] ?? true;
+                ?>
+                <div id="current-mode-display"
+                    class="text-xs font-black uppercase italic <?php echo $isSim ? 'text-accent' : 'text-danger animate-pulse'; ?> transition-colors">
+                    <?php echo $isSim ? 'SCOMMESSE SIMULATE' : 'DENARO REALE ATTIVO'; ?>
                 </div>
             </div>
 
-            <button onclick="openSettings()"
-                class="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2">
+            <a hx-get="/api/view/settings" hx-target="#htmx-container" hx-push-url="/settings"
+                class="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2 cursor-pointer">
                 <i data-lucide="settings" class="w-4 h-4"></i> Admin Panel
-            </button>
+            </a>
         </div>
     </aside>
 

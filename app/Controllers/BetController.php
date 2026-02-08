@@ -147,6 +147,48 @@ class BetController
     public function getRealBalance()
     {
         header('Content-Type: application/json');
+
+        // --- SIMULATION MODE BALANCE ---
+        if (Config::isSimulationMode()) {
+            try {
+                $db = \App\Services\Database::getInstance()->getConnection();
+
+                // 1. Calcola P&L dalle scommesse chiuse (won/lost) simulate (betfair_id IS NULL)
+                $stmt = $db->query("SELECT status, odds, stake FROM bets WHERE betfair_id IS NULL AND status IN ('won', 'lost')");
+                $history = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+                $profit = 0;
+                foreach ($history as $bet) {
+                    if ($bet['status'] === 'won') {
+                        $profit += $bet['stake'] * ($bet['odds'] - 1);
+                    } else {
+                        $profit -= $bet['stake'];
+                    }
+                }
+
+                // 2. Calcola Esposizione (scommesse piazzate/pending)
+                $stmt = $db->query("SELECT SUM(stake) as exposure FROM bets WHERE betfair_id IS NULL AND status IN ('placed', 'pending')");
+                $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+                $exposure = (float) ($row['exposure'] ?? 0);
+
+                $initial = Config::INITIAL_BANKROLL;
+                $totalEquity = $initial + $profit;
+                $available = $totalEquity - $exposure;
+
+                echo json_encode([
+                    'available' => $available,
+                    'exposure' => $exposure,
+                    'wallet' => $totalEquity,
+                    'currency' => 'EUR',
+                    'wallet_name' => 'Conto Virtuale'
+                ]);
+            } catch (\Throwable $e) {
+                echo json_encode(['error' => $e->getMessage()]);
+            }
+            return;
+        }
+
+        // --- REAL BETFAIR BALANCE ---
         try {
             $bf = new BetfairService();
             if (!$bf->isConfigured()) {
@@ -161,7 +203,7 @@ class BetController
                     'exposure' => $data['exposure'],
                     'wallet' => $data['availableToBetBalance'] + abs($data['exposure']),
                     'currency' => $data['currencyCode'] ?? 'EUR',
-                    'wallet_name' => $data['wallet'] ?? 'Unknown'
+                    'wallet_name' => $data['wallet'] ?? 'Betfair Real'
                 ]);
             } else {
                 echo json_encode(['error' => 'API Error', 'details' => $funds]);

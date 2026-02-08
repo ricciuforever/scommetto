@@ -115,6 +115,8 @@ try {
         (new \App\Controllers\SystemController())->updateSettings();
     } elseif ($path === '/api/simulation/reset' && $method === 'POST') {
         (new \App\Controllers\SystemController())->resetSimulation();
+    } elseif ($path === '/api/view/settings') {
+        (new \App\Controllers\SystemController())->viewSettings();
     } else {
         http_response_code(404);
         echo json_encode(['error' => 'Not Found', 'path' => $path]);

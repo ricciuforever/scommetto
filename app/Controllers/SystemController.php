@@ -61,6 +61,12 @@ class SystemController
         }
     }
 
+    public function viewSettings()
+    {
+        $this->checkAuth();
+        require __DIR__ . '/../Views/partials/settings.php';
+    }
+
     public function resetSimulation()
     {
         $this->checkAuth();
