@@ -8,6 +8,7 @@ use App\Controllers\BetController;
 use App\Controllers\SyncController;
 use App\Controllers\FilterController;
 use App\Controllers\CountryController;
+use App\Controllers\LeagueController;
 
 $request = $_SERVER['REQUEST_URI'] ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -26,11 +27,17 @@ try {
             (new CountryController())->index();
             return;
         }
+        if ($path === '/leagues') {
+            (new LeagueController())->index();
+            return;
+        }
         (new MatchController())->index();
     } elseif ($path === '/api/live') {
         (new MatchController())->getLive();
     } elseif ($path === '/api/countries') {
         (new CountryController())->list();
+    } elseif ($path === '/api/leagues') {
+        (new LeagueController())->list();
     } elseif ($path === '/api/dashboard' || $path === '/api/view/dashboard') {
         (new MatchController())->dashboard();
     } elseif ($path === '/api/view/leagues') {
