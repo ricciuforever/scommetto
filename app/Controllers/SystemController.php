@@ -8,13 +8,28 @@ class SystemController
 {
     private function checkAuth()
     {
-        $user = $_SERVER['PHP_AUTH_USER'] ?? '';
-        $pass = $_SERVER['PHP_AUTH_PW'] ?? '';
+        // Workaround per server CGI/FPM dove PHP_AUTH_USER non viene popolato automaticamente
+        if (!isset($_SERVER['PHP_AUTH_USER'])) {
+            if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+                list($user, $pw) = explode(':', base64_decode(substr($_SERVER['HTTP_AUTHORIZATION'], 6)));
+            } elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+                list($user, $pw) = explode(':', base64_decode(substr($_SERVER['REDIRECT_HTTP_AUTHORIZATION'], 6)));
+            } else {
+                $user = '';
+                $pw = '';
+            }
+        } else {
+            $user = $_SERVER['PHP_AUTH_USER'];
+            $pw = $_SERVER['PHP_AUTH_PW'];
+        }
 
-        $validUser = Config::get('ADMIN_USER', 'admin');
-        $validPass = Config::get('ADMIN_PASS', 'admin');
+        $validUser = trim(Config::get('ADMIN_USER', 'admin'));
+        $validPass = trim(Config::get('ADMIN_PASS', 'admin'));
 
-        if ($user !== $validUser || $pass !== $validPass) {
+        // Debug Log (Temporaneo se serve debuggare)
+        // error_log("Auth Attempt: InputUser='$user' vs ValidUser='$validUser'");
+
+        if ($user !== $validUser || $pw !== $validPass) {
             header('WWW-Authenticate: Basic realm="Scommetto Admin Area"');
             header('HTTP/1.0 401 Unauthorized');
             echo json_encode(['error' => 'Authentication required']);
