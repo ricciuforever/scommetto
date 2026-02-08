@@ -525,6 +525,9 @@ try {
     "bets_fix_fixture_id" => [
       "ALTER TABLE bets MODIFY COLUMN fixture_id VARCHAR(100) NOT NULL"
     ],
+    "fixtures_sync_column_v2" => [
+      "ALTER TABLE league_seasons ADD COLUMN last_fixtures_sync TIMESTAMP NULL"
+    ],
     "global_last_updated" => [
       "ALTER TABLE countries ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
       "ALTER TABLE seasons ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
