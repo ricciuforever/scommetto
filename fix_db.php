@@ -420,8 +420,8 @@ try {
   // Inizializza api_usage se vuota
   $count = $db->query("SELECT COUNT(*) FROM api_usage")->fetchColumn();
   if ($count == 0) {
-      $db->exec("INSERT INTO api_usage (id, requests_limit, requests_used, requests_remaining) VALUES (1, 75000, 0, 75000)");
-      echo "✅ Tabella 'api_usage' inizializzata.\n";
+    $db->exec("INSERT INTO api_usage (id, requests_limit, requests_used, requests_remaining) VALUES (1, 75000, 0, 75000)");
+    echo "✅ Tabella 'api_usage' inizializzata.\n";
   }
 
   // --- 2. PATCHING COLONNE MANCANTI ---
@@ -522,6 +522,20 @@ try {
     ],
     "bets_fix_fixture_id" => [
       "ALTER TABLE bets MODIFY COLUMN fixture_id VARCHAR(100) NOT NULL"
+    ],
+    "global_last_updated" => [
+      "ALTER TABLE countries ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE seasons ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE leagues ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE teams ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE team_leagues ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE venues ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE standings ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE fixtures ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE team_seasons ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE players ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE coaches ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "ALTER TABLE squads ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
     ],
   ];
 
