@@ -146,6 +146,16 @@ class MatchController
                 $liveMatches = $data['response'] ?? [];
             }
 
+            // Filter by Sport if requested
+            $selectedSport = $_GET['sport'] ?? 'all';
+            $allMatches = $liveMatches; // Keep copy for counting
+
+            if ($selectedSport !== 'all') {
+                $liveMatches = array_filter($liveMatches, function ($m) use ($selectedSport) {
+                    return stripos($m['sport'], $selectedSport) !== false;
+                });
+            }
+
             // 2. Predictions
             $predictions = [];
             $predProps = Config::DATA_PATH . 'betfair_hot_predictions.json';
@@ -203,14 +213,19 @@ class MatchController
             }
 
             // 4. Sport Extraction (for filters)
-            $availableSports = [];
-            foreach ($liveMatches as $m) {
+            $activeSports = [];
+            // Use allMatches here to calculate counts even when filtered view is active
+            $source = isset($allMatches) ? $allMatches : $liveMatches;
+
+            foreach ($source as $m) {
                 if (!empty($m['sport'])) {
-                    $availableSports[$m['sport']] = true;
+                    if (!isset($activeSports[$m['sport']])) {
+                        $activeSports[$m['sport']] = 0;
+                    }
+                    $activeSports[$m['sport']]++;
                 }
             }
-            $activeSports = array_keys($availableSports);
-            sort($activeSports);
+            ksort($activeSports);
 
             // 5. Open Bets Count
             $openBetsCount = 0;
