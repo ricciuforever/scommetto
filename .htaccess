@@ -4,6 +4,10 @@ DirectoryIndex index.php
     RewriteEngine On
     RewriteBase /
     
+    # FORZA L'HEADER AUTHORIZATION
+    # Necessario su hosting condivisi che lo rimuovono
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization},E=REDIRECT_HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    
     # Se il file o la directory esistono, caricali normalmente
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
