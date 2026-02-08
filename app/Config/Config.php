@@ -14,7 +14,7 @@ class Config
     const USAGE_FILE = self::DATA_PATH . 'usage.json';
     const INITIAL_BANKROLL = 100.00;
     const MIN_BETFAIR_STAKE = 2.00;
-    const BETFAIR_CONFIDENCE_THRESHOLD = 50;
+    const BETFAIR_CONFIDENCE_THRESHOLD = 75;
 
     // Popular League IDs
     const LEAGUE_SERIE_A = 135;
