@@ -290,78 +290,47 @@ class BetfairService
         $this->log("Mapping advice to selection: $advice", ['runners' => $runners, 'home' => $homeTeam, 'away' => $awayTeam]);
         $advice = trim(strtolower($advice));
 
-        // 0. Handle Over/Under and BTS
+        // 1. Exact Name Matching (Best for multi-sport)
+        foreach ($runners as $r) {
+            $name = trim(strtolower($r['runnerName']));
+            if ($advice === $name) return (string)$r['selectionId'];
+        }
+
+        // 2. Handle Over/Under and BTS
         if (strpos($advice, 'over 2.5') !== false) {
-            foreach ($runners as $r) { if (stripos($r['runnerName'], 'over') !== false) return $r['selectionId']; }
+            foreach ($runners as $r) { if (stripos($r['runnerName'], 'over') !== false) return (string)$r['selectionId']; }
         }
         if (strpos($advice, 'under 2.5') !== false) {
-            foreach ($runners as $r) { if (stripos($r['runnerName'], 'under') !== false) return $r['selectionId']; }
+            foreach ($runners as $r) { if (stripos($r['runnerName'], 'under') !== false) return (string)$r['selectionId']; }
         }
         if (strpos($advice, 'bts') !== false || strpos($advice, 'both teams to score') !== false || strpos($advice, 'yes') !== false) {
-             foreach ($runners as $r) { if (stripos($r['runnerName'], 'yes') !== false) return $r['selectionId']; }
-        }
-        if (strpos($advice, 'no bts') !== false || strpos($advice, 'no') !== false) {
-             foreach ($runners as $r) { if (stripos($r['runnerName'], 'no') !== false) return $r['selectionId']; }
+             foreach ($runners as $r) { if (stripos($r['runnerName'], 'yes') !== false) return (string)$r['selectionId']; }
         }
 
-        // 1. Handle explicit 1, X, 2 or Home, Away, Draw
-        if ($advice === '1' || $advice === 'home' || $advice === 'casa') {
+        // 3. Handle explicit 1, X, 2 or Home, Away, Draw
+        if ($advice === '1' || $advice === 'home' || $advice === 'casa' || ($homeTeam && strpos($advice, strtolower($homeTeam)) !== false)) {
             if ($homeTeam) {
                 foreach ($runners as $r) {
-                    if (strpos(strtolower($r['runnerName']), strtolower($homeTeam)) !== false) return $r['selectionId'];
+                    if (stripos($r['runnerName'], $homeTeam) !== false) return (string)$r['selectionId'];
                 }
             }
-            // Fallback: usually the first runner is Home
-            return $runners[0]['selectionId'] ?? null;
+            return (string)($runners[0]['selectionId'] ?? null);
         }
 
-        if ($advice === '2' || $advice === 'away' || $advice === 'trasferta') {
+        if ($advice === '2' || $advice === 'away' || $advice === 'trasferta' || ($awayTeam && strpos($advice, strtolower($awayTeam)) !== false)) {
             if ($awayTeam) {
                 foreach ($runners as $r) {
-                    if (strpos(strtolower($r['runnerName']), strtolower($awayTeam)) !== false) return $r['selectionId'];
+                    if (stripos($r['runnerName'], $awayTeam) !== false) return (string)$r['selectionId'];
                 }
             }
-            // Fallback: usually the second runner is Away
-            return $runners[1]['selectionId'] ?? null;
+            return (string)($runners[1]['selectionId'] ?? null);
         }
 
-        if ($advice === 'x' || $advice === 'draw' || $advice === 'pareggio' || $advice === 'the draw') {
-            foreach ($runners as $r) {
-                $name = strtolower($r['runnerName']);
-                if ($name === 'the draw' || $name === 'pareggio' || $name === 'draw' || $name === 'x') {
-                    return $r['selectionId'];
-                }
-            }
-            // Fallback: usually the third runner is Draw
-            return $runners[2]['selectionId'] ?? null;
-        }
-
-        // 2. Handle common Match Odds advice with prefixes
-        if (strpos($advice, 'winner:') !== false || strpos($advice, 'vincente:') !== false) {
-            $teamName = trim(explode(':', $advice)[1]);
-            foreach ($runners as $r) {
-                if (strpos(strtolower($r['runnerName']), strtolower($teamName)) !== false) {
-                    return $r['selectionId'];
-                }
-            }
-        }
-
-        // 3. Generic fallback: check if advice contains any runner name
+        // 4. Fuzzy Fallback
         foreach ($runners as $r) {
-            if (strpos($advice, strtolower($r['runnerName'])) !== false) {
-                return $r['selectionId'];
-            }
-        }
-
-        // 4. If advice is a team name directly
-        if ($homeTeam && strpos($advice, strtolower($homeTeam)) !== false) {
-             foreach ($runners as $r) {
-                if (strpos(strtolower($r['runnerName']), strtolower($homeTeam)) !== false) return $r['selectionId'];
-            }
-        }
-        if ($awayTeam && strpos($advice, strtolower($awayTeam)) !== false) {
-             foreach ($runners as $r) {
-                if (strpos(strtolower($r['runnerName']), strtolower($awayTeam)) !== false) return $r['selectionId'];
+            $name = strtolower($r['runnerName']);
+            if (strpos($advice, $name) !== false || strpos($name, $advice) !== false) {
+                return (string)$r['selectionId'];
             }
         }
 
@@ -570,6 +539,38 @@ class BetfairService
         if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
             $this->clearPersistentToken();
             return $this->getAccountStatement(true);
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Get Settled Bets (Cleared Orders)
+     */
+    public function getClearedOrders($isRetry = false)
+    {
+        $token = $this->authenticate();
+        if (!$token) return null;
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/listClearedOrders/');
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['betStatus' => 'SETTLED', 'recordCount' => 100]));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "X-Application: {$this->appKey}",
+            "X-Authentication: {$token}",
+            "Content-Type: application/json",
+            "Accept: application/json"
+        ]);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $decoded = json_decode($response, true);
+        if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
+            $this->clearPersistentToken();
+            return $this->getClearedOrders(true);
         }
 
         return $decoded;
