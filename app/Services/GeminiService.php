@@ -61,11 +61,13 @@ class GeminiService
                 "DATI STATISTICI AVANZATI (Se disponibili):\n" . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili") . "\n\n" .
                 "REGOLE RIGIDE:\n" .
                 "1. Se i nomi delle squadre sono 'Unknown', cerca di dedurli dai nomi dei runner o dal contesto del mercato.\n" .
-                "2. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE (tiri, possesso, cartellini) se forniti.\n" .
-                "3. Sii molto tecnico nella spiegazione (motivation), correlando l'andamento del match (stats) con le variazioni delle quote.\n" .
-                "4. Se mancano le statistiche live, basa l'analisi sulla liquidità del mercato e sul movimento delle quote (Weight of Money).\n" .
-                "5. Se sono presenti dati H2H, usali per contestualizzare la forza delle squadre.\n" .
-                "6. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
+                "2. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE (tiri, possesso, cartellini, formazioni, statistiche individuali giocatori) se forniti.\n" .
+                "3. Usa la CLASSIFICA (standings) per valutare l'importanza del match e il divario tecnico tra le squadre.\n" .
+                "4. Prendi in considerazione i PRONOSTICI esterni (predictions) forniti da API-Football come ulteriore conferma o segnale di contrasto.\n" .
+                "5. Sii molto tecnico nella spiegazione (motivation), correlando l'andamento del match (stats) con le variazioni delle quote, la situazione in classifica e i pronostici API.\n" .
+                "6. Se mancano le statistiche live, basa l'analisi sulla liquidità del mercato e sul movimento delle quote (Weight of Money).\n" .
+                "7. Se sono presenti dati H2H, usali per contestualizzare la forza delle squadre nel tempo.\n" .
+                "8. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
                 "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
                 "```json\n" .
                 "{\n" .

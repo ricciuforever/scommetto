@@ -211,24 +211,8 @@ class GiaNikController
             ];
 
             // --- ENRICHMENT WITH API-FOOTBALL ---
-            $apiData = null;
             if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
-                $apiMatch = $this->findMatchingFixture($event['event'], $event['sport']);
-                if ($apiMatch) {
-                    $api = new FootballApiService();
-                    $fixtureId = $apiMatch['fixture']['id'];
-                    $stats = $api->fetchFixtureStatistics($fixtureId);
-                    $events = $api->fetchFixtureEvents($fixtureId);
-                    $h2h = $api->fetchH2H($apiMatch['teams']['home']['id'] . '-' . $apiMatch['teams']['away']['id']);
-
-                    $apiData = [
-                        'fixture' => $apiMatch,
-                        'statistics' => $stats['response'] ?? [],
-                        'events' => $events['response'] ?? [],
-                        'h2h' => $h2h['response'] ?? []
-                    ];
-                    $event['api_football'] = $apiData;
-                }
+                $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport']);
             }
 
             $gemini = new GeminiService();
@@ -248,14 +232,19 @@ class GiaNikController
         }
     }
 
-    private function findMatchingFixture($bfEventName, $sport)
+    private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null)
     {
         $api = new FootballApiService();
 
         // 1. Try Live matches first
-        $live = $api->fetchLiveMatches();
-        if (!empty($live['response'])) {
-            $match = $this->searchInFixtureList($bfEventName, $live['response']);
+        $liveFixtures = $preFetchedLive;
+        if ($liveFixtures === null) {
+            $live = $api->fetchLiveMatches();
+            $liveFixtures = $live['response'] ?? [];
+        }
+
+        if (!empty($liveFixtures)) {
+            $match = $this->searchInFixtureList($bfEventName, $liveFixtures);
             if ($match) return $match;
         }
 
@@ -401,6 +390,11 @@ class GiaNikController
             $liveEventsRes = $this->bf->getLiveEvents($eventTypeIds);
             $events = $liveEventsRes['result'] ?? [];
 
+            // Pre-fetch live fixtures from API-Football once to use for matching
+            $api = new FootballApiService();
+            $apiLiveRes = $api->fetchLiveMatches();
+            $apiLiveFixtures = $apiLiveRes['response'] ?? [];
+
             if (empty($events)) {
                 echo json_encode(['status' => 'success', 'message' => 'Nessun evento live']);
                 return;
@@ -466,15 +460,7 @@ class GiaNikController
 
                     // Enriched with API-Football if available
                     if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
-                        $apiMatch = $this->findMatchingFixture($event['event'], $event['sport']);
-                        if ($apiMatch) {
-                            $api = new FootballApiService();
-                            $fid = $apiMatch['fixture']['id'];
-                            $event['api_football'] = [
-                                'statistics' => $api->fetchFixtureStatistics($fid)['response'] ?? [],
-                                'events' => $api->fetchFixtureEvents($fid)['response'] ?? []
-                            ];
-                        }
+                        $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures);
                     }
 
                     $gemini = new GeminiService();
@@ -559,6 +545,39 @@ class GiaNikController
         } catch (\Throwable $e) {
             error_log("GiaNik Settlement Error: " . $e->getMessage());
         }
+    }
+
+    private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null)
+    {
+        $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive);
+        if (!$apiMatch) return null;
+
+        $api = new FootballApiService();
+        $fixtureId = $apiMatch['fixture']['id'];
+
+        // Comprehensive fixture details (stats, events, lineups, players)
+        $details = $api->fetchFixtureDetails($fixtureId);
+        $fullFixture = $details['response'][0] ?? $apiMatch;
+
+        // H2H
+        $h2h = $api->fetchH2H($apiMatch['teams']['home']['id'] . '-' . $apiMatch['teams']['away']['id']);
+
+        // Standings
+        $standings = null;
+        if (isset($apiMatch['league']['id'], $apiMatch['league']['season'])) {
+            $stRes = $api->fetchStandings($apiMatch['league']['id'], $apiMatch['league']['season']);
+            $standings = $stRes['response'][0]['league']['standings'] ?? null;
+        }
+
+        // Predictions
+        $predictions = $api->fetchPredictions($fixtureId);
+
+        return [
+            'fixture' => $fullFixture,
+            'h2h' => $h2h['response'] ?? [],
+            'standings' => $standings,
+            'predictions' => $predictions['response'][0] ?? null
+        ];
     }
 
     public function recentBets()
