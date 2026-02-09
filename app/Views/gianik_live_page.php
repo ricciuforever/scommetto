@@ -1,0 +1,42 @@
+<?php
+// app/Views/gianik_live_page.php
+$pageTitle = "GiaNik Live - Betfair Dashboard";
+require __DIR__ . '/layout/top.php';
+?>
+
+<div class="flex flex-col gap-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-4xl font-black italic uppercase tracking-tighter text-white leading-none">
+                GiaNik Live <span class="text-accent">.</span>
+            </h1>
+            <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mt-2">
+                Betfair Multi-Sport Dashboard (Real-Time)
+            </p>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="flex flex-col items-end">
+                <span class="text-[10px] font-black uppercase text-slate-500">Auto-Refresh</span>
+                <span class="text-xs font-bold text-success flex items-center gap-1.5">
+                    <span class="w-2 h-2 bg-success rounded-full animate-pulse"></span>
+                    ATTIVO (30s)
+                </span>
+            </div>
+            <button hx-get="/api/gianik/live" hx-target="#gianik-live-container" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/5 transition-all text-slate-400 hover:text-white">
+                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Container per il caricamento asincrono -->
+    <div id="gianik-live-container" hx-get="/api/gianik/live" hx-trigger="load, every 30s" class="min-h-[400px]">
+        <div class="flex items-center justify-center p-20">
+            <div class="flex flex-col items-center gap-4">
+                <i data-lucide="loader-2" class="w-12 h-12 text-accent animate-spin"></i>
+                <span class="text-xs font-black uppercase tracking-widest text-slate-500">Inizializzazione Dati Betfair...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php require __DIR__ . '/layout/bottom.php'; ?>
