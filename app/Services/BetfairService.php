@@ -15,8 +15,11 @@ class BetfairService
     private $sessionToken;
     private $sessionFile;
     private $loginAttemptFile;
+    private $activityFile;
+    private $lockFile;
     private $authFailed = false;
     private $ssoUrl;
+    private $keepAliveUrl;
     private $apiUrl = 'https://api.betfair.com/exchange/betting/json-rpc/v1';
     private $lastRequestTime = 0;
     private $logFile;
@@ -30,8 +33,12 @@ class BetfairService
         $this->certPath = Config::get('BETFAIR_CERT_PATH');
         $this->keyPath = Config::get('BETFAIR_KEY_PATH');
         $this->ssoUrl = Config::get('BETFAIR_SSO_URL', 'https://identitysso.betfair.it/api/certlogin');
+        $this->keepAliveUrl = 'https://identitysso.betfair.it/api/keepAlive';
+
         $this->sessionFile = Config::DATA_PATH . 'betfair_session.txt';
         $this->loginAttemptFile = Config::DATA_PATH . 'last_login_attempt.txt';
+        $this->activityFile = Config::DATA_PATH . 'betfair_last_activity.txt';
+        $this->lockFile = Config::DATA_PATH . 'betfair_login.lock';
 
         // Carica token persistente o da configurazione
         $this->sessionToken = $this->loadPersistentToken() ?: Config::get('BETFAIR_SESSION_TOKEN');
@@ -54,6 +61,7 @@ class BetfairService
             mkdir(dirname($this->sessionFile), 0777, true);
         }
         file_put_contents($this->sessionFile, $token);
+        $this->updateLastActivity();
     }
 
     private function clearPersistentToken($reason = "unspecified")
@@ -62,7 +70,18 @@ class BetfairService
         if (file_exists($this->sessionFile)) {
             unlink($this->sessionFile);
         }
+        if (file_exists($this->activityFile)) {
+            unlink($this->activityFile);
+        }
         $this->sessionToken = null;
+    }
+
+    private function updateLastActivity()
+    {
+        if (!is_dir(dirname($this->activityFile))) {
+            mkdir(dirname($this->activityFile), 0777, true);
+        }
+        file_put_contents($this->activityFile, time());
     }
 
     private function log($message, $data = null)
@@ -91,91 +110,19 @@ class BetfairService
         return $hasKey && ($hasCredentials || $hasToken);
     }
 
-    private function authenticate($force = false)
+    public function keepAlive()
     {
-        if ($this->sessionToken && !$force) {
-            return $this->sessionToken;
-        }
+        if (!$this->sessionToken) return false;
 
-        if ($this->authFailed && !$force) {
-            return null;
-        }
-
-        // Implementazione Cooldown per evitare blocchi account
-        if (file_exists($this->loginAttemptFile)) {
-            $lastAttempt = (int) file_get_contents($this->loginAttemptFile);
-            $cooldown = 60; // 1 minuto di cooldown tra login falliti
-            if ((time() - $lastAttempt) < $cooldown && !$force) {
-                $this->log("Autenticazione in cooldown. Salto il tentativo per evitare blocchi.");
-                $this->authFailed = true;
-                return null;
-            }
-        }
-
-        // Registra il tentativo attuale
-        file_put_contents($this->loginAttemptFile, time());
-
-        $this->log("Inizio procedura di autenticazione...");
-
-        // Se abbiamo i certificati, usiamo ssoUrl (certlogin)
-        if (!empty($this->certPath) && file_exists($this->certPath)) {
-            $this->log("Tentativo di login con certificati...");
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $this->ssoUrl);
-            curl_setopt($ch, CURLOPT_POST, 1);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, "username={$this->username}&password={$this->password}");
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                "X-Application: {$this->appKey}",
-                "Content-Type: application/x-www-form-urlencoded"
-            ]);
-            curl_setopt($ch, CURLOPT_SSLCERT, $this->certPath);
-            curl_setopt($ch, CURLOPT_SSLKEY, $this->keyPath);
-
-            $response = curl_exec($ch);
-            curl_close($ch);
-            $data = json_decode($response, true);
-
-            if (isset($data['sessionToken'])) {
-                $this->sessionToken = $data['sessionToken'];
-                $this->savePersistentToken($this->sessionToken);
-                $this->log("Login con certificati riuscito.");
-                // Reset cooldown on success
-                if (file_exists($this->loginAttemptFile))
-                    unlink($this->loginAttemptFile);
-                return $this->sessionToken;
-            }
-            $this->log("Login con certificati fallito.", $data);
-        }
-
-        // Altrimenti proviamo il login interattivo/API Desktop (senza certificati)
-
-        // CHECK LOCK
-        $lockFile = sys_get_temp_dir() . '/betfair_login_lock';
-        if (file_exists($lockFile)) {
-            $lockTime = filemtime($lockFile);
-            if (time() - $lockTime < 1200) { // 20 minuti di cooldown (Official Limit)
-                $this->log("Login BLOCCATO preventivamente per cooldown (15min).");
-                return null;
-            }
-            unlink($lockFile);
-        }
-
-        $this->log("Tentativo di login senza certificati (API Desktop)...");
-        $loginUrl = 'https://identitysso.betfair.it/api/login';
-
+        $this->log("Inizio Keep Alive per estendere la sessione...");
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $loginUrl);
+        curl_setopt($ch, CURLOPT_URL, $this->keepAliveUrl);
         curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
-            'username' => $this->username,
-            'password' => $this->password
-        ]));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, "");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        // curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Removed unsafe dev option
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             "X-Application: {$this->appKey}",
-            "Content-Type: application/x-www-form-urlencoded",
+            "X-Authentication: {$this->sessionToken}",
             "Accept: application/json"
         ]);
 
@@ -183,31 +130,164 @@ class BetfairService
         curl_close($ch);
         $data = json_decode($response, true);
 
-        if (isset($data['token']) && !empty($data['token'])) {
-            $this->sessionToken = $data['token'];
-            $this->savePersistentToken($this->sessionToken);
-            $this->log("Login senza certificati riuscito.");
-            // Reset cooldown on success
-            if (file_exists($this->loginAttemptFile))
-                unlink($this->loginAttemptFile);
+        if (isset($data['status']) && $data['status'] === 'SUCCESS') {
+            $this->log("Keep Alive RIUSCITO.");
+            if (isset($data['token']) && $data['token'] !== $this->sessionToken) {
+                $this->sessionToken = $data['token'];
+                $this->savePersistentToken($this->sessionToken);
+            } else {
+                $this->updateLastActivity();
+            }
+            return true;
+        }
+
+        $this->log("Keep Alive FALLITO.", $data);
+        if (isset($data['error']) && in_array($data['error'], ['INVALID_SESSION_INFORMATION', 'NO_SESSION'])) {
+            $this->clearPersistentToken("Keep Alive Error: " . $data['error']);
+        }
+        return false;
+    }
+
+    public function authenticate($force = false)
+    {
+        // 1. Verifica token in memoria e necessità di Keep Alive
+        if ($this->sessionToken && !$force) {
+            $lastActivity = file_exists($this->activityFile) ? (int)file_get_contents($this->activityFile) : 0;
+            if (time() - $lastActivity > 14400) { // 4 ore
+                $this->keepAlive();
+            }
             return $this->sessionToken;
         }
 
-        // Gestione Errori Critici e Lock
-        if (isset($data['error'])) {
-            $criticalErrors = ['TEMPORARY_BAN_TOO_MANY_REQUESTS', 'ACCOUNT_PENDING_PASSWORD_CHANGE', 'ACCOUNT_LOCKED'];
-            if (in_array($data['error'], $criticalErrors)) {
-                $this->log("ERRORE CRITICO LOGIN: " . $data['error'] . ". Attivo cooldown di 15 minuti.");
-                touch($lockFile);
-            }
-
-            if ($data['error'] === 'STRONG_AUTH_CODE_REQUIRED') {
-                $this->log("ERRORE CRITICO: Autenticazione a 2 fattori (2FA) rilevata. L'API Desktop non può accedere senza codice. Soluzioni: 1. Configura i certificati SSL nel .env; 2. Disabilita temporaneamente la 2FA su Betfair.it; 3. Inserisci un token manualmente in " . $this->sessionFile);
-            }
+        if ($this->authFailed && !$force) {
+            return null;
         }
 
-        $this->log("Login senza certificati fallito.", $data);
-        $this->authFailed = true;
+        // 2. Controllo Ban Temporaneo (20m)
+        $banFile = sys_get_temp_dir() . '/betfair_login_lock';
+        if (file_exists($banFile)) {
+            $lockTime = filemtime($banFile);
+            if (time() - $lockTime < 1200) { // 20 minuti
+                $this->log("Login BLOCCATO preventivamente per ban temporaneo attivo.");
+                return null;
+            }
+            unlink($banFile);
+        }
+
+        // 3. LOGIN ATOMICO con flock
+        if (!is_dir(dirname($this->lockFile))) {
+            mkdir(dirname($this->lockFile), 0777, true);
+        }
+        $fp = fopen($this->lockFile, "w+");
+        if (!$fp) {
+            $this->log("Impossibile aprire il file di lock per il login.");
+            return $this->sessionToken; // Riprova con quello che abbiamo
+        }
+
+        if (flock($fp, LOCK_EX)) {
+            // DOUBLE CHECK: Ricarica il token dal file, forse un altro processo ha appena loggato
+            $this->sessionToken = $this->loadPersistentToken();
+            if ($this->sessionToken && !$force) {
+                $this->log("Login saltato: un altro processo ha già effettuato l'autenticazione.");
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                return $this->sessionToken;
+            }
+
+            // Necessario il login - Controllo Cooldown
+            if (file_exists($this->loginAttemptFile)) {
+                $lastAttempt = (int) file_get_contents($this->loginAttemptFile);
+                if ((time() - $lastAttempt) < 60 && !$force) {
+                    $this->log("Autenticazione in cooldown (global). Salto.");
+                    $this->authFailed = true;
+                    flock($fp, LOCK_UN);
+                    fclose($fp);
+                    return null;
+                }
+            }
+
+            // Registra il tentativo
+            file_put_contents($this->loginAttemptFile, time());
+            $this->log("Inizio procedura di autenticazione (LOCK ACQUISITO)...");
+
+            // --- TENTATIVO CON CERTIFICATI ---
+            if (!empty($this->certPath) && file_exists($this->certPath)) {
+                $this->log("Tentativo di login con certificati...");
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $this->ssoUrl);
+                curl_setopt($ch, CURLOPT_POST, 1);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, "username={$this->username}&password={$this->password}");
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    "X-Application: {$this->appKey}",
+                    "Content-Type: application/x-www-form-urlencoded"
+                ]);
+                curl_setopt($ch, CURLOPT_SSLCERT, $this->certPath);
+                curl_setopt($ch, CURLOPT_SSLKEY, $this->keyPath);
+
+                $response = curl_exec($ch);
+                curl_close($ch);
+                $data = json_decode($response, true);
+
+                if (isset($data['sessionToken'])) {
+                    $this->sessionToken = $data['sessionToken'];
+                    $this->savePersistentToken($this->sessionToken);
+                    $this->log("Login con certificati riuscito.");
+                    if (file_exists($this->loginAttemptFile)) unlink($this->loginAttemptFile);
+                    flock($fp, LOCK_UN);
+                    fclose($fp);
+                    return $this->sessionToken;
+                }
+                $this->log("Login con certificati fallito.", $data);
+            }
+
+            // --- TENTATIVO SENZA CERTIFICATI (API DESKTOP) ---
+            $this->log("Tentativo di login senza certificati (API Desktop)...");
+            $loginUrl = 'https://identitysso.betfair.it/api/login';
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $loginUrl);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(['username' => $this->username, 'password' => $this->password]));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "X-Application: {$this->appKey}",
+                "Content-Type: application/x-www-form-urlencoded",
+                "Accept: application/json"
+            ]);
+
+            $response = curl_exec($ch);
+            curl_close($ch);
+            $data = json_decode($response, true);
+
+            if (isset($data['token']) && !empty($data['token'])) {
+                $this->sessionToken = $data['token'];
+                $this->savePersistentToken($this->sessionToken);
+                $this->log("Login senza certificati riuscito.");
+                if (file_exists($this->loginAttemptFile)) unlink($this->loginAttemptFile);
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                return $this->sessionToken;
+            }
+
+            // Gestione Errori Critici
+            if (isset($data['error'])) {
+                $criticalErrors = ['TEMPORARY_BAN_TOO_MANY_REQUESTS', 'ACCOUNT_PENDING_PASSWORD_CHANGE', 'ACCOUNT_LOCKED'];
+                if (in_array($data['error'], $criticalErrors)) {
+                    $this->log("ERRORE CRITICO LOGIN: " . $data['error'] . ". Attivo ban temporaneo di 20 minuti.");
+                    touch($banFile);
+                }
+
+                if ($data['error'] === 'STRONG_AUTH_CODE_REQUIRED') {
+                    $this->log("ERRORE CRITICO: Autenticazione a 2 fattori (2FA) rilevata. L'API Desktop non può accedere senza codice. Soluzioni: 1. Configura i certificati SSL nel .env; 2. Disabilita temporaneamente la 2FA su Betfair.it; 3. Inserisci un token manualmente in " . $this->sessionFile);
+                }
+            }
+
+            $this->log("Login fallito.", $data);
+            $this->authFailed = true;
+            flock($fp, LOCK_UN);
+        }
+        fclose($fp);
+
         return null;
     }
 
