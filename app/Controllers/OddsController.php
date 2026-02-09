@@ -153,6 +153,47 @@ class OddsController
         }
     }
 
+    /**
+     * Ritorna la lista dei bookmaker che hanno quote live in questo momento.
+     * Endpoint: /api/odds/active-bookmakers
+     */
+    public function activeBookmakers()
+    {
+        header('Content-Type: application/json');
+        try {
+            $api = new FootballApiService();
+            $apiResult = $api->fetchLiveOdds();
+
+            $bookmakers = [];
+            $seenIds = [];
+
+            if (!empty($apiResult['response'])) {
+                foreach ($apiResult['response'] as $match) {
+                    if (!empty($match['bookmakers'])) {
+                        foreach ($match['bookmakers'] as $bk) {
+                            if (!isset($seenIds[$bk['id']])) {
+                                $bookmakers[] = [
+                                    'id' => $bk['id'],
+                                    'name' => $bk['name']
+                                ];
+                                $seenIds[$bk['id']] = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Sort alphabetically
+            usort($bookmakers, fn($a, $b) => strcmp($a['name'], $b['name']));
+
+            echo json_encode(['response' => $bookmakers]);
+
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
 
     /**
      * Ritorna le quote pre-match per una partita.

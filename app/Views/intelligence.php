@@ -16,7 +16,6 @@ require __DIR__ . '/layout/top.php';
         const [error, setError] = useState(null);
 
         // Filters State
-        const [allBookmakers, setAllBookmakers] = useState([]);
         const [availableBookmakers, setAvailableBookmakers] = useState([]); // Bookmakers with live odds
         const [selectedBookmaker, setSelectedBookmaker] = useState('');
         const [selectedCountry, setSelectedCountry] = useState('');
@@ -46,33 +45,13 @@ require __DIR__ . '/layout/top.php';
 
                 let fixtures = fixturesData.response || [];
 
-                // Detect which bookmakers have odds for these fixtures (only if not already detected)
-                if (fixtures.length > 0 && allBookmakers.length > 0 && !selectedBookmaker) {
-                    const activeBookmakerIds = new Set();
-
-                    // Check first fixture for all bookmakers to see which have odds
-                    const firstFixture = fixtures[0];
-                    await Promise.all(
-                        allBookmakers.map(async (bookmaker) => {
-                            try {
-                                const oddsRes = await fetch(`/api/odds?fixture=${firstFixture.fixture.id}&bookmaker=${bookmaker.id}`);
-                                const oddsData = await oddsRes.json();
-
-                                if (oddsData.response && oddsData.response.length > 0) {
-                                    const fixtureOdds = oddsData.response[0];
-                                    if (fixtureOdds.bookmakers && fixtureOdds.bookmakers.length > 0) {
-                                        activeBookmakerIds.add(bookmaker.id);
-                                    }
-                                }
-                            } catch (err) {
-                                // Bookmaker doesn't have odds, skip
-                            }
-                        })
-                    );
-
-                    // Filter to only bookmakers with odds
-                    const active = allBookmakers.filter(bk => activeBookmakerIds.has(bk.id));
-                    setAvailableBookmakers(active);
+                // Fetch active bookmakers for live matches
+                try {
+                    const activeBkRes = await fetch('/api/odds/active-bookmakers');
+                    const activeBkData = await activeBkRes.json();
+                    setAvailableBookmakers(activeBkData.response || []);
+                } catch (err) {
+                    console.error("Error fetching active bookmakers:", err);
                 }
 
                 // If a bookmaker is selected, fetch odds for each fixture
@@ -179,14 +158,6 @@ require __DIR__ . '/layout/top.php';
             setPredictionMatch(null);
             setPredictionData(null);
         };
-
-        // Fetch Bookmakers list (all available from DB)
-        useEffect(() => {
-            fetch('/api/odds/bookmakers')
-                .then(res => res.json())
-                .then(data => setAllBookmakers(data.response || []))
-                .catch(console.error);
-        }, []);
 
         // Initial fetch and auto-refresh
         useEffect(() => {

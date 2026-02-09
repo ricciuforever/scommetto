@@ -147,6 +147,8 @@ try {
         (new OddsController())->live();
     } elseif ($path === '/api/odds/live/bets') {
         (new OddsController())->liveBets();
+    } elseif ($path === '/api/odds/active-bookmakers') {
+        (new OddsController())->activeBookmakers();
     } elseif ($path === '/api/odds') {
         (new OddsController())->prematch();
     } elseif ($path === '/api/odds/bookmakers') {
