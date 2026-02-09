@@ -13,6 +13,7 @@ use App\Controllers\SeasonController;
 use App\Controllers\TeamController;
 use App\Controllers\RoundController;
 use App\Controllers\FixtureController;
+use App\Controllers\FixtureStatsController;
 use App\Controllers\H2HController;
 use App\Controllers\TeamStatsController;
 use App\Controllers\VenueController;
@@ -34,6 +35,7 @@ try {
         '/teams' => TeamController::class,
         '/rounds' => RoundController::class,
         '/fixtures' => FixtureController::class,
+        '/fixture-stats' => FixtureStatsController::class,
         '/h2h' => H2HController::class,
         '/team-stats' => TeamStatsController::class,
         '/venues' => VenueController::class,
@@ -65,6 +67,8 @@ try {
         (new RoundController())->list();
     } elseif ($path === '/api/fixtures') {
         (new FixtureController())->list();
+    } elseif ($path === '/api/fixture-stats') {
+        (new FixtureStatsController())->show();
     } elseif ($path === '/api/h2h') {
         (new H2HController())->show();
     } elseif ($path === '/api/teams') {
