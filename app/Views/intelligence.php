@@ -206,10 +206,17 @@ require __DIR__ . '/layout/top.php';
         const filteredEvents = useMemo(() => {
             return liveEvents.filter(evt => {
                 const matchCountry = selectedCountry ? evt.league.country === selectedCountry : true;
-                const matchLeague = selectedLeague ? evt.league.id === parseInt(selectedLeague) : true;
+                const matchLeague = selectedLeague ? (evt.league && evt.league.id === parseInt(selectedLeague)) : true;
                 return matchCountry && matchLeague;
             });
         }, [liveEvents, selectedCountry, selectedLeague]);
+
+        // Refresh icons whenever events or loading state changes
+        useEffect(() => {
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+        }, [filteredEvents, loading]);
 
         return (
             <div className="flex flex-col h-full space-y-6">
@@ -345,9 +352,23 @@ require __DIR__ . '/layout/top.php';
         const awayScore = goals?.away ?? score?.fulltime?.away ?? 0;
 
         // Extract odds if available (from merged data)
-        const mainOdds = odds && odds.length > 0 && odds[0].bets && odds[0].bets.length > 0
-            ? odds[0].bets[0].values
-            : null;
+        // We look for "Match Winner" (ID 1) or just the first bet available
+        const getMainOdds = () => {
+            if (!odds || odds.length === 0 || !odds[0].bets) return null;
+
+            // Try to find Match Winner (ID 1)
+            const matchWinner = odds[0].bets.find(b => b.id === 1 || b.name === 'Match Winner');
+            if (matchWinner && matchWinner.values) return matchWinner.values;
+
+            // Fallback to first available bet if it has values
+            if (odds[0].bets.length > 0 && odds[0].bets[0].values) {
+                return odds[0].bets[0].values;
+            }
+
+            return null;
+        };
+
+        const mainOdds = getMainOdds();
 
         return (
             <div onClick={onClick} className="glass p-6 rounded-2xl border border-white/10 hover:border-accent/30 transition-all group cursor-pointer hover:scale-[1.02]">

@@ -168,6 +168,7 @@ class OddsController
         header('Content-Type: application/json');
         try {
             $api = new FootballApiService();
+            // Discovery via /odds/live
             $apiResult = $api->fetchLiveOdds();
 
             $bookmakers = [];
@@ -185,6 +186,35 @@ class OddsController
                                 $seenIds[$bk['id']] = true;
                             }
                         }
+                    }
+                }
+            }
+
+            // FALLBACK: Se la discovery live è vuota (comune se non ci sono match "premium" live),
+            // restituiamo una lista dei bookmaker più comuni dal database.
+            if (empty($bookmakers)) {
+                $model = new \App\Models\Bookmaker();
+                $all = $model->getAll();
+
+                // Se il DB è vuoto, proviamo a sincronizzarlo
+                if (empty($all)) {
+                    $apiResultBk = $api->fetchBookmakers();
+                    if (!empty($apiResultBk['response'])) {
+                        foreach ($apiResultBk['response'] as $bk) {
+                            $model->save($bk);
+                        }
+                        $all = $model->getAll();
+                    }
+                }
+
+                // Lista ID popolari/utili (Betfair=3, Bet365=8, Bwin=6, etc.)
+                $popularIds = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 16];
+                foreach ($all as $bk) {
+                    if (in_array($bk['id'], $popularIds)) {
+                        $bookmakers[] = [
+                            'id' => $bk['id'],
+                            'name' => $bk['name']
+                        ];
                     }
                 }
             }
