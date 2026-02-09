@@ -75,4 +75,15 @@ class Player
             'number' => $squadInfo['number'] ?? null
         ]);
     }
+    public function getTeams($playerId)
+    {
+        $sql = "SELECT t.*, s.position, s.number 
+                FROM teams t
+                JOIN squads s ON t.id = s.team_id
+                WHERE s.player_id = ?
+                ORDER BY t.name ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$playerId]);
+        return $stmt->fetchAll();
+    }
 }

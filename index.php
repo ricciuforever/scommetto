@@ -102,6 +102,8 @@ try {
         (new PlayerSeasonStatsController())->show();
     } elseif ($path === '/api/team/seasons') {
         (new TeamController())->seasons();
+    } elseif ($path === '/api/squads') {
+        (new TeamController())->squads();
     } elseif ($path === '/api/team-stats') {
         (new TeamStatsController())->show();
     } elseif ($path === '/api/standings') {

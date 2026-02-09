@@ -144,9 +144,15 @@ class FootballApiService
         return $this->request("/coaches?team=$teamId");
     }
 
-    public function fetchSquad($teamId)
+    public function fetchSquad($teamId = null, $playerId = null)
     {
-        return $this->request("/players/squads?team=$teamId");
+        $url = "/players/squads";
+        if ($teamId) {
+            $url .= "?team=$teamId";
+        } elseif ($playerId) {
+            $url .= "?player=$playerId";
+        }
+        return $this->request($url);
     }
 
     public function fetchTeamSeasons($teamId)
