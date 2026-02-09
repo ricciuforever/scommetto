@@ -3,6 +3,7 @@
 $groupedMatches = $groupedMatches ?? [];
 $account = $account ?? ['available' => 0, 'exposure' => 0];
 $orders = $orders ?? [];
+$history = $history ?? [];
 
 $translationMap = [
     'Soccer' => 'Calcio',
@@ -85,6 +86,38 @@ $iconMap = [
                         <?php echo $order['side']; ?>
                     </span>
                     <div class="text-[8px] font-bold text-slate-500 mt-1"><?php echo $order['status']; ?></div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- Settled Bets Section -->
+<?php if (!empty($history)): ?>
+<div class="mb-10">
+    <h2 class="text-xl font-black italic uppercase tracking-tight text-white mb-4">Ultime Giocate Concluse</h2>
+    <div class="glass rounded-[32px] border-white/5 divide-y divide-white/5 overflow-hidden">
+        <?php foreach (array_slice($history, 0, 10) as $bet):
+            $profit = (float)($bet['profit'] ?? 0);
+            $isWin = $profit > 0;
+            $isLoss = $profit < 0;
+            $statusClass = $isWin ? 'text-success' : ($isLoss ? 'text-danger' : 'text-slate-500');
+        ?>
+            <div class="p-4 flex items-center justify-between group hover:bg-white/5 transition-all">
+                <div>
+                    <div class="text-[10px] font-black italic uppercase text-white truncate max-w-[250px]">
+                        Market: <?php echo $bet['marketId']; ?>
+                    </div>
+                    <div class="text-[8px] font-bold text-slate-500 uppercase">
+                        Scommessa: <?php echo $bet['betId']; ?> | Quota: <?php echo $bet['lastMatchedPrice']; ?>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-[10px] font-black italic uppercase <?php echo $statusClass; ?>">
+                        <?php echo $profit >= 0 ? '+' : ''; echo number_format($profit, 2); ?>€
+                    </div>
+                    <div class="text-[8px] font-bold text-slate-500 uppercase"><?php echo date('d/m/y H:i', strtotime($bet['settledDate'])); ?></div>
                 </div>
             </div>
         <?php endforeach; ?>

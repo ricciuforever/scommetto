@@ -14,6 +14,8 @@ class BetfairService
     private $keyPath;
     private $sessionToken;
     private $sessionFile;
+    private $loginAttemptFile;
+    private $authFailed = false;
     private $ssoUrl;
     private $apiUrl = 'https://api.betfair.com/exchange/betting/json-rpc/v1';
     private $lastRequestTime = 0;
@@ -29,6 +31,7 @@ class BetfairService
         $this->keyPath = Config::get('BETFAIR_KEY_PATH');
         $this->ssoUrl = Config::get('BETFAIR_SSO_URL', 'https://identitysso.betfair.it/api/certlogin');
         $this->sessionFile = Config::DATA_PATH . 'betfair_session.txt';
+        $this->loginAttemptFile = Config::DATA_PATH . 'last_login_attempt.txt';
 
         // Carica token persistente o da configurazione
         $this->sessionToken = $this->loadPersistentToken() ?: Config::get('BETFAIR_SESSION_TOKEN');
@@ -53,8 +56,9 @@ class BetfairService
         file_put_contents($this->sessionFile, $token);
     }
 
-    private function clearPersistentToken()
+    private function clearPersistentToken($reason = "unspecified")
     {
+        $this->log("Invalido il token persistente. Ragione: $reason");
         if (file_exists($this->sessionFile)) {
             unlink($this->sessionFile);
         }
@@ -93,6 +97,24 @@ class BetfairService
             return $this->sessionToken;
         }
 
+        if ($this->authFailed && !$force) {
+            return null;
+        }
+
+        // Implementazione Cooldown per evitare blocchi account
+        if (file_exists($this->loginAttemptFile)) {
+            $lastAttempt = (int)file_get_contents($this->loginAttemptFile);
+            $cooldown = 60; // 1 minuto di cooldown tra login falliti
+            if ((time() - $lastAttempt) < $cooldown && !$force) {
+                $this->log("Autenticazione in cooldown. Salto il tentativo per evitare blocchi.");
+                $this->authFailed = true;
+                return null;
+            }
+        }
+
+        // Registra il tentativo attuale
+        file_put_contents($this->loginAttemptFile, time());
+
         $this->log("Inizio procedura di autenticazione...");
 
         // Se abbiamo i certificati, usiamo ssoUrl (certlogin)
@@ -118,6 +140,8 @@ class BetfairService
                 $this->sessionToken = $data['sessionToken'];
                 $this->savePersistentToken($this->sessionToken);
                 $this->log("Login con certificati riuscito.");
+                // Reset cooldown on success
+                if (file_exists($this->loginAttemptFile)) unlink($this->loginAttemptFile);
                 return $this->sessionToken;
             }
             $this->log("Login con certificati fallito.", $data);
@@ -149,6 +173,8 @@ class BetfairService
             $this->sessionToken = $data['token'];
             $this->savePersistentToken($this->sessionToken);
             $this->log("Login senza certificati riuscito.");
+            // Reset cooldown on success
+            if (file_exists($this->loginAttemptFile)) unlink($this->loginAttemptFile);
             return $this->sessionToken;
         }
 
@@ -157,6 +183,7 @@ class BetfairService
         }
 
         $this->log("Login senza certificati fallito.", $data);
+        $this->authFailed = true;
         return null;
     }
 
@@ -204,8 +231,8 @@ class BetfairService
         if (isset($decoded['error']['data']['exceptionname']) && $decoded['error']['data']['exceptionname'] === 'APINGException') {
             $errorCode = $decoded['error']['data']['APINGException']['errorCode'] ?? '';
             if ($errorCode === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
-                $this->log("Sessione scaduta (JSON-RPC). Tento il refresh...");
-                $this->clearPersistentToken();
+                $this->log("Sessione scaduta (JSON-RPC: $method). Tento il refresh...");
+                $this->clearPersistentToken("INVALID_SESSION_INFORMATION (JSON-RPC)");
                 return $this->request($method, $params, true);
             }
         }
@@ -428,8 +455,8 @@ class BetfairService
 
         // Controllo sessione scaduta per REST
         if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
-            $this->log("Sessione scaduta (REST Betting). Tento il refresh...");
-            $this->clearPersistentToken();
+            $this->log("Sessione scaduta (REST Betting: placeBet). Tento il refresh...");
+            $this->clearPersistentToken("INVALID_SESSION_INFORMATION (REST Betting)");
             return $this->placeBet($marketId, $selectionId, $price, $size, true);
         }
 
@@ -470,7 +497,7 @@ class BetfairService
             $isExpired = true;
 
         if ($isExpired && !$isRetry) {
-            $this->clearPersistentToken();
+            $this->clearPersistentToken("INVALID_SESSION_INFORMATION (getFunds)");
             return $this->getFunds(true);
         }
 
@@ -554,7 +581,7 @@ class BetfairService
 
         $decoded = json_decode($response, true);
         if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
-            $this->clearPersistentToken();
+            $this->clearPersistentToken("INVALID_SESSION_INFORMATION (getAccountStatement)");
             return $this->getAccountStatement(true);
         }
 
@@ -587,7 +614,7 @@ class BetfairService
 
         $decoded = json_decode($response, true);
         if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
-            $this->clearPersistentToken();
+            $this->clearPersistentToken("INVALID_SESSION_INFORMATION (getClearedOrders)");
             return $this->getClearedOrders(true);
         }
 
@@ -620,7 +647,7 @@ class BetfairService
 
         $decoded = json_decode($response, true);
         if (isset($decoded['errorCode']) && $decoded['errorCode'] === 'INVALID_SESSION_INFORMATION' && !$isRetry) {
-            $this->clearPersistentToken();
+            $this->clearPersistentToken("INVALID_SESSION_INFORMATION (getCurrentOrders)");
             return $this->getCurrentOrders(true);
         }
 
