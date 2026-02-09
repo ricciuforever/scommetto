@@ -37,6 +37,12 @@ class OddsController
             if (!empty($_GET['bet'])) {
                 $params['bet'] = $_GET['bet'];
             }
+            if (!empty($_GET['league'])) {
+                $params['league'] = $_GET['league'];
+            }
+            if (!empty($_GET['fixture'])) {
+                $params['fixture'] = $_GET['fixture'];
+            }
 
             $apiResult = $api->fetchLiveOdds($params);
 
