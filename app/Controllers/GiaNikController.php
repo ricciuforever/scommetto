@@ -44,6 +44,9 @@ class GiaNikController
 
                 $ordersRes = $bf->getCurrentOrders();
                 $orders = $ordersRes['currentOrders'] ?? [];
+
+                $settledRes = $bf->getClearedOrders();
+                $history = $settledRes['clearedOrders'] ?? [];
             }
 
             // Group by sport
