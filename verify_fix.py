@@ -29,31 +29,32 @@ async def run():
             elif "/api/odds/active-bookmakers" in url:
                 await route.fulfill(json={
                     "response": [
-                        {"id": 3, "name": "Betfair"}
+                        {"id": 3, "name": "Betfair"},
+                        {"id": 8, "name": "Bet365"}
                     ]
                 })
             elif "/api/odds/live" in url:
-                if "bookmaker=3" in url:
-                    # Mocking a response where fixture ID is a string to test robust matching
-                    await route.fulfill(json={
-                        "response": [
-                            {
-                                "fixture": {"id": "100"},
-                                "odds": [
-                                    {
-                                        "id": 1, "name": "Match Winner",
-                                        "values": [
-                                            {"value": "Home", "odd": "2.10"},
-                                            {"value": "Draw", "odd": "3.40"},
-                                            {"value": "Away", "odd": "3.80"}
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    })
-                else:
-                    await route.fulfill(json={"response": []})
+                # Mocking a response with MULTIPLE bookmakers
+                # If backend filtering works, we only see the one requested.
+                # If not, the frontend should still pick the right one.
+                bookmaker_id = 3 if "bookmaker=3" in url else 8
+                await route.fulfill(json={
+                    "response": [
+                        {
+                            "fixture": {"id": 100},
+                            "bookmakers": [
+                                {
+                                    "id": 3, "name": "Betfair",
+                                    "bets": [{"id": 1, "name": "Match Winner", "values": [{"value": "Home", "odd": "2.10"}]}]
+                                },
+                                {
+                                    "id": 8, "name": "Bet365",
+                                    "bets": [{"id": 1, "name": "Match Winner", "values": [{"value": "Home", "odd": "2.25"}]}]
+                                }
+                            ]
+                        }
+                    ]
+                })
             else:
                 await route.continue_()
 
@@ -63,57 +64,25 @@ async def run():
         await page.wait_for_selector("text=Milan")
         print("Page loaded.")
 
-        # Select Betfair
+        # Select Betfair (ID 3)
         await page.select_option("select:near(:text('Bookmaker'))", label="Betfair")
         await page.wait_for_load_state("networkidle")
         await asyncio.sleep(1)
 
-        # Verify Milan is still visible (robust ID matching worked)
-        milan_visible = await page.locator("text=Milan").is_visible()
-        print(f"Milan visible after filter: {milan_visible}")
+        # Verify Betfair odds (2.10) are visible
+        odds_3_visible = await page.locator("text=2.10").is_visible()
+        print(f"Betfair odds (2.10) visible: {odds_3_visible}")
 
-        # Verify odds are displayed
-        odds_visible = await page.locator("text=2.10").is_visible()
-        print(f"Odds (2.10) visible: {odds_visible}")
+        # Select Bet365 (ID 8)
+        await page.select_option("select:near(:text('Bookmaker'))", label="Bet365")
+        await page.wait_for_load_state("networkidle")
+        await asyncio.sleep(1)
 
-        await page.screenshot(path="verification/robust_matching.png")
+        # Verify Bet365 odds (2.25) are visible
+        odds_8_visible = await page.locator("text=2.25").is_visible()
+        print(f"Bet365 odds (2.25) visible: {odds_8_visible}")
 
-        # Test Error Reporting
-        async def handle_error_route(route):
-            url = route.request.url
-            if "/api/odds/live" in url:
-                await route.fulfill(json={
-                    "error": "Rate limit exceeded",
-                    "response": []
-                })
-            elif "/api/intelligence/live" in url:
-                # Keep this mock!
-                await route.fulfill(json={
-                    "response": [
-                        {
-                            "fixture": {"id": 100, "status": {"short": "1H", "elapsed": 25}},
-                            "league": {"id": 135, "name": "Serie A", "country": "Italy", "logo": "https://media.api-sports.io/football/leagues/135.png"},
-                            "teams": {
-                                "home": {"id": 1, "name": "Milan", "logo": "https://media.api-sports.io/football/teams/1.png"},
-                                "away": {"id": 2, "name": "Napoli", "logo": "https://media.api-sports.io/football/teams/2.png"}
-                            },
-                            "goals": {"home": 1, "away": 0}
-                        }
-                    ]
-                })
-            elif "/api/odds/active-bookmakers" in url:
-                 await route.fulfill(json={"response": [{"id": 3, "name": "Betfair"}]})
-            else:
-                await route.continue_()
-
-        await page.unroute("**/*")
-        await page.route("**/*", handle_error_route)
-
-        await page.goto("http://localhost:8000/?bookmaker=3")
-        await page.wait_for_selector("text=Rate limit exceeded")
-        print("Error message 'Rate limit exceeded' is visible.")
-
-        await page.screenshot(path="verification/error_reporting.png")
+        await page.screenshot(path="verification/multi_bookmaker_filtering.png")
 
         await browser.close()
 

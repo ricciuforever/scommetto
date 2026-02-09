@@ -95,10 +95,17 @@ require __DIR__ . '/layout/top.php';
 
                         const oddsMap = new Map();
                         (oddsData.response || []).forEach(item => {
-                            // Support both item.odds (flat) and item.bookmakers[0].bets (nested)
-                            const bets = item.odds || (item.bookmakers && item.bookmakers.length > 0 ? item.bookmakers[0].bets : null);
-                            const fid = item.fixture?.id || item.fixture; // Handle object or direct ID
+                            let bets = null;
+                            if (item.bookmakers && item.bookmakers.length > 0) {
+                                // Find the selected bookmaker in the array
+                                const targetBk = item.bookmakers.find(b => b.id == selectedBookmaker);
+                                if (targetBk) bets = targetBk.bets;
+                            } else {
+                                // Fallback to flat odds key if bookmakers array is missing
+                                bets = item.odds;
+                            }
 
+                            const fid = item.fixture?.id || item.fixture; // Handle object or direct ID
                             if (bets && fid) {
                                 oddsMap.set(Number(fid), bets);
                             }
