@@ -63,29 +63,40 @@ class SyncController
             if (empty($sports['result']))
                 throw new \Exception("Errore recupero sport Betfair");
 
+            $sportIds = array_map(fn($s) => $s['eventType']['id'], $sports['result']);
+
+            // 2. Fetch ALL live events for these sports
+            $events = $this->betfairService->getLiveEvents($sportIds);
+            if (empty($events['result'])) {
+                echo "Nessun evento live trovato.\n";
+                return;
+            }
+
+            $allEventIds = array_map(fn($e) => $e['event']['id'], $events['result']);
+
+            // 3. Fetch Market Catalogues in chunks
             $allMarketIds = [];
             $marketToEventMap = [];
 
-            foreach ($sports['result'] as $sport) {
-                $sportId = $sport['eventType']['id'];
-                $sportName = $sport['eventType']['name'];
-
-                $events = $this->betfairService->getLiveEvents([$sportId]);
-                if (empty($events['result']))
-                    continue;
-
-                $eventIds = array_map(fn($e) => $e['event']['id'], $events['result']);
-
-                $catalogues = $this->betfairService->getMarketCatalogues($eventIds, 100);
+            $eventChunks = array_chunk($allEventIds, 40);
+            foreach ($eventChunks as $chunk) {
+                $catalogues = $this->betfairService->getMarketCatalogues($chunk, 200);
                 if (empty($catalogues['result']))
                     continue;
 
                 foreach ($catalogues['result'] as $cat) {
+                    // Prefer Match Odds or main markets to keep data manageable
+                    $mName = $cat['marketName'];
+                    $isMainMarket = (stripos($mName, 'Match Odds') !== false || stripos($mName, 'Moneyline') !== false || stripos($mName, 'Esito Finale') !== false || stripos($mName, 'Winner') !== false);
+
+                    // But if it's the only market for the event, take it
+                    if (!$isMainMarket && count($cat['runners']) > 3) continue;
+
                     $mId = $cat['marketId'];
                     $allMarketIds[] = $mId;
                     $marketToEventMap[$mId] = [
-                        'sport' => $sportName,
-                        'sportId' => $sportId,
+                        'sport' => $cat['eventType']['name'] ?? 'Altro',
+                        'sportId' => $cat['eventType']['id'] ?? '0',
                         'event' => $cat['event'],
                         'competition' => $cat['competition'] ?? null,
                         'marketName' => $cat['marketName'],
@@ -107,11 +118,11 @@ class SyncController
                         $meta = $marketToEventMap[$mId];
 
                         $eventData = [
-                            'marketId' => $mId,
-                            'sport' => $meta['sport'],
-                            'event_id' => $meta['event']['id'], // Add Betfair Event ID
-                            'event' => $meta['event']['name'],
-                            'competition' => $meta['competition']['name'] ?? $meta['sport'],
+                            'marketId' => (string) $mId,
+                            'sport' => (string) $meta['sport'],
+                            'event_id' => (string) ($meta['event']['id'] ?? ''),
+                            'event' => (string) ($meta['event']['name'] ?? 'Unknown'),
+                            'competition' => (string) ($meta['competition']['name'] ?? $meta['sport']),
                             'market' => $meta['marketName'],
                             'totalMatched' => $book['totalMatched'],
                             'runners' => array_map(function ($r) use ($meta) {

@@ -81,6 +81,11 @@ try {
         return;
     }
 
+    if (preg_match('#^/api/gianik/analyze/([\d\.]+)$#', $path, $matches)) {
+        (new \App\Controllers\GiaNikController())->analyze($matches[1]);
+        return;
+    }
+
     // Intelligence Dashboard as Home
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||

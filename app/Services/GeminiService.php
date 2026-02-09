@@ -28,6 +28,7 @@ class GeminiService
         }
 
         $isUpcoming = $options['is_upcoming'] ?? false;
+        $isGiaNik = $options['is_gianik'] ?? false;
 
         if ($isUpcoming) {
             $prompt = "Sei un ANALISTA ELITE di Betfair. Il tuo compito è analizzare gli eventi FUTURI forniti e suggerire i migliori pronostici (max 10).\n\n" .
@@ -52,6 +53,24 @@ class GeminiService
                 "    \"motivation\": \"Spiegazione tecnica del perché questo pronostico è di valore.\"\n" .
                 "  }\n" .
                 "]\n" .
+                "```";
+        } elseif ($isGiaNik) {
+            $prompt = "Sei un ANALISTA ELITE di Betfair. Il tuo compito è analizzare UN SINGOLO EVENTO LIVE fornito e dare un parere tecnico esperto su quote e mercato.\n\n" .
+                $balanceText .
+                "DATI EVENTO:\n" . json_encode($candidates[0]) . "\n\n" .
+                "REGOLE:\n" .
+                "1. Analizza quote Back/Lay e volumi.\n" .
+                "2. Sii molto tecnico nella spiegazione (motivation).\n" .
+                "3. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
+                "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
+                "```json\n" .
+                "{\n" .
+                "  \"advice\": \"Runner Name\",\n" .
+                "  \"odds\": 1.80,\n" .
+                "  \"confidence\": 90,\n" .
+                "  \"sentiment\": \"Testo breve sul sentiment (Bullish/Bearish/Neutral)\",\n" .
+                "  \"motivation\": \"Spiegazione tecnica dettagliata del perché questo runner ha valore.\"\n" .
+                "}\n" .
                 "```";
         } else {
             $prompt = "Sei un TRADER ELITE di Betfair. Il tuo compito è analizzare il mercato live multi-sport e scovare la scommessa migliore tra quelle fornite.\n\n" .
