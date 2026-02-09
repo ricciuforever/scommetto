@@ -390,6 +390,21 @@ require __DIR__ . '/layout/top.php';
                         </div>
                     </div>
                 )}
+
+                {/* AI Prediction Button */}
+                <div className="mt-4 pt-4 border-t border-white/10">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`/fixture-predictions?fixture=${fixture.id}`, '_blank');
+                        }}
+                        className="w-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 text-white px-4 py-3 rounded-xl border border-purple-500/30 hover:border-purple-500/50 transition-all flex items-center justify-center gap-2 group"
+                    >
+                        <i data-lucide="brain" className="w-5 h-5 text-purple-400 group-hover:text-purple-300"></i>
+                        <span className="font-bold text-sm">AI Prediction</span>
+                        <i data-lucide="external-link" className="w-4 h-4 text-purple-400 group-hover:text-purple-300"></i>
+                    </button>
+                </div>
             </div>
         )
     }
@@ -611,9 +626,6 @@ require __DIR__ . '/layout/top.php';
                     );
                 })}
             </div>
-        );
-    }
-            </div >
         );
     }
 
