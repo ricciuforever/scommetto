@@ -55,27 +55,28 @@ class GeminiService
                 "]\n" .
                 "```";
         } elseif ($isGiaNik) {
-            $prompt = "Sei un ANALISTA ELITE di Betfair. Il tuo compito è analizzare UN SINGOLO EVENTO LIVE fornito e dare un parere tecnico esperto su quote e mercato.\n\n" .
+            $prompt = "Sei un ANALISTA ELITE e TRADER di Betfair. Il tuo compito è analizzare un EVENTO LIVE con i suoi molteplici mercati e decidere l'operazione migliore.\n\n" .
                 $balanceText .
-                "DATI EVENTO:\n" . json_encode($candidates[0]) . "\n\n" .
+                "DATI EVENTO E MERCATI:\n" . json_encode($candidates[0]) . "\n\n" .
                 "DATI STATISTICI AVANZATI (Se disponibili):\n" . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili") . "\n\n" .
                 "REGOLE RIGIDE:\n" .
-                "1. Se i nomi delle squadre sono 'Unknown', cerca di dedurli dai nomi dei runner o dal contesto del mercato.\n" .
-                "2. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE (tiri, possesso, cartellini, formazioni, statistiche individuali giocatori) se forniti.\n" .
-                "3. Usa la CLASSIFICA (standings) per valutare l'importanza del match e il divario tecnico tra le squadre.\n" .
-                "4. Prendi in considerazione i PRONOSTICI esterni (predictions) forniti da API-Football come ulteriore conferma o segnale di contrasto.\n" .
-                "5. Sii molto tecnico nella spiegazione (motivation), correlando l'andamento del match (stats) con le variazioni delle quote, la situazione in classifica e i pronostici API.\n" .
-                "6. Se mancano le statistiche live, basa l'analisi sulla liquidità del mercato e sul movimento delle quote (Weight of Money).\n" .
-                "7. Se sono presenti dati H2H, usali per contestualizzare la forza delle squadre nel tempo.\n" .
-                "8. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
+                "1. Analizza TUTTI i mercati forniti (Match Odds, Double Chance, Under/Over, BTTS).\n" .
+                "2. Scegli l'operazione che offre il miglior rapporto rischio/rendimento.\n" .
+                "3. Decidi lo STAKE (in Euro) da puntare, tra il 1% e il 5% del budget disponibile (minimo 2€).\n" .
+                "4. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE (tiri, possesso, cartellini, formazioni) se forniti.\n" .
+                "5. Usa la CLASSIFICA e i PRONOSTICI esterni (predictions) per validare la tua scelta.\n" .
+                "6. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
+                "7. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
                 "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
                 "```json\n" .
                 "{\n" .
+                "  \"marketId\": \"1.XXXXX\",\n" .
                 "  \"advice\": \"Runner Name\",\n" .
                 "  \"odds\": 1.80,\n" .
+                "  \"stake\": 5.0,\n" .
                 "  \"confidence\": 90,\n" .
-                "  \"sentiment\": \"Testo breve sul sentiment (Bullish/Bearish/Neutral)\",\n" .
-                "  \"motivation\": \"Spiegazione tecnica dettagliata. Collega esplicitamente i dati API-Football (se presenti) con le quote Betfair.\"\n" .
+                "  \"sentiment\": \"Bullish/Bearish/Neutral\",\n" .
+                "  \"motivation\": \"Spiegazione tecnica dettagliata. Collega i dati statistici live con la scelta del mercato e dello stake.\"\n" .
                 "}\n" .
                 "```";
         } else {

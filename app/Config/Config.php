@@ -6,6 +6,7 @@ namespace App\Config;
 class Config
 {
     const FOOTBALL_API_BASE_URL = 'https://v3.football.api-sports.io';
+    const BASKETBALL_API_BASE_URL = 'https://v1.basketball.api-sports.io';
     const LOGS_PATH = __DIR__ . '/../../logs/';
     const LOG_FILE = self::LOGS_PATH . 'app_error.log';
     const DATA_PATH = __DIR__ . '/../../data/';
