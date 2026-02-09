@@ -33,22 +33,15 @@ class IntelligenceController
             $params = [];
 
             // Apply filters from GET request
-            if (!empty($_GET['bookmaker'])) {
-                $params['bookmaker'] = $_GET['bookmaker'];
-            }
             if (!empty($_GET['league'])) {
                 $params['league'] = $_GET['league'];
             }
-            if (!empty($_GET['bet'])) {
-                $params['bet'] = $_GET['bet'];
-            }
 
-            // Fetch live odds (which include fixture info)
-            // Note: API-Football /odds/live returns a list of fixtures with odds
-            $data = $api->fetchLiveOdds($params);
+            // Fetch live matches with complete data
+            $data = $api->fetchLiveMatches($params);
 
-            // Fetch Bookmakers list for the filter dropdown if needed, 
-            // but the frontend can fetch that separately from /api/odds/bookmakers
+            // The response structure from API-Football /fixtures?live=all:
+            // response[]: { fixture: {...}, league: {...}, teams: {...}, goals: {...}, score: {...} }
 
             echo json_encode(['response' => $data['response'] ?? []]);
 

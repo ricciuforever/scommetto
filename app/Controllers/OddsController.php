@@ -10,71 +10,97 @@ use App\Models\LiveBetType;
 class OddsController
 {
     /**
-     * Ritorna le quote live per una partita.
-     * Endpoint: /api/odds/live?fixture={id}
+     * Ritorna le quote live.
+     * Endpoint: /api/odds/live?fixture={id} (singola partita)
+     * Endpoint: /api/odds/live (tutte le partite live)
+     * Opzionali: &bookmaker={id}&bet={id}
      */
     public function live()
     {
         header('Content-Type: application/json');
         try {
             $fixtureId = $_GET['fixture'] ?? null;
-            if (!$fixtureId) {
-                echo json_encode(['error' => 'Fixture ID richiesto']);
+
+            // Se c'è fixture ID, usa la logica originale (cache per singola partita)
+            if ($fixtureId) {
+                $this->liveByFixture($fixtureId);
                 return;
             }
 
-            $model = new LiveOdds();
-            $data = $model->get($fixtureId);
+            // Altrimenti, fetch tutte le quote live dall'API
+            $api = new FootballApiService();
+            $params = [];
 
-            // Live odds sono molto volatili (5-30 sec). Caching molto breve o always-fetch.
-            // Strategia: Se last_updated < 10 secondi fa, usa cache. Altrimenti fetch.
-            $isStale = true;
-            if ($data) {
-                $last = strtotime($data['last_updated']);
-                if (time() - $last < 10) { // 10 secondi cache
-                    $isStale = false;
-                }
+            if (!empty($_GET['bookmaker'])) {
+                $params['bookmaker'] = $_GET['bookmaker'];
+            }
+            if (!empty($_GET['bet'])) {
+                $params['bet'] = $_GET['bet'];
             }
 
-            if ($isStale || !$data) {
-                $api = new FootballApiService();
-                $apiResult = $api->fetchLiveOdds(['fixture' => $fixtureId]);
+            $apiResult = $api->fetchLiveOdds($params);
 
-                if (!empty($apiResult['response'])) {
-                    $liveData = $apiResult['response'][0];
-                    // Struttura response[0]: { fixture: {}, league: {}, teams: {}, status: {}, update: "", odds: [] }
-
-                    // Salviamo
-                    $toSave = [
-                        'odds' => $liveData['odds'],
-                        'status' => $liveData['status']
-                    ];
-                    $model->save($fixtureId, $toSave);
-
-                    // Rileggiamo o usiamo
-                    $data = [
-                        'odds_json' => json_encode($liveData['odds']),
-                        'status_json' => json_encode($liveData['status']),
-                        'last_updated' => date('Y-m-d H:i:s')
-                    ];
-                }
-            }
-
-            if ($data) {
-                echo json_encode([
-                    'response' => [
-                        'odds' => json_decode($data['odds_json'], true),
-                        'status' => json_decode($data['status_json'] ?? '{}', true),
-                        'last_updated' => $data['last_updated']
-                    ]
-                ]);
-            } else {
-                echo json_encode(['response' => []]);
-            }
+            // Response structure: response[]: { fixture: {}, league: {}, teams: {}, bookmakers: [] }
+            echo json_encode(['response' => $apiResult['response'] ?? []]);
 
         } catch (\Throwable $e) {
             http_response_code(500);
             echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Helper per quote live di una singola partita (con cache)
+     */
+    private function liveByFixture($fixtureId)
+    {
+        $model = new LiveOdds();
+        $data = $model->get($fixtureId);
+
+        // Live odds sono molto volatili (5-30 sec). Caching molto breve o always-fetch.
+        // Strategia: Se last_updated < 10 secondi fa, usa cache. Altrimenti fetch.
+        $isStale = true;
+        if ($data) {
+            $last = strtotime($data['last_updated']);
+            if (time() - $last < 10) { // 10 secondi cache
+                $isStale = false;
+            }
+        }
+
+        if ($isStale || !$data) {
+            $api = new FootballApiService();
+            $apiResult = $api->fetchLiveOdds(['fixture' => $fixtureId]);
+
+            if (!empty($apiResult['response'])) {
+                $liveData = $apiResult['response'][0];
+                // Struttura response[0]: { fixture: {}, league: {}, teams: {}, status: {}, update: "", odds: [] }
+
+                // Salviamo
+                $toSave = [
+                    'odds' => $liveData['odds'],
+                    'status' => $liveData['status']
+                ];
+                $model->save($fixtureId, $toSave);
+
+                // Rileggiamo o usiamo
+                $data = [
+                    'odds_json' => json_encode($liveData['odds']),
+                    'status_json' => json_encode($liveData['status']),
+                    'last_updated' => date('Y-m-d H:i:s')
+                ];
+            }
+        }
+
+        if ($data) {
+            echo json_encode([
+                'response' => [
+                    'odds' => json_decode($data['odds_json'], true),
+                    'status' => json_decode($data['status_json'] ?? '{}', true),
+                    'last_updated' => $data['last_updated']
+                ]
+            ]);
+        } else {
+            echo json_encode(['response' => []]);
         }
     }
 
