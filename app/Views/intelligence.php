@@ -7,7 +7,19 @@ require __DIR__ . '/layout/top.php';
 <div id="root"></div>
 
 <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    /**
+     * Componente helper per le icone Lucide.
+     * Usa dangerouslySetInnerHTML per evitare conflitti tra React e la manipolazione DOM di Lucide.
+     */
+    function LucideIcon({ name, className = "w-4 h-4" }) {
+        return (
+            <span className="inline-flex" dangerouslySetInnerHTML={{
+                __html: `<i data-lucide="${name}" class="${className}"></i>`
+            }} />
+        );
+    }
 
     function IntelligenceDashboard() {
         // State
@@ -226,7 +238,7 @@ require __DIR__ . '/layout/top.php';
                         {/* Stats Summary */}
                         <div className="glass bg-gradient-to-br from-accent/10 to-transparent rounded-xl p-4 border border-accent/20">
                             <div className="flex items-center gap-2 mb-3">
-                                <i data-lucide="radio" className="w-5 h-5 text-accent"></i>
+                                <LucideIcon name="radio" className="w-5 h-5 text-accent" />
                                 <h3 className="text-xs font-bold text-white uppercase tracking-wider">Live Now</h3>
                             </div>
                             <div className="space-y-2">
@@ -308,7 +320,7 @@ require __DIR__ . '/layout/top.php';
                         </div>
                     ) : filteredEvents.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-                            <i data-lucide="radio" className="w-16 h-16 mb-4 opacity-30"></i>
+                            <LucideIcon name="radio" className="w-16 h-16 mb-4 opacity-30" />
                             <p className="text-lg font-bold">Nessun evento live al momento</p>
                             <p className="text-sm text-slate-600 mt-2">Prova a modificare i filtri o attendi nuovi match</p>
                         </div>
@@ -395,7 +407,7 @@ require __DIR__ . '/layout/top.php';
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4 flex-1">
                             {teams.home.logo && <img src={teams.home.logo} alt={teams.home.name} className="w-16 h-16 object-contain" />}
-                            {!teams.home.logo && <div className="w-16 h-16 bg-white/5 rounded-lg flex items-center justify-center"><i data-lucide="shield" className="w-8 h-8 text-slate-600"></i></div>}
+                            {!teams.home.logo && <div className="w-16 h-16 bg-white/5 rounded-lg flex items-center justify-center"><LucideIcon name="shield" className="w-8 h-8 text-slate-600" /></div>}
                             <span className="text-lg font-bold text-white">{teams.home.name || 'Home Team'}</span>
                         </div>
                         <div className="text-3xl font-black text-white font-mono w-12 text-center">
@@ -407,7 +419,7 @@ require __DIR__ . '/layout/top.php';
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4 flex-1">
                             {teams.away.logo && <img src={teams.away.logo} alt={teams.away.name} className="w-16 h-16 object-contain" />}
-                            {!teams.away.logo && <div className="w-16 h-16 bg-white/5 rounded-lg flex items-center justify-center"><i data-lucide="shield" className="w-8 h-8 text-slate-600"></i></div>}
+                            {!teams.away.logo && <div className="w-16 h-16 bg-white/5 rounded-lg flex items-center justify-center"><LucideIcon name="shield" className="w-8 h-8 text-slate-600" /></div>}
                             <span className="text-lg font-bold text-white">{teams.away.name || 'Away Team'}</span>
                         </div>
                         <div className="text-3xl font-black text-white font-mono w-12 text-center">
@@ -440,9 +452,9 @@ require __DIR__ . '/layout/top.php';
                         }}
                         className="w-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 text-white px-4 py-3 rounded-xl border border-purple-500/30 hover:border-purple-500/50 transition-all flex items-center justify-center gap-2 group"
                     >
-                        <i data-lucide="brain" className="w-5 h-5 text-purple-400 group-hover:text-purple-300"></i>
+                        <LucideIcon name="brain" className="w-5 h-5 text-purple-400 group-hover:text-purple-300" />
                         <span className="font-bold text-sm">AI Prediction</span>
-                        <i data-lucide="sparkles" className="w-4 h-4 text-purple-400 group-hover:text-purple-300"></i>
+                        <LucideIcon name="sparkles" className="w-4 h-4 text-purple-400 group-hover:text-purple-300" />
                     </button>
                 </div>
             </div>
@@ -478,7 +490,7 @@ require __DIR__ . '/layout/top.php';
                                 </div>
                             </div>
                             <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all">
-                                <i data-lucide="x" className="w-5 h-5 text-white"></i>
+                                <LucideIcon name="x" className="w-5 h-5 text-white" />
                             </button>
                         </div>
 
@@ -506,9 +518,9 @@ require __DIR__ . '/layout/top.php';
                         {/* Venue Info */}
                         {fixture.venue && (
                             <div className="mt-4 flex items-center justify-center gap-4 text-xs text-slate-400">
-                                <span><i data-lucide="map-pin" className="w-3 h-3 inline mr-1"></i>{fixture.venue.name || 'N/A'}</span>
+                                <span className="flex items-center gap-1"><LucideIcon name="map-pin" className="w-3 h-3 text-slate-500" />{fixture.venue.name || 'N/A'}</span>
                                 <span>•</span>
-                                <span><i data-lucide="map" className="w-3 h-3 inline mr-1"></i>{fixture.venue.city || 'N/A'}</span>
+                                <span className="flex items-center gap-1"><LucideIcon name="map" className="w-3 h-3 text-slate-500" />{fixture.venue.city || 'N/A'}</span>
                             </div>
                         )}
                     </div>
@@ -529,7 +541,7 @@ require __DIR__ . '/layout/top.php';
                                     : 'bg-white/5 text-slate-400 hover:bg-white/10'
                                     }`}
                             >
-                                <i data-lucide={tab.icon} className="w-4 h-4"></i>
+                                <LucideIcon name={tab.icon} className="w-4 h-4" />
                                 {tab.label}
                             </button>
                         ))}
@@ -686,14 +698,14 @@ require __DIR__ . '/layout/top.php';
                     <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 p-6 border-b border-purple-500/30">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">
-                                <i data-lucide="brain" className="w-10 h-10 text-purple-400"></i>
+                                <LucideIcon name="brain" className="w-10 h-10 text-purple-400" />
                                 <div>
                                     <h2 className="text-xl font-black text-white">AI Prediction</h2>
                                     <p className="text-xs text-slate-400">{teams.home.name} vs {teams.away.name}</p>
                                 </div>
                             </div>
                             <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all">
-                                <i data-lucide="x" className="w-5 h-5 text-white"></i>
+                                <LucideIcon name="x" className="w-5 h-5 text-white" />
                             </button>
                         </div>
                     </div>
@@ -706,7 +718,7 @@ require __DIR__ . '/layout/top.php';
                             </div>
                         ) : data && data.error ? (
                             <div className="text-center text-red-400 py-12">
-                                <i data-lucide="alert-circle" className="w-16 h-16 mx-auto mb-4 opacity-50"></i>
+                                <LucideIcon name="alert-circle" className="w-16 h-16 mx-auto mb-4 opacity-50" />
                                 <p>{data.error}</p>
                             </div>
                         ) : data && data.response ? (
@@ -715,7 +727,7 @@ require __DIR__ . '/layout/top.php';
                                 {data.response.advice && (
                                     <div className="glass p-6 rounded-xl border border-purple-500/20">
                                         <h3 className="text-lg font-bold text-purple-400 mb-3 flex items-center gap-2">
-                                            <i data-lucide="lightbulb" className="w-5 h-5"></i>
+                                            <LucideIcon name="lightbulb" className="w-5 h-5" />
                                             Consiglio AI
                                         </h3>
                                         <p className="text-white leading-relaxed">{data.response.advice}</p>
@@ -726,7 +738,7 @@ require __DIR__ . '/layout/top.php';
                                 {data.response.comparison && (
                                     <div className="glass p-6 rounded-xl border border-purple-500/20">
                                         <h3 className="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2">
-                                            <i data-lucide="bar-chart-2" className="w-5 h-5"></i>
+                                            <LucideIcon name="bar-chart-2" className="w-5 h-5" />
                                             Confronto Squadre
                                         </h3>
                                         <div className="space-y-3">
@@ -744,7 +756,7 @@ require __DIR__ . '/layout/top.php';
                                 {data.response.percent && (
                                     <div className="glass p-6 rounded-xl border border-purple-500/20">
                                         <h3 className="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2">
-                                            <i data-lucide="percent" className="w-5 h-5"></i>
+                                            <LucideIcon name="percent" className="w-5 h-5" />
                                             Probabilità
                                         </h3>
                                         <div className="grid grid-cols-3 gap-4">
@@ -760,7 +772,7 @@ require __DIR__ . '/layout/top.php';
                             </div>
                         ) : (
                             <div className="text-center text-slate-500 py-12">
-                                <i data-lucide="info" className="w-16 h-16 mx-auto mb-4 opacity-30"></i>
+                                <LucideIcon name="info" className="w-16 h-16 mx-auto mb-4 opacity-30" />
                                 <p>Nessuna predizione disponibile</p>
                             </div>
                         )}
