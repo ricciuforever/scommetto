@@ -168,9 +168,11 @@ class BetController
             $db = \App\Services\Database::getInstance()->getConnection();
 
             // 1. Fetch Bets
-            $sql = "SELECT b.*, f.name as match_name_fixture 
+            $sql = "SELECT b.*, t1.name as home_name, t2.name as away_name
                     FROM bets b 
                     LEFT JOIN fixtures f ON b.fixture_id = f.id 
+                    LEFT JOIN teams t1 ON f.team_home_id = t1.id
+                    LEFT JOIN teams t2 ON f.team_away_id = t2.id
                     WHERE 1=1";
             $params = [];
 
@@ -187,8 +189,8 @@ class BetController
 
             // Normalize match name
             foreach ($bets as &$b) {
-                if (empty($b['match_name']) && !empty($b['match_name_fixture'])) {
-                    $b['match_name'] = $b['match_name_fixture'];
+                if (empty($b['match_name']) && !empty($b['home_name'])) {
+                    $b['match_name'] = $b['home_name'] . ' v ' . $b['away_name'];
                 }
             }
             unset($b);
@@ -373,16 +375,18 @@ class BetController
     {
         try {
             $db = \App\Services\Database::getInstance()->getConnection();
-            $stmt = $db->prepare("SELECT b.*, f.name as match_name_fixture 
+            $stmt = $db->prepare("SELECT b.*, t1.name as home_name, t2.name as away_name
                                   FROM bets b 
                                   LEFT JOIN fixtures f ON b.fixture_id = f.id 
+                                  LEFT JOIN teams t1 ON f.team_home_id = t1.id
+                                  LEFT JOIN teams t2 ON f.team_away_id = t2.id
                                   WHERE b.id = ?");
             $stmt->execute([$id]);
             $bet = $stmt->fetch(\PDO::FETCH_ASSOC);
 
             if($bet) {
-                if(empty($bet['match_name']) && !empty($bet['match_name_fixture'])) {
-                    $bet['match_name'] = $bet['match_name_fixture'];
+                if(empty($bet['match_name']) && !empty($bet['home_name'])) {
+                    $bet['match_name'] = $bet['home_name'] . ' v ' . $bet['away_name'];
                 }
                 require __DIR__ . '/../Views/partials/modals/bet_details.php';
             } else {
@@ -402,10 +406,14 @@ class BetController
         
         // Load fixture details for display
         $db = \App\Services\Database::getInstance()->getConnection();
-        $stmt = $db->prepare("SELECT name FROM fixtures WHERE id = ?");
+        $stmt = $db->prepare("SELECT t1.name as home, t2.name as away
+                              FROM fixtures f
+                              JOIN teams t1 ON f.team_home_id = t1.id
+                              JOIN teams t2 ON f.team_away_id = t2.id
+                              WHERE f.id = ?");
         $stmt->execute([$fixtureId]);
         $fixture = $stmt->fetch(\PDO::FETCH_ASSOC);
-        $eventName = $fixture['name'] ?? 'Evento Sconosciuto';
+        $eventName = $fixture ? ($fixture['home'] . ' v ' . $fixture['away']) : 'Evento Sconosciuto';
 
         require __DIR__ . '/../Views/partials/modals/place_bet.php';
     }
