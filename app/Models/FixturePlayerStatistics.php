@@ -33,14 +33,44 @@ class FixturePlayerStatistics
 
     public function getByFixture($fixtureId)
     {
-        $stmt = $this->db->prepare("SELECT * FROM fixture_player_stats WHERE fixture_id = ?");
+        $sql = "SELECT fps.*, p.name as player_name, p.photo as player_photo, t.name as team_name, t.logo as team_logo
+                FROM fixture_player_stats fps
+                JOIN players p ON fps.player_id = p.id
+                JOIN teams t ON fps.team_id = t.id
+                WHERE fps.fixture_id = ?";
+        $stmt = $this->db->prepare($sql);
         $stmt->execute([$fixtureId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($results as &$row) {
+            $row['stats_json'] = json_decode($row['stats_json'], true);
+        }
+
+        return $results;
     }
 
     public function deleteByFixture($fixtureId)
     {
         $stmt = $this->db->prepare("DELETE FROM fixture_player_stats WHERE fixture_id = ?");
         return $stmt->execute([$fixtureId]);
+    }
+
+    public function needsRefresh($fixtureId, $statusShort)
+    {
+        $stmt = $this->db->prepare("SELECT MAX(last_updated) as last_sync FROM fixture_player_stats WHERE fixture_id = ?");
+        $stmt->execute([$fixtureId]);
+        $row = $stmt->fetch();
+
+        if (!$row || !$row['last_sync'])
+            return true;
+
+        $lastSync = strtotime($row['last_sync']);
+        $isLive = in_array($statusShort, ['1H', 'HT', '2H', 'ET', 'P', 'BT']);
+
+        if ($isLive) {
+            return (time() - $lastSync) > 120; // 2 minuti se live (sono dati pesanti)
+        }
+
+        return (time() - $lastSync) > 86400; // 24 ore altrimenti
     }
 }
