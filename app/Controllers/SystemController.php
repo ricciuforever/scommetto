@@ -40,22 +40,28 @@ class SystemController
     public function getSettings()
     {
         // Settings are public read, but write protected
-        $settings = json_decode(file_get_contents(Config::DATA_PATH . 'settings.json') ?: '{"simulation_mode":true}', true);
-        echo json_encode([
-            'simulation_mode' => $settings['simulation_mode'] ?? true,
-            'initial_bankroll' => Config::INITIAL_BANKROLL
-        ]);
+        echo json_encode(Config::getSettings());
     }
 
     public function updateSettings()
     {
         $this->checkAuth();
         $input = json_decode(file_get_contents('php://input'), true);
-        if (isset($input['simulation_mode'])) {
-            $settings = json_decode(file_get_contents(Config::DATA_PATH . 'settings.json') ?: '{}', true);
-            $settings['simulation_mode'] = (bool) $input['simulation_mode'];
-            file_put_contents(Config::DATA_PATH . 'settings.json', json_encode($settings));
-            echo json_encode(['status' => 'success', 'simulation_mode' => $settings['simulation_mode']]);
+        if ($input) {
+            $settings = Config::getSettings();
+
+            if (isset($input['simulation_mode'])) {
+                $settings['simulation_mode'] = (bool) $input['simulation_mode'];
+            }
+            if (isset($input['initial_bankroll'])) {
+                $settings['initial_bankroll'] = (float) $input['initial_bankroll'];
+            }
+            if (isset($input['virtual_bookmaker_id'])) {
+                $settings['virtual_bookmaker_id'] = (int) $input['virtual_bookmaker_id'];
+            }
+
+            file_put_contents(Config::SETTINGS_FILE, json_encode($settings));
+            echo json_encode(['status' => 'success', 'settings' => $settings]);
         } else {
             echo json_encode(['status' => 'error', 'message' => 'Invalid input']);
         }

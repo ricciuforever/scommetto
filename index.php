@@ -252,6 +252,8 @@ try {
         (new \App\Controllers\SystemController())->resetSimulation();
     } elseif ($path === '/api/view/settings') {
         (new \App\Controllers\SystemController())->viewSettings();
+    } elseif ($path === '/api/view/tracker') {
+        (new \App\Controllers\BetController())->viewTracker();
     } elseif (preg_match('#^/api/view/modal/bet/(\d+)$#', $path, $matches)) {
         (new \App\Controllers\BetController())->viewBetModal($matches[1]);
     } elseif ($path === '/api/view/modal/place_bet') {

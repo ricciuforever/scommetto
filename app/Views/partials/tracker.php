@@ -22,33 +22,47 @@ function getIcon($s)
 
 <div id="tracker-view-content" class="animate-fade-in">
     <!-- Tracker Summary Metrics -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10" id="tracker-stats-summary-php">
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Available
-                Balance</span>
-            <div
-                class="text-4xl font-black italic tracking-tighter <?php echo $summary['available_balance'] >= 0 ? 'text-white' : 'text-danger'; ?>">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10" id="tracker-stats-summary-php">
+        <div class="glass p-6 rounded-[30px] border-white/5">
+            <span class="text-[8px] font-black uppercase tracking-widest text-slate-500 block mb-1">Saldo Disponibile</span>
+            <div class="text-3xl font-black italic tracking-tighter <?php echo $summary['available_balance'] >= 0 ? 'text-white' : 'text-danger'; ?>">
                 <?php echo number_format($summary['available_balance'], 2); ?>€
             </div>
         </div>
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Portfolio</span>
-            <div class="text-4xl font-black italic tracking-tighter text-white">
-                <?php echo number_format($summary['currentPortfolio'], 2); ?>€
+        <div class="glass p-6 rounded-[30px] border-white/5">
+            <span class="text-[8px] font-black uppercase tracking-widest text-slate-500 block mb-1">Saldo Totale</span>
+            <div class="text-3xl font-black italic tracking-tighter text-white">
+                <?php echo number_format($summary['totalBalance'], 2); ?>€
             </div>
         </div>
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Net Balance</span>
-            <div
-                class="text-4xl font-black italic tracking-tighter <?php echo $summary['netProfit'] >= 0 ? 'text-success' : 'text-danger'; ?>">
+        <div class="glass p-6 rounded-[30px] border-white/5">
+            <span class="text-[8px] font-black uppercase tracking-widest text-slate-500 block mb-1">Profitto Netto</span>
+            <div class="text-3xl font-black italic tracking-tighter <?php echo $summary['netProfit'] >= 0 ? 'text-success' : 'text-danger'; ?>">
                 <?php echo ($summary['netProfit'] >= 0 ? '+' : '') . number_format($summary['netProfit'], 2); ?>€
             </div>
+            <span class="text-[10px] font-bold <?php echo $summary['profitPercent'] >= 0 ? 'text-success' : 'text-danger'; ?>">
+                <?php echo ($summary['profitPercent'] >= 0 ? '+' : '') . number_format($summary['profitPercent'], 2); ?>%
+            </span>
         </div>
-        <div class="glass p-8 rounded-[40px] border-white/5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">ROI</span>
-            <div class="text-4xl font-black italic tracking-tighter text-accent">
+        <div class="glass p-6 rounded-[30px] border-white/5">
+            <span class="text-[8px] font-black uppercase tracking-widest text-slate-500 block mb-1">Win / Loss</span>
+            <div class="flex items-baseline gap-2">
+                <div class="text-3xl font-black italic tracking-tighter text-success"><?php echo $summary['winCount']; ?></div>
+                <div class="text-xl font-black italic tracking-tighter text-slate-600">/</div>
+                <div class="text-2xl font-black italic tracking-tighter text-danger"><?php echo $summary['lossCount']; ?></div>
+            </div>
+            <div class="flex gap-2 text-[10px] font-bold">
+                <span class="text-success"><?php echo number_format($summary['winRate'], 1); ?>%</span>
+                <span class="text-slate-600">|</span>
+                <span class="text-danger"><?php echo number_format($summary['lossRate'], 1); ?>%</span>
+            </div>
+        </div>
+        <div class="glass p-6 rounded-[30px] border-white/5">
+            <span class="text-[8px] font-black uppercase tracking-widest text-slate-500 block mb-1">ROI</span>
+            <div class="text-3xl font-black italic tracking-tighter text-accent">
                 <?php echo number_format($summary['roi'], 1); ?>%
             </div>
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Resa Investimento</span>
         </div>
     </div>
 
@@ -109,9 +123,11 @@ function getIcon($s)
                             <?php echo ($bet['status'] === 'won' ? '+' : ($bet['status'] === 'lost' ? '-' : '')); ?>
                             <?php echo number_format(abs($profit), 2); ?>€
                         </div>
-                        <div class="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                            Puntata:
-                            <?php echo $bet['stake']; ?>€
+                        <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 flex items-center justify-end gap-2">
+                            <?php if ($bet['bookmaker_name']): ?>
+                                <span class="bg-white/5 px-2 py-0.5 rounded text-[8px] text-accent border border-white/5"><?php echo htmlspecialchars($bet['bookmaker_name']); ?></span>
+                            <?php endif; ?>
+                            <span>Puntata: <?php echo $bet['stake']; ?>€</span>
                         </div>
                     </div>
                 </div>

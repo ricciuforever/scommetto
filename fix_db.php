@@ -470,6 +470,10 @@ try {
     echo "✅ Tabella 'api_usage' inizializzata.\n";
   }
 
+  // Inizializza bookmakers base
+  $db->exec("INSERT IGNORE INTO bookmakers (id, name) VALUES (3, 'Betfair'), (7, 'William Hill')");
+  echo "✅ Bookmakers base inizializzati.\n";
+
   // --- 2. PATCHING COLONNE MANCANTI ---
 
   $patches = [

@@ -30,7 +30,15 @@ class Database
         try {
             $this->conn = new PDO($dsn, $user, $pass, $options);
         } catch (PDOException $e) {
-            throw new \Exception("Database Connection Error: " . $e->getMessage());
+            // Fallback to SQLite if MySQL fails (mostly for sandbox environment)
+            $dbPath = Config::DATA_PATH . 'scommetto.sqlite';
+            try {
+                $this->conn = new PDO("sqlite:" . $dbPath);
+                $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                $this->conn->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+            } catch (PDOException $e2) {
+                throw new \Exception("Database Connection Error: " . $e->getMessage() . " AND SQLite Error: " . $e2->getMessage());
+            }
         }
     }
 
