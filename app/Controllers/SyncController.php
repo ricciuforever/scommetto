@@ -85,20 +85,37 @@ class SyncController
                     continue;
 
                 foreach ($catalogues['result'] as $cat) {
-                    // Prefer Match Odds or main markets to keep data manageable
+                    // LOGIC CHANGE: Accept more markets to ensure visibility
                     $mName = $cat['marketName'];
-                    $isMainMarket = (stripos($mName, 'Match Odds') !== false || stripos($mName, 'Moneyline') !== false || stripos($mName, 'Esito Finale') !== false || stripos($mName, 'Winner') !== false || stripos($mName, 'Head To Head') !== false || stripos($mName, 'Testa a Testa') !== false || stripos($mName, 'Match Betting') !== false);
 
-                    // But if it's the only market for the event, take it
-                    if (!$isMainMarket && count($cat['runners']) > 3)
+                    // Main market keywords (extended)
+                    $isMain = (
+                        stripos($mName, 'Match Odds') !== false ||
+                        stripos($mName, 'Moneyline') !== false ||
+                        stripos($mName, 'Esito Finale') !== false ||
+                        stripos($mName, 'Winner') !== false ||
+                        stripos($mName, 'Head To Head') !== false ||
+                        stripos($mName, 'Testa a Testa') !== false ||
+                        stripos($mName, 'Match Betting') !== false ||
+                        stripos($mName, 'Over/Under') !== false || // Add Goals
+                        stripos($mName, 'Handicap') !== false // Add Handicap
+                    );
+
+                    // If it's a 2-3 runner market, we generally want it (Tennis, Basketball, etc)
+                    // If it has many runners (Horse Racing), we only want 'Winner' or 'Place'
+                    if (count($cat['runners']) > 3 && !$isMain) {
                         continue;
+                    }
 
+                    // Store mapping
                     $mId = $cat['marketId'];
                     $allMarketIds[] = $mId;
+
                     $marketToEventMap[$mId] = [
                         'sport' => $cat['eventType']['name'] ?? 'Altro',
                         'sportId' => $cat['eventType']['id'] ?? '0',
                         'event' => $cat['event'],
+                        'event_id' => $cat['event']['id'], // Explicitly store event ID
                         'competition' => $cat['competition'] ?? null,
                         'marketName' => $cat['marketName'],
                         'runners' => $cat['runners']
