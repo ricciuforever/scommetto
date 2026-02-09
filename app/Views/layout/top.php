@@ -136,6 +136,13 @@
                     <span
                         class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Calendario</span>
                 </a>
+                <a href="/h2h"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="swords"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Testa a Testa</span>
+                </a>
                 <a href="/seasons"
                     class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
                     <i data-lucide="calendar"
