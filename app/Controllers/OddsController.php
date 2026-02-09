@@ -46,6 +46,11 @@ class OddsController
 
             $apiResult = $api->fetchLiveOdds($params);
 
+            if (!empty($apiResult['errors'])) {
+                echo json_encode(['error' => $apiResult['errors'], 'response' => []]);
+                return;
+            }
+
             // Response structure: response[]: { fixture: {}, league: {}, teams: {}, bookmakers: [] }
             echo json_encode(['response' => $apiResult['response'] ?? []]);
 
@@ -177,19 +182,21 @@ class OddsController
 
             if (!empty($apiResult['response'])) {
                 foreach ($apiResult['response'] as $match) {
-                    // Alcuni provider potrebbero includere bookmakers, altri usano la chiave 'odds'
+                    // Scenario A: Array di bookmakers (tipico quando si chiedono tutte le quote live)
                     $bks = $match['bookmakers'] ?? [];
-                    if (!empty($bks)) {
-                        foreach ($bks as $bk) {
-                            if (!isset($seenIds[$bk['id']])) {
-                                $bookmakers[] = [
-                                    'id' => $bk['id'],
-                                    'name' => $bk['name']
-                                ];
-                                $seenIds[$bk['id']] = true;
-                            }
+                    foreach ($bks as $bk) {
+                        if (isset($bk['id']) && !isset($seenIds[$bk['id']])) {
+                            $bookmakers[] = [
+                                'id' => $bk['id'],
+                                'name' => $bk['name']
+                            ];
+                            $seenIds[$bk['id']] = true;
                         }
                     }
+
+                    // Scenario B: Chiave 'odds' piatta (spesso usata quando l'API ritorna un solo bookmaker di default o filtrato)
+                    // In questo caso purtroppo l'API non dice l'ID del bookmaker nell'oggetto.
+                    // Se siamo qui è perché abbiamo fatto fetchLiveOdds() senza parametri.
                 }
             }
 
