@@ -103,7 +103,7 @@ class BetfairService
 
         // Implementazione Cooldown per evitare blocchi account
         if (file_exists($this->loginAttemptFile)) {
-            $lastAttempt = (int)file_get_contents($this->loginAttemptFile);
+            $lastAttempt = (int) file_get_contents($this->loginAttemptFile);
             $cooldown = 60; // 1 minuto di cooldown tra login falliti
             if ((time() - $lastAttempt) < $cooldown && !$force) {
                 $this->log("Autenticazione in cooldown. Salto il tentativo per evitare blocchi.");
@@ -141,7 +141,8 @@ class BetfairService
                 $this->savePersistentToken($this->sessionToken);
                 $this->log("Login con certificati riuscito.");
                 // Reset cooldown on success
-                if (file_exists($this->loginAttemptFile)) unlink($this->loginAttemptFile);
+                if (file_exists($this->loginAttemptFile))
+                    unlink($this->loginAttemptFile);
                 return $this->sessionToken;
             }
             $this->log("Login con certificati fallito.", $data);
@@ -153,7 +154,7 @@ class BetfairService
         $lockFile = sys_get_temp_dir() . '/betfair_login_lock';
         if (file_exists($lockFile)) {
             $lockTime = filemtime($lockFile);
-            if (time() - $lockTime < 900) { // 15 minuti di cooldown
+            if (time() - $lockTime < 1200) { // 20 minuti di cooldown (Official Limit)
                 $this->log("Login BLOCCATO preventivamente per cooldown (15min).");
                 return null;
             }
@@ -187,7 +188,8 @@ class BetfairService
             $this->savePersistentToken($this->sessionToken);
             $this->log("Login senza certificati riuscito.");
             // Reset cooldown on success
-            if (file_exists($this->loginAttemptFile)) unlink($this->loginAttemptFile);
+            if (file_exists($this->loginAttemptFile))
+                unlink($this->loginAttemptFile);
             return $this->sessionToken;
         }
 
