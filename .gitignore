@@ -19,3 +19,6 @@ Thumbs.db
 .agent/
 .gemini/
 database/*.sql
+
+# API Documentation (Private)
+api-doc-betfair/
