@@ -305,12 +305,25 @@ class GiaNikController
     private function normalizeTeamName($name)
     {
         $name = strtolower($name);
-        $remove = ['fc', 'united', 'city', 'town', 'real', 'atlético', 'atletico', 'inter', 'u23', 'u21', 'u19', 'women', 'donne', 'femminile'];
-        foreach ($remove as $r) {
-            $name = str_replace(" $r", '', $name);
-            $name = str_replace("$r ", '', $name);
+        // Common abbreviations
+        $replacements = [
+            'man ' => 'manchester ',
+            'man utd' => 'manchester united',
+            'man city' => 'manchester city',
+            'st ' => 'saint ',
+            'int ' => 'inter ',
+            'ath ' => 'athletic ',
+            'atl ' => 'atletico '
+        ];
+        foreach ($replacements as $search => $replace) {
+            $name = str_replace($search, $replace, $name);
         }
-        return trim($name);
+
+        $remove = ['fc', 'united', 'city', 'town', 'real', 'atlético', 'atletico', 'inter', 'u23', 'u21', 'u19', 'women', 'donne', 'femminile', 'sports', 'sc'];
+        foreach ($remove as $r) {
+            $name = preg_replace('/\b' . preg_quote($r, '/') . '\b/i', '', $name);
+        }
+        return trim(preg_replace('/\s+/', ' ', $name));
     }
 
     private function isMatch($n1, $n2)
@@ -374,6 +387,208 @@ class GiaNikController
             echo json_encode(['status' => 'success', 'message' => 'Scommessa piazzata (' . $type . ')']);
         } catch (\Throwable $e) {
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function autoProcess()
+    {
+        header('Content-Type: application/json');
+        $results = ['scanned' => 0, 'new_bets' => 0, 'errors' => []];
+        try {
+            // 1. Get Live Events
+            $eventTypesRes = $this->bf->getEventTypes();
+            $eventTypeIds = array_map(fn($et) => $et['eventType']['id'], $eventTypesRes['result'] ?? []);
+            $liveEventsRes = $this->bf->getLiveEvents($eventTypeIds);
+            $events = $liveEventsRes['result'] ?? [];
+
+            if (empty($events)) {
+                echo json_encode(['status' => 'success', 'message' => 'Nessun evento live']);
+                return;
+            }
+
+            // 2. Filter for Match Odds markets with volume
+            $eventIds = array_map(fn($e) => $e['event']['id'], $events);
+            $marketCatalogues = [];
+            $chunks = array_chunk($eventIds, 40);
+            foreach ($chunks as $chunk) {
+                $res = $this->bf->getMarketCatalogues($chunk, 100, ['MATCH_ODDS', 'WINNER', 'MONEYLINE']);
+                if (isset($res['result'])) $marketCatalogues = array_merge($marketCatalogues, $res['result']);
+            }
+
+            $marketIds = array_map(fn($mc) => $mc['marketId'], $marketCatalogues);
+
+            // Check which ones we already have
+            if (!empty($marketIds)) {
+                $placeholders = implode(',', array_fill(0, count($marketIds), '?'));
+                $stmt = $this->db->prepare("SELECT market_id FROM bets WHERE market_id IN ($placeholders)");
+                $stmt->execute($marketIds);
+                $existingMarkets = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            } else {
+                $existingMarkets = [];
+            }
+
+            $todo = [];
+            foreach ($marketCatalogues as $mc) {
+                if (!in_array($mc['marketId'], $existingMarkets)) {
+                    $todo[] = $mc;
+                }
+            }
+
+            // Limit to 3 concurrent analyses to avoid timeout/rate limit
+            $todo = array_slice($todo, 0, 3);
+            $results['scanned'] = count($todo);
+
+            foreach ($todo as $mc) {
+                try {
+                    $marketId = $mc['marketId'];
+                    $resBook = $this->bf->getMarketBooks([$marketId]);
+                    $mb = $resBook['result'][0] ?? null;
+                    if (!$mb || ($mb['totalMatched'] ?? 0) < 500) continue;
+
+                    $event = [
+                        'marketId' => $marketId,
+                        'event' => $mc['event']['name'] ?? 'Unknown',
+                        'competition' => $mc['competition']['name'] ?? '',
+                        'sport' => $mc['eventType']['name'] ?? '',
+                        'totalMatched' => $mb['totalMatched'] ?? 0,
+                        'runners' => []
+                    ];
+
+                    foreach ($mb['runners'] as $r) {
+                        $mR = array_filter($mc['runners'], fn($rm) => $rm['selectionId'] === $r['selectionId']);
+                        $name = reset($mR)['runnerName'] ?? 'Unknown';
+                        $event['runners'][] = [
+                            'selectionId' => $r['selectionId'],
+                            'name' => $name,
+                            'back' => $r['ex']['availableToBack'][0]['price'] ?? 0
+                        ];
+                    }
+
+                    // Enriched with API-Football if available
+                    if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
+                        $apiMatch = $this->findMatchingFixture($event['event'], $event['sport']);
+                        if ($apiMatch) {
+                            $api = new FootballApiService();
+                            $fid = $apiMatch['fixture']['id'];
+                            $event['api_football'] = [
+                                'statistics' => $api->fetchFixtureStatistics($fid)['response'] ?? [],
+                                'events' => $api->fetchFixtureEvents($fid)['response'] ?? []
+                            ];
+                        }
+                    }
+
+                    $gemini = new GeminiService();
+                    $predictionRaw = $gemini->analyze([$event], ['is_gianik' => true, 'available_balance' => 100, 'current_portfolio' => 100]);
+
+                    if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
+                        $analysis = json_decode($matches[1], true);
+                        if ($analysis && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 70) {
+                            // Place Virtual Bet
+                            $runnerName = $analysis['advice'];
+                            $runners = array_map(fn($r) => ['runnerName' => $r['name'], 'selectionId' => $r['selectionId']], $event['runners']);
+                            $selectionId = $this->bf->mapAdviceToSelection($runnerName, $runners);
+
+                            if ($selectionId) {
+                                $reasoning = trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
+                                $motivation = $analysis['motivation'] ?? $reasoning;
+
+                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, event_name, sport, selection_id, runner_name, odds, stake, type, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmtInsert->execute([
+                                    $marketId,
+                                    $event['event'],
+                                    $event['sport'],
+                                    $selectionId,
+                                    $runnerName,
+                                    $analysis['odds'],
+                                    2.0, // Fixed 2 euro virtual stake for auto
+                                    'virtual',
+                                    $motivation
+                                ]);
+                                $results['new_bets']++;
+                            }
+                        }
+                    }
+                } catch (\Throwable $ex) {
+                    $results['errors'][] = $ex->getMessage();
+                }
+            }
+
+            // Also trigger settlement
+            $this->settleBets();
+
+            echo json_encode(['status' => 'success', 'results' => $results]);
+        } catch (\Throwable $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function settleBets()
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND created_at < datetime('now', '-5 minutes')");
+            $stmt->execute();
+            $pending = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($pending)) return;
+
+            foreach ($pending as $bet) {
+                $marketId = $bet['market_id'];
+                $res = $this->bf->getMarketBooks([$marketId]);
+                $mb = $res['result'][0] ?? null;
+
+                if ($mb && $mb['status'] === 'CLOSED') {
+                    // Find winner
+                    $winner = null;
+                    foreach ($mb['runners'] as $r) {
+                        if (($r['status'] ?? '') === 'WINNER') {
+                            $winner = $r['selectionId'];
+                            break;
+                        }
+                    }
+
+                    if ($winner) {
+                        $isWin = ($winner == $bet['selection_id']);
+                        $status = $isWin ? 'won' : 'lost';
+                        $profit = $isWin ? ($bet['stake'] * ($bet['odds'] - 1)) : -$bet['stake'];
+
+                        $update = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?");
+                        $update->execute([$status, $profit, $bet['id']]);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log("GiaNik Settlement Error: " . $e->getMessage());
+        }
+    }
+
+    public function recentBets()
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM bets ORDER BY created_at DESC LIMIT 20");
+            $stmt->execute();
+            $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            require __DIR__ . '/../Views/partials/recent_bets_sidebar.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-2 text-[10px]">' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function betDetails($id)
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM bets WHERE id = ?");
+            $stmt->execute([$id]);
+            $bet = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$bet) {
+                echo '<div class="p-10 text-center text-danger font-black uppercase italic">Scommessa non trovata.</div>';
+                return;
+            }
+
+            require __DIR__ . '/../Views/partials/modals/bet_details.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
         }
     }
 }
