@@ -43,7 +43,7 @@ $translationMap = [
         <div class="h-8 w-px bg-white/10 mx-2"></div>
         <div>
             <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">GiaNik Virtual</span>
-            <div class="text-lg font-black tabular-nums text-accent leading-none">€<?php echo number_format(1000, 2); ?></div>
+            <div class="text-lg font-black tabular-nums text-accent leading-none">€<?php echo number_format(100, 2); ?></div>
         </div>
     </div>
 </div>
