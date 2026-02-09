@@ -59,11 +59,13 @@ class GeminiService
                 $balanceText .
                 "DATI EVENTO:\n" . json_encode($candidates[0]) . "\n\n" .
                 "DATI STATISTICI AVANZATI (Se disponibili):\n" . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili") . "\n\n" .
-                "REGOLE:\n" .
-                "1. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE (tiri, possesso, cartellini) se forniti.\n" .
-                "2. Sii molto tecnico nella spiegazione (motivation), correlando l'andamento del match (stats) con le variazioni delle quote.\n" .
-                "3. Se sono presenti dati H2H, usali per contestualizzare la forza delle squadre.\n" .
-                "4. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
+                "REGOLE RIGIDE:\n" .
+                "1. Se i nomi delle squadre sono 'Unknown', cerca di dedurli dai nomi dei runner o dal contesto del mercato.\n" .
+                "2. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE (tiri, possesso, cartellini) se forniti.\n" .
+                "3. Sii molto tecnico nella spiegazione (motivation), correlando l'andamento del match (stats) con le variazioni delle quote.\n" .
+                "4. Se mancano le statistiche live, basa l'analisi sulla liquidità del mercato e sul movimento delle quote (Weight of Money).\n" .
+                "5. Se sono presenti dati H2H, usali per contestualizzare la forza delle squadre.\n" .
+                "6. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
                 "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
                 "```json\n" .
                 "{\n" .
