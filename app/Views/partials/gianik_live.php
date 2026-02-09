@@ -1,6 +1,8 @@
 <?php
 // app/Views/partials/gianik_live.php
 $groupedMatches = $groupedMatches ?? [];
+$account = $account ?? ['available' => 0, 'exposure' => 0];
+$orders = $orders ?? [];
 
 $translationMap = [
     'Soccer' => 'Calcio',
@@ -40,6 +42,55 @@ $iconMap = [
     'Volleyball' => 'activity',
 ];
 ?>
+
+<!-- Account Summary -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
+    <div class="glass p-6 rounded-[32px] border-white/5">
+        <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Disponibile Betfair</div>
+        <div class="text-2xl font-black tabular-nums text-white">
+            €<?php echo number_format($account['available'], 2); ?>
+        </div>
+    </div>
+    <div class="glass p-6 rounded-[32px] border-white/5">
+        <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Esposizione</div>
+        <div class="text-2xl font-black tabular-nums text-warning">
+            €<?php echo number_format($account['exposure'], 2); ?>
+        </div>
+    </div>
+    <div class="glass p-6 rounded-[32px] border-white/5">
+        <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Ordini Correnti</div>
+        <div class="text-2xl font-black tabular-nums text-accent">
+            <?php echo count($orders); ?> <span class="text-xs text-slate-500">attivi</span>
+        </div>
+    </div>
+</div>
+
+<!-- Active Orders Section (only if exists) -->
+<?php if (!empty($orders)): ?>
+<div class="mb-10">
+    <h2 class="text-xl font-black italic uppercase tracking-tight text-white mb-4">Ordini in Corso</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <?php foreach (array_slice($orders, 0, 6) as $order): ?>
+            <div class="glass p-4 rounded-2xl border-white/5 flex justify-between items-center">
+                <div>
+                    <div class="text-[10px] font-black text-white italic uppercase truncate max-w-[150px]">
+                        ID: <?php echo $order['betId']; ?>
+                    </div>
+                    <div class="text-[8px] font-bold text-slate-500 uppercase">
+                        Quota: <?php echo $order['priceSize']['price']; ?> | €<?php echo $order['priceSize']['size']; ?>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span class="px-2 py-0.5 rounded bg-accent/10 text-accent text-[8px] font-black uppercase">
+                        <?php echo $order['side']; ?>
+                    </span>
+                    <div class="text-[8px] font-bold text-slate-500 mt-1"><?php echo $order['status']; ?></div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php if (empty($groupedMatches)): ?>
     <div class="glass p-20 rounded-[40px] text-center">
@@ -153,9 +204,12 @@ $iconMap = [
                             <!-- Footer Actions -->
                             <div class="mt-5 pt-4 border-t border-white/5 flex justify-between items-center">
                                 <span class="px-2 py-0.5 rounded bg-danger/10 text-danger text-[8px] font-black uppercase tracking-widest animate-pulse">LIVE</span>
-                                <a href="<?php echo $matchLink; ?>" class="text-[9px] font-black text-slate-400 hover:text-white uppercase tracking-widest flex items-center gap-1 transition-colors">
+                                <button
+                                    hx-get="/api/gianik/analyze/<?php echo $m['marketId']; ?>"
+                                    hx-target="#global-modal-container"
+                                    class="text-[9px] font-black text-slate-400 hover:text-white uppercase tracking-widest flex items-center gap-1 transition-colors bg-transparent border-none cursor-pointer">
                                     Analizza <i data-lucide="brain-circuit" class="w-3 h-3"></i>
-                                </a>
+                                </button>
                             </div>
                         </div>
                     <?php endforeach; ?>
