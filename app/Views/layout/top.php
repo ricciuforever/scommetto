@@ -150,6 +150,13 @@
                     <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Statistiche
                         Match</span>
                 </a>
+                <a href="/fixture-events"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="zap"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Eventi Match</span>
+                </a>
                 <a href="/seasons"
                     class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
                     <i data-lucide="calendar"

@@ -70,4 +70,23 @@ class FixtureEvent
         }
         return $events;
     }
+
+    public function needsRefresh($fixtureId, $statusShort)
+    {
+        $stmt = $this->db->prepare("SELECT MAX(last_updated) as last_sync FROM fixture_events WHERE fixture_id = ?");
+        $stmt->execute([$fixtureId]);
+        $row = $stmt->fetch();
+
+        if (!$row || !$row['last_sync'])
+            return true;
+
+        $lastSync = strtotime($row['last_sync']);
+        $isLive = in_array($statusShort, ['1H', 'HT', '2H', 'ET', 'P', 'BT']);
+
+        if ($isLive) {
+            return (time() - $lastSync) > 60; // 1 minuto se live
+        }
+
+        return (time() - $lastSync) > 86400; // 24 ore altrimenti
+    }
 }
