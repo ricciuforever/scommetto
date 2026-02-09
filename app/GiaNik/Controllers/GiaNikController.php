@@ -129,7 +129,7 @@ class GiaNikController
 
             // Virtual Balance (from SQLite bets if needed, but let's just show a default for now)
             // or maybe we should have a settings table in SQLite too.
-            $virtualBalance = 1000.00; // Default
+            $virtualBalance = 100.00; // Default
 
             require __DIR__ . '/../Views/partials/gianik_live.php';
         } catch (\Throwable $e) {
