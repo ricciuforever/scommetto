@@ -13,7 +13,8 @@ class Config
     const BETS_HISTORY_FILE = self::DATA_PATH . 'bets_history.json';
     const USAGE_FILE = self::DATA_PATH . 'usage.json';
     const SETTINGS_FILE = self::DATA_PATH . 'settings.json'; // New Settings File
-    const INITIAL_BANKROLL = 100.00;
+    const DEFAULT_INITIAL_BANKROLL = 100.00;
+    const DEFAULT_VIRTUAL_BOOKMAKER_ID = 7; // William Hill
     const MIN_BETFAIR_STAKE = 2.00;
     const BETFAIR_CONFIDENCE_THRESHOLD = 80;
     const DEFAULT_TIMEZONE = 'Europe/Rome';
@@ -66,18 +67,39 @@ class Config
         return (int) date('m') <= 6 ? (int) date('Y') - 1 : (int) date('Y');
     }
 
-    public static function isSimulationMode()
+    public static function getSettings()
     {
-        if (!file_exists(self::SETTINGS_FILE))
-            return true; // Default True
+        if (!file_exists(self::SETTINGS_FILE)) {
+            return [
+                'simulation_mode' => true,
+                'initial_bankroll' => self::DEFAULT_INITIAL_BANKROLL,
+                'virtual_bookmaker_id' => self::DEFAULT_VIRTUAL_BOOKMAKER_ID
+            ];
+        }
         $settings = json_decode(file_get_contents(self::SETTINGS_FILE), true);
-        return $settings['simulation_mode'] ?? true;
+        return [
+            'simulation_mode' => $settings['simulation_mode'] ?? true,
+            'initial_bankroll' => (float) ($settings['initial_bankroll'] ?? self::DEFAULT_INITIAL_BANKROLL),
+            'virtual_bookmaker_id' => (int) ($settings['virtual_bookmaker_id'] ?? self::DEFAULT_VIRTUAL_BOOKMAKER_ID)
+        ];
     }
 
-    public static function setSimulationMode($enabled)
+    public static function isSimulationMode()
     {
-        $settings = ['simulation_mode' => (bool) $enabled];
-        file_put_contents(self::SETTINGS_FILE, json_encode($settings));
+        $settings = self::getSettings();
+        return $settings['simulation_mode'];
+    }
+
+    public static function getInitialBankroll()
+    {
+        $settings = self::getSettings();
+        return $settings['initial_bankroll'];
+    }
+
+    public static function getVirtualBookmakerId()
+    {
+        $settings = self::getSettings();
+        return $settings['virtual_bookmaker_id'];
     }
 
     public static function getDB()

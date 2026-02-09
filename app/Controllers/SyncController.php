@@ -161,11 +161,33 @@ class SyncController
 
     private function executeGlobalAnalysis(array $candidates, &$results)
     {
-        $funds = $this->betfairService->getFunds();
-        $balance = [
-            'available_balance' => $funds['availableToBetBalance'] ?? 0,
-            'current_portfolio' => ($funds['availableToBetBalance'] ?? 0) + abs($funds['exposure'] ?? 0)
-        ];
+        $balance = ['available_balance' => 0, 'current_portfolio' => 0];
+
+        if (Config::isSimulationMode()) {
+            $initial = Config::getInitialBankroll();
+            $db = Database::getInstance()->getConnection();
+
+            // Calc P&L
+            $stmt = $db->query("SELECT status, odds, stake FROM bets WHERE betfair_id IS NULL AND status IN ('won', 'lost')");
+            $profit = 0;
+            foreach ($stmt->fetchAll() as $b) {
+                if ($b['status'] === 'won') $profit += $b['stake'] * ($b['odds'] - 1);
+                else $profit -= $b['stake'];
+            }
+
+            // Calc Exposure
+            $stmt = $db->query("SELECT SUM(stake) FROM bets WHERE betfair_id IS NULL AND status IN ('placed', 'pending')");
+            $exposure = (float) $stmt->fetchColumn();
+
+            $balance['current_portfolio'] = $initial + $profit;
+            $balance['available_balance'] = $balance['current_portfolio'] - $exposure;
+        } else {
+            $funds = $this->betfairService->getFunds();
+            $balance = [
+                'available_balance' => $funds['availableToBetBalance'] ?? 0,
+                'current_portfolio' => ($funds['availableToBetBalance'] ?? 0) + abs($funds['exposure'] ?? 0)
+            ];
+        }
 
         if ($balance['available_balance'] < Config::MIN_BETFAIR_STAKE && !Config::isSimulationMode())
             return;
@@ -226,16 +248,25 @@ class SyncController
                         if ($isSimulation) {
                             $status = 'placed';
                             $note = '[SIMULAZIONE] Bet Virtuale';
+                            $vBookieId = Config::getVirtualBookmakerId();
+
+                            // Get bookmaker name for the ID
+                            $db = Database::getInstance()->getConnection();
+                            $stmt = $db->prepare("SELECT name FROM bookmakers WHERE id = ?");
+                            $stmt->execute([$vBookieId]);
+                            $vBookieName = $stmt->fetchColumn() ?: 'Virtual Bookie';
+
                             $this->betModel->create([
                                 'fixture_id' => $event['marketId'],
+                                'bookmaker_id' => $vBookieId,
+                                'bookmaker_name' => $vBookieName,
                                 'match_name' => $event['event']['name'],
                                 'advice' => $betData['advice'],
                                 'market' => $event['marketName'],
                                 'odds' => $finalPrice,
                                 'stake' => $betData['stake'],
                                 'status' => $status,
-                                'notes' => $note,
-                                'bookmaker_name' => 'Betfair.it'
+                                'notes' => $note
                             ]);
                             echo "SCOMMESSA SIMULATA: " . $event['event']['name'] . " - " . $betData['advice'] . " @ $finalPrice\n";
                             $results['bets_placed']++;

@@ -66,12 +66,12 @@ class BetController
             $bf = new BetfairService();
             $isSimulation = Config::isSimulationMode();
             $logMsg .= $isSimulation ? "[SIMULAZIONE] " : "[REAL] ";
+            $db = \App\Services\Database::getInstance()->getConnection();
 
             if ($bf->isConfigured() && $confidence >= $threshold && !$isSimulation) {
                 $logMsg .= "Procedo su Betfair. ";
 
                 $fixtureId = (int) $input['fixture_id'];
-                $db = \App\Services\Database::getInstance()->getConnection();
                 $stmt = $db->prepare("SELECT f.*, t1.name as home_name, t2.name as away_name
                                      FROM fixtures f
                                      JOIN teams t1 ON f.team_home_id = t1.id
@@ -121,6 +121,14 @@ class BetController
                 if ($isSimulation && $confidence >= 60) {
                     $status = 'placed';
                     $note .= "[SIMULAZIONE] Scommessa virtuale piazzata.";
+
+                    $vBookieId = Config::getVirtualBookmakerId();
+                    $stmt = $db->prepare("SELECT name FROM bookmakers WHERE id = ?");
+                    $stmt->execute([$vBookieId]);
+                    $vBookieName = $stmt->fetchColumn() ?: 'Virtual Bookie';
+
+                    $input['bookmaker_id'] = $vBookieId;
+                    $input['bookmaker_name'] = $vBookieName;
                 }
             }
         } catch (\Throwable $e) {
@@ -178,34 +186,29 @@ class BetController
             // 2. Calculate Balance & Stats (Unified Logic)
             $statsSummary = [
                 'available_balance' => 0,
-                'currentPortfolio' => 0,
+                'totalBalance' => 0,
+                'exposure' => 0,
                 'netProfit' => 0,
                 'roi' => 0,
                 'winCount' => 0,
-                'lossCount' => 0
+                'lossCount' => 0,
+                'winRate' => 0,
+                'lossRate' => 0,
+                'profitPercent' => 0
             ];
 
             // ROI & Profit from history
             $totalStake = 0;
-            $totalReturn = 0;
 
-            // Re-fetch all for stats if filtered
+            // Re-fetch all for stats
             $allBetsStmt = $db->query("SELECT status, stake, odds, betfair_id FROM bets");
             $allBets = $allBetsStmt->fetchAll(\PDO::FETCH_ASSOC);
 
-            // Calculate ROI/Profit based on Mode (Sim/Real separation in history? 
-            // Currently dashboard mixes them or filters. Let's assume we show ALL local history stats
-            // but Balance reflects current mode.)
-
-            // To be precise: If Sim Mode, show Sim Balance. If Real, Real Balance.
-            // But History usually mixes unless we filter by `betfair_id` presence.
-            // Let's stick to showing ALL DB history for ROI, but Mode-Specific Balance.
-
+            // Calculate Stats
             foreach ($allBets as $b) {
                 if ($b['status'] === 'won') {
                     $profit = $b['stake'] * ($b['odds'] - 1);
                     $statsSummary['netProfit'] += $profit;
-                    $totalReturn += ($b['stake'] + $profit);
                     $statsSummary['winCount']++;
                 } elseif ($b['status'] === 'lost') {
                     $statsSummary['netProfit'] -= $b['stake'];
@@ -216,16 +219,19 @@ class BetController
                 }
             }
 
+            $totalClosed = $statsSummary['winCount'] + $statsSummary['lossCount'];
+            if ($totalClosed > 0) {
+                $statsSummary['winRate'] = ($statsSummary['winCount'] / $totalClosed) * 100;
+                $statsSummary['lossRate'] = ($statsSummary['lossCount'] / $totalClosed) * 100;
+            }
+
             if ($totalStake > 0) {
                 $statsSummary['roi'] = ($statsSummary['netProfit'] / $totalStake) * 100;
             }
 
-            // Balance
+            // Balance Calculation based on Mode
             if (Config::isSimulationMode()) {
-                // Sim Logic
-                $initial = Config::INITIAL_BANKROLL;
-
-                // Recalculate Sim-Only Profit
+                $initial = Config::getInitialBankroll();
                 $simProfit = 0;
                 $simExposure = 0;
                 foreach ($allBets as $b) {
@@ -240,23 +246,25 @@ class BetController
                     }
                 }
 
-                $statsSummary['currentPortfolio'] = $simExposure;
-                $statsSummary['available_balance'] = ($initial + $simProfit) - $simExposure;
-                // Override NetProfit to show Sim Profit in Sim Mode? Or Global? 
-                // Let's show Global Profit in history, but Sim Balance.
+                $statsSummary['totalBalance'] = $initial + $simProfit;
+                $statsSummary['available_balance'] = $statsSummary['totalBalance'] - $simExposure;
+                $statsSummary['exposure'] = $simExposure;
+                $statsSummary['profitPercent'] = ($initial > 0) ? ($simProfit / $initial) * 100 : 0;
             } else {
-                // Real Logic
                 try {
                     $bf = new BetfairService();
                     if ($bf->isConfigured()) {
                         $funds = $bf->getFunds();
-                        if (isset($funds['result']))
-                            $funds = $funds['result'];
+                        if (isset($funds['result'])) $funds = $funds['result'];
                         $statsSummary['available_balance'] = $funds['availableToBetBalance'] ?? 0;
-                        $statsSummary['currentPortfolio'] = abs($funds['exposure'] ?? 0);
+                        $statsSummary['exposure'] = abs($funds['exposure'] ?? 0);
+                        $statsSummary['totalBalance'] = $statsSummary['available_balance'] + $statsSummary['exposure'];
+                        // For real mode, profit percent can be complex if bankroll changes,
+                        // but we'll show global net profit % relative to initial bankroll for now
+                        $initial = Config::getInitialBankroll();
+                        $statsSummary['profitPercent'] = ($initial > 0) ? ($statsSummary['netProfit'] / $initial) * 100 : 0;
                     }
-                } catch (\Throwable $e) {
-                }
+                } catch (\Throwable $e) {}
             }
 
             require __DIR__ . '/../Views/partials/tracker.php';
@@ -292,7 +300,7 @@ class BetController
                 $row = $stmt->fetch(\PDO::FETCH_ASSOC);
                 $exposure = (float) ($row['exposure'] ?? 0);
 
-                $initial = Config::INITIAL_BANKROLL;
+                $initial = Config::getInitialBankroll();
                 $totalEquity = $initial + $profit;
                 $available = $totalEquity - $exposure;
 
@@ -300,6 +308,7 @@ class BetController
                     'available' => $available,
                     'exposure' => $exposure,
                     'wallet' => $totalEquity,
+                    'profit_percent' => ($initial > 0) ? ($profit / $initial) * 100 : 0,
                     'currency' => 'EUR',
                     'wallet_name' => 'Conto Virtuale'
                 ]);
