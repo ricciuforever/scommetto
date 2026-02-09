@@ -91,6 +91,21 @@ try {
         return;
     }
 
+    if ($path === '/api/gianik/auto-process') {
+        (new \App\GiaNik\Controllers\GiaNikController())->autoProcess();
+        return;
+    }
+
+    if ($path === '/api/gianik/recent-bets') {
+        (new \App\GiaNik\Controllers\GiaNikController())->recentBets();
+        return;
+    }
+
+    if (preg_match('#^/api/gianik/bet/(\d+)$#', $path, $matches)) {
+        (new \App\GiaNik\Controllers\GiaNikController())->betDetails($matches[1]);
+        return;
+    }
+
     // Intelligence Dashboard as Home
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||

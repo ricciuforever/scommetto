@@ -5,9 +5,16 @@ $pageTitle = "GiaNik Live - App within App";
 require __DIR__ . '/../../Views/layout/top.php';
 ?>
 
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-6 mr-72"> <!-- Added margin for sidebar -->
+    <!-- Hidden auto-processing trigger -->
+    <div hx-get="/api/gianik/auto-process" hx-trigger="every 120s" class="hidden"></div>
+
     <div class="flex items-center justify-between">
         <div>
+            <div class="flex items-center gap-2 mb-2">
+                 <span class="w-2 h-2 bg-accent rounded-full animate-ping"></span>
+                 <span class="text-[8px] font-black uppercase text-accent tracking-[.2em]">Autonomous Agent Active</span>
+            </div>
             <h1 class="text-4xl font-black italic uppercase tracking-tighter text-white leading-none">
                 GiaNik Live <span class="text-accent">.</span>
             </h1>
@@ -49,8 +56,24 @@ require __DIR__ . '/../../Views/layout/top.php';
     <div id="global-modal-container"></div>
 </div>
 
+<!-- GiaNik Bets Sidebar -->
+<aside class="fixed top-[73px] right-0 bottom-0 w-72 border-l border-white/10 glass z-30 flex flex-col">
+    <div id="recent-bets-container" hx-get="/api/gianik/recent-bets" hx-trigger="load, every 30s" class="flex-1 overflow-hidden">
+        <div class="flex items-center justify-center p-20">
+            <i data-lucide="loader-2" class="w-6 h-6 text-slate-500 animate-spin"></i>
+        </div>
+    </div>
+</aside>
+
 <script>
     window.gianikMode = 'virtual';
+
+    window.openBetDetails = function(id) {
+        htmx.ajax('GET', '/api/gianik/bet/' + id, {
+            target: '#global-modal-container',
+            swap: 'innerHTML'
+        });
+    }
     function setGiaNikMode(mode) {
         window.gianikMode = mode;
         const vBtn = document.getElementById('mode-virtual');
