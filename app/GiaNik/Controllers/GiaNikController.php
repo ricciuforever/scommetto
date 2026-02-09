@@ -156,11 +156,30 @@ class GiaNikController
             ]);
             $mc = $resCat['result'][0] ?? null;
 
+            $eventName = $mc['event']['name'] ?? 'Unknown';
+            $competitionName = $mc['competition']['name'] ?? '';
+            $sportName = $mc['eventType']['name'] ?? '';
+            $eventId = $mc['event']['id'] ?? null;
+
+            // Fallback: if names are missing, try listEvents if we have an event ID
+            if (($eventName === 'Unknown' || empty($sportName)) && $eventId) {
+                $resEv = $this->bf->request('listEvents', ['filter' => ['eventIds' => [$eventId]]]);
+                if (!empty($resEv['result'][0]['event'])) {
+                    $eventName = $resEv['result'][0]['event']['name'];
+                }
+
+                // Also try to get event type if missing
+                if (empty($sportName)) {
+                    $resEt = $this->bf->request('listEventTypes', ['filter' => ['eventIds' => [$eventId]]]);
+                    $sportName = $resEt['result'][0]['eventType']['name'] ?? '';
+                }
+            }
+
             $event = [
                 'marketId' => $marketId,
-                'event' => $mc['event']['name'] ?? 'Unknown',
-                'competition' => $mc['competition']['name'] ?? '',
-                'sport' => $mc['eventType']['name'] ?? '',
+                'event' => $eventName,
+                'competition' => $competitionName,
+                'sport' => $sportName,
                 'totalMatched' => $mb['totalMatched'] ?? 0,
                 'runners' => []
             ];
@@ -232,17 +251,46 @@ class GiaNikController
     private function findMatchingFixture($bfEventName, $sport)
     {
         $api = new FootballApiService();
+
+        // 1. Try Live matches first
         $live = $api->fetchLiveMatches();
+        if (!empty($live['response'])) {
+            $match = $this->searchInFixtureList($bfEventName, $live['response']);
+            if ($match) return $match;
+        }
 
-        if (empty($live['response'])) return null;
+        // 2. If not in live all, try searching by team if we can extract names
+        $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $bfEventName);
+        if (count($bfTeams) >= 2) {
+            $bfHome = $this->normalizeTeamName($bfTeams[0]);
 
+            // Search for home team to get its fixtures for today
+            $teamSearch = $api->fetchTeams(['name' => $bfHome]);
+            if (!empty($teamSearch['response'])) {
+                foreach (array_slice($teamSearch['response'], 0, 3) as $teamItem) {
+                    $teamId = $teamItem['team']['id'];
+                    $fixtures = $api->request("/fixtures?team=$teamId&date=" . date('Y-m-d'));
+
+                    if (!empty($fixtures['response'])) {
+                        $match = $this->searchInFixtureList($bfEventName, $fixtures['response']);
+                        if ($match) return $match;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function searchInFixtureList($bfEventName, $fixtures)
+    {
         $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $bfEventName);
         if (count($bfTeams) < 2) return null;
 
         $bfHome = $this->normalizeTeamName($bfTeams[0]);
         $bfAway = $this->normalizeTeamName($bfTeams[1]);
 
-        foreach ($live['response'] as $item) {
+        foreach ($fixtures as $item) {
             $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
             $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
 
@@ -251,7 +299,6 @@ class GiaNikController
                 return $item;
             }
         }
-
         return null;
     }
 
