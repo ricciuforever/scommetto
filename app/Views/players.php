@@ -284,52 +284,143 @@ require __DIR__ . '/layout/top.php';
             );
         };
 
+        const renderSidelined = () => {
+            if (loadingSidelined) return (
+                <div className="flex justify-center items-center py-20">
+                    <div className="w-8 h-8 border-4 border-accent/20 border-t-accent rounded-full animate-spin"></div>
+                </div>
+            );
+
+            if (!sidelined || sidelined.length === 0) return (
+                <div className="text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs">
+                    Nessun infortunio registrato
+                </div>
+            );
+
+            return (
+                <div className="space-y-4">
+                    {sidelined.map((item, index) => {
+                        const start = new Date(item.start_date).toLocaleDateString();
+                        const end = new Date(item.end_date).toLocaleDateString();
+                        return (
+                            <div key={index} className="glass p-4 rounded-xl border border-white/5 flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-danger/10 rounded-full flex items-center justify-center border border-danger/20">
+                                        <i data-lucide="cross" className="w-5 h-5 text-danger"></i>
+                                    </div>
+                                    <div>
+                                        <span className="text-sm font-black text-white block">{item.type}</span>
+                                        <span className="text-[10px] text-slate-500 uppercase font-bold">{start} - {end}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        };
+
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                 <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={onClose}></div>
-                <div className="relative bg-[#0f172a] border border-white/10 w-full max-w-4xl rounded-[2rem] overflow-hidden shadow-2xl max-h-[90vh] flex flex-col md:flex-row">
+                <div className="relative bg-[#0f172a] border border-white/10 w-full max-w-5xl rounded-[2rem] overflow-hidden shadow-2xl max-h-[90vh] flex flex-col md:flex-row">
                     <button onClick={onClose} className="absolute right-6 top-6 text-slate-500 hover:text-white z-10 bg-black/20 p-2 rounded-full backdrop-blur md:hidden">
                         <i data-lucide="x" className="w-5 h-5"></i>
                     </button>
 
-                    <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                        <h4 className="text-[10px] text-slate-500 uppercase font-black mb-3">Info Nascita</h4>
-                        <div className="space-y-2">
-                            <div>
-                                <span className="block text-[9px] text-slate-500">Data</span>
-                                <span className="text-sm text-white font-bold">{player.birth?.date || player.birth_date || 'N/A'}</span>
+                    {/* Left Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900/50 p-6 flex flex-col gap-6 border-b md:border-b-0 md:border-r border-white/5 relative shrink-0 overflow-y-auto no-scrollbar">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-white/10 shadow-lg mb-4">
+                                <img src={player.photo} alt={player.name} className="w-full h-full object-cover" />
                             </div>
-                            <div>
-                                <span className="block text-[9px] text-slate-500">Luogo</span>
-                                <span className="text-sm text-white font-bold">{player.birth?.place || player.birth_place || 'N/A'}</span>
+                            <h2 className="text-xl font-black text-white uppercase leading-tight mb-1">{player.name}</h2>
+                            <div className="flex items-center gap-2 mb-4">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{player.nationality}</span>
+                                <span className="w-1 h-1 rounded-full bg-slate-600"></span>
+                                <span className="text-[10px] font-black text-accent uppercase tracking-widest">{player.position}</span>
                             </div>
-                            <div>
-                                <span className="block text-[9px] text-slate-500">Paese</span>
-                                <span className="text-sm text-white font-bold">{player.birth?.country || player.birth_country || 'N/A'}</span>
+
+                            <div className="grid grid-cols-3 gap-2 w-full mb-6">
+                                <div className="bg-white/5 p-2 rounded-lg border border-white/5">
+                                    <span className="block text-[9px] text-slate-500 uppercase font-bold">Età</span>
+                                    <span className="text-sm font-black text-white">{player.age || 'N/A'}</span>
+                                </div>
+                                <div className="bg-white/5 p-2 rounded-lg border border-white/5">
+                                    <span className="block text-[9px] text-slate-500 uppercase font-bold">Alt.</span>
+                                    <span className="text-sm font-black text-white">{player.height || 'N/A'}</span>
+                                </div>
+                                <div className="bg-white/5 p-2 rounded-lg border border-white/5">
+                                    <span className="block text-[9px] text-slate-500 uppercase font-bold">Peso</span>
+                                    <span className="text-sm font-black text-white">{player.weight || 'N/A'}</span>
+                                </div>
                             </div>
+                        </div>
+
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <h4 className="text-[10px] text-slate-500 uppercase font-black mb-3 border-b border-white/5 pb-2">Info Nascita</h4>
+                            <div className="space-y-3">
+                                <div>
+                                    <span className="block text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Data</span>
+                                    <span className="text-sm text-white font-bold">{player.birth?.date || player.birth_date || 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Luogo</span>
+                                    <span className="text-sm text-white font-bold">{player.birth?.place || player.birth_place || 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Paese</span>
+                                    <span className="text-sm text-white font-bold">{player.birth?.country || player.birth_country || 'N/A'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-accent/10 to-transparent p-4 rounded-xl border border-accent/20">
+                            <div className="flex items-center gap-2 mb-2">
+                                <i data-lucide="zap" className="w-3 h-3 text-accent"></i>
+                                <h4 className="text-[10px] text-accent uppercase font-black">Scommetto Insight</h4>
+                            </div>
+                            <p className="text-xs text-slate-300 leading-relaxed italic opacity-80">
+                                Analisi e previsioni basate sulle prestazioni recenti saranno disponibili a breve.
+                            </p>
                         </div>
                     </div>
 
-                    {/* Could add transfer history here if available, or just keeping it clean */}
-                    <div className="bg-gradient-to-br from-accent/10 to-transparent p-4 rounded-xl border border-accent/20">
-                        <h4 className="text-[10px] text-accent uppercase font-black mb-3">Scommetto Insight</h4>
-                        <p className="text-xs text-slate-300 leading-relaxed italic">
-                            Analisi e previsioni basate sulle prestazioni recenti saranno disponibili a breve.
-                        </p>
+                    {/* Right Content */}
+                    <div className="flex-1 p-6 md:p-8 overflow-y-auto no-scrollbar relative flex flex-col">
+                        <button onClick={onClose} className="absolute right-8 top-8 text-slate-500 hover:text-white hidden md:flex bg-white/5 hover:bg-white/10 p-2 rounded-full transition-colors">
+                            <i data-lucide="x" className="w-5 h-5"></i>
+                        </button>
+
+                        <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2 no-scrollbar border-b border-white/5">
+                            {['stats', 'career', 'transfers', 'trophies', 'sidelined'].map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveTab(tab)}
+                                    className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap mb-2 ${activeTab === tab
+                                            ? 'bg-accent text-slate-900 shadow-lg shadow-accent/20'
+                                            : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
+                                        }`}
+                                >
+                                    {tab === 'stats' && 'Statistiche'}
+                                    {tab === 'career' && 'Carriera'}
+                                    {tab === 'transfers' && 'Trasferimenti'}
+                                    {tab === 'trophies' && 'Trofei'}
+                                    {tab === 'sidelined' && 'Infortuni'}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                            {(activeTab === 'overview' || activeTab === 'stats') && renderStats()}
+                            {activeTab === 'career' && renderCareer()}
+                            {activeTab === 'transfers' && renderTransfers()}
+                            {activeTab === 'trophies' && renderTrophies()}
+                            {activeTab === 'sidelined' && renderSidelined()}
+                        </div>
                     </div>
+                </div>
             </div>
-        )
-    }
-    { activeTab === 'stats' && renderStats() }
-    { activeTab === 'career' && renderCareer() }
-    { activeTab === 'transfers' && renderTransfers() }
-    { activeTab === 'trophies' && renderTrophies() }
-    { activeTab === 'sidelined' && renderSidelined() }
-                            </div >
-                        </div >
-                    </div >
-                </div >
-            </div >
         );
     }
 

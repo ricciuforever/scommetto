@@ -63,7 +63,7 @@ try {
 
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||
-        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/predictions', '/tracker', '/settings']) ||
+        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/settings']) ||
         preg_match('#^/(match|team|player)/(\d+)$#', $path)
     ) {
         (new MatchController())->index();
@@ -137,10 +137,6 @@ try {
         (new MatchController())->viewLeagues();
     } elseif (preg_match('#^/api/view/leagues/(\d+)$#', $path, $matches)) {
         (new MatchController())->viewLeagueDetails($matches[1]);
-    } elseif ($path === '/api/view/predictions') {
-        (new MatchController())->viewPredictions();
-    } elseif ($path === '/api/view/tracker') {
-        (new App\Controllers\BetController())->viewTracker();
     } elseif (preg_match('#^/api/view/match/(\d+)/tab/(\w+)$#', $path, $matches)) {
         (new MatchController())->viewMatchTab($matches[1], $matches[2]);
     } elseif (preg_match('#^/api/view/match/(\d+)$#', $path, $matches)) {
