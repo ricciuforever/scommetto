@@ -49,6 +49,7 @@ require __DIR__ . '/layout/top.php';
         // Fetch Live Data
         const fetchLive = async () => {
             setLoading(true);
+            setError(null);
             try {
                 // 1. Fetch live fixtures (always needed for scores, status, etc.)
                 let fixturesUrl = '/api/intelligence/live';
@@ -57,6 +58,13 @@ require __DIR__ . '/layout/top.php';
 
                 const fixturesRes = await fetch(`${fixturesUrl}?${fixturesParams.toString()}`);
                 const fixturesData = await fixturesRes.json();
+
+                if (fixturesData.error) {
+                    setError(typeof fixturesData.error === 'object' ? JSON.stringify(fixturesData.error) : fixturesData.error);
+                    setLiveEvents([]);
+                    return;
+                }
+
                 let fixtures = fixturesData.response || [];
 
                 // 2. Fetch active bookmakers for live matches
@@ -81,27 +89,37 @@ require __DIR__ . '/layout/top.php';
                         const oddsRes = await fetch(`/api/odds/live?${oddsParams.toString()}`);
                         const oddsData = await oddsRes.json();
 
+                        if (oddsData.error) {
+                            setError(`Errore Bookmaker: ${typeof oddsData.error === 'object' ? JSON.stringify(oddsData.error) : oddsData.error}`);
+                        }
+
                         const oddsMap = new Map();
                         (oddsData.response || []).forEach(item => {
                             // Support both item.odds (flat) and item.bookmakers[0].bets (nested)
                             const bets = item.odds || (item.bookmakers && item.bookmakers.length > 0 ? item.bookmakers[0].bets : null);
-                            if (bets) {
-                                oddsMap.set(item.fixture.id, bets);
+                            const fid = item.fixture?.id || item.fixture; // Handle object or direct ID
+
+                            if (bets && fid) {
+                                oddsMap.set(Number(fid), bets);
                             }
                         });
 
                         // Filter: only show matches that have live odds for the selected broker
                         // AND attach the odds in the format expected by LiveEventCard
-                        fixtures = fixtures.filter(f => oddsMap.has(f.fixture.id) && oddsMap.get(f.fixture.id).length > 0)
-                            .map(f => ({
-                                ...f,
-                                odds: [{
-                                    name: bookmakers.find(b => b.id == selectedBookmaker)?.name || 'Bookmaker',
-                                    bets: oddsMap.get(f.fixture.id)
-                                }]
-                            }));
+                        fixtures = fixtures.filter(f => oddsMap.has(Number(f.fixture.id)))
+                            .map(f => {
+                                const bets = oddsMap.get(Number(f.fixture.id));
+                                return {
+                                    ...f,
+                                    odds: [{
+                                        name: bookmakers.find(b => b.id == selectedBookmaker)?.name || 'Bookmaker',
+                                        bets: bets
+                                    }]
+                                };
+                            });
                     } catch (err) {
                         console.error("Error fetching live odds for bookmaker:", err);
+                        setError("Errore nel recupero delle quote live per il bookmaker selezionato.");
                     }
                 }
 
@@ -328,6 +346,13 @@ require __DIR__ . '/layout/top.php';
 
                 {/* Main Content Grid */}
                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                    {error && (
+                        <div className="bg-danger/10 border border-danger/20 rounded-xl p-4 mb-6 flex items-center gap-3 text-danger">
+                            <LucideIcon name="alert-triangle" className="w-5 h-5" />
+                            <p className="text-sm font-bold">{error}</p>
+                        </div>
+                    )}
+
                     {loading && filteredEvents.length === 0 ? (
                         <div className="flex justify-center items-center h-64">
                             <div className="w-8 h-8 border-4 border-accent/20 border-t-accent rounded-full animate-spin"></div>
