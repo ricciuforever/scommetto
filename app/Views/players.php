@@ -14,7 +14,13 @@ require __DIR__ . '/layout/top.php';
         const [loadingStats, setLoadingStats] = useState(false);
         const [career, setCareer] = useState([]);
         const [loadingCareer, setLoadingCareer] = useState(false);
-        const [activeTab, setActiveTab] = useState('overview'); // overview, stats, career
+        const [transfers, setTransfers] = useState([]);
+        const [loadingTransfers, setLoadingTransfers] = useState(false);
+        const [trophies, setTrophies] = useState([]);
+        const [loadingTrophies, setLoadingTrophies] = useState(false);
+        const [sidelined, setSidelined] = useState([]);
+        const [loadingSidelined, setLoadingSidelined] = useState(false);
+        const [activeTab, setActiveTab] = useState('overview'); // overview, stats, career, transfers, trophies, sidelined
 
         useEffect(() => {
             if (player) {
@@ -30,7 +36,7 @@ require __DIR__ . '/layout/top.php';
                         console.error(err);
                         setLoadingStats(false);
                     });
-                
+
                 // Fetch Career
                 setLoadingCareer(true);
                 fetch(`/api/player-teams?player=${player.id}`)
@@ -42,6 +48,45 @@ require __DIR__ . '/layout/top.php';
                     .catch(err => {
                         console.error(err);
                         setLoadingCareer(false);
+                    });
+
+                // Fetch Transfers
+                setLoadingTransfers(true);
+                fetch(`/api/player-transfers?player=${player.id}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        setTransfers(data.response || []);
+                        setLoadingTransfers(false);
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        setLoadingTransfers(false);
+                    });
+
+                // Fetch Trophies
+                setLoadingTrophies(true);
+                fetch(`/api/player-trophies?player=${player.id}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        setTrophies(data.response || []);
+                        setLoadingTrophies(false);
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        setLoadingTrophies(false);
+                    });
+
+                // Fetch Sidelined
+                setLoadingSidelined(true);
+                fetch(`/api/player-sidelined?player=${player.id}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        setSidelined(data.response || []);
+                        setLoadingSidelined(false);
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        setLoadingSidelined(false);
                     });
             }
         }, [player]);
@@ -85,184 +130,206 @@ require __DIR__ . '/layout/top.php';
         const renderStats = () => {
             if (loadingStats) return <div className="text-center py-8"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto"></div></div>;
             if (!stats.length) return <div className="text-center py-8 text-slate-500 italic">Nessuna statistica disponibile per la stagione corrente.</div>;
-            
-            return (
-                 <div className="space-y-6 mt-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                     {stats.map((stat, idx) => (
-                         <div key={idx} className="bg-white/5 rounded-xl p-4 border border-white/5">
-                             <div className="flex items-center gap-3 mb-4 border-b border-white/5 pb-2">
-                                 <img src={stat.team?.logo || stat.team_logo} className="w-8 h-8 object-contain" alt="Team" />
-                                 <div>
-                                     <div className="text-sm font-bold text-white">{stat.team?.name || 'Team'}</div>
-                                     <div className="text-[10px] text-slate-400">{stat.league?.name || 'League'} ({stat.season})</div>
-                                 </div>
-                                 {stat.games?.rating && (
-                                     <div className={`ml-auto px-2 py-1 rounded text-xs font-black ${parseFloat(stat.games.rating) >= 7 ? 'bg-success text-slate-900' : 'bg-slate-700 text-white'}`}>
-                                         {parseFloat(stat.games.rating).toFixed(1)}
-                                     </div>
-                                 )}
-                             </div>
-                             
-                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                 <div className="text-center bg-black/20 rounded-lg p-2">
-                                     <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Presenze</div>
-                                     <div className="text-lg font-black text-white">{stat.games?.appearences || 0}</div>
-                                     <div className="text-[9px] text-slate-600">{stat.games?.minutes || 0}' min</div>
-                                 </div>
-                                 <div className="text-center bg-black/20 rounded-lg p-2">
-                                     <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Gol</div>
-                                     <div className="text-lg font-black text-accent">{stat.goals?.total || 0}</div>
-                                     <div className="text-[9px] text-slate-600">Assists: {stat.goals?.assists || 0}</div>
-                                 </div>
-                                 <div className="text-center bg-black/20 rounded-lg p-2">
-                                     <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Passaggi</div>
-                                     <div className="text-lg font-black text-white">{stat.passes?.total || 0}</div>
-                                     <div className="text-[9px] text-slate-600">Acc: {stat.passes?.accuracy || 0}%</div>
-                                 </div>
-                                 <div className="text-center bg-black/20 rounded-lg p-2">
-                                     <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Tiri</div>
-                                     <div className="text-lg font-black text-white">{stat.shots?.total || 0}</div>
-                                     <div className="text-[9px] text-slate-600">In porta: {stat.shots?.on || 0}</div>
-                                 </div>
-                             </div>
 
-                             <div className="grid grid-cols-3 gap-2 mt-2">
-                                 <div className="bg-black/20 p-2 rounded text-center">
-                                     <span className="block text-[9px] text-slate-500 uppercase">Dribbling</span>
-                                     <span className="text-xs font-bold text-white">{stat.dribbles?.success || 0}</span>
-                                 </div>
-                                 <div className="bg-black/20 p-2 rounded text-center">
-                                     <span className="block text-[9px] text-slate-500 uppercase">Tackle</span>
-                                     <span className="text-xs font-bold text-white">{stat.tackles?.total || 0}</span>
-                                 </div>
-                                 <div className="bg-black/20 p-2 rounded text-center">
-                                     <span className="block text-[9px] text-slate-500 uppercase">Duelli Vinti</span>
-                                     <span className="text-xs font-bold text-white">{stat.duels?.won || 0}</span>
-                                 </div>
-                             </div>
-                         </div>
-                     ))}
-                 </div>
-             );
+            return (
+                <div className="space-y-6 mt-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {stats.map((stat, idx) => (
+                        <div key={idx} className="bg-white/5 rounded-xl p-4 border border-white/5">
+                            <div className="flex items-center gap-3 mb-4 border-b border-white/5 pb-2">
+                                <img src={stat.team?.logo || stat.team_logo} className="w-8 h-8 object-contain" alt="Team" />
+                                <div>
+                                    <div className="text-sm font-bold text-white">{stat.team?.name || 'Team'}</div>
+                                    <div className="text-[10px] text-slate-400">{stat.league?.name || 'League'} ({stat.season})</div>
+                                </div>
+                                {stat.games?.rating && (
+                                    <div className={`ml-auto px-2 py-1 rounded text-xs font-black ${parseFloat(stat.games.rating) >= 7 ? 'bg-success text-slate-900' : 'bg-slate-700 text-white'}`}>
+                                        {parseFloat(stat.games.rating).toFixed(1)}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="text-center bg-black/20 rounded-lg p-2">
+                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Presenze</div>
+                                    <div className="text-lg font-black text-white">{stat.games?.appearences || 0}</div>
+                                    <div className="text-[9px] text-slate-600">{stat.games?.minutes || 0}' min</div>
+                                </div>
+                                <div className="text-center bg-black/20 rounded-lg p-2">
+                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Gol</div>
+                                    <div className="text-lg font-black text-accent">{stat.goals?.total || 0}</div>
+                                    <div className="text-[9px] text-slate-600">Assists: {stat.goals?.assists || 0}</div>
+                                </div>
+                                <div className="text-center bg-black/20 rounded-lg p-2">
+                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Passaggi</div>
+                                    <div className="text-lg font-black text-white">{stat.passes?.total || 0}</div>
+                                    <div className="text-[9px] text-slate-600">Acc: {stat.passes?.accuracy || 0}%</div>
+                                </div>
+                                <div className="text-center bg-black/20 rounded-lg p-2">
+                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Tiri</div>
+                                    <div className="text-lg font-black text-white">{stat.shots?.total || 0}</div>
+                                    <div className="text-[9px] text-slate-600">In porta: {stat.shots?.on || 0}</div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 mt-2">
+                                <div className="bg-black/20 p-2 rounded text-center">
+                                    <span className="block text-[9px] text-slate-500 uppercase">Dribbling</span>
+                                    <span className="text-xs font-bold text-white">{stat.dribbles?.success || 0}</span>
+                                </div>
+                                <div className="bg-black/20 p-2 rounded text-center">
+                                    <span className="block text-[9px] text-slate-500 uppercase">Tackle</span>
+                                    <span className="text-xs font-bold text-white">{stat.tackles?.total || 0}</span>
+                                </div>
+                                <div className="bg-black/20 p-2 rounded text-center">
+                                    <span className="block text-[9px] text-slate-500 uppercase">Duelli Vinti</span>
+                                    <span className="text-xs font-bold text-white">{stat.duels?.won || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
         };
-        
+
+        const renderTransfers = () => {
+            if (loadingTransfers) return (
+                <div className="flex justify-center items-center py-20">
+                    <div className="w-8 h-8 border-4 border-accent/20 border-t-accent rounded-full animate-spin"></div>
+                </div>
+            );
+
+            if (!transfers || transfers.length === 0) return (
+                <div className="text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs">
+                    Nessun trasferimento registrato
+                </div>
+            );
+
+            return (
+                <div className="relative border-l-2 border-white/10 ml-4 pl-8 py-4 space-y-8">
+                    {transfers.map((item, index) => {
+                        const date = new Date(item.date).toLocaleDateString('it-IT', { year: 'numeric', month: 'long', day: 'numeric' });
+                        return (
+                            <div key={index} className="relative group">
+                                <div className="absolute -left-[41px] top-0 w-5 h-5 bg-slate-800 border-2 border-white/10 rounded-full group-hover:border-accent group-hover:bg-accent transition-colors"></div>
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 block">{date}</span>
+                                <div className="glass p-4 rounded-xl border border-white/5 flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-3 w-1/2">
+                                        <div className="relative shrink-0">
+                                            <div className="w-10 h-10 bg-white/5 rounded-lg border border-white/10 p-1 flex items-center justify-center">
+                                                <img src={item.teams.out.logo} alt={item.teams.out.name} className="w-full h-full object-contain opacity-50 grayscale group-hover:grayscale-0 group-hover:opacity-100 transition-all" />
+                                            </div>
+                                            <div className="absolute -right-2 top-1/2 -translate-y-1/2 bg-danger text-[8px] font-black text-white px-1 rounded">OUT</div>
+                                        </div>
+                                        <span className="text-xs font-bold text-slate-400 truncate">{item.teams.out.name}</span>
+                                    </div>
+
+                                    <div className="flex flex-col items-center shrink-0">
+                                        <i data-lucide="arrow-right" className="w-4 h-4 text-slate-600"></i>
+                                        <span className="text-[9px] font-black text-accent uppercase">{item.type || 'Transfer'}</span>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 w-1/2 justify-end">
+                                        <span className="text-xs font-bold text-white truncate text-right">{item.teams.in.name}</span>
+                                        <div className="relative shrink-0">
+                                            <div className="w-10 h-10 bg-white/5 rounded-lg border border-white/10 p-1 flex items-center justify-center">
+                                                <img src={item.teams.in.logo} alt={item.teams.in.name} className="w-full h-full object-contain" />
+                                            </div>
+                                            <div className="absolute -left-2 top-1/2 -translate-y-1/2 bg-success text-[8px] font-black text-slate-900 px-1 rounded">IN</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        };
+
+        const renderTrophies = () => {
+            if (loadingTrophies) return (
+                <div className="flex justify-center items-center py-20">
+                    <div className="w-8 h-8 border-4 border-accent/20 border-t-accent rounded-full animate-spin"></div>
+                </div>
+            );
+
+            if (!trophies || trophies.length === 0) return (
+                <div className="text-center py-20 text-slate-500 font-bold uppercase tracking-widest text-xs">
+                    Nessun trofeo registrato
+                </div>
+            );
+
+            return (
+                <div className="space-y-6">
+                    {trophies.map((item, index) => (
+                        <div key={index} className="glass p-4 rounded-xl border border-white/5 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center border border-white/5">
+                                    <i data-lucide="trophy" className="w-6 h-6 text-accent"></i>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-black text-white">{item.league}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.country}</span>
+                                        <span className="text-slate-700">•</span>
+                                        <span className="text-[10px] font-bold text-accent uppercase tracking-widest">{item.season}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-accent/10 px-3 py-1 rounded-lg border border-accent/20">
+                                <span className="text-xs font-black text-accent uppercase tracking-widest">{item.place}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                 <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={onClose}></div>
-                <div className="relative bg-[#0f172a] border border-white/10 w-full max-w-4xl rounded-[2rem] overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
-                    <button onClick={onClose} className="absolute right-6 top-6 text-slate-500 hover:text-white z-10 bg-black/20 p-2 rounded-full backdrop-blur">
+                <div className="relative bg-[#0f172a] border border-white/10 w-full max-w-4xl rounded-[2rem] overflow-hidden shadow-2xl max-h-[90vh] flex flex-col md:flex-row">
+                    <button onClick={onClose} className="absolute right-6 top-6 text-slate-500 hover:text-white z-10 bg-black/20 p-2 rounded-full backdrop-blur md:hidden">
                         <i data-lucide="x" className="w-5 h-5"></i>
                     </button>
 
-                    <div className="flex flex-col md:flex-row h-full overflow-hidden">
-                        {/* Left Column: Profile - Fixed on Desktop, Scrollable on Mobile if needed */}
-                        <div className="md:w-1/3 p-8 flex flex-col items-center bg-white/5 border-r border-white/5 relative overflow-y-auto">
-                            <div className="relative mb-6 shrink-0">
-                                <div className="w-40 h-40 rounded-full overflow-hidden border-4 border-accent shadow-2xl shadow-accent/20">
-                                    <img src={player.photo} alt={player.name} className="w-full h-full object-cover" />
-                                </div>
-                                {player.injured && (
-                                    <div className="absolute -bottom-2 -right-2 bg-danger text-white p-2 rounded-full border-4 border-[#0f172a]">
-                                        <i data-lucide="shield-alert" className="w-5 h-5"></i>
-                                    </div>
-                                )}
+                    <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                        <h4 className="text-[10px] text-slate-500 uppercase font-black mb-3">Info Nascita</h4>
+                        <div className="space-y-2">
+                            <div>
+                                <span className="block text-[9px] text-slate-500">Data</span>
+                                <span className="text-sm text-white font-bold">{player.birth?.date || player.birth_date || 'N/A'}</span>
                             </div>
-
-                            <h2 className="text-2xl font-black text-white text-center uppercase italic">{player.name}</h2>
-                            <p className="text-accent font-bold uppercase tracking-widest text-xs mt-2">{player.position || 'Player'}</p>
-
-                            <div className="w-full mt-8 space-y-4">
-                                <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Nazionalità</span>
-                                    <span className="text-sm text-white font-bold">{player.nationality}</span>
-                                </div>
-                                <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Età</span>
-                                    <span className="text-sm text-white font-bold">{player.age} anni</span>
-                                </div>
-                                <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Altezza</span>
-                                    <span className="text-sm text-white font-bold">{player.height || 'N/A'}</span>
-                                </div>
-                                <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Peso</span>
-                                    <span className="text-sm text-white font-bold">{player.weight || 'N/A'}</span>
-                                </div>
-                                <div className={`p-3 rounded-xl mt-4 border ${player.injured ? 'bg-danger/10 border-danger/20' : 'bg-success/10 border-success/20'}`}>
-                                    <div className="flex items-center justify-center gap-2">
-                                        <i data-lucide={player.injured ? "alert-circle" : "check-circle"} className={`w-4 h-4 ${player.injured ? 'text-danger' : 'text-success'}`}></i>
-                                        <span className={`text-xs font-bold uppercase ${player.injured ? 'text-danger' : 'text-success'}`}>
-                                            {player.injured ? 'Indisponibile' : 'Disponibile'}
-                                        </span>
-                                    </div>
-                                </div>
+                            <div>
+                                <span className="block text-[9px] text-slate-500">Luogo</span>
+                                <span className="text-sm text-white font-bold">{player.birth?.place || player.birth_place || 'N/A'}</span>
                             </div>
-                        </div>
-
-                        {/* Right Column: Stats & Details */}
-                        <div className="md:w-2/3 flex flex-col h-full">
-                            <div className="flex items-center gap-6 p-6 border-b border-white/5 sticky top-0 bg-[#0f172a] z-10">
-                                <button
-                                    onClick={() => setActiveTab('overview')}
-                                    className={`pb-2 text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'overview' ? 'text-accent border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}
-                                >
-                                    Riepilogo
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('stats')}
-                                    className={`pb-2 text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'stats' ? 'text-accent border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}
-                                >
-                                    Statistiche Stagione
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('career')}
-                                    className={`pb-2 text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'career' ? 'text-accent border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}
-                                >
-                                    Carriera
-                                </button>
-                            </div>
-
-                            <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
-                                {activeTab === 'overview' ? (
-                                    <div className="space-y-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                                                <h4 className="text-[10px] text-slate-500 uppercase font-black mb-3">Info Nascita</h4>
-                                                <div className="space-y-2">
-                                                    <div>
-                                                        <span className="block text-[9px] text-slate-500">Data</span>
-                                                        <span className="text-sm text-white font-bold">{player.birth?.date || player.birth_date || 'N/A'}</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="block text-[9px] text-slate-500">Luogo</span>
-                                                        <span className="text-sm text-white font-bold">{player.birth?.place || player.birth_place || 'N/A'}</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="block text-[9px] text-slate-500">Paese</span>
-                                                        <span className="text-sm text-white font-bold">{player.birth?.country || player.birth_country || 'N/A'}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Could add transfer history here if available, or just keeping it clean */}
-                                            <div className="bg-gradient-to-br from-accent/10 to-transparent p-4 rounded-xl border border-accent/20">
-                                                <h4 className="text-[10px] text-accent uppercase font-black mb-3">Scommetto Insight</h4>
-                                                <p className="text-xs text-slate-300 leading-relaxed italic">
-                                                    Analisi e previsioni basate sulle prestazioni recenti saranno disponibili a breve.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : activeTab === 'stats' ? (
-                                    renderStats()
-                                ) : (
-                                    renderCareer()
-                                )}
+                            <div>
+                                <span className="block text-[9px] text-slate-500">Paese</span>
+                                <span className="text-sm text-white font-bold">{player.birth?.country || player.birth_country || 'N/A'}</span>
                             </div>
                         </div>
                     </div>
-                </div>
+
+                    {/* Could add transfer history here if available, or just keeping it clean */}
+                    <div className="bg-gradient-to-br from-accent/10 to-transparent p-4 rounded-xl border border-accent/20">
+                        <h4 className="text-[10px] text-accent uppercase font-black mb-3">Scommetto Insight</h4>
+                        <p className="text-xs text-slate-300 leading-relaxed italic">
+                            Analisi e previsioni basate sulle prestazioni recenti saranno disponibili a breve.
+                        </p>
+                    </div>
             </div>
+        )
+    }
+    { activeTab === 'stats' && renderStats() }
+    { activeTab === 'career' && renderCareer() }
+    { activeTab === 'transfers' && renderTransfers() }
+    { activeTab === 'trophies' && renderTrophies() }
+    { activeTab === 'sidelined' && renderSidelined() }
+                            </div >
+                        </div >
+                    </div >
+                </div >
+            </div >
         );
     }
 

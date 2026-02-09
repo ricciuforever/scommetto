@@ -165,6 +165,26 @@ class FootballApiService
         return $this->request("/teams/countries");
     }
 
+    public function fetchTopScorers($leagueId, $season)
+    {
+        return $this->request("/players/topscorers?league=$leagueId&season=$season");
+    }
+
+    public function fetchTopAssists($leagueId, $season)
+    {
+        return $this->request("/players/topassists?league=$leagueId&season=$season");
+    }
+
+    public function fetchTopYellowCards($leagueId, $season)
+    {
+        return $this->request("/players/topyellowcards?league=$leagueId&season=$season");
+    }
+
+    public function fetchTopRedCards($leagueId, $season)
+    {
+        return $this->request("/players/topredcards?league=$leagueId&season=$season");
+    }
+
     public function fetchTeamStatistics($teamId, $leagueId, $season, $date = null)
     {
         $url = "/teams/statistics?team=$teamId&league=$leagueId&season=$season";
@@ -185,25 +205,7 @@ class FootballApiService
         return $this->request("/players?$queryString");
     }
 
-    public function fetchTopScorers($leagueId, $season)
-    {
-        return $this->request("/players/topscorers?league=$leagueId&season=$season");
-    }
 
-    public function fetchTopAssists($leagueId, $season)
-    {
-        return $this->request("/players/topassists?league=$leagueId&season=$season");
-    }
-
-    public function fetchTopYellowCards($leagueId, $season)
-    {
-        return $this->request("/players/topyellowcards?league=$leagueId&season=$season");
-    }
-
-    public function fetchTopRedCards($leagueId, $season)
-    {
-        return $this->request("/players/topredcards?league=$leagueId&season=$season");
-    }
 
 
     public function fetchPredictions($fixtureId)

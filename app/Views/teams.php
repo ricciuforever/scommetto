@@ -130,7 +130,7 @@ require __DIR__ . '/layout/top.php';
         }, [teams, loading, initLoading]);
 
         const filteredTeams = teams.filter(t =>
-            t.name.toLowerCase().includes(search.toLowerCase())
+            (t.name || '').toLowerCase().includes(search.toLowerCase())
         );
 
         if (initLoading) {

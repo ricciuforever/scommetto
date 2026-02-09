@@ -80,6 +80,37 @@ require __DIR__ . '/layout/top.php';
 
         const [selectedLeague, setSelectedLeague] = useState('');
         const [selectedSeason, setSelectedSeason] = useState('');
+        
+        const [activeTab, setActiveTab] = useState('teams');
+        const [playerStats, setPlayerStats] = useState({
+            scorers: [],
+            assists: [],
+            yellowcards: [],
+            redcards: []
+        });
+
+        // Effect for Player Stats Fetching
+        useEffect(() => {
+            if (activeTab === 'teams' || !selectedLeague || !selectedSeason) return;
+            
+            // Check if already loaded
+            if (playerStats[activeTab] && playerStats[activeTab].length > 0) return;
+
+            setLoading(true);
+            fetch(`/api/league-top-stats?league=${selectedLeague}&season=${selectedSeason}&type=${activeTab}`)
+                .then(res => res.json())
+                .then(data => {
+                    setPlayerStats(prev => ({
+                        ...prev,
+                        [activeTab]: data.response || []
+                    }));
+                    setLoading(false);
+                })
+                .catch(err => {
+                    console.error('Errore caricamento statistiche giocatori:', err);
+                    setLoading(false);
+                });
+        }, [activeTab, selectedLeague, selectedSeason]);
 
         // Caricamento Iniziale: Leghe e Stagioni
         useEffect(() => {
@@ -103,6 +134,17 @@ require __DIR__ . '/layout/top.php';
                 setInitLoading(false);
             });
         }, []);
+
+        // Reset Player Stats on context change
+        useEffect(() => {
+            setPlayerStats({
+                scorers: [],
+                assists: [],
+                yellowcards: [],
+                redcards: []
+            });
+            // Also reset to teams tab? Maybe not, keep user preference but reload data if tab is active
+        }, [selectedLeague, selectedSeason]);
 
         // Caricamento Classifica
         useEffect(() => {
@@ -187,53 +229,166 @@ require __DIR__ . '/layout/top.php';
                     </div>
                 </header>
 
-                {loading && standings.length === 0 ? (
+                <div className="flex flex-wrap gap-4 mb-8 border-b border-white/10 pb-4">
+                    <button
+                        onClick={() => setActiveTab('teams')}
+                        className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'teams' ? 'bg-accent text-slate-900 shadow-lg shadow-accent/20' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                    >
+                        Classifica
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('scorers')}
+                        className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'scorers' ? 'bg-accent text-slate-900 shadow-lg shadow-accent/20' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                    >
+                        Marcatori
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('assists')}
+                        className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'assists' ? 'bg-accent text-slate-900 shadow-lg shadow-accent/20' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                    >
+                        Assist
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('yellowcards')}
+                        className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'yellowcards' ? 'bg-warning text-slate-900 shadow-lg shadow-warning/20' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                    >
+                        Cartellini Gialli
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('redcards')}
+                        className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'redcards' ? 'bg-danger text-white shadow-lg shadow-danger/20' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                    >
+                        Cartellini Rossi
+                    </button>
+                </div>
+
+                {loading ? (
                     <div className="flex flex-col items-center justify-center py-40 gap-6">
                         <div className="w-12 h-12 border-4 border-accent/20 border-t-accent rounded-full animate-spin"></div>
-                        <span className="text-xs font-black uppercase tracking-widest text-slate-500">Recupero posizioni...</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-500">
+                            {activeTab === 'teams' ? 'Recupero posizioni...' : 'Statistiche giocatori...'}
+                        </span>
                     </div>
+                ) : activeTab === 'teams' ? (
+                    standings.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-40 gap-4 glass rounded-3xl border border-dashed border-white/10">
+                            <i data-lucide="trophy" className="w-12 h-12 text-slate-700"></i>
+                            <p className="text-slate-500 font-bold uppercase tracking-widest text-sm text-center px-6">
+                                Nessun dato disponibile per questa stagione.<br />
+                                <span className="text-[10px] font-medium opacity-50">La competizione potrebbe non essere ancora iniziata.</span>
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-10">
+                            {Object.entries(groupedStandings).map(([groupName, rows]) => (
+                                <div key={groupName} className="glass rounded-3xl border border-white/10 overflow-hidden shadow-2xl">
+                                    <div className="bg-white/5 px-6 py-4 border-b border-white/10 flex justify-between items-center">
+                                        <h2 className="text-sm font-black uppercase tracking-widest text-white italic">{groupName}</h2>
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase">{rows.length} Squadre</span>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-black/20 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                    <th className="py-4 pl-4 text-center w-12">#</th>
+                                                    <th className="py-4">Squadra</th>
+                                                    <th className="py-4 text-center">PT</th>
+                                                    <th className="py-4 text-center">G</th>
+                                                    <th className="py-4 text-center">V</th>
+                                                    <th className="py-4 text-center">N</th>
+                                                    <th className="py-4 text-center">P</th>
+                                                    <th className="py-4 text-center hidden md:table-cell">Gf:Gs</th>
+                                                    <th className="py-4 text-center">DR</th>
+                                                    <th className="py-4 text-center pr-4">Forma</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {rows.map(row => <StandingRow key={row.team_id} row={row} />)}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )
                 ) : (
-                    <div className="flex flex-col gap-10">
-                        {Object.entries(groupedStandings).map(([groupName, rows]) => (
-                            <div key={groupName} className="glass rounded-3xl border border-white/10 overflow-hidden shadow-2xl">
-                                <div className="bg-white/5 px-6 py-4 border-b border-white/10 flex justify-between items-center">
-                                    <h2 className="text-sm font-black uppercase tracking-widest text-white italic">{groupName}</h2>
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase">{rows.length} Squadre</span>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-black/20 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                <th className="py-4 pl-4 text-center w-12">#</th>
-                                                <th className="py-4">Squadra</th>
-                                                <th className="py-4 text-center">PT</th>
-                                                <th className="py-4 text-center">G</th>
-                                                <th className="py-4 text-center">V</th>
-                                                <th className="py-4 text-center">N</th>
-                                                <th className="py-4 text-center">P</th>
-                                                <th className="py-4 text-center hidden md:table-cell">Gf:Gs</th>
-                                                <th className="py-4 text-center">DR</th>
-                                                <th className="py-4 text-center pr-4">Forma</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {rows.map(row => <StandingRow key={row.team_id} row={row} />)}
-                                        </tbody>
-                                    </table>
-                                </div>
+                    // Player Stats View
+                    !playerStats[activeTab] || playerStats[activeTab].length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-40 gap-4 glass rounded-3xl border border-dashed border-white/10">
+                            <i data-lucide="user-x" className="w-12 h-12 text-slate-700"></i>
+                            <p className="text-slate-500 font-bold uppercase tracking-widest text-sm text-center px-6">
+                                Nessuna statistica disponibile.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="glass rounded-3xl border border-white/10 overflow-hidden shadow-2xl">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-black/20 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                            <th className="py-4 pl-4 text-center w-12">#</th>
+                                            <th className="py-4">Giocatore</th>
+                                            <th className="py-4">Squadra</th>
+                                            <th className="py-4 text-center">
+                                                {activeTab === 'scorers' && 'Gol'}
+                                                {activeTab === 'assists' && 'Assist'}
+                                                {activeTab === 'yellowcards' && 'Gialli'}
+                                                {activeTab === 'redcards' && 'Rossi'}
+                                            </th>
+                                            <th className="py-4 text-center hidden md:table-cell">Presenze</th>
+                                            <th className="py-4 text-center hidden md:table-cell">Rating</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {playerStats[activeTab].map((item, idx) => {
+                                            const stat = item.statistics[0];
+                                            const value = activeTab === 'scorers' ? stat.goals.total :
+                                                activeTab === 'assists' ? stat.goals.assists :
+                                                    activeTab === 'yellowcards' ? stat.cards.yellow :
+                                                        stat.cards.red;
+                                            return (
+                                                <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                                                    <td className="py-4 pl-4 text-center text-xs font-black text-slate-500">{idx + 1}</td>
+                                                    <td className="py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full overflow-hidden bg-white/10 border border-white/10">
+                                                                <img src={item.player.photo} alt={item.player.name} className="w-full h-full object-cover" />
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-sm font-bold text-white">{item.player.name}</div>
+                                                                <div className="text-[10px] text-slate-500 uppercase tracking-tight">{item.player.nationality}</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <img src={stat.team.logo} className="w-5 h-5 object-contain" alt={stat.team.name} />
+                                                            <span className="text-xs font-bold text-slate-300 hidden md:inline">{stat.team.name}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-4 text-center">
+                                                        <span className="text-sm font-black text-accent bg-accent/10 px-2 py-1 rounded border border-accent/20">
+                                                            {value || 0}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-4 text-center text-xs font-bold text-slate-500 hidden md:table-cell">
+                                                        {stat.games.appearences} <span className="text-[9px] font-normal">({stat.games.minutes}')</span>
+                                                    </td>
+                                                    <td className="py-4 text-center hidden md:table-cell">
+                                                        {stat.games.rating ? (
+                                                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${parseFloat(stat.games.rating) >= 7 ? 'bg-success text-slate-900' : 'bg-slate-800 text-slate-400'}`}>
+                                                                {parseFloat(stat.games.rating).toFixed(1)}
+                                                            </span>
+                                                        ) : '-'}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
-                        ))}
-                    </div>
-                )}
-
-                {!loading && standings.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-40 gap-4 glass rounded-3xl border border-dashed border-white/10">
-                        <i data-lucide="trophy" className="w-12 h-12 text-slate-700"></i>
-                        <p className="text-slate-500 font-bold uppercase tracking-widest text-sm text-center px-6">
-                            Nessun dato disponibile per questa stagione.<br/>
-                            <span className="text-[10px] font-medium opacity-50">La competizione potrebbe non essere ancora iniziata.</span>
-                        </p>
-                    </div>
+                        </div>
+                    )
                 )}
             </div>
         );

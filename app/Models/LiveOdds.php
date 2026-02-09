@@ -17,18 +17,22 @@ class LiveOdds
 
     public function save($fixture_id, $data)
     {
-        $sql = "INSERT INTO live_odds (fixture_id, odds_json, status_json)
-                VALUES (:fid, :odds, :status)
+        $sql = "INSERT INTO live_odds (fixture_id, odds_json, status_json, last_updated)
+                VALUES (:fid, :odds, :status, CURRENT_TIMESTAMP)
                 ON DUPLICATE KEY UPDATE
                     odds_json = VALUES(odds_json),
                     status_json = VALUES(status_json),
                     last_updated = CURRENT_TIMESTAMP";
 
         $stmt = $this->db->prepare($sql);
+
+        $odds = is_string($data['odds']) ? $data['odds'] : json_encode($data['odds']);
+        $status = is_string($data['status']) ? $data['status'] : json_encode($data['status']);
+
         return $stmt->execute([
             'fid' => $fixture_id,
-            'odds' => json_encode($data['odds'] ?? []),
-            'status' => json_encode($data['status'] ?? [])
+            'odds' => $odds,
+            'status' => $status
         ]);
     }
 

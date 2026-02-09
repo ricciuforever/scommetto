@@ -78,11 +78,15 @@ require __DIR__ . '/layout/top.php';
             if (window.lucide) lucide.createIcons();
         }, [leagues, loading, search, filterType, filterCountry]);
 
-        const countries = [...new Set(leagues.map(l => l.country_name))].sort();
+        const countries = [...new Set(leagues.map(l => l.country_name || ''))].filter(Boolean).sort();
 
         const filteredLeagues = leagues.filter(l => {
-            const matchesSearch = l.name.toLowerCase().includes(search.toLowerCase()) ||
-                                l.country_name.toLowerCase().includes(search.toLowerCase());
+            const name = l.name || '';
+            const country = l.country_name || '';
+
+            const matchesSearch = name.toLowerCase().includes(search.toLowerCase()) ||
+                country.toLowerCase().includes(search.toLowerCase());
+
             const matchesType = filterType === 'all' || l.type === filterType;
             const matchesCountry = filterCountry === 'all' || l.country_name === filterCountry;
             return matchesSearch && matchesType && matchesCountry;

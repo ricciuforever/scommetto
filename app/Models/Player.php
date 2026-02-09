@@ -115,4 +115,90 @@ class Player
         $stmt->execute([$playerId]);
         return $stmt->fetchAll();
     }
+
+    public function getTransfers($playerId)
+    {
+        $stmt = $this->db->prepare("SELECT * FROM player_transfers WHERE player_id = ?");
+        $stmt->execute([$playerId]);
+        $row = $stmt->fetch();
+        if ($row) {
+            return [
+                'transfers' => json_decode($row['transfers_json'], true),
+                'update_date' => $row['update_date'],
+                'last_updated' => $row['last_updated']
+            ];
+        }
+        return null;
+    }
+
+    public function saveTransfers($playerId, $updateDate, $transfers)
+    {
+        $stmt = $this->db->prepare("
+            INSERT INTO player_transfers (player_id, update_date, transfers_json)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+            update_date = VALUES(update_date), transfers_json = VALUES(transfers_json), last_updated = CURRENT_TIMESTAMP
+        ");
+        $stmt->execute([
+            $playerId,
+            date('Y-m-d H:i:s', strtotime($updateDate)),
+            json_encode($transfers)
+        ]);
+    }
+
+    public function getTrophies($playerId)
+    {
+        $stmt = $this->db->prepare("SELECT * FROM player_trophies WHERE player_id = ?");
+        $stmt->execute([$playerId]);
+        $row = $stmt->fetch();
+        if ($row) {
+            return [
+                'trophies' => json_decode($row['trophies_json'], true),
+                'last_updated' => $row['last_updated']
+            ];
+        }
+        return null;
+    }
+
+    public function saveTrophies($playerId, $trophies)
+    {
+        $stmt = $this->db->prepare("
+            INSERT INTO player_trophies (player_id, trophies_json)
+            VALUES (?, ?)
+            ON DUPLICATE KEY UPDATE 
+            trophies_json = VALUES(trophies_json), last_updated = CURRENT_TIMESTAMP
+        ");
+        $stmt->execute([
+            $playerId,
+            json_encode($trophies)
+        ]);
+    }
+
+    public function getSidelined($playerId)
+    {
+        $stmt = $this->db->prepare("SELECT * FROM player_sidelined WHERE player_id = ?");
+        $stmt->execute([$playerId]);
+        $row = $stmt->fetch();
+        if ($row) {
+            return [
+                'sidelined' => json_decode($row['sidelined_json'], true),
+                'last_updated' => $row['last_updated']
+            ];
+        }
+        return null;
+    }
+
+    public function saveSidelined($playerId, $sidelined)
+    {
+        $stmt = $this->db->prepare("
+            INSERT INTO player_sidelined (player_id, sidelined_json)
+            VALUES (?, ?)
+            ON DUPLICATE KEY UPDATE 
+            sidelined_json = VALUES(sidelined_json), last_updated = CURRENT_TIMESTAMP
+        ");
+        $stmt->execute([
+            $playerId,
+            json_encode($sidelined)
+        ]);
+    }
 }

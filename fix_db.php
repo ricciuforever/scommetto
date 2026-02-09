@@ -208,13 +208,42 @@ try {
           INDEX (`fixture_id`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
-    "top_stats" => "CREATE TABLE IF NOT EXISTS `top_stats` (
+    "league_topstats" => "CREATE TABLE IF NOT EXISTS `league_topstats` (
           `league_id` INT,
           `season` INT,
-          `type` ENUM('scorers', 'assists', 'yellow_cards', 'red_cards'),
-          `stats_json` LONGTEXT,
+          `type` ENUM('scorers', 'assists', 'yellowcards', 'redcards'),
+          `json_data` JSON,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (`league_id`, `season`, `type`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+    "player_transfers" => "CREATE TABLE IF NOT EXISTS `player_transfers` (
+          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `player_id` INT NOT NULL,
+          `update_date` DATETIME,
+          `transfers_json` JSON,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY `unique_player` (`player_id`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+    "player_trophies" => "CREATE TABLE IF NOT EXISTS `player_trophies` (
+          `player_id` INT NOT NULL,
+          `trophies_json` JSON,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`player_id`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+    "player_sidelined" => "CREATE TABLE IF NOT EXISTS `player_sidelined` (
+          `player_id` INT NOT NULL,
+          `sidelined_json` JSON,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`player_id`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+    "live_bet_types" => "CREATE TABLE IF NOT EXISTS `live_bet_types` (
+          `id` INT PRIMARY KEY,
+          `name` VARCHAR(255),
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
     "h2h_records" => "CREATE TABLE IF NOT EXISTS `h2h_records` (

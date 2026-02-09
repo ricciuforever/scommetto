@@ -25,6 +25,7 @@ use App\Controllers\H2HController;
 use App\Controllers\TeamStatsController;
 use App\Controllers\VenueController;
 use App\Controllers\StandingController;
+use App\Controllers\OddsController;
 
 $request = $_SERVER['REQUEST_URI'] ?? '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -102,10 +103,28 @@ try {
         (new PlayerSeasonStatsController())->show();
     } elseif ($path === '/api/player-teams') {
         (new PlayerController())->teams();
+    } elseif ($path === '/api/player-transfers') {
+        (new PlayerController())->transfers();
+    } elseif ($path === '/api/player-trophies') {
+        (new PlayerController())->trophies();
+    } elseif ($path === '/api/player-sidelined') {
+        (new PlayerController())->sidelined();
     } elseif ($path === '/api/team/seasons') {
         (new TeamController())->seasons();
     } elseif ($path === '/api/squads') {
         (new TeamController())->squads();
+    } elseif ($path === '/api/odds/live') {
+        (new OddsController())->live();
+    } elseif ($path === '/api/odds/live/bets') {
+        (new OddsController())->liveBets();
+    } elseif ($path === '/api/odds') {
+        (new OddsController())->prematch();
+    } elseif ($path === '/api/odds/bookmakers') {
+        (new OddsController())->bookmakers();
+    } elseif ($path === '/api/odds/bets') {
+        (new OddsController())->bets();
+    } elseif ($path === '/api/league-top-stats') {
+        (new LeagueController())->topStats();
     } elseif ($path === '/api/team-stats') {
         (new TeamStatsController())->show();
     } elseif ($path === '/api/standings') {

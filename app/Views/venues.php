@@ -97,8 +97,8 @@ require __DIR__ . '/layout/top.php';
         }, [venues, loading, initLoading]);
 
         const filteredVenues = venues.filter(v =>
-            v.name.toLowerCase().includes(search.toLowerCase()) ||
-            v.city.toLowerCase().includes(search.toLowerCase())
+            (v.name || '').toLowerCase().includes(search.toLowerCase()) ||
+            (v.city || '').toLowerCase().includes(search.toLowerCase())
         );
 
         if (initLoading) {

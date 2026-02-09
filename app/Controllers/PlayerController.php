@@ -101,6 +101,143 @@ class PlayerController
         }
     }
 
+
+    /**
+     * Ritorna i trasferimenti del giocatore
+     */
+    public function transfers()
+    {
+        header('Content-Type: application/json');
+        try {
+            $playerId = $_GET['player'] ?? null;
+            if (!$playerId) {
+                echo json_encode(['error' => 'Player ID richiesto']);
+                return;
+            }
+
+            $model = new Player();
+            $data = $model->getTransfers($playerId);
+
+            // Should refresh if old? User said recommended 1 call per day.
+            // Check staleness.
+            $isStale = true;
+            if ($data) {
+                // simple check: if last_updated is < 24h ago
+                $last = strtotime($data['last_updated']);
+                if (time() - $last < 86400) {
+                    $isStale = false;
+                }
+            }
+
+            if ($isStale || !$data) {
+                $api = new FootballApiService();
+                $apiResult = $api->fetchTransfers(['player' => $playerId]);
+
+                if (!empty($apiResult['response'])) {
+                    // response[0] contains { player, update, transfers }
+                    $info = $apiResult['response'][0];
+                    $updateDate = $info['update'];
+                    $transfers = $info['transfers'];
+
+                    $model->saveTransfers($playerId, $updateDate, $transfers);
+                    $data = $model->getTransfers($playerId);
+                }
+            }
+
+            echo json_encode(['response' => $data ? $data['transfers'] : []]);
+
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Ritorna i trofei del giocatore
+     */
+    public function trophies()
+    {
+        header('Content-Type: application/json');
+        try {
+            $playerId = $_GET['player'] ?? null;
+            if (!$playerId) {
+                echo json_encode(['error' => 'Player ID richiesto']);
+                return;
+            }
+
+            $model = new Player();
+            $data = $model->getTrophies($playerId);
+
+            // Check staleness (24h default for user-specific data)
+            $isStale = true;
+            if ($data) {
+                $last = strtotime($data['last_updated']);
+                if (time() - $last < 86400) {
+                    $isStale = false;
+                }
+            }
+
+            if ($isStale || !$data) {
+                $api = new FootballApiService();
+                $apiResult = $api->fetchTrophies(['player' => $playerId]);
+
+                if (!empty($apiResult['response'])) {
+                    $model->saveTrophies($playerId, $apiResult['response']);
+                    $data = $model->getTrophies($playerId);
+                }
+            }
+
+            echo json_encode(['response' => $data ? $data['trophies'] : []]);
+
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Ritorna gli infortuni/assenza del giocatore
+     */
+    public function sidelined()
+    {
+        header('Content-Type: application/json');
+        try {
+            $playerId = $_GET['player'] ?? null;
+            if (!$playerId) {
+                echo json_encode(['error' => 'Player ID richiesto']);
+                return;
+            }
+
+            $model = new Player();
+            $data = $model->getSidelined($playerId);
+
+            // Check staleness
+            $isStale = true;
+            if ($data) {
+                $last = strtotime($data['last_updated']);
+                if (time() - $last < 86400) {
+                    $isStale = false;
+                }
+            }
+
+            if ($isStale || !$data) {
+                $api = new FootballApiService();
+                $apiResult = $api->fetchSidelined(['player' => $playerId]);
+
+                if (!empty($apiResult['response'])) {
+                    $model->saveSidelined($playerId, $apiResult['response']);
+                    $data = $model->getSidelined($playerId);
+                }
+            }
+
+            echo json_encode(['response' => $data ? $data['sidelined'] : []]);
+
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
     private function syncTeams($playerId)
     {
         $api = new FootballApiService();

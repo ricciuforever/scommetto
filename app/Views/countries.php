@@ -56,7 +56,7 @@ require __DIR__ . '/layout/top.php';
         }, [countries, loading, search]);
 
         const filteredCountries = countries.filter(c =>
-            c.name.toLowerCase().includes(search.toLowerCase())
+            (c.name || '').toLowerCase().includes(search.toLowerCase())
         );
 
         return (
