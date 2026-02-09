@@ -250,7 +250,8 @@ class SyncController
 
                         if ($isSimulation) {
                             $status = 'placed';
-                            $note = $reasoning ?: '[SIMULAZIONE] Bet Virtuale';
+                            $sentiment = !empty($betData['sentiment']) ? "SENTIMENT: " . $betData['sentiment'] . "\n\n" : "";
+                            $note = $sentiment . ($betData['motivation'] ?? $reasoning ?? '[SIMULAZIONE] Bet Virtuale');
                             $vBookieId = Config::getVirtualBookmakerId();
 
                             // Get bookmaker name for the ID
@@ -289,7 +290,7 @@ class SyncController
                                     'betfair_id' => $res['instructionReports'][0]['betId'] ?? null,
                                     'status' => 'placed',
                                     'bookmaker_name' => 'Betfair.it',
-                                    'notes' => $reasoning
+                                    'notes' => (!empty($betData['sentiment']) ? "SENTIMENT: " . $betData['sentiment'] . "\n\n" : "") . ($betData['motivation'] ?? $reasoning ?? '')
                                 ]);
                                 echo "SCOMMESSA PIAZZATA: " . $event['event']['name'] . " - " . $betData['advice'] . " @ $finalPrice\n";
                             }

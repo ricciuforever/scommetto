@@ -72,11 +72,22 @@
                             </div>
                         </div>
 
-                        <div class="space-y-3">
-                            <span class="text-[10px] font-black uppercase tracking-widest text-slate-500 block">Analisi Tecnica Gemini</span>
-                            <p class="text-sm text-slate-400 italic leading-relaxed">
-                                "<?php echo htmlspecialchars($p['motivation'] ?? 'Nessuna motivazione fornita.'); ?>"
-                            </p>
+                        <div class="space-y-4">
+                            <?php if (!empty($p['sentiment'])): ?>
+                                <div>
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Sentiment Mercato</span>
+                                    <span class="text-xs font-bold text-accent px-2 py-1 bg-accent/10 rounded-lg border border-accent/20">
+                                        <?php echo htmlspecialchars($p['sentiment']); ?>
+                                    </span>
+                                </div>
+                            <?php endif; ?>
+
+                            <div>
+                                <span class="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Analisi Tecnica Gemini</span>
+                                <p class="text-sm text-slate-400 italic leading-relaxed">
+                                    "<?php echo htmlspecialchars($p['motivation'] ?? 'Nessuna motivazione fornita.'); ?>"
+                                </p>
+                            </div>
                         </div>
                     </div>
 
