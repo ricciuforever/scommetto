@@ -31,19 +31,35 @@ $translationMap = [
 
 <!-- Account Summary (Compact Bar) -->
 <div class="glass px-6 py-3 rounded-xl border-white/5 flex flex-wrap items-center justify-between gap-4 mb-6">
-    <div class="flex items-center gap-6">
-        <div>
-            <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">Disponibile (Real)</span>
-            <div class="text-lg font-black tabular-nums text-white leading-none">€<?php echo number_format($account['available'], 2); ?></div>
+    <div class="flex items-center gap-8">
+        <!-- Real Betfair Account -->
+        <div class="flex items-center gap-4">
+            <div>
+                <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">Real Disponibile</span>
+                <div class="text-lg font-black tabular-nums text-white leading-none">€<?php echo number_format($account['available'], 2); ?></div>
+            </div>
+            <div>
+                <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">Real Esposizione</span>
+                <div class="text-lg font-black tabular-nums text-warning leading-none">€<?php echo number_format($account['exposure'], 2); ?></div>
+            </div>
         </div>
-        <div>
-            <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">Esposizione</span>
-            <div class="text-lg font-black tabular-nums text-warning leading-none">€<?php echo number_format($account['exposure'], 2); ?></div>
-        </div>
+
         <div class="h-8 w-px bg-white/10 mx-2"></div>
-        <div>
-            <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">GiaNik Virtual</span>
-            <div class="text-lg font-black tabular-nums text-accent leading-none">€<?php echo number_format(100, 2); ?></div>
+
+        <!-- Virtual GiaNik Account -->
+        <div class="flex items-center gap-4">
+            <div>
+                <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual Disponibile</span>
+                <div class="text-lg font-black tabular-nums text-white leading-none">€<?php echo number_format($virtualAccount['available'], 2); ?></div>
+            </div>
+            <div>
+                <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual In Gioco</span>
+                <div class="text-lg font-black tabular-nums text-accent leading-none">€<?php echo number_format($virtualAccount['exposure'], 2); ?></div>
+            </div>
+            <div>
+                <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual Totale</span>
+                <div class="text-lg font-black tabular-nums text-slate-400 leading-none">€<?php echo number_format($virtualAccount['total'], 2); ?></div>
+            </div>
         </div>
     </div>
 </div>
@@ -83,8 +99,16 @@ $translationMap = [
                     $runners = $m['runners'] ?? [];
                 ?>
                     <div class="glass p-5 rounded-[24px] border border-white/5 hover:border-accent/20 transition-all group relative overflow-hidden">
-                        <div class="absolute top-0 right-0 p-3">
+                        <div class="absolute top-0 right-0 p-3 flex flex-col items-end gap-1">
                              <span class="text-[8px] font-black uppercase text-slate-500 opacity-50"><?php echo $m['marketId']; ?></span>
+                             <span class="px-1.5 py-0.5 rounded bg-success/10 text-success text-[8px] font-black uppercase tracking-widest border border-success/20">
+                                <?php echo $m['status_label']; ?>
+                             </span>
+                             <?php if ($m['has_api_data']): ?>
+                                 <span class="px-1.5 py-0.5 rounded bg-accent/10 text-accent text-[8px] font-black uppercase tracking-widest border border-accent/20">
+                                    Analisi Potenziata
+                                 </span>
+                             <?php endif; ?>
                         </div>
 
                         <div class="mb-4">
@@ -94,8 +118,11 @@ $translationMap = [
                             <h3 class="text-sm font-black italic uppercase text-white leading-tight mb-2 group-hover:text-accent transition-colors">
                                 <?php echo $m['event']; ?>
                             </h3>
-                            <div class="flex items-center gap-3">
+                            <div class="flex items-center justify-between">
                                 <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Matched: <span class="text-white">€<?php echo number_format($m['totalMatched'], 0, ',', '.'); ?></span></span>
+                                <?php if ($m['score']): ?>
+                                    <span class="text-[10px] font-black text-white bg-white/10 px-2 py-0.5 rounded"><?php echo $m['score']; ?></span>
+                                <?php endif; ?>
                             </div>
                         </div>
 
