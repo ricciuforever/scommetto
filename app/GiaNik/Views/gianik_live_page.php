@@ -1,7 +1,8 @@
 <?php
-// app/Views/gianik_live_page.php
-$pageTitle = "GiaNik Live - Betfair Dashboard";
-require __DIR__ . '/layout/top.php';
+// app/GiaNik/Views/gianik_live_page.php
+$pageTitle = "GiaNik Live - App within App";
+// We still use the main layout for now as it provides React/Tailwind/HTMX
+require __DIR__ . '/../../Views/layout/top.php';
 ?>
 
 <div class="flex flex-col gap-6">
@@ -11,10 +12,16 @@ require __DIR__ . '/layout/top.php';
                 GiaNik Live <span class="text-accent">.</span>
             </h1>
             <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mt-2">
-                Betfair Multi-Sport Dashboard (Real-Time)
+                Betfair Multi-Sport Dashboard (Real-Time) - SEZIONE INDIPENDENTE
             </p>
         </div>
         <div class="flex items-center gap-4">
+            <!-- Mode Switcher -->
+            <div class="flex bg-white/5 p-1 rounded-xl border border-white/5">
+                <button onclick="setGiaNikMode('virtual')" id="mode-virtual" class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all bg-accent text-white">Virtual</button>
+                <button onclick="setGiaNikMode('real')" id="mode-real" class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all text-slate-500">Real</button>
+            </div>
+
             <div class="flex flex-col items-end">
                 <span class="text-[10px] font-black uppercase text-slate-500">Auto-Refresh</span>
                 <span class="text-xs font-bold text-success flex items-center gap-1.5">
@@ -35,11 +42,31 @@ require __DIR__ . '/layout/top.php';
             <div class="flex flex-col items-center gap-4">
                 <i data-lucide="loader-2" class="w-12 h-12 text-accent animate-spin"></i>
                 <span class="text-xs font-black uppercase tracking-widest text-slate-500">Inizializzazione Dati
-                    Betfair...</span>
+                    Betfair Diretti...</span>
             </div>
         </div>
     </div>
     <div id="global-modal-container"></div>
 </div>
 
-<?php require __DIR__ . '/layout/bottom.php'; ?>
+<script>
+    window.gianikMode = 'virtual';
+    function setGiaNikMode(mode) {
+        window.gianikMode = mode;
+        const vBtn = document.getElementById('mode-virtual');
+        const rBtn = document.getElementById('mode-real');
+        if (mode === 'virtual') {
+            vBtn.classList.add('bg-accent', 'text-white');
+            vBtn.classList.remove('text-slate-500');
+            rBtn.classList.remove('bg-accent', 'text-white');
+            rBtn.classList.add('text-slate-500');
+        } else {
+            rBtn.classList.add('bg-accent', 'text-white');
+            rBtn.classList.remove('text-slate-500');
+            vBtn.classList.remove('bg-accent', 'text-white');
+            vBtn.classList.add('text-slate-500');
+        }
+    }
+</script>
+
+<?php require __DIR__ . '/../../Views/layout/bottom.php'; ?>
