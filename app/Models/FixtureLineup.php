@@ -52,6 +52,44 @@ class FixtureLineup
                 WHERE fl.fixture_id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$fixture_id]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($results as &$row) {
+            $row['start_xi_json'] = json_decode($row['start_xi_json'], true);
+            $row['substitutes_json'] = json_decode($row['substitutes_json'], true);
+        }
+
+        return $results;
+    }
+
+    public function needsRefresh($fixtureId, $statusShort)
+    {
+        $stmt = $this->db->prepare("SELECT MAX(last_updated) as last_sync FROM fixture_lineups WHERE fixture_id = ?");
+        $stmt->execute([$fixtureId]);
+        $row = $stmt->fetch();
+
+        if (!$row || !$row['last_sync'])
+            return true;
+
+        $lastSync = strtotime($row['last_sync']);
+
+        // Lineups are updated every 15 minutes
+        $isLive = in_array($statusShort, ['1H', 'HT', '2H', 'ET', 'P', 'BT']);
+
+        if ($isLive) {
+            return (time() - $lastSync) > 900; // 15 minuti se live
+        }
+
+        // Se non è ancora iniziato, controlliamo se mancano meno di 45 minuti all'inizio
+        $fixtureModel = new Fixture();
+        $fixture = $fixtureModel->getById($fixtureId);
+        if ($fixture && $statusShort === 'NS') {
+            $startTime = strtotime($fixture['date']);
+            if ($startTime - time() < 2700) { // < 45 minuti
+                return (time() - $lastSync) > 900; // rinfresca ogni 15 minuti
+            }
+        }
+
+        return (time() - $lastSync) > 86400; // 24 ore altrimenti
     }
 }
