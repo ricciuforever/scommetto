@@ -6,6 +6,7 @@ namespace App\GiaNik\Controllers;
 use App\Config\Config;
 use App\Services\BetfairService;
 use App\Services\GeminiService;
+use App\Services\FootballApiService;
 use App\GiaNik\GiaNikDatabase;
 use PDO;
 
@@ -190,8 +191,29 @@ class GiaNikController
                 'current_portfolio' => $available + $exposure
             ];
 
+            // --- ENRICHMENT WITH API-FOOTBALL ---
+            $apiData = null;
+            if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
+                $apiMatch = $this->findMatchingFixture($event['event'], $event['sport']);
+                if ($apiMatch) {
+                    $api = new FootballApiService();
+                    $fixtureId = $apiMatch['fixture']['id'];
+                    $stats = $api->fetchFixtureStatistics($fixtureId);
+                    $events = $api->fetchFixtureEvents($fixtureId);
+                    $h2h = $api->fetchH2H($apiMatch['teams']['home']['id'] . '-' . $apiMatch['teams']['away']['id']);
+
+                    $apiData = [
+                        'fixture' => $apiMatch,
+                        'statistics' => $stats['response'] ?? [],
+                        'events' => $events['response'] ?? [],
+                        'h2h' => $h2h['response'] ?? []
+                    ];
+                    $event['api_football'] = $apiData;
+                }
+            }
+
             $gemini = new GeminiService();
-            // GiaNik option strictly uses candidates[0] and no external DB info
+            // GiaNik option uses candidates[0] which now includes API-Football data if found
             $predictionRaw = $gemini->analyze([$event], array_merge($balance, ['is_gianik' => true]));
 
             $analysis = [];
@@ -205,6 +227,51 @@ class GiaNikController
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore Analisi: ' . $e->getMessage() . '</div>';
         }
+    }
+
+    private function findMatchingFixture($bfEventName, $sport)
+    {
+        $api = new FootballApiService();
+        $live = $api->fetchLiveMatches();
+
+        if (empty($live['response'])) return null;
+
+        $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $bfEventName);
+        if (count($bfTeams) < 2) return null;
+
+        $bfHome = $this->normalizeTeamName($bfTeams[0]);
+        $bfAway = $this->normalizeTeamName($bfTeams[1]);
+
+        foreach ($live['response'] as $item) {
+            $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
+            $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
+
+            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) ||
+                ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome))) {
+                return $item;
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeTeamName($name)
+    {
+        $name = strtolower($name);
+        $remove = ['fc', 'united', 'city', 'town', 'real', 'atlético', 'atletico', 'inter', 'u23', 'u21', 'u19', 'women', 'donne', 'femminile'];
+        foreach ($remove as $r) {
+            $name = str_replace(" $r", '', $name);
+            $name = str_replace("$r ", '', $name);
+        }
+        return trim($name);
+    }
+
+    private function isMatch($n1, $n2)
+    {
+        if (empty($n1) || empty($n2)) return false;
+        if (strpos($n1, $n2) !== false || strpos($n2, $n1) !== false) return true;
+        if (levenshtein($n1, $n2) < 3) return true;
+        return false;
     }
 
     public function placeBet()

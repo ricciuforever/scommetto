@@ -58,10 +58,12 @@ class GeminiService
             $prompt = "Sei un ANALISTA ELITE di Betfair. Il tuo compito è analizzare UN SINGOLO EVENTO LIVE fornito e dare un parere tecnico esperto su quote e mercato.\n\n" .
                 $balanceText .
                 "DATI EVENTO:\n" . json_encode($candidates[0]) . "\n\n" .
+                "DATI STATISTICI AVANZATI (Se disponibili):\n" . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili") . "\n\n" .
                 "REGOLE:\n" .
-                "1. Analizza quote Back/Lay e volumi.\n" .
-                "2. Sii molto tecnico nella spiegazione (motivation).\n" .
-                "3. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
+                "1. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE (tiri, possesso, cartellini) se forniti.\n" .
+                "2. Sii molto tecnico nella spiegazione (motivation), correlando l'andamento del match (stats) con le variazioni delle quote.\n" .
+                "3. Se sono presenti dati H2H, usali per contestualizzare la forza delle squadre.\n" .
+                "4. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
                 "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
                 "```json\n" .
                 "{\n" .
@@ -69,7 +71,7 @@ class GeminiService
                 "  \"odds\": 1.80,\n" .
                 "  \"confidence\": 90,\n" .
                 "  \"sentiment\": \"Testo breve sul sentiment (Bullish/Bearish/Neutral)\",\n" .
-                "  \"motivation\": \"Spiegazione tecnica dettagliata del perché questo runner ha valore.\"\n" .
+                "  \"motivation\": \"Spiegazione tecnica dettagliata. Collega esplicitamente i dati API-Football (se presenti) con le quote Betfair.\"\n" .
                 "}\n" .
                 "```";
         } else {
