@@ -66,6 +66,8 @@ require __DIR__ . '/layout/top.php';
                 }
 
                 let fixtures = fixturesData.response || [];
+                const fixtureMap = new Map();
+                fixtures.forEach(f => fixtureMap.set(Number(f.fixture.id), f));
 
                 // 2. Fetch active bookmakers for live matches
                 let bookmakers = [];
@@ -78,10 +80,9 @@ require __DIR__ . '/layout/top.php';
                     console.error("Error fetching active bookmakers:", err);
                 }
 
-                // 3. If a bookmaker is selected, filter events and attach live odds
-                if (selectedBookmaker && fixtures.length > 0) {
+                // 3. Fetch live odds and merge/filter
+                if (selectedBookmaker) {
                     try {
-                        // Fetch all live odds for the selected bookmaker in one call
                         const oddsParams = new URLSearchParams();
                         oddsParams.append('bookmaker', selectedBookmaker);
                         if (selectedLeague) oddsParams.append('league', selectedLeague);
@@ -93,44 +94,48 @@ require __DIR__ . '/layout/top.php';
                             setError(`Errore Bookmaker: ${typeof oddsData.error === 'object' ? JSON.stringify(oddsData.error) : oddsData.error}`);
                         }
 
-                        const oddsMap = new Map();
+                        const mergedFixtures = [];
+                        const bookmakerName = bookmakers.find(b => b.id == selectedBookmaker)?.name || 'Bookmaker';
+
                         (oddsData.response || []).forEach(item => {
                             let bets = null;
                             if (item.bookmakers && item.bookmakers.length > 0) {
-                                // Find the selected bookmaker in the array
                                 const targetBk = item.bookmakers.find(b => b.id == selectedBookmaker);
                                 if (targetBk) bets = targetBk.bets;
                             } else {
-                                // Fallback to flat odds key if bookmakers array is missing
                                 bets = item.odds;
                             }
 
-                            const fid = item.fixture?.id || item.fixture; // Handle object or direct ID
+                            const fid = Number(item.fixture?.id || item.fixture);
                             if (bets && fid) {
-                                oddsMap.set(Number(fid), bets);
+                                let baseFixture = fixtureMap.get(fid);
+                                if (!baseFixture) {
+                                    baseFixture = {
+                                        fixture: item.fixture,
+                                        league: item.league,
+                                        teams: item.teams,
+                                        goals: { home: null, away: null }
+                                    };
+                                }
+
+                                mergedFixtures.push({
+                                    ...baseFixture,
+                                    odds: [{
+                                        name: bookmakerName,
+                                        bets: bets
+                                    }]
+                                });
                             }
                         });
 
-                        // Filter: only show matches that have live odds for the selected broker
-                        // AND attach the odds in the format expected by LiveEventCard
-                        fixtures = fixtures.filter(f => oddsMap.has(Number(f.fixture.id)))
-                            .map(f => {
-                                const bets = oddsMap.get(Number(f.fixture.id));
-                                return {
-                                    ...f,
-                                    odds: [{
-                                        name: bookmakers.find(b => b.id == selectedBookmaker)?.name || 'Bookmaker',
-                                        bets: bets
-                                    }]
-                                };
-                            });
+                        setLiveEvents(mergedFixtures);
                     } catch (err) {
                         console.error("Error fetching live odds for bookmaker:", err);
                         setError("Errore nel recupero delle quote live per il bookmaker selezionato.");
                     }
+                } else {
+                    setLiveEvents(fixtures);
                 }
-
-                setLiveEvents(fixtures);
             } catch (err) {
                 console.error("Error fetching live intelligence:", err);
                 setError("Errore nel caricamento dei dati live.");
@@ -418,27 +423,32 @@ require __DIR__ . '/layout/top.php';
         const { fixture, league, teams, goals, score, odds } = event;
 
         // Determine scores from goals or score object
-        const homeScore = goals?.home ?? score?.fulltime?.home ?? 0;
-        const awayScore = goals?.away ?? score?.fulltime?.away ?? 0;
+        const homeScore = goals?.home ?? score?.fulltime?.home ?? '-';
+        const awayScore = goals?.away ?? score?.fulltime?.away ?? '-';
 
-        // Extract odds if available (from merged data)
-        // We look for "Match Winner" (ID 1) or just the first bet available
-        const getMainOdds = () => {
-            if (!odds || odds.length === 0 || !odds[0].bets) return null;
+        // Group odds by category
+        const markets = useMemo(() => {
+            if (!odds || odds.length === 0 || !odds[0].bets) return {};
+            const bets = odds[0].bets;
 
-            // Try to find Match Winner (ID 1)
-            const matchWinner = odds[0].bets.find(b => b.id === 1 || b.name === 'Match Winner');
-            if (matchWinner && matchWinner.values) return matchWinner.values;
-
-            // Fallback to first available bet if it has values
-            if (odds[0].bets.length > 0 && odds[0].bets[0].values) {
-                return odds[0].bets[0].values;
+            // Group Over/Under by line
+            const overUnderRaw = bets.find(b => b.id === 5 || b.name?.toLowerCase().includes('over/under'));
+            const ouGroups = {};
+            if (overUnderRaw && overUnderRaw.values) {
+                overUnderRaw.values.forEach(v => {
+                    const line = v.value.split(' ').pop();
+                    if (!ouGroups[line]) ouGroups[line] = [];
+                    ouGroups[line].push(v);
+                });
             }
 
-            return null;
-        };
-
-        const mainOdds = getMainOdds();
+            return {
+                winner: bets.find(b => b.id === 1 || b.name?.toLowerCase().includes('winner')),
+                doubleChance: bets.find(b => b.id === 12 || b.name?.toLowerCase().includes('double chance')),
+                btts: bets.find(b => b.id === 8 || b.name?.toLowerCase().includes('both teams score')),
+                overUnder: ouGroups
+            };
+        }, [odds]);
 
         return (
             <div onClick={onClick} className="glass p-6 rounded-2xl border border-white/10 hover:border-accent/30 transition-all group cursor-pointer hover:scale-[1.02]">
@@ -486,18 +496,75 @@ require __DIR__ . '/layout/top.php';
                     </div>
                 </div>
 
-                {/* Odds (1X2) - Only show if bookmaker selected */}
-                {mainOdds && mainOdds.length > 0 && (
-                    <div>
-                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-3">Quote Live - {odds[0].name}</p>
-                        <div className="grid grid-cols-3 gap-3">
-                            {mainOdds.map((odd, idx) => (
-                                <div key={idx} className="bg-black/40 hover:bg-accent/10 p-3 rounded-xl border border-white/10 hover:border-accent/30 transition-all text-center cursor-pointer group/odd">
-                                    <span className="block text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-wider">{odd.value}</span>
-                                    <span className="block text-xl font-black text-accent group-hover/odd:text-white transition-colors">{odd.odd}</span>
+                {/* Detailed Odds Sections */}
+                {odds && odds.length > 0 && (
+                    <div className="space-y-6">
+                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest border-b border-white/5 pb-2">Quote Live - {odds[0].name}</p>
+
+                        {/* 1X2 */}
+                        {markets.winner && (
+                            <div>
+                                <p className="text-[9px] text-slate-400 font-bold mb-2 uppercase tracking-wider">Esito Finale (1X2)</p>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {markets.winner.values.map((odd, idx) => (
+                                        <div key={idx} className="bg-black/40 hover:bg-accent/10 p-2 rounded-xl border border-white/10 transition-all text-center">
+                                            <span className="block text-[8px] text-slate-500 uppercase">{odd.value}</span>
+                                            <span className="block text-sm font-black text-accent">{odd.odd}</span>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                        )}
+
+                        {/* Double Chance */}
+                        {markets.doubleChance && (
+                            <div>
+                                <p className="text-[9px] text-slate-400 font-bold mb-2 uppercase tracking-wider">Doppia Chance</p>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {markets.doubleChance.values.map((odd, idx) => (
+                                        <div key={idx} className="bg-black/40 hover:bg-accent/10 p-2 rounded-xl border border-white/10 transition-all text-center">
+                                            <span className="block text-[8px] text-slate-500 uppercase">{odd.value}</span>
+                                            <span className="block text-sm font-black text-accent">{odd.odd}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* BTTS */}
+                        {markets.btts && (
+                            <div>
+                                <p className="text-[9px] text-slate-400 font-bold mb-2 uppercase tracking-wider">Entrambe le Squadre Segnano</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {markets.btts.values.map((odd, idx) => (
+                                        <div key={idx} className="bg-black/40 hover:bg-accent/10 p-2 rounded-xl border border-white/10 transition-all text-center">
+                                            <span className="block text-[8px] text-slate-500 uppercase">{odd.value}</span>
+                                            <span className="block text-sm font-black text-accent">{odd.odd}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Over/Under (showing first 3 lines) */}
+                        {Object.keys(markets.overUnder).length > 0 && (
+                            <div>
+                                <p className="text-[9px] text-slate-400 font-bold mb-2 uppercase tracking-wider">Under / Over</p>
+                                <div className="space-y-2">
+                                    {Object.entries(markets.overUnder).slice(0, 3).map(([line, values]) => (
+                                        <div key={line} className="grid grid-cols-3 gap-2 items-center">
+                                            <div className="text-[10px] font-bold text-slate-500 text-center">Line {line}</div>
+                                            {values.map((odd, idx) => (
+                                                <div key={idx} className="bg-black/40 hover:bg-accent/10 p-2 rounded-xl border border-white/10 transition-all text-center">
+                                                    <span className="block text-[8px] text-slate-500 uppercase">{odd.value.split(' ')[0]}</span>
+                                                    <span className="block text-sm font-black text-accent">{odd.odd}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
