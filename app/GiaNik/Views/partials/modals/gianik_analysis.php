@@ -1,5 +1,5 @@
 <?php
-// app/Views/partials/modals/gianik_analysis.php
+// app/GiaNik/Views/partials/modals/gianik_analysis.php
 $analysis = $analysis ?? [];
 $reasoning = $reasoning ?? '';
 $event = $event ?? [];
@@ -66,7 +66,7 @@ $event = $event ?? [];
 
                 <div class="glass p-6 rounded-3xl border-white/5">
                     <div class="text-[10px] font-black text-accent uppercase tracking-widest mb-3">Motivazione Tecnica AI</div>
-                    <div class="text-sm italic text-slate-300 bg-black/20 p-5 rounded-2xl max-h-64 overflow-y-auto leading-relaxed">
+                    <div class="text-sm italic text-slate-300 bg-black/20 p-5 rounded-2xl max-h-48 overflow-y-auto leading-relaxed">
                         <?php
                             $motivation = $analysis['motivation'] ?? $reasoning;
                             echo nl2br(htmlspecialchars($motivation));
@@ -78,9 +78,78 @@ $event = $event ?? [];
                      <button onclick="document.getElementById('gianik-analysis-modal').remove()" class="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest text-xs transition-all border border-white/5">
                         Chiudi
                      </button>
+
+                     <?php if (!empty($analysis)): ?>
+                     <button
+                        onclick="placeGiaNikBet()"
+                        id="bet-btn"
+                        class="flex-[2] py-4 rounded-2xl bg-accent hover:bg-accent/80 text-white font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2">
+                        <i data-lucide="zap" class="w-4 h-4"></i> Piazza Scommessa <span id="btn-mode-label" class="opacity-50 ml-1"></span>
+                     </button>
+                     <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
-    <script>if (window.lucide) lucide.createIcons();</script>
+
+    <script>
+        if (window.lucide) lucide.createIcons();
+
+        // Update label based on global mode
+        const modeLabel = document.getElementById('btn-mode-label');
+        if (modeLabel) {
+            modeLabel.innerText = '(' + (window.gianikMode || 'virtual').toUpperCase() + ')';
+        }
+
+        async function placeGiaNikBet() {
+            const btn = document.getElementById('bet-btn');
+            const originalContent = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Elaborazione...';
+            if (window.lucide) lucide.createIcons();
+
+            const betData = {
+                marketId: <?php echo json_encode($event['marketId']); ?>,
+                eventName: <?php echo json_encode($event['event']); ?>,
+                sport: <?php echo json_encode($event['sport']); ?>,
+                advice: <?php echo json_encode($analysis['advice'] ?? ''); ?>,
+                odds: <?php echo (float)($analysis['odds'] ?? 0); ?>,
+                stake: 2.0, // Default stake for IT
+                type: window.gianikMode || 'virtual',
+                motivation: <?php echo json_encode($motivation); ?>,
+                // We need selectionId, we can try to find it from runners or let backend handle mapping
+                runnerName: <?php echo json_encode($analysis['advice'] ?? ''); ?>,
+                selectionId: null // Backend will map it
+            };
+
+            // Attempt to find selectionId in client side first
+            const runners = <?php echo json_encode($event['runners']); ?>;
+            const runner = runners.find(r => r.name.toLowerCase().includes(betData.runnerName.toLowerCase()));
+            if (runner) betData.selectionId = runner.selectionId;
+
+            try {
+                const response = await fetch('/api/gianik/place-bet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(betData)
+                });
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    alert('Scommessa piazzata con successo!');
+                    document.getElementById('gianik-analysis-modal').remove();
+                } else {
+                    alert('Errore: ' + result.message);
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent;
+                    if (window.lucide) lucide.createIcons();
+                }
+            } catch (err) {
+                alert('Errore di rete: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = originalContent;
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+    </script>
 </div>

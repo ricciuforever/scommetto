@@ -72,17 +72,22 @@ try {
     }
 
     if ($path === '/gianik-live') {
-        (new \App\Controllers\GiaNikController())->index();
+        (new \App\GiaNik\Controllers\GiaNikController())->index();
         return;
     }
 
     if ($path === '/api/gianik/live') {
-        (new \App\Controllers\GiaNikController())->live();
+        (new \App\GiaNik\Controllers\GiaNikController())->live();
         return;
     }
 
     if (preg_match('#^/api/gianik/analyze/([\d\.]+)$#', $path, $matches)) {
-        (new \App\Controllers\GiaNikController())->analyze($matches[1]);
+        (new \App\GiaNik\Controllers\GiaNikController())->analyze($matches[1]);
+        return;
+    }
+
+    if ($path === '/api/gianik/place-bet') {
+        (new \App\GiaNik\Controllers\GiaNikController())->placeBet();
         return;
     }
 
