@@ -12,6 +12,7 @@ use App\Controllers\LeagueController;
 use App\Controllers\SeasonController;
 use App\Controllers\TeamController;
 use App\Controllers\PlayerController;
+use App\Controllers\PlayerSeasonStatsController;
 use App\Controllers\RoundController;
 use App\Controllers\FixtureController;
 use App\Controllers\FixtureStatsController;
@@ -97,6 +98,8 @@ try {
         (new TeamController())->list();
     } elseif ($path === '/api/players') {
         (new PlayerController())->show();
+    } elseif ($path === '/api/player-season-stats') {
+        (new PlayerSeasonStatsController())->show();
     } elseif ($path === '/api/team/seasons') {
         (new TeamController())->seasons();
     } elseif ($path === '/api/team-stats') {
