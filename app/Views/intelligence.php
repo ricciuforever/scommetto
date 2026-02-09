@@ -27,6 +27,11 @@ require __DIR__ . '/layout/top.php';
         const [matchDetails, setMatchDetails] = useState(null);
         const [loadingDetails, setLoadingDetails] = useState(false);
 
+        // AI Prediction Modal State
+        const [predictionMatch, setPredictionMatch] = useState(null);
+        const [predictionData, setPredictionData] = useState(null);
+        const [loadingPrediction, setLoadingPrediction] = useState(false);
+
         // Fetch Live Data (matches only, odds are fetched separately if bookmaker selected)
         const fetchLive = async () => {
             setLoading(true);
@@ -149,6 +154,30 @@ require __DIR__ . '/layout/top.php';
         const closeMatchDetail = () => {
             setSelectedMatch(null);
             setMatchDetails(null);
+        };
+
+        // Open AI Prediction modal
+        const openPrediction = async (match) => {
+            setPredictionMatch(match);
+            setPredictionData(null);
+            setLoadingPrediction(true);
+            
+            try {
+                const res = await fetch(`/api/fixture-predictions?fixture=${match.fixture.id}`);
+                const data = await res.json();
+                setPredictionData(data);
+            } catch (err) {
+                console.error("Error fetching prediction:", err);
+                setPredictionData({ error: "Impossibile caricare la predizione" });
+            } finally {
+                setLoadingPrediction(false);
+            }
+        };
+
+        // Close AI Prediction modal
+        const closePrediction = () => {
+            setPredictionMatch(null);
+            setPredictionData(null);
         };
 
         // Fetch Bookmakers list (all available from DB)
@@ -299,7 +328,7 @@ require __DIR__ . '/layout/top.php';
                     ) : (
                         <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
                             {filteredEvents.map((evt) => (
-                                <LiveEventCard key={evt.fixture.id} event={evt} onClick={() => openMatchDetail(evt)} />
+                                <LiveEventCard key={evt.fixture.id} event={evt} onClick={() => openMatchDetail(evt)} onPredictionClick={openPrediction} />
                             ))}
                         </div>
                     )}
@@ -314,11 +343,21 @@ require __DIR__ . '/layout/top.php';
                         onClose={closeMatchDetail}
                     />
                 )}
+
+                {/* AI Prediction Modal */}
+                {predictionMatch && (
+                    <PredictionModal 
+                        match={predictionMatch}
+                        data={predictionData}
+                        loading={loadingPrediction}
+                        onClose={closePrediction}
+                    />
+                )}
             </div>
         );
     }
 
-    function LiveEventCard({ event, onClick }) {
+    function LiveEventCard({ event, onClick, onPredictionClick }) {
         const { fixture, league, teams, goals, score, odds } = event;
 
         // Determine scores from goals or score object
@@ -396,13 +435,13 @@ require __DIR__ . '/layout/top.php';
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            window.open(`/fixture-predictions?fixture=${fixture.id}`, '_blank');
+                            onPredictionClick(event);
                         }}
                         className="w-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 text-white px-4 py-3 rounded-xl border border-purple-500/30 hover:border-purple-500/50 transition-all flex items-center justify-center gap-2 group"
                     >
                         <i data-lucide="brain" className="w-5 h-5 text-purple-400 group-hover:text-purple-300"></i>
                         <span className="font-bold text-sm">AI Prediction</span>
-                        <i data-lucide="external-link" className="w-4 h-4 text-purple-400 group-hover:text-purple-300"></i>
+                        <i data-lucide="sparkles" className="w-4 h-4 text-purple-400 group-hover:text-purple-300"></i>
                     </button>
                 </div>
             </div>
@@ -485,8 +524,8 @@ require __DIR__ . '/layout/top.php';
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === tab.id
-                                        ? 'bg-accent text-black'
-                                        : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                                    ? 'bg-accent text-black'
+                                    : 'bg-white/5 text-slate-400 hover:bg-white/10'
                                     }`}
                             >
                                 <i data-lucide={tab.icon} className="w-4 h-4"></i>
@@ -625,6 +664,107 @@ require __DIR__ . '/layout/top.php';
                         </div>
                     );
                 })}
+            </div>
+        );
+    }
+
+    // AI Prediction Modal Component
+    function PredictionModal({ match, data, loading, onClose }) {
+        const { fixture, league, teams } = match;
+
+        React.useEffect(() => {
+            if (window.lucide) {
+                setTimeout(() => lucide.createIcons(), 100);
+            }
+        }, [data]);
+
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
+                <div className="glass w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-3xl border border-purple-500/30" onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 p-6 border-b border-purple-500/30">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <i data-lucide="brain" className="w-10 h-10 text-purple-400"></i>
+                                <div>
+                                    <h2 className="text-xl font-black text-white">AI Prediction</h2>
+                                    <p className="text-xs text-slate-400">{teams.home.name} vs {teams.away.name}</p>
+                                </div>
+                            </div>
+                            <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all">
+                                <i data-lucide="x" className="w-5 h-5 text-white"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+                        {loading ? (
+                            <div className="flex justify-center items-center h-64">
+                                <div className="w-12 h-12 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
+                            </div>
+                        ) : data && data.error ? (
+                            <div className="text-center text-red-400 py-12">
+                                <i data-lucide="alert-circle" className="w-16 h-16 mx-auto mb-4 opacity-50"></i>
+                                <p>{data.error}</p>
+                            </div>
+                        ) : data && data.response ? (
+                            <div className="space-y-6">
+                                {/* Prediction Advice */}
+                                {data.response.advice && (
+                                    <div className="glass p-6 rounded-xl border border-purple-500/20">
+                                        <h3 className="text-lg font-bold text-purple-400 mb-3 flex items-center gap-2">
+                                            <i data-lucide="lightbulb" className="w-5 h-5"></i>
+                                            Consiglio AI
+                                        </h3>
+                                        <p className="text-white leading-relaxed">{data.response.advice}</p>
+                                    </div>
+                                )}
+
+                                {/* Comparison Stats */}
+                                {data.response.comparison && (
+                                    <div className="glass p-6 rounded-xl border border-purple-500/20">
+                                        <h3 className="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2">
+                                            <i data-lucide="bar-chart-2" className="w-5 h-5"></i>
+                                            Confronto Squadre
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {Object.entries(data.response.comparison).map(([key, value]) => (
+                                                <div key={key} className="flex justify-between items-center">
+                                                    <span className="text-sm text-slate-400 capitalize">{key.replace(/_/g, ' ')}</span>
+                                                    <span className="text-sm font-bold text-white">{value}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Win Percentages */}
+                                {data.response.percent && (
+                                    <div className="glass p-6 rounded-xl border border-purple-500/20">
+                                        <h3 className="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2">
+                                            <i data-lucide="percent" className="w-5 h-5"></i>
+                                            Probabilità
+                                        </h3>
+                                        <div className="grid grid-cols-3 gap-4">
+                                            {Object.entries(data.response.percent).map(([key, value]) => (
+                                                <div key={key} className="text-center">
+                                                    <div className="text-3xl font-black text-purple-400 mb-1">{value}</div>
+                                                    <div className="text-xs text-slate-400 uppercase tracking-wider">{key}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="text-center text-slate-500 py-12">
+                                <i data-lucide="info" className="w-16 h-16 mx-auto mb-4 opacity-30"></i>
+                                <p>Nessuna predizione disponibile</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
         );
     }
