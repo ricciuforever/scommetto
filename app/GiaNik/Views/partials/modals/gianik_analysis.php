@@ -28,7 +28,13 @@ $event = $event ?? [];
 
             <div class="space-y-6">
                 <!-- Event Header -->
-                <div class="glass p-6 rounded-3xl border-white/5">
+                <div class="glass p-6 rounded-3xl border-white/5 relative">
+                    <?php if (isset($event['api_football'])): ?>
+                        <div class="absolute top-4 right-4 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[8px] font-black uppercase tracking-wider shadow-lg shadow-emerald-500/5">
+                             <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+                             Analisi Potenziata (Dati Live)
+                        </div>
+                    <?php endif; ?>
                     <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1"><?php echo htmlspecialchars($event['sport'] ?? 'Sport'); ?> - <?php echo htmlspecialchars($event['competition'] ?? ''); ?></div>
                     <div class="text-xl font-black italic uppercase text-white">
                         <?php echo htmlspecialchars($event['event'] ?? 'Evento'); ?>
