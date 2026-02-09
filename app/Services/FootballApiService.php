@@ -99,6 +99,11 @@ class FootballApiService
         return $this->request($url);
     }
 
+    public function fetchFixtureInjuries($fixtureId)
+    {
+        return $this->request("/injuries?fixture=$fixtureId");
+    }
+
     public function fetchFixtureDetails($id)
     {
         return $this->request("/fixtures?id=$id");
