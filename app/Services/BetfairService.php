@@ -148,6 +148,18 @@ class BetfairService
         }
 
         // Altrimenti proviamo il login interattivo/API Desktop (senza certificati)
+
+        // CHECK LOCK
+        $lockFile = sys_get_temp_dir() . '/betfair_login_lock';
+        if (file_exists($lockFile)) {
+            $lockTime = filemtime($lockFile);
+            if (time() - $lockTime < 900) { // 15 minuti di cooldown
+                $this->log("Login BLOCCATO preventivamente per cooldown (15min).");
+                return null;
+            }
+            unlink($lockFile);
+        }
+
         $this->log("Tentativo di login senza certificati (API Desktop)...");
         $loginUrl = 'https://identitysso.betfair.it/api/login';
 
@@ -159,6 +171,7 @@ class BetfairService
             'password' => $this->password
         ]));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        // curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Removed unsafe dev option
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             "X-Application: {$this->appKey}",
             "Content-Type: application/x-www-form-urlencoded",
@@ -178,8 +191,17 @@ class BetfairService
             return $this->sessionToken;
         }
 
-        if (isset($data['error']) && $data['error'] === 'STRONG_AUTH_CODE_REQUIRED') {
-            $this->log("ERRORE CRITICO: Autenticazione a 2 fattori (2FA) rilevata. L'API Desktop non può accedere senza codice. Soluzioni: 1. Configura i certificati SSL nel .env; 2. Disabilita temporaneamente la 2FA su Betfair.it; 3. Inserisci un token manualmente in " . $this->sessionFile);
+        // Gestione Errori Critici e Lock
+        if (isset($data['error'])) {
+            $criticalErrors = ['TEMPORARY_BAN_TOO_MANY_REQUESTS', 'ACCOUNT_PENDING_PASSWORD_CHANGE', 'ACCOUNT_LOCKED'];
+            if (in_array($data['error'], $criticalErrors)) {
+                $this->log("ERRORE CRITICO LOGIN: " . $data['error'] . ". Attivo cooldown di 15 minuti.");
+                touch($lockFile);
+            }
+
+            if ($data['error'] === 'STRONG_AUTH_CODE_REQUIRED') {
+                $this->log("ERRORE CRITICO: Autenticazione a 2 fattori (2FA) rilevata. L'API Desktop non può accedere senza codice. Soluzioni: 1. Configura i certificati SSL nel .env; 2. Disabilita temporaneamente la 2FA su Betfair.it; 3. Inserisci un token manualmente in " . $this->sessionFile);
+            }
         }
 
         $this->log("Login senza certificati fallito.", $data);

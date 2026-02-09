@@ -87,10 +87,11 @@ class SyncController
                 foreach ($catalogues['result'] as $cat) {
                     // Prefer Match Odds or main markets to keep data manageable
                     $mName = $cat['marketName'];
-                    $isMainMarket = (stripos($mName, 'Match Odds') !== false || stripos($mName, 'Moneyline') !== false || stripos($mName, 'Esito Finale') !== false || stripos($mName, 'Winner') !== false);
+                    $isMainMarket = (stripos($mName, 'Match Odds') !== false || stripos($mName, 'Moneyline') !== false || stripos($mName, 'Esito Finale') !== false || stripos($mName, 'Winner') !== false || stripos($mName, 'Head To Head') !== false || stripos($mName, 'Testa a Testa') !== false || stripos($mName, 'Match Betting') !== false);
 
                     // But if it's the only market for the event, take it
-                    if (!$isMainMarket && count($cat['runners']) > 3) continue;
+                    if (!$isMainMarket && count($cat['runners']) > 3)
+                        continue;
 
                     $mId = $cat['marketId'];
                     $allMarketIds[] = $mId;
@@ -182,8 +183,10 @@ class SyncController
             $stmt = $db->query("SELECT status, odds, stake FROM bets WHERE betfair_id IS NULL AND status IN ('won', 'lost')");
             $profit = 0;
             foreach ($stmt->fetchAll() as $b) {
-                if ($b['status'] === 'won') $profit += $b['stake'] * ($b['odds'] - 1);
-                else $profit -= $b['stake'];
+                if ($b['status'] === 'won')
+                    $profit += $b['stake'] * ($b['odds'] - 1);
+                else
+                    $profit -= $b['stake'];
             }
 
             // Calc Exposure

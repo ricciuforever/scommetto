@@ -108,13 +108,23 @@
                 </a>
                 <a href="/gemini-bets"
                     class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="history" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Giocate Gemini</span>
+                    <i data-lucide="history"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Giocate
+                        Gemini</span>
                 </a>
                 <a href="/gemini-predictions"
                     class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="crystal-ball" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Pronostici 7gg</span>
+                    <i data-lucide="crystal-ball"
+                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Pronostici
+                        7gg</span>
+                </a>
+                <a href="/gianik-live"
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="zap" class="w-4 h-4 text-slate-500 group-hover:text-warning transition-colors"></i>
+                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">GiaNik
+                        Live</span>
                 </a>
             </nav>
         </div>

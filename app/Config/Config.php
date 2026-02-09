@@ -106,10 +106,20 @@ class Config
     {
         static $pdo = null;
         if ($pdo === null) {
-            $dbPath = self::DATA_PATH . 'scommetto.sqlite';
-            $pdo = new \PDO("sqlite:" . $dbPath);
-            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-            $pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
+            // MySQL Configuration
+            $dsn = "mysql:host=localhost;dbname=scommetto;charset=utf8mb4";
+            $username = "root";
+            $password = "";
+
+            try {
+                $pdo = new \PDO($dsn, $username, $password);
+                $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+                $pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
+            } catch (\PDOException $e) {
+                // If MySQL fails, try SQLite as fallback or just log error
+                error_log("MySQL Connection failed: " . $e->getMessage());
+                throw $e;
+            }
         }
         return $pdo;
     }

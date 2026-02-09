@@ -24,7 +24,8 @@ class H2H
         $sql = "INSERT INTO h2h_records (team1_id, team2_id, h2h_json) 
                 VALUES (:t1, :t2, :h2h_json)
                 ON DUPLICATE KEY UPDATE 
-                h2h_json = VALUES(h2h_json), last_updated = CURRENT_TIMESTAMP";
+                h2h_json = VALUES(h2h_json), 
+                last_updated = CURRENT_TIMESTAMP";
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
@@ -56,7 +57,8 @@ class H2H
         $stmt = $this->db->prepare("SELECT last_updated FROM h2h_records WHERE team1_id = ? AND team2_id = ?");
         $stmt->execute([$t1, $t2]);
         $row = $stmt->fetch();
-        if (!$row) return true;
+        if (!$row)
+            return true;
         return (time() - strtotime($row['last_updated'])) > ($hours * 3600);
     }
 }
