@@ -27,11 +27,14 @@ require __DIR__ . '/layout/top.php';
         const [loading, setLoading] = useState(true);
         const [error, setError] = useState(null);
 
+        // Initial filters from URL
+        const getInitialFilter = (key) => new URLSearchParams(window.location.search).get(key) || '';
+
         // Filters State
         const [availableBookmakers, setAvailableBookmakers] = useState([]); // Bookmakers with live odds
-        const [selectedBookmaker, setSelectedBookmaker] = useState('');
-        const [selectedCountry, setSelectedCountry] = useState('');
-        const [selectedLeague, setSelectedLeague] = useState('');
+        const [selectedBookmaker, setSelectedBookmaker] = useState(getInitialFilter('bookmaker'));
+        const [selectedCountry, setSelectedCountry] = useState(getInitialFilter('country'));
+        const [selectedLeague, setSelectedLeague] = useState(getInitialFilter('league'));
 
         // Modal State
         const [selectedMatch, setSelectedMatch] = useState(null);
@@ -89,7 +92,7 @@ require __DIR__ . '/layout/top.php';
 
                         // Filter: only show matches that have live odds for the selected broker
                         // AND attach the odds in the format expected by LiveEventCard
-                        fixtures = fixtures.filter(f => oddsMap.has(f.fixture.id))
+                        fixtures = fixtures.filter(f => oddsMap.has(f.fixture.id) && oddsMap.get(f.fixture.id).length > 0)
                             .map(f => ({
                                 ...f,
                                 odds: [{
@@ -179,6 +182,17 @@ require __DIR__ . '/layout/top.php';
             setPredictionMatch(null);
             setPredictionData(null);
         };
+
+        // Update URL parameters when filters change
+        useEffect(() => {
+            const params = new URLSearchParams(window.location.search);
+            if (selectedBookmaker) params.set('bookmaker', selectedBookmaker); else params.delete('bookmaker');
+            if (selectedCountry) params.set('country', selectedCountry); else params.delete('country');
+            if (selectedLeague) params.set('league', selectedLeague); else params.delete('league');
+
+            const newRelativePathQuery = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+            window.history.replaceState(null, '', newRelativePathQuery);
+        }, [selectedBookmaker, selectedCountry, selectedLeague]);
 
         // Initial fetch and auto-refresh
         useEffect(() => {
@@ -319,10 +333,22 @@ require __DIR__ . '/layout/top.php';
                             <div className="w-8 h-8 border-4 border-accent/20 border-t-accent rounded-full animate-spin"></div>
                         </div>
                     ) : filteredEvents.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-64 text-slate-500">
+                        <div className="flex flex-col items-center justify-center h-64 text-slate-500 text-center px-4">
                             <LucideIcon name="radio" className="w-16 h-16 mb-4 opacity-30" />
-                            <p className="text-lg font-bold">Nessun evento live al momento</p>
-                            <p className="text-sm text-slate-600 mt-2">Prova a modificare i filtri o attendi nuovi match</p>
+                            <p className="text-lg font-bold">
+                                {selectedBookmaker ? `Nessun evento disponibile per il bookmaker selezionato` : `Nessun evento live al momento`}
+                            </p>
+                            <p className="text-sm text-slate-600 mt-2">
+                                {selectedBookmaker ? `Prova a cambiare bookmaker o attendi nuovi match con quote live` : `Prova a modificare i filtri o attendi nuovi match`}
+                            </p>
+                            {selectedBookmaker && (
+                                <button
+                                    onClick={() => setSelectedBookmaker('')}
+                                    className="mt-6 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition-all border border-white/10 text-white"
+                                >
+                                    Rimuovi filtro bookmaker
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
