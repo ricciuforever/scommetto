@@ -36,10 +36,11 @@ class Player
 
     public function save($playerData)
     {
-        $sql = "INSERT INTO players (id, name, firstname, lastname, age, nationality, height, weight, photo) 
-                VALUES (:id, :name, :firstname, :lastname, :age, :nationality, :height, :weight, :photo)
+        $sql = "INSERT INTO players (id, name, firstname, lastname, age, birth_date, birth_place, birth_country, nationality, height, weight, photo, injured) 
+                VALUES (:id, :name, :firstname, :lastname, :age, :birth_date, :birth_place, :birth_country, :nationality, :height, :weight, :photo, :injured)
                 ON DUPLICATE KEY UPDATE 
-                name = VALUES(name), age = VALUES(age), photo = VALUES(photo), last_updated = CURRENT_TIMESTAMP";
+                name = VALUES(name), age = VALUES(age), photo = VALUES(photo), 
+                injured = VALUES(injured), last_updated = CURRENT_TIMESTAMP";
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
@@ -48,10 +49,14 @@ class Player
             'firstname' => $playerData['firstname'] ?? '',
             'lastname' => $playerData['lastname'] ?? '',
             'age' => $playerData['age'] ?? null,
+            'birth_date' => $playerData['birth']['date'] ?? null,
+            'birth_place' => $playerData['birth']['place'] ?? null,
+            'birth_country' => $playerData['birth']['country'] ?? null,
             'nationality' => $playerData['nationality'] ?? '',
             'height' => $playerData['height'] ?? null,
             'weight' => $playerData['weight'] ?? null,
-            'photo' => $playerData['photo'] ?? null
+            'photo' => $playerData['photo'] ?? null,
+            'injured' => $playerData['injured'] ?? false
         ]);
     }
 

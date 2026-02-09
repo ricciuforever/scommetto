@@ -11,6 +11,7 @@ use App\Controllers\CountryController;
 use App\Controllers\LeagueController;
 use App\Controllers\SeasonController;
 use App\Controllers\TeamController;
+use App\Controllers\PlayerController;
 use App\Controllers\RoundController;
 use App\Controllers\FixtureController;
 use App\Controllers\FixtureStatsController;
@@ -38,6 +39,7 @@ try {
         '/leagues' => LeagueController::class,
         '/seasons' => SeasonController::class,
         '/teams' => TeamController::class,
+        '/players' => PlayerController::class,
         '/rounds' => RoundController::class,
         '/fixtures' => FixtureController::class,
         '/fixture-stats' => FixtureStatsController::class,
@@ -93,6 +95,8 @@ try {
         (new H2HController())->show();
     } elseif ($path === '/api/teams') {
         (new TeamController())->list();
+    } elseif ($path === '/api/players') {
+        (new PlayerController())->show();
     } elseif ($path === '/api/team/seasons') {
         (new TeamController())->seasons();
     } elseif ($path === '/api/team-stats') {
