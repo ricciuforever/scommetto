@@ -22,7 +22,8 @@ require __DIR__ . '/layout/top.php';
                     ATTIVO (30s)
                 </span>
             </div>
-            <button hx-get="/api/gianik/live" hx-target="#gianik-live-container" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/5 transition-all text-slate-400 hover:text-white">
+            <button hx-get="/api/gianik/live" hx-target="#gianik-live-container"
+                class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/5 transition-all text-slate-400 hover:text-white">
                 <i data-lucide="refresh-cw" class="w-5 h-5"></i>
             </button>
         </div>
@@ -33,10 +34,12 @@ require __DIR__ . '/layout/top.php';
         <div class="flex items-center justify-center p-20">
             <div class="flex flex-col items-center gap-4">
                 <i data-lucide="loader-2" class="w-12 h-12 text-accent animate-spin"></i>
-                <span class="text-xs font-black uppercase tracking-widest text-slate-500">Inizializzazione Dati Betfair...</span>
+                <span class="text-xs font-black uppercase tracking-widest text-slate-500">Inizializzazione Dati
+                    Betfair...</span>
             </div>
         </div>
     </div>
+    <div id="global-modal-container"></div>
 </div>
 
 <?php require __DIR__ . '/layout/bottom.php'; ?>
