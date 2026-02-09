@@ -102,6 +102,27 @@ try {
         (new FixtureInjuryController())->show();
     } elseif ($path === '/api/fixture-predictions') {
         (new FixturePredictionController())->show();
+    } elseif (preg_match('#^/api/fixtures/(\d+)/statistics$#', $path, $matches)) {
+        $_GET['fixture'] = $matches[1];
+        (new FixtureStatsController())->show();
+    } elseif (preg_match('#^/api/fixtures/(\d+)/events$#', $path, $matches)) {
+        $_GET['fixture'] = $matches[1];
+        (new FixtureEventController())->show();
+    } elseif (preg_match('#^/api/fixtures/(\d+)/lineups$#', $path, $matches)) {
+        $_GET['fixture'] = $matches[1];
+        (new FixtureLineupController())->show();
+    } elseif (preg_match('#^/api/fixtures/(\d+)/h2h$#', $path, $matches)) {
+        $fixtureId = $matches[1];
+        $fixtureModel = new \App\Models\Fixture();
+        $fixture = $fixtureModel->getById($fixtureId);
+        if ($fixture) {
+            $_GET['t1'] = $fixture['team_home_id'];
+            $_GET['t2'] = $fixture['team_away_id'];
+            (new H2HController())->show();
+        } else {
+            header('Content-Type: application/json');
+            echo json_encode(['response' => [], 'error' => 'Fixture not found']);
+        }
     } elseif ($path === '/api/h2h') {
         (new H2HController())->show();
     } elseif ($path === '/api/teams') {
