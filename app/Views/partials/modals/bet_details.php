@@ -67,9 +67,9 @@ elseif ($bet['status'] === 'lost')
 
                 <?php if (!empty($bet['notes'])): ?>
                     <div class="glass p-6 rounded-3xl border-white/5">
-                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Note di Sistema
+                        <div class="text-[10px] font-bold text-accent uppercase tracking-widest mb-2">Analisi Tecnica Gemini
                         </div>
-                        <div class="text-xs font-mono text-slate-400 bg-black/20 p-4 rounded-xl max-h-32 overflow-y-auto">
+                        <div class="text-sm italic text-slate-300 bg-black/20 p-4 rounded-xl max-h-48 overflow-y-auto leading-relaxed">
                             <?php echo nl2br(htmlspecialchars($bet['notes'])); ?>
                         </div>
                     </div>

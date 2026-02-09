@@ -35,7 +35,7 @@ class GeminiService
                 "REGOLE:\n" .
                 "1. Analizza sport, competizione e volumi.\n" .
                 "2. Suggerisci fino a 5 pronostici interessanti.\n" .
-                "3. Specifica l'advice (runner) e una breve motivazione.\n\n" .
+                "3. Specifica l'advice (runner) e una motivazione tecnica (motivation).\n\n" .
                 "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
                 "```json\n" .
                 "[\n" .
@@ -47,7 +47,8 @@ class GeminiService
                 "    \"advice\": \"Runner Name\",\n" .
                 "    \"odds\": 1.80,\n" .
                 "    \"confidence\": 85,\n" .
-                "    \"totalMatched\": 5000\n" .
+                "    \"totalMatched\": 5000,\n" .
+                "    \"motivation\": \"Spiegazione tecnica del perché questo pronostico è di valore.\"\n" .
                 "  }\n" .
                 "]\n" .
                 "```";

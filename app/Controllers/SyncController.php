@@ -199,6 +199,9 @@ class SyncController
         $prediction = $this->geminiService->analyze($topCandidates, $balance);
         $results['analyzed']++;
 
+        // Estrai l'analisi testuale (ragionamento) prima del blocco JSON
+        $reasoning = trim(preg_replace('/```json[\s\S]*?```/', '', $prediction));
+
         if (preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches)) {
             $betData = json_decode($matches[1], true);
             if ($betData && !empty($betData['marketId']) && !empty($betData['advice'])) {
@@ -247,7 +250,7 @@ class SyncController
 
                         if ($isSimulation) {
                             $status = 'placed';
-                            $note = '[SIMULAZIONE] Bet Virtuale';
+                            $note = $reasoning ?: '[SIMULAZIONE] Bet Virtuale';
                             $vBookieId = Config::getVirtualBookmakerId();
 
                             // Get bookmaker name for the ID
@@ -285,7 +288,8 @@ class SyncController
                                     'stake' => $betData['stake'],
                                     'betfair_id' => $res['instructionReports'][0]['betId'] ?? null,
                                     'status' => 'placed',
-                                    'bookmaker_name' => 'Betfair.it'
+                                    'bookmaker_name' => 'Betfair.it',
+                                    'notes' => $reasoning
                                 ]);
                                 echo "SCOMMESSA PIAZZATA: " . $event['event']['name'] . " - " . $betData['advice'] . " @ $finalPrice\n";
                             }

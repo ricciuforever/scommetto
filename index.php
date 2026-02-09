@@ -61,6 +61,16 @@ try {
         return;
     }
 
+    if ($path === '/gemini-bets') {
+        (new \App\Controllers\BetController())->index();
+        return;
+    }
+
+    if ($path === '/gemini-predictions') {
+        (new \App\Controllers\MatchController())->viewUpcomingPredictions();
+        return;
+    }
+
     // Intelligence Dashboard as Home
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||
