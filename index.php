@@ -71,6 +71,16 @@ try {
         return;
     }
 
+    if ($path === '/gianik-live') {
+        (new \App\Controllers\GiaNikController())->index();
+        return;
+    }
+
+    if ($path === '/api/gianik/live') {
+        (new \App\Controllers\GiaNikController())->live();
+        return;
+    }
+
     // Intelligence Dashboard as Home
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||

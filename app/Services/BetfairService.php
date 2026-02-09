@@ -509,7 +509,7 @@ class BetfairService
                 'marketBettingTypes' => ['ODDS']
             ],
             'maxResults' => $maxResults,
-            'marketProjection' => ['RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION', 'EVENT']
+            'marketProjection' => ['RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION', 'EVENT', 'COMPETITION']
         ]);
     }
 
