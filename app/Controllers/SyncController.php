@@ -86,10 +86,11 @@ class SyncController
             // 3. Fetch Market Catalogues in chunks
             $allMarketIds = [];
             $marketToEventMap = [];
+            $targetMarkets = ['MATCH_ODDS', 'WINNER', 'MONEYLINE', 'OVER_UNDER_25', 'BOTH_TEAMS_TO_SCORE'];
 
-            $eventChunks = array_chunk($allEventIds, 40);
+            $eventChunks = array_chunk($allEventIds, 10);
             foreach ($eventChunks as $chunk) {
-                $catalogues = $this->betfairService->getMarketCatalogues($chunk, 200);
+                $catalogues = $this->betfairService->getMarketCatalogues($chunk, 1000, $targetMarkets);
                 if (empty($catalogues['result']))
                     continue;
 
@@ -377,6 +378,8 @@ class SyncController
             $now = new \DateTime();
             $end = (new \DateTime())->add(new \DateInterval('P2D')); // Prossime 48 ore
 
+            $targetMarkets = ['MATCH_ODDS', 'WINNER', 'MONEYLINE', 'OVER_UNDER_25', 'BOTH_TEAMS_TO_SCORE'];
+
             foreach ($sports['result'] as $sport) {
                 $sportId = $sport['eventType']['id'];
                 $sportName = $sport['eventType']['name'];
@@ -397,35 +400,31 @@ class SyncController
 
                 $eventIds = array_map(fn($e) => $e['event']['id'], $events['result']);
 
-                // Recupera cataloghi mercati (es. Match Odds)
-                $catalogues = $this->betfairService->request('listMarketCatalogue', [
-                    'filter' => [
-                        'eventIds' => $eventIds,
-                        'marketBettingTypes' => ['ODDS']
-                    ],
-                    'maxResults' => 200,
-                    'marketProjection' => ['RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION', 'EVENT', 'COMPETITION']
-                ]);
+                // Recupera cataloghi mercati in chunk per sport
+                $eventChunks = array_chunk($eventIds, 10);
+                foreach ($eventChunks as $chunk) {
+                    $catalogues = $this->betfairService->getMarketCatalogues($chunk, 1000, $targetMarkets);
 
-                if (empty($catalogues['result']))
-                    continue;
-
-                foreach ($catalogues['result'] as $cat) {
-                    // Filtriamo per mercati principali o con volume
-                    $mName = $cat['marketName'];
-                    if (stripos($mName, 'Match Odds') === false && stripos($mName, 'Esito Finale') === false && count($cat['runners']) > 3)
+                    if (empty($catalogues['result']))
                         continue;
 
-                    $mId = $cat['marketId'];
-                    $allMarketIds[] = $mId;
-                    $marketToEventMap[$mId] = [
-                        'sport' => $sportName,
-                        'sportId' => $sportId,
-                        'event' => $cat['event'],
-                        'marketName' => $cat['marketName'],
-                        'competition' => $cat['competition'] ?? null,
-                        'runners' => $cat['runners']
-                    ];
+                    foreach ($catalogues['result'] as $cat) {
+                        // Filtriamo per mercati principali o con volume
+                        $mName = $cat['marketName'];
+                        if (stripos($mName, 'Match Odds') === false && stripos($mName, 'Esito Finale') === false && count($cat['runners']) > 3)
+                            continue;
+
+                        $mId = $cat['marketId'];
+                        $allMarketIds[] = $mId;
+                        $marketToEventMap[$mId] = [
+                            'sport' => $sportName,
+                            'sportId' => $sportId,
+                            'event' => $cat['event'],
+                            'marketName' => $cat['marketName'],
+                            'competition' => $cat['competition'] ?? null,
+                            'runners' => $cat['runners']
+                        ];
+                    }
                 }
             }
 
