@@ -169,6 +169,7 @@ class OddsController
         try {
             $api = new FootballApiService();
             // Discovery via /odds/live
+            // Nota: /odds/live non raggruppa per bookmaker nella response standard
             $apiResult = $api->fetchLiveOdds();
 
             $bookmakers = [];
@@ -176,8 +177,10 @@ class OddsController
 
             if (!empty($apiResult['response'])) {
                 foreach ($apiResult['response'] as $match) {
-                    if (!empty($match['bookmakers'])) {
-                        foreach ($match['bookmakers'] as $bk) {
+                    // Alcuni provider potrebbero includere bookmakers, altri usano la chiave 'odds'
+                    $bks = $match['bookmakers'] ?? [];
+                    if (!empty($bks)) {
+                        foreach ($bks as $bk) {
                             if (!isset($seenIds[$bk['id']])) {
                                 $bookmakers[] = [
                                     'id' => $bk['id'],
@@ -190,8 +193,8 @@ class OddsController
                 }
             }
 
-            // FALLBACK: Se la discovery live è vuota (comune se non ci sono match "premium" live),
-            // restituiamo una lista dei bookmaker più comuni dal database.
+            // FALLBACK: Se la discovery live è vuota (molto comune con API-Football live odds),
+            // restituiamo una lista dei bookmaker più comuni/importanti dal database.
             if (empty($bookmakers)) {
                 $model = new \App\Models\Bookmaker();
                 $all = $model->getAll();
