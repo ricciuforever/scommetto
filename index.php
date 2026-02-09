@@ -18,6 +18,7 @@ use App\Controllers\FixtureEventController;
 use App\Controllers\FixtureLineupController;
 use App\Controllers\FixturePlayerStatsController;
 use App\Controllers\FixtureInjuryController;
+use App\Controllers\FixturePredictionController;
 use App\Controllers\H2HController;
 use App\Controllers\TeamStatsController;
 use App\Controllers\VenueController;
@@ -44,6 +45,7 @@ try {
         '/fixture-lineups' => FixtureLineupController::class,
         '/fixture-player-stats' => FixturePlayerStatsController::class,
         '/fixture-injuries' => FixtureInjuryController::class,
+        '/fixture-predictions' => FixturePredictionController::class,
         '/h2h' => H2HController::class,
         '/team-stats' => TeamStatsController::class,
         '/venues' => VenueController::class,
@@ -85,6 +87,8 @@ try {
         (new FixturePlayerStatsController())->show();
     } elseif ($path === '/api/fixture-injuries') {
         (new FixtureInjuryController())->show();
+    } elseif ($path === '/api/fixture-predictions') {
+        (new FixturePredictionController())->show();
     } elseif ($path === '/api/h2h') {
         (new H2HController())->show();
     } elseif ($path === '/api/teams') {
