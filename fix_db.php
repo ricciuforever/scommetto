@@ -310,6 +310,13 @@ try {
           `prediction_raw` TEXT
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
+    "fixture_predictions" => "CREATE TABLE IF NOT EXISTS `fixture_predictions` (
+          `fixture_id` INT PRIMARY KEY,
+          `prediction_json` JSON,
+          `comparison_json` JSON,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
     "player_seasons" => "CREATE TABLE IF NOT EXISTS `player_seasons` (
           `year` INT PRIMARY KEY,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

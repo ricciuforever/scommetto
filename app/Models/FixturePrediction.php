@@ -22,8 +22,8 @@ class FixturePrediction
             fixture_id INT PRIMARY KEY,
             prediction_json JSON,
             comparison_json JSON,
-            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON DUPLICATE KEY UPDATE last_updated = CURRENT_TIMESTAMP
-        )";
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
         $this->db->exec($sql);
     }
 
