@@ -22,6 +22,11 @@ require __DIR__ . '/layout/top.php';
         const [selectedCountry, setSelectedCountry] = useState('');
         const [selectedLeague, setSelectedLeague] = useState('');
 
+        // Modal State
+        const [selectedMatch, setSelectedMatch] = useState(null);
+        const [matchDetails, setMatchDetails] = useState(null);
+        const [loadingDetails, setLoadingDetails] = useState(false);
+
         // Fetch Live Data (matches only, odds are fetched separately if bookmaker selected)
         const fetchLive = async () => {
             setLoading(true);
@@ -99,6 +104,51 @@ require __DIR__ . '/layout/top.php';
             } finally {
                 setLoading(false);
             }
+        };
+
+        // Fetch comprehensive match details
+        const fetchMatchDetails = async (fixtureId) => {
+            setLoadingDetails(true);
+            try {
+                // Fetch multiple endpoints in parallel
+                const [statsRes, eventsRes, lineupsRes, h2hRes] = await Promise.all([
+                    fetch(`/api/fixtures/${fixtureId}/statistics`),
+                    fetch(`/api/fixtures/${fixtureId}/events`),
+                    fetch(`/api/fixtures/${fixtureId}/lineups`),
+                    fetch(`/api/fixtures/${fixtureId}/h2h?last=5`)
+                ]);
+
+                const [stats, events, lineups, h2h] = await Promise.all([
+                    statsRes.json(),
+                    eventsRes.json(),
+                    lineupsRes.json(),
+                    h2hRes.json()
+                ]);
+
+                setMatchDetails({
+                    statistics: stats.response || [],
+                    events: events.response || [],
+                    lineups: lineups.response || [],
+                    h2h: h2h.response || []
+                });
+            } catch (err) {
+                console.error("Error fetching match details:", err);
+            } finally {
+                setLoadingDetails(false);
+            }
+        };
+
+        // Open match detail modal
+        const openMatchDetail = (match) => {
+            setSelectedMatch(match);
+            setMatchDetails(null);
+            fetchMatchDetails(match.fixture.id);
+        };
+
+        // Close match detail modal
+        const closeMatchDetail = () => {
+            setSelectedMatch(null);
+            setMatchDetails(null);
         };
 
         // Fetch Bookmakers list (all available from DB)
@@ -249,16 +299,26 @@ require __DIR__ . '/layout/top.php';
                     ) : (
                         <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
                             {filteredEvents.map((evt) => (
-                                <LiveEventCard key={evt.fixture.id} event={evt} />
+                                <LiveEventCard key={evt.fixture.id} event={evt} onClick={() => openMatchDetail(evt)} />
                             ))}
                         </div>
                     )}
                 </div>
+
+                {/* Match Detail Modal */}
+                {selectedMatch && (
+                    <MatchDetailModal
+                        match={selectedMatch}
+                        details={matchDetails}
+                        loading={loadingDetails}
+                        onClose={closeMatchDetail}
+                    />
+                )}
             </div>
         );
     }
 
-    function LiveEventCard({ event }) {
+    function LiveEventCard({ event, onClick }) {
         const { fixture, league, teams, goals, score, odds } = event;
 
         // Determine scores from goals or score object
@@ -271,7 +331,7 @@ require __DIR__ . '/layout/top.php';
             : null;
 
         return (
-            <div className="glass p-6 rounded-2xl border border-white/10 hover:border-accent/30 transition-all group cursor-pointer">
+            <div onClick={onClick} className="glass p-6 rounded-2xl border border-white/10 hover:border-accent/30 transition-all group cursor-pointer hover:scale-[1.02]">
                 {/* League Header */}
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
                     <div className="flex items-center gap-3">
@@ -332,6 +392,251 @@ require __DIR__ . '/layout/top.php';
                 )}
             </div>
         )
+    }
+
+    // Match Detail Modal Component
+    function MatchDetailModal({ match, details, loading, onClose }) {
+        const [activeTab, setActiveTab] = React.useState('stats');
+        const { fixture, league, teams, goals, score } = match;
+        
+        const homeScore = goals?.home ?? score?.fulltime?.home ?? 0;
+        const awayScore = goals?.away ?? score?.fulltime?.away ?? 0;
+
+        // Refresh icons when modal opens or tab changes
+        React.useEffect(() => {
+            if (window.lucide) {
+                setTimeout(() => lucide.createIcons(), 100);
+            }
+        }, [activeTab]);
+
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
+                <div className="glass w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-3xl border border-white/10" onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="bg-gradient-to-r from-accent/20 to-transparent p-6 border-b border-white/10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                {league.logo && <img src={league.logo} alt={league.name} className="w-10 h-10 object-contain" />}
+                                <div>
+                                    <h2 className="text-xl font-black text-white">{league.name}</h2>
+                                    <p className="text-xs text-slate-400">{league.country} • Round {fixture.league?.round || 'N/A'}</p>
+                                </div>
+                            </div>
+                            <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all">
+                                <i data-lucide="x" className="w-5 h-5 text-white"></i>
+                            </button>
+                        </div>
+
+                        {/* Score Display */}
+                        <div className="grid grid-cols-3 gap-4 items-center">
+                            <div className="flex items-center gap-3 justify-end">
+                                {teams.home.logo && <img src={teams.home.logo} alt={teams.home.name} className="w-16 h-16 object-contain" />}
+                                <span className="text-lg font-bold text-white">{teams.home.name}</span>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-5xl font-black text-white font-mono">
+                                    {homeScore} - {awayScore}
+                                </div>
+                                <div className="mt-2 inline-flex items-center gap-2 bg-danger/10 text-danger px-4 py-2 rounded-lg border border-danger/20">
+                                    <span className="animate-pulse w-2 h-2 rounded-full bg-danger"></span>
+                                    <span className="text-sm font-bold">{fixture.status.short} {fixture.status.elapsed}'</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-lg font-bold text-white">{teams.away.name}</span>
+                                {teams.away.logo && <img src={teams.away.logo} alt={teams.away.name} className="w-16 h-16 object-contain" />}
+                            </div>
+                        </div>
+
+                        {/* Venue Info */}
+                        {fixture.venue && (
+                            <div className="mt-4 flex items-center justify-center gap-4 text-xs text-slate-400">
+                                <span><i data-lucide="map-pin" className="w-3 h-3 inline mr-1"></i>{fixture.venue.name || 'N/A'}</span>
+                                <span>•</span>
+                                <span><i data-lucide="map" className="w-3 h-3 inline mr-1"></i>{fixture.venue.city || 'N/A'}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Tabs */}
+                    <div className="flex gap-2 p-4 border-b border-white/10 overflow-x-auto">
+                        {[
+                            { id: 'stats', label: 'Statistiche', icon: 'bar-chart-2' },
+                            { id: 'events', label: 'Eventi', icon: 'activity' },
+                            { id: 'lineups', label: 'Formazioni', icon: 'users' },
+                            { id: 'h2h', label: 'Testa a Testa', icon: 'git-compare' }
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === tab.id
+                                        ? 'bg-accent text-black'
+                                        : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                                }`}
+                            >
+                                <i data-lucide={tab.icon} className="w-4 h-4"></i>
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-6 overflow-y-auto max-h-[calc(90vh-400px)]">
+                        {loading ? (
+                            <div className="flex justify-center items-center h-64">
+                                <div className="w-12 h-12 border-4 border-accent/20 border-t-accent rounded-full animate-spin"></div>
+                            </div>
+                        ) : (
+                            <>
+                                {activeTab === 'stats' && <StatsTab stats={details?.statistics} teams={teams} />}
+                                {activeTab === 'events' && <EventsTab events={details?.events} teams={teams} />}
+                                {activeTab === 'lineups' && <LineupsTab lineups={details?.lineups} />}
+                                {activeTab === 'h2h' && <H2HTab h2h={details?.h2h} teams={teams} />}
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Stats Tab Component
+    function StatsTab({ stats, teams }) {
+        if (!stats || stats.length === 0) {
+            return <div className="text-center text-slate-500 py-12">Nessuna statistica disponibile</div>;
+        }
+
+        const homeStats = stats[0]?.statistics || [];
+        const awayStats = stats[1]?.statistics || [];
+
+        return (
+            <div className="space-y-4">
+                {homeStats.map((stat, idx) => {
+                    const awayStat = awayStats[idx];
+                    const homeValue = parseInt(stat.value) || 0;
+                    const awayValue = parseInt(awayStat?.value) || 0;
+                    const total = homeValue + awayValue || 1;
+                    const homePercent = (homeValue / total) * 100;
+                    const awayPercent = (awayValue / total) * 100;
+
+                    return (
+                        <div key={idx} className="glass p-4 rounded-xl">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-bold text-white">{stat.value || 0}</span>
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">{stat.type}</span>
+                                <span className="text-sm font-bold text-white">{awayStat?.value || 0}</span>
+                            </div>
+                            <div className="flex h-2 rounded-full overflow-hidden bg-white/5">
+                                <div className="bg-accent" style={{ width: `${homePercent}%` }}></div>
+                                <div className="bg-danger" style={{ width: `${awayPercent}%` }}></div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    }
+
+    // Events Tab Component
+    function EventsTab({ events, teams }) {
+        if (!events || events.length === 0) {
+            return <div className="text-center text-slate-500 py-12">Nessun evento disponibile</div>;
+        }
+
+        const getEventIcon = (type) => {
+            switch(type) {
+                case 'Goal': return '⚽';
+                case 'Card': return '🟨';
+                case 'subst': return '🔄';
+                default: return '•';
+            }
+        };
+
+        return (
+            <div className="space-y-3">
+                {events.map((event, idx) => (
+                    <div key={idx} className={`glass p-4 rounded-xl flex items-center gap-4 ${event.team.id === teams.home.id ? 'flex-row' : 'flex-row-reverse'}`}>
+                        <div className="text-2xl">{getEventIcon(event.type)}</div>
+                        <div className={event.team.id === teams.home.id ? 'text-left' : 'text-right'}>
+                            <p className="text-sm font-bold text-white">{event.player.name}</p>
+                            <p className="text-xs text-slate-400">{event.detail} {event.comments ? `(${event.comments})` : ''}</p>
+                        </div>
+                        <div className="ml-auto bg-accent/20 text-accent px-3 py-1 rounded-lg text-sm font-bold">
+                            {event.time.elapsed}'
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    // Lineups Tab Component
+    function LineupsTab({ lineups }) {
+        if (!lineups || lineups.length === 0) {
+            return <div className="text-center text-slate-500 py-12">Nessuna formazione disponibile</div>;
+        }
+
+        return (
+            <div className="grid grid-cols-2 gap-6">
+                {lineups.map((lineup, idx) => (
+                    <div key={idx} className="glass p-4 rounded-xl">
+                        <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/10">
+                            {lineup.team.logo && <img src={lineup.team.logo} alt={lineup.team.name} className="w-8 h-8 object-contain" />}
+                            <div>
+                                <p className="text-sm font-bold text-white">{lineup.team.name}</p>
+                                <p className="text-xs text-slate-400">{lineup.formation}</p>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <p className="text-xs font-bold text-accent uppercase tracking-wider mb-2">Starting XI</p>
+                            {lineup.startXI?.map((player, pidx) => (
+                                <div key={pidx} className="flex items-center gap-2 text-sm">
+                                    <span className="w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center text-xs font-bold">
+                                        {player.player.number}
+                                    </span>
+                                    <span className="text-white">{player.player.name}</span>
+                                    <span className="text-xs text-slate-500 ml-auto">{player.player.pos}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    // H2H Tab Component
+    function H2HTab({ h2h, teams }) {
+        if (!h2h || h2h.length === 0) {
+            return <div className="text-center text-slate-500 py-12">Nessuno storico disponibile</div>;
+        }
+
+        return (
+            <div className="space-y-3">
+                {h2h.map((match, idx) => (
+                    <div key={idx} className="glass p-4 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs text-slate-400">{new Date(match.fixture.date).toLocaleDateString()}</span>
+                            <span className="text-xs text-slate-400">{match.league.name}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                {match.teams.home.logo && <img src={match.teams.home.logo} alt={match.teams.home.name} className="w-6 h-6 object-contain" />}
+                                <span className="text-sm font-bold text-white">{match.teams.home.name}</span>
+                            </div>
+                            <div className="text-lg font-black text-white font-mono">
+                                {match.goals.home} - {match.goals.away}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-white">{match.teams.away.name}</span>
+                                {match.teams.away.logo && <img src={match.teams.away.logo} alt={match.teams.away.name} className="w-6 h-6 object-contain" />}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
