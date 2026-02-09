@@ -880,4 +880,31 @@ class MatchController
     {
         return $this->getPredictions(100);
     }
+
+    public function viewUpcomingPredictions()
+    {
+        try {
+            // Se non è una richiesta HTMX, carica l'intera pagina (layout)
+            if (!isset($_SERVER['HTTP_HX_REQUEST'])) {
+                $file = __DIR__ . '/../Views/gemini_predictions_page.php';
+                if (file_exists($file)) {
+                    require $file;
+                    return;
+                }
+            }
+
+            $predictions = [];
+            $cacheFile = Config::DATA_PATH . 'betfair_hot_predictions.json';
+
+            if (file_exists($cacheFile)) {
+                $data = json_decode(file_get_contents($cacheFile), true);
+                $predictions = $data['response'] ?? [];
+                $timestamp = $data['timestamp'] ?? time();
+            }
+
+            require __DIR__ . '/../Views/partials/gemini_predictions.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore Caricamento Pronostici: ' . $e->getMessage() . '</div>';
+        }
+    }
 }

@@ -101,103 +101,15 @@
                     <i data-lucide="home" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
                     <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Home</span>
                 </a>
-                <a href="/countries"
+                <a href="/gemini-bets"
                     class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="globe" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span
-                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Nazioni</span>
+                    <i data-lucide="history" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Giocate Gemini</span>
                 </a>
-                <a href="/leagues"
+                <a href="/gemini-predictions"
                     class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="trophy"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span
-                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Campionati</span>
-                </a>
-                <a href="/teams"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="users" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span
-                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Squadre</span>
-                </a>
-                <a href="/rounds"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="layers"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span
-                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Giornate</span>
-                </a>
-                <a href="/fixtures"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="calendar-days"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span
-                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Calendario</span>
-                </a>
-                <a href="/h2h"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="swords"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Testa a
-                        Testa</span>
-                </a>
-                <a href="/fixture-stats"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="bar-chart-2"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Statistiche
-                        Match</span>
-                </a>
-                <a href="/fixture-events"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="zap" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Eventi
-                        Match</span>
-                </a>
-                <a href="/fixture-lineups"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="users" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span
-                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Formazioni</span>
-                </a>
-                <a href="/fixture-player-stats"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="user-check"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Performance
-                        Player</span>
-                </a>
-                <a href="/fixture-injuries"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="shield-alert"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span
-                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Infortuni</span>
-                </a>
-                <a href="/fixture-predictions"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="brain" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Pronostici
-                        AI</span>
-                </a>
-                <a href="/seasons"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="calendar"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span
-                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Stagioni</span>
-                </a>
-                <a href="/players"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="users" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span
-                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Giocatori</span>
-                </a>
-                <a href="/venues"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="building-2"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Stadi</span>
+                    <i data-lucide="crystal-ball" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Pronostici 7gg</span>
                 </a>
             </nav>
         </div>

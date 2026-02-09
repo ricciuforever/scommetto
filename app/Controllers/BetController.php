@@ -151,6 +151,16 @@ class BetController
         }
     }
 
+    public function index()
+    {
+        $file = __DIR__ . '/../Views/gemini_bets.php';
+        if (file_exists($file)) {
+            require $file;
+        } else {
+            $this->viewTracker();
+        }
+    }
+
     public function viewTracker()
     {
         try {
