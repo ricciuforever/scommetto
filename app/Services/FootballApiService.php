@@ -37,6 +37,15 @@ class FootballApiService
         return $this->request('/leagues/seasons');
     }
 
+    public function fetchPlayersSeasons($playerId = null)
+    {
+        $url = "/players/seasons";
+        if ($playerId) {
+            $url .= "?player=$playerId";
+        }
+        return $this->request($url);
+    }
+
     public function fetchLeagues($params = [])
     {
         $queryString = http_build_query($params);

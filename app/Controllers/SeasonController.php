@@ -36,8 +36,8 @@ class SeasonController
 
             $seasons = $model->getAll();
             // Filtra solo anni sensati (es. >= 2010 e <= anno attuale + 2)
-            $thisYear = (int)date('Y');
-            $seasons = array_filter($seasons, function($y) use ($thisYear) {
+            $thisYear = (int) date('Y');
+            $seasons = array_filter($seasons, function ($y) use ($thisYear) {
                 return $y >= 2010 && $y <= ($thisYear + 1);
             });
             $seasons = array_values($seasons);
@@ -61,10 +61,18 @@ class SeasonController
         $api = new FootballApiService();
         $model = new Season();
 
+        // Sync general seasons
         $data = $api->fetchSeasons();
-
         if (isset($data['response']) && is_array($data['response'])) {
             foreach ($data['response'] as $year) {
+                $model->save($year);
+            }
+        }
+
+        // Sync player-specific seasons (more specific for stats)
+        $pData = $api->fetchPlayersSeasons();
+        if (isset($pData['response']) && is_array($pData['response'])) {
+            foreach ($pData['response'] as $year) {
                 $model->save($year);
             }
         }
