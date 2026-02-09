@@ -31,9 +31,8 @@ class OddsController
             $api = new FootballApiService();
             $params = [];
 
-            if (!empty($_GET['bookmaker'])) {
-                $params['bookmaker'] = $_GET['bookmaker'];
-            }
+            // Nota: L'endpoint /odds/live non supporta il filtro 'bookmaker' direttamente.
+            // Lo filtriamo lato frontend/controller se necessario.
             if (!empty($_GET['bet'])) {
                 $params['bet'] = $_GET['bet'];
             }
@@ -51,8 +50,20 @@ class OddsController
                 return;
             }
 
+            $response = $apiResult['response'] ?? [];
+
+            // Filtraggio locale per bookmaker se richiesto
+            if (!empty($_GET['bookmaker'])) {
+                $bookmakerId = (int)$_GET['bookmaker'];
+                foreach ($response as &$item) {
+                    if (isset($item['bookmakers'])) {
+                        $item['bookmakers'] = array_values(array_filter($item['bookmakers'], fn($bk) => $bk['id'] == $bookmakerId));
+                    }
+                }
+            }
+
             // Response structure: response[]: { fixture: {}, league: {}, teams: {}, bookmakers: [] }
-            echo json_encode(['response' => $apiResult['response'] ?? []]);
+            echo json_encode(['response' => $response]);
 
         } catch (\Throwable $e) {
             http_response_code(500);
