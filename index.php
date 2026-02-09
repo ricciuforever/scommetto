@@ -61,12 +61,21 @@ try {
         return;
     }
 
+    // Intelligence Dashboard as Home
     if (
         $path === '/' || $path === '/index.php' || $path === '' ||
-        in_array(rtrim($path, '/'), ['/dashboard', '/leagues', '/settings']) ||
+        in_array(rtrim($path, '/'), ['/intelligence'])
+    ) {
+        (new \App\Controllers\IntelligenceController())->index();
+    }
+    // Old Dashboard and other routes via MatchController (main.php wrapper)
+    elseif (
+        in_array(rtrim($path, '/'), ['/leagues', '/settings']) ||
         preg_match('#^/(match|team|player)/(\d+)$#', $path)
     ) {
         (new MatchController())->index();
+    } elseif ($path === '/api/intelligence/live') {
+        (new \App\Controllers\IntelligenceController())->live();
     } elseif ($path === '/api/live') {
         (new MatchController())->getLive();
     } elseif ($path === '/api/countries') {

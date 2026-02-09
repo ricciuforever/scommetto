@@ -96,12 +96,10 @@
             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-4 px-4">Menu
                 Principale</span>
             <nav class="space-y-1">
-                <a href="/dashboard"
+                <a href="/"
                     class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="layout-dashboard"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span
-                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Dashboard</span>
+                    <i data-lucide="home" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Home</span>
                 </a>
                 <a href="/countries"
                     class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
