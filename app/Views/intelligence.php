@@ -33,6 +33,7 @@ require __DIR__ . '/layout/top.php';
         // Filters State
         const [availableBookmakers, setAvailableBookmakers] = useState([]); // Bookmakers with live odds
         const [selectedBookmaker, setSelectedBookmaker] = useState(getInitialFilter('bookmaker'));
+        const [balance, setBalance] = useState(null);
         const [selectedCountry, setSelectedCountry] = useState(getInitialFilter('country'));
         const [selectedLeague, setSelectedLeague] = useState(getInitialFilter('league'));
 
@@ -46,10 +47,22 @@ require __DIR__ . '/layout/top.php';
         const [predictionData, setPredictionData] = useState(null);
         const [loadingPrediction, setLoadingPrediction] = useState(false);
 
+        // Fetch Balance
+        const fetchBalance = async () => {
+            try {
+                const res = await fetch('/api/betfair/balance');
+                const data = await res.json();
+                if (!data.error) setBalance(data);
+            } catch (err) {
+                console.error("Error fetching balance:", err);
+            }
+        };
+
         // Fetch Live Data
         const fetchLive = async () => {
             setLoading(true);
             setError(null);
+            fetchBalance();
             try {
                 // 1. Fetch live fixtures (always needed for scores, status, etc.)
                 let fixturesUrl = '/api/intelligence/live';
@@ -279,24 +292,33 @@ require __DIR__ . '/layout/top.php';
                 {/* Horizontal Filters Bar */}
                 <div className="glass rounded-2xl border border-white/10 p-6">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        {/* Stats Summary */}
-                        <div className="glass bg-gradient-to-br from-accent/10 to-transparent rounded-xl p-4 border border-accent/20">
-                            <div className="flex items-center gap-2 mb-3">
-                                <LucideIcon name="radio" className="w-5 h-5 text-accent" />
-                                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Live Now</h3>
+                        {/* Portfolio & Stats Summary */}
+                        <div className="glass bg-gradient-to-br from-accent/10 to-transparent rounded-xl p-4 border border-accent/20 md:col-span-1">
+                            <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
+                                <div className="flex items-center gap-2">
+                                    <LucideIcon name="radio" className="w-4 h-4 text-accent" />
+                                    <h3 className="text-[10px] font-bold text-white uppercase tracking-wider">Live Now</h3>
+                                </div>
+                                <span className="text-lg font-black text-white">{filteredEvents.length}</span>
                             </div>
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[10px] text-slate-400">Partite</span>
-                                    <span className="text-lg font-black text-white">{filteredEvents.length}</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[10px] text-slate-400">Bookmakers</span>
-                                    <span className="text-sm font-bold text-accent">{availableBookmakers.length}</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[10px] text-slate-400">Nazioni</span>
-                                    <span className="text-sm font-bold text-accent">{availableCountries.length}</span>
+                            <div className="space-y-1">
+                                {balance && (
+                                    <>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] text-slate-400 uppercase font-bold">Disponibile</span>
+                                            <span className="text-xs font-black text-white">{Number(balance.available).toFixed(2)}€</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] text-slate-400 uppercase font-bold">Profitto</span>
+                                            <span className={`text-xs font-black ${balance.profit_percent >= 0 ? 'text-success' : 'text-danger'}`}>
+                                                {balance.profit_percent >= 0 ? '+' : ''}{Number(balance.profit_percent).toFixed(1)}%
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
+                                <div className="flex items-center justify-between opacity-60">
+                                    <span className="text-[9px] text-slate-500 uppercase font-bold">Broker</span>
+                                    <span className="text-[9px] font-bold text-accent">{availableBookmakers.length}</span>
                                 </div>
                             </div>
                         </div>
@@ -451,7 +473,7 @@ require __DIR__ . '/layout/top.php';
         }, [odds]);
 
         return (
-            <div onClick={onClick} className="glass p-6 rounded-2xl border border-white/10 hover:border-accent/30 transition-all group cursor-pointer hover:scale-[1.02]">
+            <div onClick={onClick} className="glass p-6 rounded-2xl border border-white/10 hover:border-accent/30 transition-all group cursor-pointer hover:scale-[1.02] flex flex-col">
                 {/* League Header */}
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
                     <div className="flex items-center gap-3">
@@ -510,6 +532,7 @@ require __DIR__ . '/layout/top.php';
                                         <div key={idx} className="bg-black/40 hover:bg-accent/10 p-2 rounded-xl border border-white/10 transition-all text-center">
                                             <span className="block text-[8px] text-slate-500 uppercase">{odd.value}</span>
                                             <span className="block text-sm font-black text-accent">{odd.odd}</span>
+                                            <span className="block text-[7px] text-slate-600 font-bold mt-1">Win: {(Number(odd.odd) * 10).toFixed(2)}€</span>
                                         </div>
                                     ))}
                                 </div>
