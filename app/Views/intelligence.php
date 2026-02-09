@@ -31,54 +31,63 @@ require __DIR__ . '/layout/top.php';
         const [predictionData, setPredictionData] = useState(null);
         const [loadingPrediction, setLoadingPrediction] = useState(false);
 
-        // Fetch Live Data (matches only, odds are fetched separately if bookmaker selected)
+        // Fetch Live Data
         const fetchLive = async () => {
             setLoading(true);
             try {
-                // Fetch live fixtures
+                // 1. Fetch live fixtures (always needed for scores, status, etc.)
                 let fixturesUrl = '/api/intelligence/live';
                 const fixturesParams = new URLSearchParams();
                 if (selectedLeague) fixturesParams.append('league', selectedLeague);
 
                 const fixturesRes = await fetch(`${fixturesUrl}?${fixturesParams.toString()}`);
                 const fixturesData = await fixturesRes.json();
-
                 let fixtures = fixturesData.response || [];
 
-                // Fetch active bookmakers for live matches
+                // 2. Fetch active bookmakers for live matches
+                let bookmakers = [];
                 try {
                     const activeBkRes = await fetch('/api/odds/active-bookmakers');
                     const activeBkData = await activeBkRes.json();
-                    setAvailableBookmakers(activeBkData.response || []);
+                    bookmakers = activeBkData.response || [];
+                    setAvailableBookmakers(bookmakers);
                 } catch (err) {
                     console.error("Error fetching active bookmakers:", err);
                 }
 
-                // If a bookmaker is selected, fetch odds for each fixture
+                // 3. If a bookmaker is selected, filter events and attach live odds
                 if (selectedBookmaker && fixtures.length > 0) {
-                    const fixturesWithOdds = await Promise.all(
-                        fixtures.map(async (fixture) => {
-                            try {
-                                const oddsRes = await fetch(`/api/odds?fixture=${fixture.fixture.id}&bookmaker=${selectedBookmaker}`);
-                                const oddsData = await oddsRes.json();
+                    try {
+                        // Fetch all live odds for the selected bookmaker in one call
+                        const oddsParams = new URLSearchParams();
+                        oddsParams.append('bookmaker', selectedBookmaker);
+                        if (selectedLeague) oddsParams.append('league', selectedLeague);
 
-                                // Extract bookmaker odds from response
-                                if (oddsData.response && oddsData.response.length > 0) {
-                                    const fixtureOdds = oddsData.response[0];
-                                    if (fixtureOdds.bookmakers && fixtureOdds.bookmakers.length > 0) {
-                                        return {
-                                            ...fixture,
-                                            odds: fixtureOdds.bookmakers[0].bets // First bookmaker's bets
-                                        };
-                                    }
-                                }
-                            } catch (err) {
-                                console.error(`Error fetching odds for fixture ${fixture.fixture.id}:`, err);
+                        const oddsRes = await fetch(`/api/odds/live?${oddsParams.toString()}`);
+                        const oddsData = await oddsRes.json();
+
+                        const oddsMap = new Map();
+                        (oddsData.response || []).forEach(item => {
+                            // Support both item.odds (flat) and item.bookmakers[0].bets (nested)
+                            const bets = item.odds || (item.bookmakers && item.bookmakers.length > 0 ? item.bookmakers[0].bets : null);
+                            if (bets) {
+                                oddsMap.set(item.fixture.id, bets);
                             }
-                            return fixture;
-                        })
-                    );
-                    fixtures = fixturesWithOdds;
+                        });
+
+                        // Filter: only show matches that have live odds for the selected broker
+                        // AND attach the odds in the format expected by LiveEventCard
+                        fixtures = fixtures.filter(f => oddsMap.has(f.fixture.id))
+                            .map(f => ({
+                                ...f,
+                                odds: [{
+                                    name: bookmakers.find(b => b.id == selectedBookmaker)?.name || 'Bookmaker',
+                                    bets: oddsMap.get(f.fixture.id)
+                                }]
+                            }));
+                    } catch (err) {
+                        console.error("Error fetching live odds for bookmaker:", err);
+                    }
                 }
 
                 setLiveEvents(fixtures);
