@@ -630,16 +630,23 @@ class BetfairService
     }
 
     /**
-     * Get Market Catalogues for a list of Event IDs
+     * Get Market Catalogues for a list of Event IDs with filtering and sorting
      */
-    public function getMarketCatalogues(array $eventIds, int $maxResults = 50)
+    public function getMarketCatalogues(array $eventIds, int $maxResults = 50, array $marketTypeCodes = [], string $sort = 'MAXIMUM_TRADED')
     {
+        $filter = [
+            'eventIds' => $eventIds,
+            'marketBettingTypes' => ['ODDS']
+        ];
+
+        if (!empty($marketTypeCodes)) {
+            $filter['marketTypeCodes'] = $marketTypeCodes;
+        }
+
         return $this->request('listMarketCatalogue', [
-            'filter' => [
-                'eventIds' => $eventIds,
-                'marketBettingTypes' => ['ODDS']
-            ],
+            'filter' => $filter,
             'maxResults' => $maxResults,
+            'sort' => $sort,
             'marketProjection' => ['RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION', 'EVENT', 'COMPETITION', 'EVENT_TYPE']
         ]);
     }
