@@ -65,14 +65,23 @@ class SyncController
 
             $sportIds = array_map(fn($s) => $s['eventType']['id'], $sports['result']);
 
-            // 2. Fetch ALL live events for these sports
-            $events = $this->betfairService->getLiveEvents($sportIds);
-            if (empty($events['result'])) {
+            // 2. Fetch ALL live events for these sports (Batched)
+            $allEvents = [];
+            $sportChunks = array_chunk($sportIds, 5); // Limit per call
+
+            foreach ($sportChunks as $chunk) {
+                $fe = $this->betfairService->getLiveEvents($chunk);
+                if (!empty($fe['result'])) {
+                    $allEvents = array_merge($allEvents, $fe['result']);
+                }
+            }
+
+            if (empty($allEvents)) {
                 echo "Nessun evento live trovato.\n";
                 return;
             }
 
-            $allEventIds = array_map(fn($e) => $e['event']['id'], $events['result']);
+            $allEventIds = array_map(fn($e) => $e['event']['id'], $allEvents);
 
             // 3. Fetch Market Catalogues in chunks
             $allMarketIds = [];
