@@ -47,7 +47,23 @@ class FixtureLineupController
             }
 
             $lineups = $model->getByFixture($fixtureId);
-            echo json_encode(['response' => $lineups]);
+
+            // Format data to match API structure
+            $formatted = [];
+            foreach ($lineups as $lineup) {
+                $formatted[] = [
+                    'team' => [
+                        'id' => $lineup['team_id'],
+                        'name' => $lineup['team_name'],
+                        'logo' => $lineup['team_logo']
+                    ],
+                    'formation' => $lineup['formation'],
+                    'startXI' => $lineup['start_xi_json'] ?? [],
+                    'substitutes' => $lineup['substitutes_json'] ?? []
+                ];
+            }
+
+            echo json_encode(['response' => $formatted]);
 
         } catch (\Throwable $e) {
             http_response_code(500);

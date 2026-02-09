@@ -398,7 +398,7 @@ require __DIR__ . '/layout/top.php';
     function MatchDetailModal({ match, details, loading, onClose }) {
         const [activeTab, setActiveTab] = React.useState('stats');
         const { fixture, league, teams, goals, score } = match;
-        
+
         const homeScore = goals?.home ?? score?.fulltime?.home ?? 0;
         const awayScore = goals?.away ?? score?.fulltime?.away ?? 0;
 
@@ -469,11 +469,10 @@ require __DIR__ . '/layout/top.php';
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                                    activeTab === tab.id
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === tab.id
                                         ? 'bg-accent text-black'
                                         : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                                }`}
+                                    }`}
                             >
                                 <i data-lucide={tab.icon} className="w-4 h-4"></i>
                                 {tab.label}
@@ -545,7 +544,7 @@ require __DIR__ . '/layout/top.php';
         }
 
         const getEventIcon = (type) => {
-            switch(type) {
+            switch (type) {
                 case 'Goal': return '⚽';
                 case 'Card': return '🟨';
                 case 'subst': return '🔄';
@@ -579,30 +578,42 @@ require __DIR__ . '/layout/top.php';
 
         return (
             <div className="grid grid-cols-2 gap-6">
-                {lineups.map((lineup, idx) => (
-                    <div key={idx} className="glass p-4 rounded-xl">
-                        <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/10">
-                            {lineup.team.logo && <img src={lineup.team.logo} alt={lineup.team.name} className="w-8 h-8 object-contain" />}
-                            <div>
-                                <p className="text-sm font-bold text-white">{lineup.team.name}</p>
-                                <p className="text-xs text-slate-400">{lineup.formation}</p>
+                {lineups.map((lineup, idx) => {
+                    // Safety checks
+                    if (!lineup || !lineup.team) return null;
+
+                    return (
+                        <div key={idx} className="glass p-4 rounded-xl">
+                            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/10">
+                                {lineup.team.logo && <img src={lineup.team.logo} alt={lineup.team.name} className="w-8 h-8 object-contain" />}
+                                <div>
+                                    <p className="text-sm font-bold text-white">{lineup.team.name || 'N/A'}</p>
+                                    <p className="text-xs text-slate-400">{lineup.formation || 'N/A'}</p>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <p className="text-xs font-bold text-accent uppercase tracking-wider mb-2">Starting XI</p>
+                                {lineup.startXI && lineup.startXI.length > 0 ? (
+                                    lineup.startXI.map((player, pidx) => (
+                                        <div key={pidx} className="flex items-center gap-2 text-sm">
+                                            <span className="w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center text-xs font-bold">
+                                                {player.player?.number || '?'}
+                                            </span>
+                                            <span className="text-white">{player.player?.name || 'Unknown'}</span>
+                                            <span className="text-xs text-slate-500 ml-auto">{player.player?.pos || ''}</span>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-xs text-slate-500">Nessun giocatore disponibile</p>
+                                )}
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <p className="text-xs font-bold text-accent uppercase tracking-wider mb-2">Starting XI</p>
-                            {lineup.startXI?.map((player, pidx) => (
-                                <div key={pidx} className="flex items-center gap-2 text-sm">
-                                    <span className="w-6 h-6 rounded-full bg-accent/20 text-accent flex items-center justify-center text-xs font-bold">
-                                        {player.player.number}
-                                    </span>
-                                    <span className="text-white">{player.player.name}</span>
-                                    <span className="text-xs text-slate-500 ml-auto">{player.player.pos}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
+        );
+    }
+            </div >
         );
     }
 
