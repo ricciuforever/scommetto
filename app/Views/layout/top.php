@@ -1,5 +1,26 @@
 <?php
 // app/Views/layout/top.php
+use App\Config\Config;
+
+// Rilevamento Admin tramite Basic Auth (stessa logica di SystemController)
+$auth_user = $_SERVER['PHP_AUTH_USER'] ?? '';
+$auth_pw = $_SERVER['PHP_AUTH_PW'] ?? '';
+
+if (empty($auth_user)) {
+    if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $auth_data = explode(':', base64_decode(substr($_SERVER['HTTP_AUTHORIZATION'], 6)), 2);
+        if (count($auth_data) === 2) {
+            list($auth_user, $auth_pw) = $auth_data;
+        }
+    } elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        $auth_data = explode(':', base64_decode(substr($_SERVER['REDIRECT_HTTP_AUTHORIZATION'], 6)), 2);
+        if (count($auth_data) === 2) {
+            list($auth_user, $auth_pw) = $auth_data;
+        }
+    }
+}
+
+$isAdmin = ($auth_user === trim(Config::get('ADMIN_USER', 'admin')) && $auth_pw === trim(Config::get('ADMIN_PASS', 'admin')));
 ?>
 <!DOCTYPE html>
 <html lang="it" class="dark">
@@ -200,6 +221,20 @@
                     <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Stadi</span>
                 </a>
             </nav>
+
+            <?php if ($isAdmin): ?>
+                <div class="mt-8">
+                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-4 px-4">Gestione</span>
+                    <nav class="space-y-1">
+                        <a href="/settings"
+                            class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                            <i data-lucide="shield-check"
+                                class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
+                            <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Admin SaaS</span>
+                        </a>
+                    </nav>
+                </div>
+            <?php endif; ?>
         </div>
 
         <div class="p-4 border-t border-white/10">
