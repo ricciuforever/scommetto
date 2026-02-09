@@ -21,6 +21,7 @@ class GiaNikDatabase
 
     private function ensureSchema()
     {
+        // 1. Ensure table exists
         $this->connection->exec("CREATE TABLE IF NOT EXISTS bets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             market_id TEXT,
@@ -38,6 +39,27 @@ class GiaNikDatabase
             settled_at DATETIME,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
+
+        // 2. Ensure all columns exist (Self-Repair)
+        $requiredColumns = [
+            'profit' => 'REAL DEFAULT 0',
+            'settled_at' => 'DATETIME',
+            'motivation' => 'TEXT',
+            'type' => "TEXT DEFAULT 'virtual'"
+        ];
+
+        $stmt = $this->connection->query("PRAGMA table_info(bets)");
+        $existingColumns = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
+
+        foreach ($requiredColumns as $col => $definition) {
+            if (!in_array($col, $existingColumns)) {
+                try {
+                    $this->connection->exec("ALTER TABLE bets ADD COLUMN $col $definition");
+                } catch (\Exception $e) {
+                    // Ignore if already exists or other sqlite issues
+                }
+            }
+        }
     }
 
     public static function getInstance()
