@@ -266,17 +266,18 @@ class FootballApiService
         return $this->request("/odds/bets");
     }
 
-    public function fetchPlayerProfiles($params)
+    public function fetchPlayerProfiles($params = [])
     {
         $queryString = http_build_query($params);
         return $this->request("/players/profiles?$queryString");
     }
 
-    public function fetchPlayers($params)
+    public function fetchPlayerTeams($playerId)
     {
-        $queryString = http_build_query($params);
-        return $this->request("/players?$queryString");
+        return $this->request("/players/teams?player=$playerId");
     }
+
+
 
     public function fetchStatus()
     {

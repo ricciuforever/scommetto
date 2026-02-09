@@ -12,12 +12,14 @@ require __DIR__ . '/layout/top.php';
     function PlayerModal({ player, onClose }) {
         const [stats, setStats] = useState([]);
         const [loadingStats, setLoadingStats] = useState(false);
-        const [activeTab, setActiveTab] = useState('overview'); // overview, stats
+        const [career, setCareer] = useState([]);
+        const [loadingCareer, setLoadingCareer] = useState(false);
+        const [activeTab, setActiveTab] = useState('overview'); // overview, stats, career
 
         useEffect(() => {
             if (player) {
+                // Fetch Stats
                 setLoadingStats(true);
-                // Default to current year, or let the backend decide
                 fetch(`/api/player-season-stats?player=${player.id}`)
                     .then(res => res.json())
                     .then(data => {
@@ -28,77 +30,122 @@ require __DIR__ . '/layout/top.php';
                         console.error(err);
                         setLoadingStats(false);
                     });
+                
+                // Fetch Career
+                setLoadingCareer(true);
+                fetch(`/api/player-teams?player=${player.id}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        setCareer(data.response || []);
+                        setLoadingCareer(false);
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        setLoadingCareer(false);
+                    });
             }
         }, [player]);
 
         if (!player) return null;
 
-        // Helper to sum stats if multiple teams/leagues (optional, or just show the first/primary)
-        // For simplicity, we show the first entry or map them
-        const renderStats = () => {
-            if (loadingStats) return <div className="text-center py-8"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto"></div></div>;
-            if (!stats.length) return <div className="text-center py-8 text-slate-500 italic">Nessuna statistica disponibile per la stagione corrente.</div>;
+        // Render Career
+        const renderCareer = () => {
+            if (loadingCareer) return <div className="text-center py-8"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto"></div></div>;
+            if (!career.length) return <div className="text-center py-8 text-slate-500 italic">Nessuna informazione sulla carriera disponibile.</div>;
 
             return (
-                <div className="space-y-6 mt-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                    {stats.map((stat, idx) => (
-                        <div key={idx} className="bg-white/5 rounded-xl p-4 border border-white/5">
-                            <div className="flex items-center gap-3 mb-4 border-b border-white/5 pb-2">
-                                <img src={stat.team?.logo || stat.team_logo} className="w-8 h-8 object-contain" alt="Team" />
-                                <div>
-                                    <div className="text-sm font-bold text-white">{stat.team?.name || 'Team'}</div>
-                                    <div className="text-[10px] text-slate-400">{stat.league?.name || 'League'} ({stat.season})</div>
-                                </div>
-                                {stat.games?.rating && (
-                                    <div className={`ml-auto px-2 py-1 rounded text-xs font-black ${parseFloat(stat.games.rating) >= 7 ? 'bg-success text-slate-900' : 'bg-slate-700 text-white'}`}>
-                                        {parseFloat(stat.games.rating).toFixed(1)}
-                                    </div>
-                                )}
+                <div className="space-y-4 mt-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {career.map((item, idx) => (
+                        <div key={idx} className="bg-white/5 rounded-xl p-4 border border-white/5 flex items-center gap-4 hover:bg-white/10 transition-colors">
+                            <div className="w-12 h-12 bg-white/10 rounded-lg p-2 flex items-center justify-center">
+                                <img src={item.team_logo} className="w-full h-full object-contain" alt={item.team_name} />
                             </div>
-
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="text-center bg-black/20 rounded-lg p-2">
-                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Presenze</div>
-                                    <div className="text-lg font-black text-white">{stat.games?.appearences || 0}</div>
-                                    <div className="text-[9px] text-slate-600">{stat.games?.minutes || 0}' min</div>
-                                </div>
-                                <div className="text-center bg-black/20 rounded-lg p-2">
-                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Gol</div>
-                                    <div className="text-lg font-black text-accent">{stat.goals?.total || 0}</div>
-                                    <div className="text-[9px] text-slate-600">Assists: {stat.goals?.assists || 0}</div>
-                                </div>
-                                <div className="text-center bg-black/20 rounded-lg p-2">
-                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Passaggi</div>
-                                    <div className="text-lg font-black text-white">{stat.passes?.total || 0}</div>
-                                    <div className="text-[9px] text-slate-600">Acc: {stat.passes?.accuracy || 0}%</div>
-                                </div>
-                                <div className="text-center bg-black/20 rounded-lg p-2">
-                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Tiri</div>
-                                    <div className="text-lg font-black text-white">{stat.shots?.total || 0}</div>
-                                    <div className="text-[9px] text-slate-600">In porta: {stat.shots?.on || 0}</div>
+                            <div className="flex-1">
+                                <h4 className="text-sm font-bold text-white">{item.team_name}</h4>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                    {(item.seasons || []).map(year => (
+                                        <span key={year} className="text-[10px] bg-accent/10 text-accent px-1.5 py-0.5 rounded font-bold border border-accent/20">
+                                            {year}
+                                        </span>
+                                    ))}
                                 </div>
                             </div>
-
-                            <div className="grid grid-cols-3 gap-2 mt-2">
-                                <div className="bg-black/20 p-2 rounded text-center">
-                                    <span className="block text-[9px] text-slate-500 uppercase">Dribbling</span>
-                                    <span className="text-xs font-bold text-white">{stat.dribbles?.success || 0}</span>
+                            {item.team_country && (
+                                <div className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded uppercase tracking-wider font-bold">
+                                    {item.team_country}
                                 </div>
-                                <div className="bg-black/20 p-2 rounded text-center">
-                                    <span className="block text-[9px] text-slate-500 uppercase">Tackle</span>
-                                    <span className="text-xs font-bold text-white">{stat.tackles?.total || 0}</span>
-                                </div>
-                                <div className="bg-black/20 p-2 rounded text-center">
-                                    <span className="block text-[9px] text-slate-500 uppercase">Duelli Vinti</span>
-                                    <span className="text-xs font-bold text-white">{stat.duels?.won || 0}</span>
-                                </div>
-                            </div>
+                            )}
                         </div>
                     ))}
                 </div>
             );
         };
 
+        // Helper to sum stats if multiple teams/leagues
+        const renderStats = () => {
+            if (loadingStats) return <div className="text-center py-8"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto"></div></div>;
+            if (!stats.length) return <div className="text-center py-8 text-slate-500 italic">Nessuna statistica disponibile per la stagione corrente.</div>;
+            
+            return (
+                 <div className="space-y-6 mt-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                     {stats.map((stat, idx) => (
+                         <div key={idx} className="bg-white/5 rounded-xl p-4 border border-white/5">
+                             <div className="flex items-center gap-3 mb-4 border-b border-white/5 pb-2">
+                                 <img src={stat.team?.logo || stat.team_logo} className="w-8 h-8 object-contain" alt="Team" />
+                                 <div>
+                                     <div className="text-sm font-bold text-white">{stat.team?.name || 'Team'}</div>
+                                     <div className="text-[10px] text-slate-400">{stat.league?.name || 'League'} ({stat.season})</div>
+                                 </div>
+                                 {stat.games?.rating && (
+                                     <div className={`ml-auto px-2 py-1 rounded text-xs font-black ${parseFloat(stat.games.rating) >= 7 ? 'bg-success text-slate-900' : 'bg-slate-700 text-white'}`}>
+                                         {parseFloat(stat.games.rating).toFixed(1)}
+                                     </div>
+                                 )}
+                             </div>
+                             
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                 <div className="text-center bg-black/20 rounded-lg p-2">
+                                     <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Presenze</div>
+                                     <div className="text-lg font-black text-white">{stat.games?.appearences || 0}</div>
+                                     <div className="text-[9px] text-slate-600">{stat.games?.minutes || 0}' min</div>
+                                 </div>
+                                 <div className="text-center bg-black/20 rounded-lg p-2">
+                                     <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Gol</div>
+                                     <div className="text-lg font-black text-accent">{stat.goals?.total || 0}</div>
+                                     <div className="text-[9px] text-slate-600">Assists: {stat.goals?.assists || 0}</div>
+                                 </div>
+                                 <div className="text-center bg-black/20 rounded-lg p-2">
+                                     <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Passaggi</div>
+                                     <div className="text-lg font-black text-white">{stat.passes?.total || 0}</div>
+                                     <div className="text-[9px] text-slate-600">Acc: {stat.passes?.accuracy || 0}%</div>
+                                 </div>
+                                 <div className="text-center bg-black/20 rounded-lg p-2">
+                                     <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Tiri</div>
+                                     <div className="text-lg font-black text-white">{stat.shots?.total || 0}</div>
+                                     <div className="text-[9px] text-slate-600">In porta: {stat.shots?.on || 0}</div>
+                                 </div>
+                             </div>
+
+                             <div className="grid grid-cols-3 gap-2 mt-2">
+                                 <div className="bg-black/20 p-2 rounded text-center">
+                                     <span className="block text-[9px] text-slate-500 uppercase">Dribbling</span>
+                                     <span className="text-xs font-bold text-white">{stat.dribbles?.success || 0}</span>
+                                 </div>
+                                 <div className="bg-black/20 p-2 rounded text-center">
+                                     <span className="block text-[9px] text-slate-500 uppercase">Tackle</span>
+                                     <span className="text-xs font-bold text-white">{stat.tackles?.total || 0}</span>
+                                 </div>
+                                 <div className="bg-black/20 p-2 rounded text-center">
+                                     <span className="block text-[9px] text-slate-500 uppercase">Duelli Vinti</span>
+                                     <span className="text-xs font-bold text-white">{stat.duels?.won || 0}</span>
+                                 </div>
+                             </div>
+                         </div>
+                     ))}
+                 </div>
+             );
+        };
+        
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                 <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={onClose}></div>
@@ -167,6 +214,12 @@ require __DIR__ . '/layout/top.php';
                                 >
                                     Statistiche Stagione
                                 </button>
+                                <button
+                                    onClick={() => setActiveTab('career')}
+                                    className={`pb-2 text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'career' ? 'text-accent border-b-2 border-accent' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    Carriera
+                                </button>
                             </div>
 
                             <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
@@ -200,8 +253,10 @@ require __DIR__ . '/layout/top.php';
                                             </div>
                                         </div>
                                     </div>
-                                ) : (
+                                ) : activeTab === 'stats' ? (
                                     renderStats()
+                                ) : (
+                                    renderCareer()
                                 )}
                             </div>
                         </div>

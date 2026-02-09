@@ -100,6 +100,8 @@ try {
         (new PlayerController())->show();
     } elseif ($path === '/api/player-season-stats') {
         (new PlayerSeasonStatsController())->show();
+    } elseif ($path === '/api/player-teams') {
+        (new PlayerController())->teams();
     } elseif ($path === '/api/team/seasons') {
         (new TeamController())->seasons();
     } elseif ($path === '/api/squads') {

@@ -178,6 +178,15 @@ try {
           PRIMARY KEY (`fixture_id`, `team_id`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
+    "player_career" => "CREATE TABLE IF NOT EXISTS `player_career` (
+          `player_id` INT,
+          `team_id` INT,
+          `seasons_json` LONGTEXT COMMENT 'Array of seasons played',
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`player_id`, `team_id`),
+          FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
     "fixture_player_stats" => "CREATE TABLE IF NOT EXISTS `fixture_player_stats` (
           `fixture_id` INT,
           `team_id` INT,

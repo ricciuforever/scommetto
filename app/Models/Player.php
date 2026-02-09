@@ -86,4 +86,33 @@ class Player
         $stmt->execute([$playerId]);
         return $stmt->fetchAll();
     }
+
+    public function saveCareer($playerId, $careerData)
+    {
+        $sql = "INSERT INTO player_career (player_id, team_id, seasons_json) 
+                VALUES (:pid, :tid, :seasons)
+                ON DUPLICATE KEY UPDATE seasons_json = VALUES(seasons_json), last_updated = CURRENT_TIMESTAMP";
+        $stmt = $this->db->prepare($sql);
+
+        foreach ($careerData as $item) {
+            $stmt->execute([
+                'pid' => $playerId,
+                'tid' => $item['team']['id'],
+                'seasons' => json_encode($item['seasons'])
+            ]);
+        }
+    }
+
+    public function getCareer($playerId)
+    {
+        $sql = "SELECT pc.*, t.name as team_name, t.logo as team_logo, t.country as team_country 
+                FROM player_career pc
+                JOIN teams t ON pc.team_id = t.id
+                WHERE pc.player_id = ?
+                ORDER BY JSON_EXTRACT(pc.seasons_json, '$[0]') DESC";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$playerId]);
+        return $stmt->fetchAll();
+    }
 }

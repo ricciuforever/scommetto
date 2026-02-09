@@ -64,4 +64,58 @@ class PlayerController
             echo json_encode(['error' => $e->getMessage()]);
         }
     }
+    /**
+     * Ritorna la lista delle squadre in cui il giocatore ha militato (Carriera)
+     */
+    public function teams()
+    {
+        header('Content-Type: application/json');
+        try {
+            $playerId = $_GET['player'] ?? null;
+            if (!$playerId) {
+                echo json_encode(['error' => 'Player ID richiesto']);
+                return;
+            }
+
+            $model = new Player();
+            $career = $model->getCareer($playerId);
+
+            // Se non abbiamo dati, sincronizziamo
+            // Oppure possiamo verificare se è necessario refresh (implementeremo logica refresh in futuro se serve)
+            if (empty($career)) {
+                $this->syncTeams($playerId);
+                $career = $model->getCareer($playerId);
+            }
+
+            // Decodifichiamo i JSON per il frontend
+            foreach ($career as &$item) {
+                $item['seasons'] = json_decode($item['seasons_json']);
+                unset($item['seasons_json']);
+            }
+
+            echo json_encode(['response' => $career]);
+
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    private function syncTeams($playerId)
+    {
+        $api = new FootballApiService();
+        $model = new Player();
+        $teamModel = new \App\Models\Team(); // Assicurarsi che Team model esista e sia importato
+
+        $data = $api->fetchPlayerTeams($playerId);
+
+        if (isset($data['response']) && is_array($data['response'])) {
+            foreach ($data['response'] as $item) {
+                // Salviamo le info base della squadra se non le abbiamo
+                $teamModel->save($item['team']);
+            }
+            // Salviamo la carriera
+            $model->saveCareer($playerId, $data['response']);
+        }
+    }
 }
