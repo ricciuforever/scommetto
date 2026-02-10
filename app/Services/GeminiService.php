@@ -74,7 +74,7 @@ class GeminiService
                 "6. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
                 "7. SOGLIA DI CONFIDENZA: Suggerisci l'operazione SOLO se la tua 'confidence' è pari o superiore all'80%. Se è inferiore, non scommettere sul mercato.\n" .
                 "8. REGOLE CALCIO (MULTI-ENTRY): Se le condizioni cambiano durante il match, puoi rientrare con nuove scommesse. Massimo 4 puntate totali per match: 2 nel Primo Tempo e 2 nel Secondo Tempo. Ogni ingresso deve avere confidence >= 80%.\n" .
-                "9. EVITA QUOTE INSIGNIFICANTI: Ignora quote inferiori a 1.25. Non hanno valore tecnico.\n" .
+                "9. QUOTA MINIMA E VALORE: Non accettare mai quote inferiori a 1.25. Se un evento ha confidenza >= 80% ma la quota attuale è più bassa (es. 1.10 - 1.20), puoi comunque suggerire di puntare a 1.25 (Puntata a Quota Fissa). In tal caso, imposta 'odds' a 1.25 nel JSON. L'ordine rimarrà in attesa sul mercato.\n" .
                 "10. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
                 "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
                 "```json\n" .
@@ -98,7 +98,7 @@ class GeminiService
                 "3. Se nessun evento è convincente (risk/reward scarso), non scegliere nulla.\n" .
                 "4. NON INVENTARE QUOTE: usa solo quelle presenti nel JSON per il runner scelto.\n" .
                 "5. Stake: 1-5% del portfolio.\n" .
-                "6. EVITA QUOTE INSIGNIFICANTI: Ignora quote inferiori a 1.25. Puntare su una quota 1.10 o inferiore è considerato un errore di gestione del rischio.\n" .
+                "6. QUOTA MINIMA: Ignora quote inferiori a 1.25. Se un evento è eccezionale ma la quota è bassa, puoi puntare a 1.25 (Puntata a Quota Fissa) forzando il campo 'odds' a 1.25.\n" .
                 "7. Se per uno sport non hai dati statistici (ma solo quote), sii più prudente e cerca solo 'Value Bets' evidenti.\n\n" .
                 "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
                 "```json\n" .
