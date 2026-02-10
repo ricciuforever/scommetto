@@ -61,12 +61,14 @@ class GeminiService
             $prompt = "Sei un ANALISTA ELITE e TRADER di Betfair. Il tuo compito è analizzare un EVENTO LIVE con i suoi molteplici mercati e decidere l'operazione migliore.\n\n" .
                 $balanceText .
                 "DATI EVENTO E MERCATI:\n" . json_encode($candidates[0]) . "\n\n" .
-                "DATI STATISTICI AVANZATI (Se disponibili):\n" . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili") . "\n\n" .
+                "DATI STATISTICI AVANZATI (Se disponibili):\n" .
+                "Calcio: " . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili") . "\n" .
+                "Basket: " . (isset($candidates[0]['api_basketball']) ? json_encode($candidates[0]['api_basketball']) : "Non disponibili") . "\n\n" .
                 "REGOLE RIGIDE:\n" .
                 "1. Analizza TUTTI i mercati forniti (Match Odds, Double Chance, varie linee di Under/Over, BTTS).\n" .
                 "2. Scegli l'operazione che offre il miglior rapporto rischio/rendimento. Non sei obbligato a scegliere il mercato principale se un altro (es. Over 1.5) è più sicuro o profittevole.\n" .
                 "3. Decidi lo STAKE (in Euro) da puntare. Hai piena libertà di arrivare fino al 5% del Budget Disponibile Virtuale (minimo 2€).\n" .
-                "4. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE (tiri, possesso, cartellini, formazioni) se forniti.\n" .
+                "4. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE. Per il Basket guarda attentamente a tiri totali, rimbalzi, assist e percentuali dal campo se forniti.\n" .
                 "5. Usa la CLASSIFICA e i PRONOSTICI esterni (predictions) per validare la tua scelta.\n" .
                 "6. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
                 "7. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
