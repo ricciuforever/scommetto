@@ -74,7 +74,7 @@ class GeminiService
                 "6. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
                 "7. SOGLIA DI CONFIDENZA: Suggerisci l'operazione SOLO se la tua 'confidence' è pari o superiore all'80%. Se è inferiore, non scommettere sul mercato.\n" .
                 "8. REGOLE CALCIO (MULTI-ENTRY): Se le condizioni cambiano durante il match, puoi rientrare con nuove scommesse. Massimo 4 puntate totali per match: 2 nel Primo Tempo e 2 nel Secondo Tempo. Ogni ingresso deve avere confidence >= 80%.\n" .
-                "9. QUOTA MINIMA E VALORE: Non accettare mai quote inferiori a 1.25. Se un evento ha confidenza >= 80% ma la quota attuale è più bassa (es. 1.10 - 1.20), puoi comunque suggerire di puntare a 1.25 (Puntata a Quota Fissa). In tal caso, imposta 'odds' a 1.25 nel JSON. L'ordine rimarrà in attesa sul mercato.\n" .
+                "9. QUOTA MINIMA E VALORE: 1.25 è la tua quota MINIMA di ingresso. Se la quota attuale del mercato è superiore a 1.25, prendila così com'è. Se invece la quota attuale è inferiore (es. 1.10 - 1.20) ma hai una confidenza >= 80%, puoi suggerire di piazzare un ordine a 1.25 (Quota Minima Accettabile). In questo caso, forza il campo 'odds' a 1.25 nel JSON. L'ordine rimarrà in attesa (unmatched) sul mercato finché non viene raggiunto il prezzo.\n" .
                 "10. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
                 "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
                 "```json\n" .
@@ -98,7 +98,7 @@ class GeminiService
                 "3. Se nessun evento è convincente (risk/reward scarso), non scegliere nulla.\n" .
                 "4. NON INVENTARE QUOTE: usa solo quelle presenti nel JSON per il runner scelto.\n" .
                 "5. Stake: 1-5% del portfolio.\n" .
-                "6. QUOTA MINIMA: Ignora quote inferiori a 1.25. Se un evento è eccezionale ma la quota è bassa, puoi puntare a 1.25 (Puntata a Quota Fissa) forzando il campo 'odds' a 1.25.\n" .
+                "6. QUOTA MINIMA: 1.25 è la quota minima di ingresso. Se la quota attuale è superiore, usala. Se è inferiore ma l'evento è eccezionale, scrivi '1.25' nel campo 'odds' per piazzare un ordine limite.\n" .
                 "7. Se per uno sport non hai dati statistici (ma solo quote), sii più prudente e cerca solo 'Value Bets' evidenti.\n\n" .
                 "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
                 "```json\n" .
