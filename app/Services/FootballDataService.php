@@ -332,6 +332,18 @@ class FootballDataService
     {
         $name = strtolower($name);
 
+        // 0. Transliterate common accented characters
+        $chars = [
+            'ä' => 'a', 'ö' => 'o', 'ü' => 'u', 'ß' => 'ss',
+            'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+            'á' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'å' => 'a',
+            'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i',
+            'ó' => 'o', 'ò' => 'o', 'ô' => 'o', 'õ' => 'o', 'ø' => 'o',
+            'ú' => 'u', 'ù' => 'u', 'û' => 'u',
+            'ñ' => 'n', 'ç' => 'c', 'ý' => 'y', 'ÿ' => 'y'
+        ];
+        $name = strtr($name, $chars);
+
         // 1. Common abbreviations replacements (using word boundaries to avoid partial matches)
         $replacements = [
             'man' => 'manchester',
@@ -362,8 +374,8 @@ class FootballDataService
             'fc', 'f.c.', 'united', 'city', 'town', 'real', 'atlético', 'atletico',
             'u23', 'u21', 'u19', 'women', 'donne', 'femminile', 'sports', 'sc', 'ac', 'as',
             'cf', 'rc', 'de', 'rs', 'bk', 'fk', 'nk', 'hsk', 'acs', 'csc', 'csm', 'cs', 'afc',
-            'pfc', 'ff', 'if', 'is', 'sk', 'sv', 'spvgg', 'bsc', 'tsv', 'vfb', 'vfl',
-            'ballklubb', 'club', 'sport', 'v.', 'vs'
+            'pfc', 'ff', 'if', 'is', 'sk', 'sv', 'spvgg', 'bsc', 'tsv', 'vfb', 'vfl', 'cp',
+            'ballklubb', 'club', 'sport', 'v.', 'vs', 'ii', ' b'
         ];
 
         $tempName = $name;
