@@ -19,7 +19,7 @@ class FootballApiService
 
     public function fetchLiveMatches($params = [])
     {
-        $endpoint = '/fixtures?live=all';
+        $endpoint = '/fixtures?live=all&timezone=Europe/Rome';
         if (!empty($params)) {
             $queryString = http_build_query($params);
             $endpoint .= "&$queryString";

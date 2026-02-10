@@ -89,11 +89,24 @@ class GiaNikController
                 $marketBooksMap[$mb['marketId']] = $mb;
             }
 
+            // Prioritize market types (Match Odds > Winner > Moneyline)
+            usort($marketCatalogues, function($a, $b) {
+                $prio = ['MATCH_ODDS' => 1, 'WINNER' => 2, 'MONEYLINE' => 3];
+                $typeA = $a['description']['marketType'] ?? '';
+                $typeB = $b['description']['marketType'] ?? '';
+                return ($prio[$typeA] ?? 99) <=> ($prio[$typeB] ?? 99);
+            });
+
             $groupedMatches = [];
+            $processedEvents = [];
             foreach ($marketCatalogues as $mc) {
                 $marketId = $mc['marketId'];
+                $eventId = $mc['event']['id'];
+
+                if (isset($processedEvents[$eventId])) continue;
                 if (!isset($marketBooksMap[$marketId])) continue;
 
+                $processedEvents[$eventId] = true;
                 $mb = $marketBooksMap[$marketId];
                 $sport = $mc['eventType']['name'] ?? 'Altro';
 
@@ -125,34 +138,41 @@ class GiaNikController
                         $m['status_label'] = ($match['status']['short'] ?? 'LIVE') . ' ' . ($match['status']['timer'] ?? '');
                         $m['has_api_data'] = true;
                     }
-                } else {
-                    // Try to get from Betfair Market Definition or Event Name
-                    if (isset($mb['marketDefinition'])) {
-                        $def = $mb['marketDefinition'];
+                }
 
-                        // 1. Try to get score from marketDefinition['score'] (Most reliable for Tennis, Volley, etc)
-                        if (isset($def['score'])) {
-                            $s = $def['score'];
-                            if (isset($s['homeSets'], $s['awaySets'])) {
-                                $m['score'] = $s['homeSets'] . '-' . $s['awaySets'];
-                                if (isset($s['homeGames'], $s['awayGames'])) {
-                                    $m['score'] .= " (" . $s['homeGames'] . "-" . $s['awayGames'] . ")";
-                                }
-                                $m['status_label'] = 'SET';
+                // Generic Betfair-based enrichment (fallback or additional info)
+                if (isset($mb['marketDefinition'])) {
+                    $def = $mb['marketDefinition'];
+
+                    // 1. Try to get score from marketDefinition['score'] (Reliable for Tennis, Volley, etc)
+                    if (isset($def['score'])) {
+                        $s = $def['score'];
+                        // Tennis sets/games style
+                        if (isset($s['homeSets']) || isset($s['awaySets'])) {
+                            $hs = $s['homeSets'] ?? 0;
+                            $as = $s['awaySets'] ?? 0;
+                            $m['score'] = "$hs-$as";
+                            if (isset($s['homeGames'], $s['awayGames'])) {
+                                $m['score'] .= " (" . $s['homeGames'] . "-" . $s['awayGames'] . ")";
                             }
+                            if ($m['status_label'] === 'LIVE') $m['status_label'] = 'SET';
                         }
+                        // Generic homeScore/awayScore
+                        elseif (isset($s['homeScore'], $s['awayScore'])) {
+                            if (!$m['score']) $m['score'] = $s['homeScore'] . '-' . $s['awayScore'];
+                        }
+                    }
 
-                        // 2. Fallback: Extract scores from event name if present (e.g. "Team A 1-0 Team B")
-                        if (!$m['score'] && preg_match('/(\d+)\s*-\s*(\d+)/', $m['event'], $scoreMatches)) {
-                            $m['score'] = $scoreMatches[1] . '-' . $scoreMatches[2];
-                        }
+                    // 2. Fallback: Extract scores from event name if present (e.g. "Team A 1-0 Team B")
+                    if (!$m['score'] && preg_match('/(\d+)\s*-\s*(\d+)/', $m['event'], $scoreMatches)) {
+                        $m['score'] = $scoreMatches[1] . '-' . $scoreMatches[2];
+                    }
 
-                        // 3. Status label refinements
-                        if (preg_match('/\((Q[1-4]|Set\s*[1-5]|HT|End\s*Set\s*\d)\)/i', $m['event'], $periodMatches)) {
-                            $m['status_label'] = strtoupper($periodMatches[1]);
-                        } elseif (isset($def['inPlay']) && $def['inPlay'] && $m['status_label'] === 'LIVE') {
-                            $m['status_label'] = 'LIVE';
-                        }
+                    // 3. Status label refinements
+                    if (preg_match('/\((Q[1-4]|Set\s*[1-5]|HT|End\s*Set\s*\d)\)/i', $m['event'], $periodMatches)) {
+                        $m['status_label'] = strtoupper($periodMatches[1]);
+                    } elseif (isset($def['inPlay']) && $def['inPlay'] && $m['status_label'] === 'LIVE') {
+                        $m['status_label'] = 'LIVE';
                     }
                 }
 
@@ -185,15 +205,7 @@ class GiaNikController
             $account['exposure'] = abs($funds['exposure'] ?? 0);
 
             // Virtual
-            $initialBalance = 100.00;
-            $totalProfit = (float)$this->db->query("SELECT SUM(profit) FROM bets WHERE status IN ('won', 'lost')")->fetchColumn();
-            $virtualExposure = (float)$this->db->query("SELECT SUM(stake) FROM bets WHERE status = 'pending'")->fetchColumn();
-
-            $virtualAccount = [
-                'total' => $initialBalance + $totalProfit,
-                'exposure' => $virtualExposure,
-                'available' => ($initialBalance + $totalProfit) - $virtualExposure
-            ];
+            $virtualAccount = $this->getVirtualBalance();
 
             $this->settleBets();
             require __DIR__ . '/../Views/partials/gianik_live.php';
@@ -259,14 +271,8 @@ class GiaNikController
                 $event['markets'][] = $m;
             }
 
-            $initialBalance = 100.00;
-            $totalProfit = (float)$this->db->query("SELECT SUM(profit) FROM bets WHERE status IN ('won', 'lost')")->fetchColumn();
-            $virtualExposure = (float)$this->db->query("SELECT SUM(stake) FROM bets WHERE status = 'pending'")->fetchColumn();
-
-            $available = ($initialBalance + $totalProfit) - $virtualExposure;
-            $total = $initialBalance + $totalProfit;
-
-            $balance = ['available_balance' => $available, 'current_portfolio' => $total];
+            $vBalance = $this->getVirtualBalance();
+            $balance = ['available_balance' => $vBalance['available'], 'current_portfolio' => $vBalance['total']];
 
             if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
                 $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition']);
@@ -419,12 +425,14 @@ class GiaNikController
                         $event['api_basketball'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition']);
                     }
 
-                    $vInit = 100.0;
-                    $vProf = (float)$this->db->query("SELECT SUM(profit) FROM bets WHERE status IN ('won', 'lost')")->fetchColumn();
-                    $vExp = (float)$this->db->query("SELECT SUM(stake) FROM bets WHERE status = 'pending'")->fetchColumn();
+                    $vBalance = $this->getVirtualBalance();
 
                     $gemini = new GeminiService();
-                    $predictionRaw = $gemini->analyze([$event], ['is_gianik' => true, 'available_balance' => ($vInit + $vProf) - $vExp, 'current_portfolio' => $vInit + $vProf]);
+                    $predictionRaw = $gemini->analyze([$event], [
+                        'is_gianik' => true,
+                        'available_balance' => $vBalance['available'],
+                        'current_portfolio' => $vBalance['total']
+                    ]);
 
                     if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
                         $analysis = json_decode($matches[1], true);
@@ -580,6 +588,18 @@ class GiaNikController
             $bets = $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
             require __DIR__ . '/../Views/partials/recent_bets_sidebar.php';
         } catch (\Throwable $e) { echo '<div class="text-danger p-2 text-[10px]">' . $e->getMessage() . '</div>'; }
+    }
+
+    private function getVirtualBalance()
+    {
+        $vInit = 100.0;
+        $vProf = (float)$this->db->query("SELECT SUM(profit) FROM bets WHERE status IN ('won', 'lost')")->fetchColumn();
+        $vExp = (float)$this->db->query("SELECT SUM(stake) FROM bets WHERE status = 'pending'")->fetchColumn();
+        return [
+            'available' => ($vInit + $vProf) - $vExp,
+            'exposure' => $vExp,
+            'total' => $vInit + $vProf
+        ];
     }
 
     public function betDetails($id)
