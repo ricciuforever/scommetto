@@ -28,7 +28,27 @@ class Standing
                     :lid, :tid, :season, :rank, :points, :gd, :form,
                     :group, :desc, :played, :win, :draw, :lose,
                     :gf, :ga, :home_json, :away_json
-                ) ON DUPLICATE KEY UPDATE
+                )";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(league_id, team_id, season) DO UPDATE SET
+                    rank = EXCLUDED.rank,
+                    points = EXCLUDED.points,
+                    goals_diff = EXCLUDED.goals_diff,
+                    form = EXCLUDED.form,
+                    group_name = EXCLUDED.group_name,
+                    description = EXCLUDED.description,
+                    played = EXCLUDED.played,
+                    win = EXCLUDED.win,
+                    draw = EXCLUDED.draw,
+                    lose = EXCLUDED.lose,
+                    goals_for = EXCLUDED.goals_for,
+                    goals_against = EXCLUDED.goals_against,
+                    home_stats_json = EXCLUDED.home_stats_json,
+                    away_stats_json = EXCLUDED.away_stats_json,
+                    last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE
                     rank = VALUES(rank),
                     points = VALUES(points),
                     goals_diff = VALUES(goals_diff),
@@ -44,6 +64,7 @@ class Standing
                     home_stats_json = VALUES(home_stats_json),
                     away_stats_json = VALUES(away_stats_json),
                     last_updated = CURRENT_TIMESTAMP";
+        }
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([

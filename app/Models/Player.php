@@ -37,10 +37,17 @@ class Player
     public function save($playerData)
     {
         $sql = "INSERT INTO players (id, name, firstname, lastname, age, birth_date, birth_place, birth_country, nationality, height, weight, photo, injured) 
-                VALUES (:id, :name, :firstname, :lastname, :age, :birth_date, :birth_place, :birth_country, :nationality, :height, :weight, :photo, :injured)
-                ON DUPLICATE KEY UPDATE 
-                name = VALUES(name), age = VALUES(age), photo = VALUES(photo), 
-                injured = VALUES(injured), last_updated = CURRENT_TIMESTAMP";
+                VALUES (:id, :name, :firstname, :lastname, :age, :birth_date, :birth_place, :birth_country, :nationality, :height, :weight, :photo, :injured)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(id) DO UPDATE SET
+                    name = EXCLUDED.name, age = EXCLUDED.age, photo = EXCLUDED.photo,
+                    injured = EXCLUDED.injured, last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE
+                    name = VALUES(name), age = VALUES(age), photo = VALUES(photo),
+                    injured = VALUES(injured), last_updated = CURRENT_TIMESTAMP";
+        }
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
@@ -63,9 +70,15 @@ class Player
     public function linkToSquad($teamId, $playerData, $squadInfo)
     {
         $sql = "INSERT INTO squads (team_id, player_id, position, number) 
-                VALUES (:team_id, :player_id, :position, :number)
-                ON DUPLICATE KEY UPDATE 
-                position = VALUES(position), number = VALUES(number), last_updated = CURRENT_TIMESTAMP";
+                VALUES (:team_id, :player_id, :position, :number)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(team_id, player_id) DO UPDATE SET
+                    position = EXCLUDED.position, number = EXCLUDED.number, last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE
+                    position = VALUES(position), number = VALUES(number), last_updated = CURRENT_TIMESTAMP";
+        }
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([

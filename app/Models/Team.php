@@ -39,12 +39,21 @@ class Team
         }
 
         $sql = "INSERT INTO teams (id, name, code, country, founded, national, logo, venue_id) 
-                VALUES (:id, :name, :code, :country, :founded, :national, :logo, :venue_id)
-                ON DUPLICATE KEY UPDATE 
+                VALUES (:id, :name, :code, :country, :founded, :national, :logo, :venue_id)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(id) DO UPDATE SET
+                    name = EXCLUDED.name, code = EXCLUDED.code, country = EXCLUDED.country,
+                    founded = EXCLUDED.founded, national = EXCLUDED.national,
+                    logo = EXCLUDED.logo, venue_id = EXCLUDED.venue_id,
+                    last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE
                     name = VALUES(name), code = VALUES(code), country = VALUES(country),
                     founded = VALUES(founded), national = VALUES(national), 
                     logo = VALUES(logo), venue_id = VALUES(venue_id),
                     last_updated = CURRENT_TIMESTAMP";
+        }
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
@@ -61,8 +70,14 @@ class Team
 
     public function linkToLeague($team_id, $league_id, $season)
     {
-        $sql = "INSERT INTO team_leagues (team_id, league_id, season) VALUES (?, ?, ?)
-                ON DUPLICATE KEY UPDATE last_updated = CURRENT_TIMESTAMP";
+        $sql = "INSERT INTO team_leagues (team_id, league_id, season) VALUES (?, ?, ?)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(team_id, league_id, season) DO UPDATE SET last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE last_updated = CURRENT_TIMESTAMP";
+        }
+
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([$team_id, $league_id, $season]);
     }
@@ -74,8 +89,14 @@ class Team
     public function touchLeagueSeason($leagueId, $season)
     {
         $sql = "INSERT INTO league_seasons (league_id, year, last_teams_sync)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-                ON DUPLICATE KEY UPDATE last_teams_sync = CURRENT_TIMESTAMP";
+                VALUES (?, ?, CURRENT_TIMESTAMP)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(league_id, year) DO UPDATE SET last_teams_sync = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE last_teams_sync = CURRENT_TIMESTAMP";
+        }
+
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([$leagueId, $season]);
     }
@@ -176,7 +197,15 @@ class Team
      */
     public function saveTeamSeasons($teamId, $seasons)
     {
-        $stmt = $this->db->prepare("INSERT INTO team_seasons (team_id, year) VALUES (?, ?) ON DUPLICATE KEY UPDATE last_updated = CURRENT_TIMESTAMP");
+        $sql = "INSERT INTO team_seasons (team_id, year) VALUES (?, ?)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(team_id, year) DO UPDATE SET last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE last_updated = CURRENT_TIMESTAMP";
+        }
+
+        $stmt = $this->db->prepare($sql);
         foreach ($seasons as $year) {
             $stmt->execute([$teamId, $year]);
         }
