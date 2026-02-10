@@ -81,17 +81,31 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
     <!-- Events List (One per row) -->
     <div class="animate-fade-in space-y-3 px-2">
         <?php
-        $allMatches = [];
-        foreach ($groupedMatches as $matches)
-            $allMatches = array_merge($allMatches, $matches);
+        $allMatches = $allMatches ?? [];
         foreach ($allMatches as $m):
             $marketId = $m['marketId'];
             $fixtureId = $m['fixture_id'];
             $homeId = $m['home_id'];
             $awayId = $m['away_id'];
+            $isJustUpdated = ($m['just_updated'] && (time() - $m['just_updated'] <= 15));
             ?>
             <div
-                class="glass p-4 rounded-[32px] border border-white/5 hover:border-accent/20 transition-all group flex flex-col gap-4">
+                id="match-card-<?php echo str_replace('.', '-', $marketId); ?>"
+                class="glass p-4 rounded-[32px] border <?php echo $isJustUpdated ? 'border-accent shadow-[0_0_20px_rgba(var(--accent-rgb),0.3)] animate-pulse' : 'border-white/5'; ?> hover:border-accent/20 transition-all group flex flex-col gap-4 relative">
+
+                <?php if ($m['has_active_real_bet']): ?>
+                    <div class="absolute -top-2 -right-2 z-10 flex items-center gap-2">
+                        <div class="bg-accent px-3 py-1 rounded-full shadow-lg border border-white/20 flex items-center gap-1.5 animate-bounce-slow">
+                            <i data-lucide="zap" class="w-3 h-3 text-white"></i>
+                            <span class="text-[9px] font-black uppercase text-white tracking-widest">Active Bet</span>
+                        </div>
+                        <?php if (isset($m['current_pl'])): ?>
+                            <div class="px-3 py-1 rounded-full shadow-lg border border-white/20 font-black text-[10px] <?php echo $m['current_pl'] >= 0 ? 'bg-success text-white' : 'bg-danger text-white'; ?>">
+                                <?php echo ($m['current_pl'] > 0 ? '+' : '') . number_format($m['current_pl'], 2); ?>€
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
 
                 <div class="flex items-center gap-6">
                     <!-- Match Info Section -->
@@ -210,8 +224,34 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
 
 <?php endif; ?>
 
+<audio id="gianik-event-sound" src="https://cdn.jsdelivr.net/gh/GiaNik/assets/notification.mp3" preload="auto"></audio>
+
 <script>
     if (window.lucide) lucide.createIcons();
+
+    // Event Highlighting & Sound
+    (function() {
+        const justUpdated = <?php echo json_encode(array_values(array_filter(array_map(fn($m) => $m['just_updated'] ? $m['marketId'] : null, $allMatches)))); ?>;
+        if (justUpdated.length > 0) {
+            const sound = document.getElementById('gianik-event-sound');
+            if (sound) {
+                sound.play().catch(e => console.log('Audio playback blocked:', e));
+            }
+
+            // Highlight removal timer (though HTMX refresh will handle it next time,
+            // we can do it client-side too if we want it to disappear exactly at 15s)
+            justUpdated.forEach(mId => {
+                const cardId = 'match-card-' + mId.replace('.', '-');
+                setTimeout(() => {
+                    const card = document.getElementById(cardId);
+                    if (card) {
+                        card.classList.remove('border-accent', 'shadow-[0_0_20px_rgba(var(--accent-rgb),0.3)]', 'animate-pulse');
+                        card.classList.add('border-white/5');
+                    }
+                }, 15000);
+            });
+        }
+    })();
 
     function openManualBetModal(data) {
         // Build modal on the fly

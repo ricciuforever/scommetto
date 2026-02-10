@@ -286,7 +286,7 @@ class FootballDataService
     /**
      * Search a Betfair event in the fixture list using normalized names
      */
-    public function searchInFixtureList($bfEventName, $fixtures)
+    public function searchInFixtureList($bfEventName, $fixtures, $mappedCountry = null)
     {
         // 1. Strip scores like "1-0", "0 - 0" if present in event name
         $name = preg_replace('/\d+\s*-\s*\d+/', ' v ', $bfEventName);
@@ -299,6 +299,15 @@ class FootballDataService
         $bfAway = $this->normalizeTeamName($bfTeams[1]);
 
         foreach ($fixtures as $item) {
+            // Optional: prioritize by country if mappedCountry is provided
+            if ($mappedCountry && isset($item['league']['country'])) {
+                $apiCountry = $item['league']['country'];
+                $countriesToMatch = is_array($mappedCountry) ? $mappedCountry : [$mappedCountry];
+                if (!in_array($apiCountry, $countriesToMatch)) {
+                    continue;
+                }
+            }
+
             $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
             $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
 
@@ -307,6 +316,12 @@ class FootballDataService
                 return $item;
             }
         }
+
+        // Fallback: if no match found with country filter, try WITHOUT country filter
+        if ($mappedCountry) {
+            return $this->searchInFixtureList($bfEventName, $fixtures, null);
+        }
+
         return null;
     }
 
@@ -330,6 +345,11 @@ class FootballDataService
             'int.' => 'inter',
             'ath' => 'athletic',
             'atl' => 'atletico',
+            'at.' => 'atletico',
+            'ind' => 'independiente',
+            'ind.' => 'independiente',
+            'dep' => 'deportivo',
+            'dep.' => 'deportivo',
             'sg' => 'saint germain'
         ];
         foreach ($replacements as $search => $replace) {

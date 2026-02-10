@@ -89,6 +89,16 @@ class GiaNikController
             $apiLiveRes = $this->footballData->getLiveMatches();
             $apiLiveMatches = $apiLiveRes['response'] ?? [];
 
+            // --- P&L Tracking for Real Bets ---
+            $stmtBets = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND type = 'real'");
+            $stmtBets->execute();
+            $activeRealBets = $stmtBets->fetchAll(PDO::FETCH_ASSOC);
+
+            // --- Score Tracking for Highlighting ---
+            if (session_status() === PHP_SESSION_NONE) session_start();
+            $prevScores = $_SESSION['gianik_scores'] ?? [];
+            $newScores = [];
+
             // 5. Merge Data
             $marketBooksMap = [];
             foreach ($marketBooks as $mb) {
@@ -143,7 +153,24 @@ class GiaNikController
                 // --- Enrichment ---
                 $foundApiData = false;
                 if (true) { // Always soccer now
-                    $match = $this->footballData->searchInFixtureList($m['event'], $apiLiveMatches);
+                    $countryCode = $m['country'];
+                    $mappedCountry = null;
+                    if ($countryCode) {
+                        $map = [
+                            'GB' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
+                            'PT' => 'Portugal',
+                            'CO' => 'Colombia',
+                            'ES' => 'Spain',
+                            'IT' => 'Italy',
+                            'FR' => 'France',
+                            'DE' => 'Germany',
+                            'BR' => 'Brazil',
+                            'AR' => 'Argentina'
+                        ];
+                        $mappedCountry = $map[$countryCode] ?? null;
+                    }
+
+                    $match = $this->footballData->searchInFixtureList($m['event'], $apiLiveMatches, $mappedCountry);
                     if ($match) {
                         $m['fixture_id'] = $match['fixture']['id'] ?? null;
                         $m['home_id'] = $match['teams']['home']['id'] ?? null;
@@ -240,9 +267,65 @@ class GiaNikController
                 $groupedMatches[$sport][] = $m;
             }
 
-            uksort($groupedMatches, function ($a, $b) use ($groupedMatches) {
-                return count($groupedMatches[$b]) <=> count($groupedMatches[$a]);
+            // Flatten and Sort matches dynamically
+            $allMatches = [];
+            foreach ($groupedMatches as $sportMatches) {
+                foreach ($sportMatches as $m) {
+                    $m['has_active_real_bet'] = false;
+                    $m['current_pl'] = 0;
+                    $m['just_updated'] = false;
+
+                    // Calculate P&L for real bets
+                    foreach ($activeRealBets as $bet) {
+                        if ($bet['market_id'] === $m['marketId']) {
+                            $m['has_active_real_bet'] = true;
+                            // Find current Back odds for this runner
+                            $currentOdds = 0;
+                            foreach ($m['runners'] as $r) {
+                                if ($r['selectionId'] == $bet['selection_id']) {
+                                    $currentOdds = is_numeric($r['back']) ? (float)$r['back'] : 0;
+                                    break;
+                                }
+                            }
+                            if ($currentOdds > 1.0) {
+                                // Estimated Cashout: (Placed Odds / Current Odds) * Stake - Stake
+                                $m['current_pl'] += (($bet['odds'] / $currentOdds) * $bet['stake']) - $bet['stake'];
+                            }
+                        }
+                    }
+
+                    // Detect Score Changes
+                    $scoreKey = $m['event_id'];
+                    $currentScore = $m['score'] ?? '0-0';
+                    $newScores[$scoreKey] = $currentScore;
+                    if (isset($prevScores[$scoreKey]) && $prevScores[$scoreKey] !== $currentScore) {
+                        $m['just_updated'] = time();
+                    }
+
+                    $allMatches[] = $m;
+                }
+            }
+            $_SESSION['gianik_scores'] = $newScores;
+
+            // Sort logic: 1. Real Bets, 2. Just Updated (15s), 3. Matched Vol
+            usort($allMatches, function($a, $b) {
+                // Priority 1: Active Real Bets
+                if ($a['has_active_real_bet'] && !$b['has_active_real_bet']) return -1;
+                if (!$a['has_active_real_bet'] && $b['has_active_real_bet']) return 1;
+
+                // Priority 2: Just Updated (within 15s)
+                $now = time();
+                $aRecent = ($a['just_updated'] && ($now - $a['just_updated'] <= 15));
+                $bRecent = ($b['just_updated'] && ($now - $b['just_updated'] <= 15));
+                if ($aRecent && !$bRecent) return -1;
+                if (!$aRecent && $bRecent) return 1;
+
+                // Priority 3: Matched Volume
+                return ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0);
             });
+
+            // Re-group for view compatibility if needed, but the view expects $allMatches now
+            // Wait, the view was iterating over $groupedMatches? No, I'll update the view too.
 
             // Funds
             $account = ['available' => 0, 'exposure' => 0];
@@ -682,7 +765,11 @@ class GiaNikController
     private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $competition = '', $bfMarketBook = null)
     {
         // Restricted to Soccer
-        $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive);
+        $countryCode = null;
+        if ($bfMarketBook && isset($bfMarketBook['marketDefinition']['countryCode'])) {
+            $countryCode = $bfMarketBook['marketDefinition']['countryCode'];
+        }
+        $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive, $countryCode);
 
         if (!$apiMatch) {
             // FALLBACK: If API-Football match not found, try to extract basic live data from Betfair
@@ -756,17 +843,37 @@ class GiaNikController
         ];
     }
 
-    private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null)
+    private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null, $countryCode = null)
     {
+        $mappedCountry = null;
+        if ($countryCode) {
+            $map = [
+                'GB' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
+                'PT' => 'Portugal',
+                'CO' => 'Colombia',
+                'ES' => 'Spain',
+                'IT' => 'Italy',
+                'FR' => 'France',
+                'DE' => 'Germany',
+                'BR' => 'Brazil',
+                'AR' => 'Argentina'
+            ];
+            $mappedCountry = $map[$countryCode] ?? null;
+        }
         $liveFixtures = $preFetchedLive ?? $this->footballData->getLiveMatches()['response'] ?? [];
-        return $this->footballData->searchInFixtureList($bfEventName, $liveFixtures);
+        return $this->footballData->searchInFixtureList($bfEventName, $liveFixtures, $mappedCountry);
     }
 
     public function recentBets()
     {
+        if (session_status() === PHP_SESSION_NONE) session_start();
         try {
-            $statusFilter = $_GET['status'] ?? 'all';
-            $typeFilter = $_GET['type'] ?? 'all';
+            // Persistence via Session (Senior approach: lighter and more reliable for UI state)
+            if (isset($_GET['status'])) $_SESSION['recent_bets_status'] = $_GET['status'];
+            if (isset($_GET['type'])) $_SESSION['recent_bets_type'] = $_GET['type'];
+
+            $statusFilter = $_SESSION['recent_bets_status'] ?? 'all';
+            $typeFilter = $_SESSION['recent_bets_type'] ?? 'all';
 
             // 1. Sport mapping (only soccer needed now but kept for consistency)
             $sportMapping = [
@@ -774,7 +881,7 @@ class GiaNikController
                 'Football' => 'Calcio'
             ];
 
-            // 2. Main query for bets
+            // 2. Main query for bets - use GROUP BY to collapse accidental duplicates
             $sql = "SELECT * FROM bets";
             $where = [];
             $params = [];
@@ -798,6 +905,7 @@ class GiaNikController
                 $sql .= " WHERE " . implode(" AND ", $where);
             }
 
+            $sql .= " GROUP BY event_name, market_name, runner_name, type, created_at";
             $sql .= " ORDER BY created_at DESC LIMIT 20";
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);

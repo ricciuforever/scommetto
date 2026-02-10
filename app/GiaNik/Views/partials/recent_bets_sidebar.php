@@ -61,8 +61,11 @@ $bets = $bets ?? [];
             <?php foreach ($bets as $bet):
                 $status = $bet['status'];
                 $statusColor = 'text-slate-500';
-                if ($status === 'won') $statusColor = 'text-success';
-                if ($status === 'lost') $statusColor = 'text-danger';
+                if ($status === 'won') {
+                    $statusColor = 'text-success';
+                } elseif ($status === 'lost') {
+                    $statusColor = 'text-danger';
+                }
 
                 $profit = (float)$bet['profit'];
                 $profitFormatted = ($profit > 0 ? '+' : '') . number_format($profit, 2) . '€';
