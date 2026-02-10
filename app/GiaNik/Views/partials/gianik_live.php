@@ -40,8 +40,14 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                 <div class="text-lg font-black tabular-nums text-warning leading-none">
                     €<?php echo number_format($account['exposure'], 2); ?></div>
             </div>
+            <div>
+                <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">Real Totale</span>
+                <div class="text-lg font-black tabular-nums text-slate-400 leading-none">
+                    €<?php echo number_format($account['available'] + $account['exposure'], 2); ?></div>
+            </div>
         </div>
 
+        <?php if ($operationalMode !== 'real'): ?>
         <div class="h-8 w-px bg-white/10 mx-2"></div>
 
         <!-- Virtual GiaNik Account -->
@@ -62,6 +68,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                     €<?php echo number_format($virtualAccount['total'], 2); ?></div>
             </div>
         </div>
+        <?php endif; ?>
     </div>
 </div>
 
