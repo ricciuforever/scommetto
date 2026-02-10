@@ -822,9 +822,18 @@ class GiaNikController
     public function matchStats($fixtureId)
     {
         try {
-            $details = $this->footballData->getFixtureDetails($fixtureId);
-            $statusShort = $details['status_short'] ?? 'NS';
+            $detailsRaw = $this->footballData->getFixtureDetails($fixtureId);
+            $statusShort = $detailsRaw['status_short'] ?? 'NS';
             $stats = $this->footballData->getFixtureStatistics($fixtureId, $statusShort);
+
+            $details = [
+                'fixture' => ['id' => $detailsRaw['id']],
+                'teams' => [
+                    'home' => ['id' => $detailsRaw['team_home_id'], 'name' => $detailsRaw['team_home_name'], 'logo' => $detailsRaw['team_home_logo']],
+                    'away' => ['id' => $detailsRaw['team_away_id'], 'name' => $detailsRaw['team_away_name'], 'logo' => $detailsRaw['team_away_logo']]
+                ]
+            ];
+
             require __DIR__ . '/../Views/partials/modals/stats.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
@@ -834,9 +843,18 @@ class GiaNikController
     public function matchLineups($fixtureId)
     {
         try {
-            $details = $this->footballData->getFixtureDetails($fixtureId);
-            $statusShort = $details['status_short'] ?? 'NS';
+            $detailsRaw = $this->footballData->getFixtureDetails($fixtureId);
+            $statusShort = $detailsRaw['status_short'] ?? 'NS';
             $lineups = $this->footballData->getFixtureLineups($fixtureId, $statusShort);
+
+            $details = [
+                'fixture' => ['id' => $detailsRaw['id']],
+                'teams' => [
+                    'home' => ['id' => $detailsRaw['team_home_id'], 'name' => $detailsRaw['team_home_name'], 'logo' => $detailsRaw['team_home_logo']],
+                    'away' => ['id' => $detailsRaw['team_away_id'], 'name' => $detailsRaw['team_away_name'], 'logo' => $detailsRaw['team_away_logo']]
+                ]
+            ];
+
             require __DIR__ . '/../Views/partials/modals/lineups.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
@@ -846,12 +864,20 @@ class GiaNikController
     public function matchH2H($fixtureId)
     {
         try {
-            $details = $this->footballData->getFixtureDetails($fixtureId);
+            $detailsRaw = $this->footballData->getFixtureDetails($fixtureId);
             // We need teams IDs to get H2H
-            $homeId = $details['teams']['home']['id'];
-            $awayId = $details['teams']['away']['id'];
+            $homeId = $detailsRaw['team_home_id'];
+            $awayId = $detailsRaw['team_away_id'];
             $h2hData = $this->footballData->getH2H($homeId, $awayId);
             $h2h = $h2hData['h2h_json'] ?? [];
+
+            $details = [
+                'teams' => [
+                    'home' => ['name' => $detailsRaw['team_home_name'], 'logo' => $detailsRaw['team_home_logo']],
+                    'away' => ['name' => $detailsRaw['team_away_name'], 'logo' => $detailsRaw['team_away_logo']]
+                ]
+            ];
+
             require __DIR__ . '/../Views/partials/modals/h2h.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
@@ -940,9 +966,9 @@ class GiaNikController
 
             // 3. Live Data (Live match cross-check)
             if ($fixtureId) {
-                $details = $this->footballData->getFixtureDetails($fixtureId);
-                if ($details) {
-                    $statusShort = $details['status_short'] ?? 'NS';
+                $detailsRaw = $this->footballData->getFixtureDetails($fixtureId);
+                if ($detailsRaw) {
+                    $statusShort = $detailsRaw['status_short'] ?? 'NS';
                     $playersStats = $this->footballData->getFixturePlayerStatistics($fixtureId, $statusShort);
                     $events = $this->footballData->getFixtureEvents($fixtureId, $statusShort);
 
