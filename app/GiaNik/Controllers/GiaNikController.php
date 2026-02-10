@@ -636,6 +636,9 @@ class GiaNikController
         $standings = (isset($apiMatch['league']['id'], $apiMatch['league']['season'])) ? $this->footballData->getStandings($apiMatch['league']['id'], $apiMatch['league']['season']) : null;
         $preds = $this->footballData->getFixturePredictions($fid, $status);
 
+        // 🎯 STATISTICS LIVE (possesso palla, tiri, corner, ecc.)
+        $stats = $this->footballData->getFixtureStatistics($fid, $status);
+
         // 🚨 DATI LIVE ESPLICITI per Gemini
         $liveData = [
             'live_score' => [
@@ -659,6 +662,7 @@ class GiaNikController
         return [
             'fixture' => $details,
             'live' => $liveData,  // ← DATI LIVE ESPLICITI
+            'statistics' => $stats,  // ← STATISTICS LIVE (shots, possession, corners, ecc.)
             'h2h' => $h2h['h2h_json'] ?? [],
             'standings' => $standings,
             'predictions' => $preds['prediction_json'] ?? null
