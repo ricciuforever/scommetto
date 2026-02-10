@@ -46,6 +46,15 @@ $bet = $bet ?? [];
                     </div>
                 </div>
 
+                <div class="glass p-5 rounded-3xl border-white/5 flex items-center justify-between">
+                     <div>
+                        <div class="text-[8px] font-black text-slate-500 uppercase tracking-[.2em] mb-1">Mercato</div>
+                        <div class="text-sm font-black italic uppercase text-indigo-400">
+                            <?php echo htmlspecialchars($bet['market_name'] ?? 'Esito Finale'); ?>
+                        </div>
+                     </div>
+                </div>
+
                 <div class="grid grid-cols-2 gap-4">
                     <div class="glass p-5 rounded-3xl border-white/5">
                         <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Runner Scelto</div>
