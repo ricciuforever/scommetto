@@ -5,7 +5,29 @@ $bets = $bets ?? [];
 
 <div class="h-full flex flex-col">
     <div class="p-4 border-b border-white/10">
-        <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-500">Ultime Giocate GiaNik</h3>
+        <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Ultime Giocate GiaNik</h3>
+
+        <!-- Status Filters -->
+        <div class="flex gap-2">
+            <label class="cursor-pointer">
+                <input type="radio" name="status" value="all" checked
+                    hx-get="/api/gianik/recent-bets?status=all" hx-target="#recent-bets-container"
+                    class="hidden peer">
+                <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-white/10 bg-white/5 text-slate-500 peer-checked:bg-slate-500 peer-checked:text-white transition-all">Tutte</span>
+            </label>
+            <label class="cursor-pointer">
+                <input type="radio" name="status" value="won"
+                    hx-get="/api/gianik/recent-bets?status=won" hx-target="#recent-bets-container"
+                    class="hidden peer">
+                <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-success/20 bg-success/5 text-success peer-checked:bg-success peer-checked:text-white transition-all">Vinte</span>
+            </label>
+            <label class="cursor-pointer">
+                <input type="radio" name="status" value="lost"
+                    hx-get="/api/gianik/recent-bets?status=lost" hx-target="#recent-bets-container"
+                    class="hidden peer">
+                <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-danger/20 bg-danger/5 text-danger peer-checked:bg-danger peer-checked:text-white transition-all">Perse</span>
+            </label>
+        </div>
     </div>
 
     <div class="flex-1 overflow-y-auto no-scrollbar py-2">
@@ -58,4 +80,15 @@ $bets = $bets ?? [];
 
 <script>
     if (window.lucide) lucide.createIcons();
+
+    // Maintain radio state after HTMX swap and update container hx-get for auto-refresh
+    (function() {
+        const container = document.querySelector('#recent-bets-container');
+        const status = new URLSearchParams(container.getAttribute('hx-get').split('?')[1] || '').get('status') || 'all';
+        const radio = document.querySelector(`input[name="status"][value="${status}"]`);
+        if (radio) radio.checked = true;
+
+        // Ensure the container's own hx-get attribute includes the status for the next 'every 30s' trigger
+        container.setAttribute('hx-get', '/api/gianik/recent-bets?status=' + status);
+    })();
 </script>
