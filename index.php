@@ -43,6 +43,33 @@ if ($path === '//')
 $logMsg = date('[Y-m-d H:i:s] ') . $method . " " . $requestUri . " -> Normalized: " . $path . PHP_EOL;
 file_put_contents(__DIR__ . '/logs/router_debug.log', $logMsg, FILE_APPEND);
 
+// Serve static files from public directory
+if (preg_match('#\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$#i', $path)) {
+    $filePath = __DIR__ . '/public' . $path;
+    if (file_exists($filePath)) {
+        $mimeTypes = [
+            'js' => 'application/javascript',
+            'css' => 'text/css',
+            'png' => 'image/png',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'svg' => 'image/svg+xml',
+            'ico' => 'image/x-icon',
+            'woff' => 'font/woff',
+            'woff2' => 'font/woff2',
+            'ttf' => 'font/ttf',
+            'eot' => 'application/vnd.ms-fontobject'
+        ];
+        $ext = pathinfo($filePath, PATHINFO_EXTENSION);
+        $mimeType = $mimeTypes[$ext] ?? 'application/octet-stream';
+
+        header('Content-Type: ' . $mimeType);
+        readfile($filePath);
+        exit;
+    }
+}
+
 try {
     // Gestione viste standard tramite Controller dedicati
     $viewRoutes = [

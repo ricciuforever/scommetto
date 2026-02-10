@@ -70,6 +70,7 @@ require __DIR__ . '/../../Views/layout/top.php';
 
 <script src="/js/modals.js"></script>
 <script>
+    // GiaNik mode
     window.gianikMode = 'virtual';
 
     window.openBetDetails = function (id) {
@@ -78,6 +79,7 @@ require __DIR__ . '/../../Views/layout/top.php';
             swap: 'innerHTML'
         });
     }
+
     function setGiaNikMode(mode) {
         window.gianikMode = mode;
         const vBtn = document.getElementById('mode-virtual');
