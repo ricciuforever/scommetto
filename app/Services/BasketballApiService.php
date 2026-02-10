@@ -19,7 +19,7 @@ class BasketballApiService
 
     public function fetchLiveGames($params = [])
     {
-        $endpoint = '/games?live=all';
+        $endpoint = '/games?live=all&timezone=Europe/London';
         if (!empty($params)) {
             $queryString = http_build_query($params);
             $endpoint .= "&$queryString";
@@ -50,6 +50,16 @@ class BasketballApiService
     {
         $queryString = http_build_query($params);
         return $this->request("/teams?$queryString");
+    }
+
+    public function fetchGameTeamStatistics($gameId)
+    {
+        return $this->request("/games/statistics/teams?id=$gameId");
+    }
+
+    public function fetchGamePlayerStatistics($gameId)
+    {
+        return $this->request("/games/statistics/players?id=$gameId");
     }
 
     public function request($endpoint)
