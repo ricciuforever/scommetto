@@ -766,6 +766,7 @@ class GiaNikController
     {
         try {
             $statusFilter = $_GET['status'] ?? 'all';
+            $typeFilter = $_GET['type'] ?? 'all';
 
             // 1. Sport mapping (only soccer needed now but kept for consistency)
             $sportMapping = [
@@ -787,6 +788,12 @@ class GiaNikController
                 $where[] = "status = 'lost'";
             }
 
+            if ($typeFilter === 'real') {
+                $where[] = "type = 'real'";
+            } elseif ($typeFilter === 'virtual') {
+                $where[] = "type = 'virtual'";
+            }
+
             if (!empty($where)) {
                 $sql .= " WHERE " . implode(" AND ", $where);
             }
@@ -803,6 +810,7 @@ class GiaNikController
 
             // Pass filters to the view
             $currentStatus = $statusFilter;
+            $currentType = $typeFilter;
             $currentSport = 'all';
             $sports = []; // Dropdown removed from view
 
