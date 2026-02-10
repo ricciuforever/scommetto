@@ -114,7 +114,7 @@ class GiaNikController
 
                 $processedEvents[$eventId] = true;
                 $mb = $marketBooksMap[$marketId];
-                $sport = $mc['eventType']['name'] ?? 'Altro';
+                $sport = 'Soccer'; // Hardcoded as we only fetch eventType 1
 
                 $m = [
                     'marketId' => $marketId,
@@ -130,12 +130,14 @@ class GiaNikController
                     'home_logo' => null,
                     'away_logo' => null,
                     'home_name' => null,
-                    'away_name' => null
+                    'away_name' => null,
+                    'country' => $mc['event']['countryCode'] ?? null,
+                    'flag' => null
                 ];
 
                 // --- Enrichment ---
                 $foundApiData = false;
-                if ($sport === 'Soccer' || $sport === 'Football') {
+                if (true) { // Always soccer now
                     $match = $this->searchInFixtureList($m['event'], $apiLiveMatches);
                     if ($match) {
                         $m['score'] = ($match['goals']['home'] ?? '0') . '-' . ($match['goals']['away'] ?? '0');
@@ -146,6 +148,8 @@ class GiaNikController
                         $m['away_logo'] = $match['teams']['away']['logo'] ?? null;
                         $m['home_name'] = $match['teams']['home']['name'] ?? null;
                         $m['away_name'] = $match['teams']['away']['name'] ?? null;
+                        $m['country'] = $match['league']['country'] ?? $m['country'];
+                        $m['flag'] = $match['league']['flag'] ?? null;
                         $foundApiData = true;
                     }
                 }
@@ -612,36 +616,15 @@ class GiaNikController
 
     private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $competition = '')
     {
-        if ($sport === 'Soccer' || $sport === 'Football') {
-            $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive);
-            if (!$apiMatch)
-                return null;
-            $api = new FootballApiService();
-            $fullFixture = $api->fetchFixtureDetails($apiMatch['fixture']['id'])['response'][0] ?? $apiMatch;
-            $h2h = $api->fetchH2H($apiMatch['teams']['home']['id'] . '-' . $apiMatch['teams']['away']['id']);
-            $standings = (isset($apiMatch['league']['id'], $apiMatch['league']['season'])) ? $api->fetchStandings($apiMatch['league']['id'], $apiMatch['league']['season'])['response'][0]['league']['standings'] ?? null : null;
-            return ['fixture' => $fullFixture, 'h2h' => $h2h['response'] ?? [], 'standings' => $standings, 'predictions' => $api->fetchPredictions($apiMatch['fixture']['id'])['response'][0] ?? null];
-        } elseif ($sport === 'Basketball') {
-            $apiMatch = $this->findMatchingBasketballFixture($bfEventName, $preFetchedLive);
-            if (!$apiMatch)
-                return null;
-            $api = new BasketballApiService();
-            $h2h = $api->fetchH2H($apiMatch['teams']['home']['id'] . '-' . $apiMatch['teams']['away']['id']);
-            $standings = (isset($apiMatch['league']['id'], $apiMatch['league']['season'])) ? $api->fetchStandings($apiMatch['league']['id'], $apiMatch['league']['season'])['response'] ?? null : null;
-
-            // Fetch deep statistics for live basketball games
-            $teamStats = $api->fetchGameTeamStatistics($apiMatch['id']);
-            $playerStats = $api->fetchGamePlayerStatistics($apiMatch['id']);
-
-            return [
-                'game' => $apiMatch,
-                'h2h' => $h2h['response'] ?? [],
-                'standings' => $standings,
-                'team_statistics' => $teamStats['response'] ?? [],
-                'player_statistics' => $playerStats['response'] ?? []
-            ];
-        }
-        return null;
+        // Restricted to Soccer
+        $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive);
+        if (!$apiMatch)
+            return null;
+        $api = new FootballApiService();
+        $fullFixture = $api->fetchFixtureDetails($apiMatch['fixture']['id'])['response'][0] ?? $apiMatch;
+        $h2h = $api->fetchH2H($apiMatch['teams']['home']['id'] . '-' . $apiMatch['teams']['away']['id']);
+        $standings = (isset($apiMatch['league']['id'], $apiMatch['league']['season'])) ? $api->fetchStandings($apiMatch['league']['id'], $apiMatch['league']['season'])['response'][0]['league']['standings'] ?? null : null;
+        return ['fixture' => $fullFixture, 'h2h' => $h2h['response'] ?? [], 'standings' => $standings, 'predictions' => $api->fetchPredictions($apiMatch['fixture']['id'])['response'][0] ?? null];
     }
 
     private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null)
@@ -658,29 +641,6 @@ class GiaNikController
         $bfHome = $this->normalizeTeamName($bfTeams[0]);
         $bfAway = $this->normalizeTeamName($bfTeams[1]);
         foreach ($fixtures as $item) {
-            $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
-            $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
-            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) || ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome)))
-                return $item;
-        }
-        return null;
-    }
-
-
-    private function findMatchingBasketballFixture($bfEventName, $preFetchedLive = null)
-    {
-        $liveGames = $preFetchedLive ?? (new BasketballApiService())->fetchLiveGames()['response'] ?? [];
-        return $this->searchInBasketballGameList($bfEventName, $liveGames);
-    }
-
-    private function searchInBasketballGameList($bfEventName, $games)
-    {
-        $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $bfEventName);
-        if (count($bfTeams) < 2)
-            return null;
-        $bfHome = $this->normalizeTeamName($bfTeams[0]);
-        $bfAway = $this->normalizeTeamName($bfTeams[1]);
-        foreach ($games as $item) {
             $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
             $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
             if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) || ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome)))
