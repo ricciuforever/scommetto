@@ -140,6 +140,29 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                             </div>
                         </div>
 
+                        <!-- Manual Betting Section (1X2) -->
+                        <div class="flex items-center gap-2 px-6">
+                            <?php foreach (($m['runners'] ?? []) as $r):
+                                if (in_array($r['name'], [$m['home_name'], $m['away_name'], 'The Draw'])):
+                                    $label = ($r['name'] === 'The Draw') ? 'X' : (($r['name'] === $m['home_name']) ? '1' : '2');
+                                    ?>
+                                    <button onclick='openManualBetModal(<?php echo json_encode([
+                                        "marketId" => $m["marketId"],
+                                        "marketName" => "Match Odds",
+                                        "selectionId" => $r["selectionId"],
+                                        "runnerName" => $r["name"],
+                                        "odds" => $r["back"],
+                                        "eventName" => $m["event"],
+                                        "sport" => $m["sport"]
+                                    ]); ?>)'
+                                        class="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-indigo-500/5 hover:bg-indigo-500/20 border border-indigo-500/10 transition-all">
+                                        <span class="text-[9px] font-black text-slate-500 uppercase"><?php echo $label; ?></span>
+                                        <span
+                                            class="text-xs font-black text-indigo-400 tabular-nums"><?php echo $r['back'] !== '-' ? number_format((float) $r['back'], 2) : '-'; ?></span>
+                                    </button>
+                                <?php endif; endforeach; ?>
+                        </div>
+
                         <!-- Away Team -->
                         <div class="flex items-center gap-4 flex-1 justify-start cursor-pointer hover:opacity-80 transition-opacity"
                             <?php if ($awayId): ?>
@@ -219,4 +242,95 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
 
 <script>
     if (window.lucide) lucide.createIcons();
+
+    function openManualBetModal(data) {
+        // Build modal on the fly
+        const modalId = 'manual-bet-modal';
+        const existing = document.getElementById(modalId);
+        if (existing) existing.remove();
+
+        const mode = window.gianikMode || 'virtual';
+
+        const html = `
+        <div id="${modalId}" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-fade-in" onclick="if(event.target === this) this.remove()">
+            <div class="bg-slate-900 w-full max-w-md rounded-[40px] border border-white/10 shadow-2xl overflow-hidden relative p-8" onclick="event.stopPropagation()">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-accent">
+                        <i data-lucide="zap" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black uppercase italic text-white">Punta Manuale</h3>
+                        <p class="text-[9px] font-black uppercase text-slate-500 tracking-widest">${mode} Mode Active</p>
+                    </div>
+                </div>
+
+                <div class="space-y-4 mb-8">
+                    <div class="p-4 rounded-2xl bg-white/5 border border-white/5">
+                        <div class="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">${data.eventName}</div>
+                        <div class="text-sm font-black text-white italic uppercase">${data.runnerName}</div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="p-4 rounded-2xl bg-white/5 border border-white/5">
+                            <div class="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Quota</div>
+                            <div class="text-xl font-black text-white">@ ${data.odds}</div>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20">
+                            <div class="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-1">Stake (€)</div>
+                            <input type="number" id="manual-stake" value="2.00" step="0.50" min="2.00" 
+                                class="w-full bg-transparent border-none p-0 text-xl font-black text-white outline-none focus:ring-0">
+                        </div>
+                    </div>
+                </div>
+
+                <button id="manual-bet-confirm" 
+                    class="w-full py-4 rounded-2xl bg-accent hover:bg-accent/80 text-white font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2">
+                    <i data-lucide="check-circle" class="w-4 h-4"></i> Conferma Scommessa (${mode.toUpperCase()})
+                </button>
+            </div>
+        </div>`;
+
+        document.body.insertAdjacentHTML('beforeend', html);
+        if (window.lucide) lucide.createIcons();
+
+        document.getElementById('manual-bet-confirm').onclick = async function () {
+            const btn = this;
+            const stake = parseFloat(document.getElementById('manual-stake').value);
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Invio...';
+            if (window.lucide) lucide.createIcons();
+
+            try {
+                const res = await fetch('/api/gianik/place-bet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        marketId: data.marketId,
+                        selectionId: data.selectionId,
+                        runnerName: data.runnerName,
+                        eventName: data.eventName,
+                        sport: data.sport,
+                        odds: data.odds,
+                        stake: stake,
+                        type: mode,
+                        motivation: 'Piazzata manualmente dall\'utente.'
+                    })
+                });
+                const result = await res.json();
+                if (result.status === 'success') {
+                    alert('Scommessa piazzata con successo!');
+                    document.getElementById(modalId).remove();
+                } else {
+                    alert('Errore: ' + result.message);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4"></i> Conferma Scommessa';
+                    if (window.lucide) lucide.createIcons();
+                }
+            } catch (err) {
+                alert('Errore di rete: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4"></i> Conferma Scommessa';
+            }
+        };
+    }
 </script>
