@@ -189,4 +189,121 @@ class FootballDataService
         }
         return $model->getById($id);
     }
+
+    /**
+     * Get live matches with centralized caching and DB sync
+     */
+    public function getLiveMatches($params = [], $cacheSeconds = 60)
+    {
+        $db = \App\Services\Database::getInstance()->getConnection();
+
+        $paramsHash = md5(json_encode($params));
+        $stateKey = "last_live_sync_" . $paramsHash;
+        $cacheFile = Config::DATA_PATH . "api_football_live_" . $paramsHash . ".json";
+
+        // 1. Check last sync from DB
+        $stmt = $db->prepare("SELECT updated_at FROM system_state WHERE `key` = ?");
+        $stmt->execute([$stateKey]);
+        $lastSync = $stmt->fetchColumn();
+
+        $needsSync = true;
+
+        if ($lastSync && (time() - strtotime($lastSync)) < $cacheSeconds && file_exists($cacheFile)) {
+            $needsSync = false;
+        }
+
+        if ($needsSync) {
+            $res = $this->api->fetchLiveMatches($params);
+            if (isset($res['response'])) {
+                // Update DB Fixtures
+                $fixtureModel = new Fixture();
+                foreach ($res['response'] as $item) {
+                    $fixtureModel->save($item);
+                }
+
+                // Update system_state
+                $sql = "INSERT INTO system_state (`key`, `value`, `updated_at`) VALUES (?, 'ok', CURRENT_TIMESTAMP) ";
+                if (\App\Services\Database::getInstance()->isSQLite()) {
+                    $sql .= " ON CONFLICT(`key`) DO UPDATE SET updated_at = CURRENT_TIMESTAMP";
+                } else {
+                    $sql .= " ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP";
+                }
+                $db->prepare($sql)->execute([$stateKey]);
+
+                // Save to file cache for quick access
+                file_put_contents($cacheFile, json_encode($res));
+                return $res;
+            }
+        }
+
+        if (file_exists($cacheFile)) {
+            return json_decode(file_get_contents($cacheFile), true);
+        }
+
+        return ['response' => []];
+    }
+
+    /**
+     * Search a Betfair event in the fixture list using normalized names
+     */
+    public function searchInFixtureList($bfEventName, $fixtures)
+    {
+        $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $bfEventName);
+        if (count($bfTeams) < 2)
+            return null;
+        $bfHome = $this->normalizeTeamName($bfTeams[0]);
+        $bfAway = $this->normalizeTeamName($bfTeams[1]);
+        foreach ($fixtures as $item) {
+            $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
+            $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
+            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) || ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome)))
+                return $item;
+        }
+        return null;
+    }
+
+    /**
+     * Normalize team name for better matching
+     */
+    public function normalizeTeamName($name)
+    {
+        $name = strtolower($name);
+        $replacements = [
+            'man ' => 'manchester ',
+            'man utd' => 'manchester united',
+            'man city' => 'manchester city',
+            'st ' => 'saint ',
+            'int ' => 'inter ',
+            'ath ' => 'athletic ',
+            'atl ' => 'atletico ',
+            'de ' => ' ',
+            'la ' => ' '
+        ];
+        foreach ($replacements as $search => $replace)
+            $name = str_replace($search, $replace, $name);
+
+        $remove = [
+            'fc', 'united', 'city', 'town', 'real', 'atlético', 'atletico', 'inter', 'u23', 'u21', 'u19',
+            'women', 'donne', 'femminile', 'sports', 'sc', 'ac', 'as', 'cf', 'rc', 'de', 'rs',
+            'bk', 'fk', 'ff', 'if', 'is', 'sk', 'sv', 'spvgg', 'bsc', 'tsv', 'vfb', 'vfl', 'utd', 'ballklubb'
+        ];
+        foreach ($remove as $r)
+            $name = preg_replace('/\b' . preg_quote($r, '/') . '\b/i', '', $name);
+
+        return trim(preg_replace('/\s+/', ' ', $name));
+    }
+
+    /**
+     * Robust matching between two normalized names
+     */
+    public function isMatch($n1, $n2)
+    {
+        if (empty($n1) || empty($n2))
+            return false;
+        if (strpos($n1, $n2) !== false || strpos($n2, $n1) !== false)
+            return true;
+        if (levenshtein($n1, $n2) < 3)
+            return true;
+        return false;
+    }
 }

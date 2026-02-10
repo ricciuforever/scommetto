@@ -86,8 +86,7 @@ class GiaNikController
             }
 
             // --- Pre-fetch Enrichment Data ---
-            $api = new FootballApiService();
-            $apiLiveRes = $api->fetchLiveMatches();
+            $apiLiveRes = $this->footballData->getLiveMatches();
             $apiLiveMatches = $apiLiveRes['response'] ?? [];
 
             // 5. Merge Data
@@ -144,7 +143,7 @@ class GiaNikController
                 // --- Enrichment ---
                 $foundApiData = false;
                 if (true) { // Always soccer now
-                    $match = $this->searchInFixtureList($m['event'], $apiLiveMatches);
+                    $match = $this->footballData->searchInFixtureList($m['event'], $apiLiveMatches);
                     if ($match) {
                         $m['fixture_id'] = $match['fixture']['id'] ?? null;
                         $m['home_id'] = $match['teams']['home']['id'] ?? null;
@@ -435,8 +434,7 @@ class GiaNikController
             $liveEventsRes = $this->bf->getLiveEvents($eventTypeIds);
             $events = $liveEventsRes['result'] ?? [];
 
-            $api = new FootballApiService();
-            $apiLiveRes = $api->fetchLiveMatches();
+            $apiLiveRes = $this->footballData->getLiveMatches();
             $apiLiveFixtures = $apiLiveRes['response'] ?? [];
 
             if (empty($events)) {
@@ -648,115 +646,8 @@ class GiaNikController
 
     private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null)
     {
-        $liveFixtures = $preFetchedLive ?? (new FootballApiService())->fetchLiveMatches()['response'] ?? [];
-        return $this->searchInFixtureList($bfEventName, $liveFixtures);
-    }
-
-    private function searchInFixtureList($bfEventName, $fixtures)
-    {
-        $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $bfEventName);
-        if (count($bfTeams) < 2)
-            return null;
-        $bfHome = $this->normalizeTeamName($bfTeams[0]);
-        $bfAway = $this->normalizeTeamName($bfTeams[1]);
-        foreach ($fixtures as $item) {
-            $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
-            $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
-            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) || ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome)))
-                return $item;
-        }
-        return null;
-    }
-
-    private function normalizeTeamName($name)
-    {
-        $name = strtolower($name);
-        $replacements = [
-            'man ' => 'manchester ',
-            'man utd' => 'manchester united',
-            'man city' => 'manchester city',
-            'st ' => 'saint ',
-            'int ' => 'inter ',
-            'ath ' => 'athletic ',
-            'atl ' => 'atletico ',
-            'de ' => ' ',
-            'la ' => ' '
-        ];
-        foreach ($replacements as $search => $replace)
-            $name = str_replace($search, $replace, $name);
-
-        $remove = [
-            'fc',
-            'united',
-            'city',
-            'town',
-            'real',
-            'atlético',
-            'atletico',
-            'inter',
-            'u23',
-            'u21',
-            'u19',
-            'women',
-            'donne',
-            'femminile',
-            'sports',
-            'sc',
-            'ac',
-            'as',
-            'cf',
-            'rc',
-            'de',
-            'rs',
-            'blazers',
-            'pistons',
-            'lakers',
-            'clippers',
-            'warriors',
-            'bulls',
-            'celtics',
-            'knicks',
-            'heat',
-            'jazz',
-            'nuggets',
-            'rockets',
-            'spurs',
-            'suns',
-            'mavericks',
-            'grizzlies',
-            'hornets',
-            'magic',
-            'bucks',
-            'pacers',
-            'cavs',
-            'cavaliers',
-            'hawks',
-            'nets',
-            '76ers',
-            'sixers',
-            'wizards',
-            'raptors',
-            'kings',
-            'pelicans',
-            'timberwolves',
-            'wolves',
-            'thunder'
-        ];
-        foreach ($remove as $r)
-            $name = preg_replace('/\b' . preg_quote($r, '/') . '\b/i', '', $name);
-
-        return trim(preg_replace('/\s+/', ' ', $name));
-    }
-
-    private function isMatch($n1, $n2)
-    {
-        if (empty($n1) || empty($n2))
-            return false;
-        if (strpos($n1, $n2) !== false || strpos($n2, $n1) !== false)
-            return true;
-        if (levenshtein($n1, $n2) < 3)
-            return true;
-        return false;
+        $liveFixtures = $preFetchedLive ?? $this->footballData->getLiveMatches()['response'] ?? [];
+        return $this->footballData->searchInFixtureList($bfEventName, $liveFixtures);
     }
 
     public function recentBets()

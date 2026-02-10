@@ -439,6 +439,12 @@ try {
           `start_date` DATE,
           `end_date` DATE,
           `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
+
+    "system_state" => "CREATE TABLE IF NOT EXISTS `system_state` (
+          `key` VARCHAR(100) PRIMARY KEY,
+          `value` TEXT,
+          `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )"
   ];
 
