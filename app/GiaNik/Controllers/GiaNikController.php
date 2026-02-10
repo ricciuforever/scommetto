@@ -786,12 +786,55 @@ class GiaNikController
 
             $events = $this->footballData->getFixtureEvents($fixtureId, $statusShort);
             $stats = $this->footballData->getFixtureStatistics($fixtureId, $statusShort);
+
+            // Try to get predictions - if not in DB, sync it
             $predictionsData = $this->footballData->getFixturePredictions($fixtureId, $statusShort);
-            $predictions = $predictionsData['prediction_json'] ?? null;
+            $predictions = null;
+            if ($predictionsData && isset($predictionsData['prediction_json'])) {
+                $predictions = $predictionsData['prediction_json'];
+            }
 
             require __DIR__ . '/../Views/partials/match_details.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger text-[10px]">Error loading details: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function matchStats($fixtureId)
+    {
+        try {
+            $details = $this->footballData->getFixtureDetails($fixtureId);
+            $statusShort = $details['status_short'] ?? 'NS';
+            $stats = $this->footballData->getFixtureStatistics($fixtureId, $statusShort);
+            require __DIR__ . '/../Views/partials/modals/stats.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function matchLineups($fixtureId)
+    {
+        try {
+            $details = $this->footballData->getFixtureDetails($fixtureId);
+            $statusShort = $details['status_short'] ?? 'NS';
+            $lineups = $this->footballData->getFixtureLineups($fixtureId, $statusShort);
+            require __DIR__ . '/../Views/partials/modals/lineups.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function matchH2H($fixtureId)
+    {
+        try {
+            $details = $this->footballData->getFixtureDetails($fixtureId);
+            // We need teams IDs to get H2H
+            $homeId = $details['teams']['home']['id'];
+            $awayId = $details['teams']['away']['id'];
+            $h2h = $this->footballData->getH2H($homeId, $awayId);
+            require __DIR__ . '/../Views/partials/modals/h2h.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
         }
     }
 

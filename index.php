@@ -169,9 +169,21 @@ try {
         }
     }
 
-    // NEW: Match Details Modal (HTML)
-    if (preg_match('#^/gianik/match-details-modal/(\d+)$#i', $path, $matches)) {
-        require __DIR__ . '/app/GiaNik/Views/partials/modals/match_details.php';
+    // NEW: Stats Modal (HTML)
+    if (preg_match('#^/gianik/stats-modal/(\d+)$#i', $path, $matches)) {
+        (new \App\GiaNik\Controllers\GiaNikController())->matchStats($matches[1]);
+        return;
+    }
+
+    // NEW: Lineups Modal (HTML)
+    if (preg_match('#^/gianik/lineups-modal/(\d+)$#i', $path, $matches)) {
+        (new \App\GiaNik\Controllers\GiaNikController())->matchLineups($matches[1]);
+        return;
+    }
+
+    // NEW: H2H Modal (HTML)
+    if (preg_match('#^/gianik/h2h-modal/(\d+)$#i', $path, $matches)) {
+        (new \App\GiaNik\Controllers\GiaNikController())->matchH2H($matches[1]);
         return;
     }
 

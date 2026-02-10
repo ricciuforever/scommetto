@@ -71,128 +71,46 @@ require __DIR__ . '/../../Views/layout/top.php';
 <script src="/js/modals.js"></script>
 <script>
     // Modal helpers
-    async function openMatchDetailsModal(fixtureId) {
+    async function openMatchStatsModal(fixtureId) {
         try {
-            const response = await fetch(`/gianik/match-details-modal/${fixtureId}`);
+            const response = await fetch(`/gianik/stats-modal/${fixtureId}`);
             const html = await response.text();
-
             const container = document.createElement('div');
             container.innerHTML = html;
             document.body.appendChild(container.firstElementChild);
-
-            if (typeof loadMatchData === 'function') {
-                loadMatchData(fixtureId);
-            }
-
             if (window.lucide) lucide.createIcons();
         } catch (error) {
-            console.error('Error opening match details modal:', error);
+            console.error('Error opening stats modal:', error);
         }
     }
 
-    let matchData = null;
-    function switchMatchTab(tab) {
-        document.querySelectorAll('.match-tab').forEach(t => {
-            t.classList.remove('bg-accent', 'text-white');
-            t.classList.add('text-slate-500');
-        });
-        const activeTab = document.getElementById('tab-' + tab);
-        if (activeTab) {
-            activeTab.classList.add('bg-accent', 'text-white');
-            activeTab.classList.remove('text-slate-500');
-        }
-
-        document.querySelectorAll('.match-tab-content').forEach(c => c.classList.add('hidden'));
-        const activeContent = document.getElementById('content-' + tab);
-        if (activeContent) activeContent.classList.remove('hidden');
-    }
-
-    async function loadMatchData(fixtureId) {
+    async function openMatchLineupsModal(fixtureId) {
         try {
-            const response = await fetch(`/api/match-details/${fixtureId}`);
-            matchData = await response.json();
-
-            // Update header
-            const hLogo = document.getElementById('match-home-logo');
-            if (hLogo) hLogo.src = matchData.fixture.team_home_logo;
-            const aLogo = document.getElementById('match-away-logo');
-            if (aLogo) aLogo.src = matchData.fixture.team_away_logo;
-
-            const hName = document.getElementById('match-home-name');
-            if (hName) hName.textContent = matchData.fixture.team_home_name;
-            const aName = document.getElementById('match-away-name');
-            if (aName) aName.textContent = matchData.fixture.team_away_name;
-
-            const score = document.getElementById('match-score');
-            if (score) score.textContent = `${matchData.fixture.score_home || 0}-${matchData.fixture.score_away || 0}`;
-
-            const status = document.getElementById('match-status');
-            if (status) status.textContent = matchData.fixture.status_short + (matchData.fixture.elapsed ? ` ${matchData.fixture.elapsed}'` : '');
-
-            const league = document.getElementById('match-league');
-            if (league) league.textContent = matchData.fixture.league_name;
-
-            const date = document.getElementById('match-date');
-            if (date) date.textContent = new Date(matchData.fixture.date).toLocaleString('it-IT');
-
-            // Render tabs
-            renderMatchStats(matchData.statistics);
-            renderEvents(matchData.events);
-        } catch (error) {
-            console.error('Error loading match data:', error);
-        }
-    }
-
-    function renderMatchStats(stats) {
-        const homeStats = stats.find(s => s.team_id == matchData.fixture.team_home_id);
-        const awayStats = stats.find(s => s.team_id == matchData.fixture.team_away_id);
-        if (!homeStats || !awayStats) return;
-
-        const statTypes = ['Ball Possession', 'Total Shots', 'Shots on Goal', 'Corner Kicks', 'Fouls', 'Yellow Cards', 'Total passes', 'Passes %'];
-        const renderStat = (stat, containerId) => {
-            const container = document.getElementById(containerId);
-            if (!container) return;
-            const statsJson = JSON.parse(stat.stats_json || '[]');
-            let html = '';
-            statTypes.forEach(type => {
-                const item = statsJson.find(s => s.type === type);
-                const value = item?.value || 0;
-                html += `
-                    <div class="flex justify-between items-center py-2 border-b border-white/5">
-                        <span class="text-xs text-slate-500 font-bold uppercase">${type}</span>
-                        <span class="text-sm font-black text-white">${value}</span>
-                    </div>`;
-            });
+            const response = await fetch(`/gianik/lineups-modal/${fixtureId}`);
+            const html = await response.text();
+            const container = document.createElement('div');
             container.innerHTML = html;
-        };
-        renderStat(homeStats, 'home-stats');
-        renderStat(awayStats, 'away-stats');
-    }
-
-    function renderEvents(events) {
-        const container = document.getElementById('events-timeline');
-        if (!container) return;
-        if (!events || events.length === 0) {
-            container.innerHTML = '<div class="text-center text-slate-500 py-8">Nessun evento registrato</div>';
-            return;
+            document.body.appendChild(container.firstElementChild);
+            if (window.lucide) lucide.createIcons();
+        } catch (error) {
+            console.error('Error opening lineups modal:', error);
         }
-
-        let html = '';
-        events.forEach(event => {
-            const icon = event.type === 'Goal' ? '⚽' : event.type === 'Card' ? (event.detail === 'Yellow Card' ? '🟨' : '🟥') : '🔄';
-            html += `
-                <div class="glass p-4 rounded-2xl border-white/5 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition-all" 
-                     onclick="openPlayerModal(${event.player_id || event.player.id}, ${matchData.fixture.id || matchData.fixture.fixture_id})">
-                    <div class="text-2xl">${icon}</div>
-                    <div class="flex-1">
-                        <div class="text-sm font-black text-white">${event.detail}</div>
-                        <div class="text-xs text-slate-500 mt-1">${event.player_name || event.player.name}</div>
-                    </div>
-                    <div class="text-accent font-black text-sm">${event.time_elapsed || event.time.elapsed}'</div>
-                </div>`;
-        });
-        container.innerHTML = html;
     }
+
+    async function openMatchH2HModal(fixtureId) {
+        try {
+            const response = await fetch(`/gianik/h2h-modal/${fixtureId}`);
+            const html = await response.text();
+            const container = document.createElement('div');
+            container.innerHTML = html;
+            document.body.appendChild(container.firstElementChild);
+            if (window.lucide) lucide.createIcons();
+        } catch (error) {
+            console.error('Error opening H2H modal:', error);
+        }
+    }
+
+
 
     async function openPlayerModal(playerId, fixtureId = null) {
         closeAllModals(); // Close other modals first if needed

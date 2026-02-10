@@ -187,11 +187,23 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                             </button>
 
                             <?php if ($fixtureId): ?>
-                                <button onclick="openMatchDetailsModal(<?php echo $fixtureId; ?>)"
-                                    class="p-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/10 transition-all"
-                                    title="Dati Match Completi">
-                                    <i data-lucide="info" class="w-4 h-4"></i>
-                                </button>
+                                <div class="flex items-center gap-1">
+                                    <button onclick="openMatchStatsModal(<?php echo $fixtureId; ?>)"
+                                        class="p-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/10 transition-all"
+                                        title="📊 Live Stats">
+                                        <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+                                    </button>
+                                    <button onclick="openMatchLineupsModal(<?php echo $fixtureId; ?>)"
+                                        class="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/10 transition-all"
+                                        title="📋 Formazioni">
+                                        <i data-lucide="users" class="w-4 h-4"></i>
+                                    </button>
+                                    <button onclick="openMatchH2HModal(<?php echo $fixtureId; ?>)"
+                                        class="p-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/10 transition-all"
+                                        title="🔄 H2H & Form">
+                                        <i data-lucide="arrow-left-right" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
                             <?php endif; ?>
                         </div>
                     </div>
