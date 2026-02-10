@@ -256,6 +256,7 @@ class GiaNikController
         try {
             $resCat = $this->bf->request('listMarketCatalogue', [
                 'filter' => ['marketIds' => [$marketId]],
+                'maxResults' => 1,
                 'marketProjection' => ['EVENT', 'COMPETITION', 'EVENT_TYPE', 'RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION']
             ]);
             $initialMc = $resCat['result'][0] ?? null;
