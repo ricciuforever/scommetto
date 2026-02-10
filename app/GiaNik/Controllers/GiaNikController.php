@@ -35,14 +35,10 @@ class GiaNikController
                 return;
             }
 
-            // 1. Get Event Types (Sports)
-            $eventTypesRes = $this->bf->getEventTypes();
-            $eventTypeIds = [];
-            foreach ($eventTypesRes['result'] ?? [] as $et) {
-                $eventTypeIds[] = $et['eventType']['id'];
-            }
+            // 1. Get Event Types (Sports) - Restricted to Soccer (ID 1)
+            $eventTypeIds = ['1'];
 
-            // 2. Get Live Events for all sports
+            // 2. Get Live Events for Soccer
             $liveEventsRes = $this->bf->getLiveEvents($eventTypeIds);
             $events = $liveEventsRes['result'] ?? [];
 
@@ -59,8 +55,6 @@ class GiaNikController
             foreach ($chunks as $chunk) {
                 $targetMarkets = [
                     'MATCH_ODDS',
-                    'WINNER',
-                    'MONEYLINE',
                     'DOUBLE_CHANCE',
                     'DRAW_NO_BET',
                     'HALF_TIME',
@@ -69,10 +63,7 @@ class GiaNikController
                     'OVER_UNDER_25',
                     'OVER_UNDER_35',
                     'OVER_UNDER_45',
-                    'BOTH_TEAMS_TO_SCORE',
-                    'SET_BETTING',
-                    'TOTAL_GAMES',
-                    'TOTAL_SETS'
+                    'BOTH_TEAMS_TO_SCORE'
                 ];
                 $res = $this->bf->getMarketCatalogues($chunk, 100, $targetMarkets);
                 if (isset($res['result'])) {
@@ -95,10 +86,6 @@ class GiaNikController
             $api = new FootballApiService();
             $apiLiveRes = $api->fetchLiveMatches();
             $apiLiveMatches = $apiLiveRes['response'] ?? [];
-
-            $apiBasket = new BasketballApiService();
-            $apiBasketLiveRes = $apiBasket->fetchLiveGames();
-            $apiBasketLiveMatches = $apiBasketLiveRes['response'] ?? [];
 
             // 5. Merge Data
             $marketBooksMap = [];
@@ -150,15 +137,6 @@ class GiaNikController
                         $m['score'] = ($match['goals']['home'] ?? '0') . '-' . ($match['goals']['away'] ?? '0');
                         $elapsed = $match['fixture']['status']['elapsed'] ?? 0;
                         $m['status_label'] = ($match['fixture']['status']['short'] ?? 'LIVE') . ($elapsed ? " $elapsed'" : "");
-                        $m['has_api_data'] = true;
-                        $foundApiData = true;
-                    }
-                } elseif ($sport === 'Basketball') {
-                    $match = $this->searchInBasketballGameList($m['event'], $apiBasketLiveMatches);
-                    if ($match) {
-                        $m['score'] = ($match['scores']['home']['total'] ?? '0') . '-' . ($match['scores']['away']['total'] ?? '0');
-                        $timer = $match['status']['timer'] ?? '';
-                        $m['status_label'] = ($match['status']['short'] ?? 'LIVE') . ($timer ? " $timer" : "");
                         $m['has_api_data'] = true;
                         $foundApiData = true;
                     }
@@ -274,8 +252,6 @@ class GiaNikController
 
             $marketTypes = [
                 'MATCH_ODDS',
-                'WINNER',
-                'MONEYLINE',
                 'OVER_UNDER_05',
                 'OVER_UNDER_15',
                 'OVER_UNDER_25',
@@ -287,10 +263,7 @@ class GiaNikController
                 'HALF_TIME',
                 'HALF_TIME_FULL_TIME',
                 'MATCH_ODDS_AND_OU_25',
-                'MATCH_ODDS_AND_BTTS',
-                'SET_BETTING',
-                'TOTAL_GAMES',
-                'TOTAL_SETS'
+                'MATCH_ODDS_AND_BTTS'
             ];
 
             $allMcRes = $this->bf->getMarketCatalogues([$eventId], 20, $marketTypes);
@@ -354,8 +327,6 @@ class GiaNikController
 
             if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
                 $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition']);
-            } elseif ($event['sport'] === 'Basketball') {
-                $event['api_basketball'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition']);
             }
 
             $gemini = new GeminiService();
@@ -426,8 +397,8 @@ class GiaNikController
         header('Content-Type: application/json');
         $results = ['scanned' => 0, 'new_bets' => 0, 'errors' => []];
         try {
-            $eventTypesRes = $this->bf->getEventTypes();
-            $eventTypeIds = array_map(fn($et) => $et['eventType']['id'], $eventTypesRes['result'] ?? []);
+            // Restricted to Soccer (ID 1)
+            $eventTypeIds = ['1'];
             $liveEventsRes = $this->bf->getLiveEvents($eventTypeIds);
             $events = $liveEventsRes['result'] ?? [];
 
@@ -443,8 +414,6 @@ class GiaNikController
             $eventIds = array_map(fn($e) => $e['event']['id'], $events);
             $marketTypes = [
                 'MATCH_ODDS',
-                'WINNER',
-                'MONEYLINE',
                 'OVER_UNDER_05',
                 'OVER_UNDER_15',
                 'OVER_UNDER_25',
@@ -456,10 +425,7 @@ class GiaNikController
                 'HALF_TIME',
                 'HALF_TIME_FULL_TIME',
                 'MATCH_ODDS_AND_OU_25',
-                'MATCH_ODDS_AND_BTTS',
-                'SET_BETTING',
-                'TOTAL_GAMES',
-                'TOTAL_SETS'
+                'MATCH_ODDS_AND_BTTS'
             ];
 
             $marketCatalogues = [];
@@ -535,8 +501,6 @@ class GiaNikController
 
                     if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
                         $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition']);
-                    } elseif ($event['sport'] === 'Basketball') {
-                        $event['api_basketball'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition']);
                     }
 
                     $vBalance = $this->getVirtualBalance();
@@ -800,75 +764,25 @@ class GiaNikController
     {
         try {
             $statusFilter = $_GET['status'] ?? 'all';
-            $sportFilter = $_GET['sport'] ?? 'all';
 
-            // 1. Sport mapping
+            // 1. Sport mapping (only soccer needed now but kept for consistency)
             $sportMapping = [
                 'Soccer' => 'Calcio',
-                'Football' => 'Calcio',
-                'Tennis' => 'Tennis',
-                'Basketball' => 'Basket',
-                'Volleyball' => 'Volley',
-                'Horse Racing' => 'Ippica',
-                'Greyhounds' => 'Levrieri',
-                'Cricket' => 'Cricket',
-                'Rugby Union' => 'Rugby',
-                'Rugby League' => 'Rugby',
-                'American Football' => 'Football Am.',
-                'Ice Hockey' => 'Hockey su Ghiaccio',
-                'Darts' => 'Freccette',
-                'Golf' => 'Golf',
-                'Snooker' => 'Snooker',
-                'Boxing' => 'Pugilato',
-                'Mixed Martial Arts' => 'MMA',
-                'Motor Sport' => 'Motori',
-                'Esports' => 'Esports'
+                'Football' => 'Calcio'
             ];
 
-            // 2. Fetch all sports that have bets for counters
-            $countSql = "SELECT sport, COUNT(*) as count FROM bets";
-            $countWhere = [];
-            $countParams = [];
-            if ($statusFilter === 'won') {
-                $countWhere[] = "status = 'won'";
-            } elseif ($statusFilter === 'lost') {
-                $countWhere[] = "status = 'lost'";
-            }
-            if (!empty($countWhere)) {
-                $countSql .= " WHERE " . implode(" AND ", $countWhere);
-            }
-            $countSql .= " GROUP BY sport";
-            $stmtCounts = $this->db->prepare($countSql);
-            $stmtCounts->execute($countParams);
-            $sportCountsRaw = $stmtCounts->fetchAll(PDO::FETCH_ASSOC);
-
-            $sports = [];
-            foreach ($sportCountsRaw as $row) {
-                $engName = $row['sport'];
-                $sports[] = [
-                    'id' => $engName,
-                    'name' => $sportMapping[$engName] ?? $engName,
-                    'count' => $row['count']
-                ];
-            }
-
-            // Sort sports by name
-            usort($sports, fn($a, $b) => strcasecmp($a['name'], $b['name']));
-
-            // 3. Main query for bets
+            // 2. Main query for bets
             $sql = "SELECT * FROM bets";
             $where = [];
             $params = [];
+
+            // Restricted to Soccer/Football
+            $where[] = "sport IN ('Soccer', 'Football')";
 
             if ($statusFilter === 'won') {
                 $where[] = "status = 'won'";
             } elseif ($statusFilter === 'lost') {
                 $where[] = "status = 'lost'";
-            }
-
-            if ($sportFilter !== 'all') {
-                $where[] = "sport = ?";
-                $params[] = $sportFilter;
             }
 
             if (!empty($where)) {
@@ -882,12 +796,13 @@ class GiaNikController
 
             // Map sport names for bets
             foreach ($bets as &$bet) {
-                $bet['sport_it'] = $sportMapping[$bet['sport']] ?? $bet['sport'];
+                $bet['sport_it'] = $sportMapping[$bet['sport']] ?? 'Calcio';
             }
 
             // Pass filters to the view
             $currentStatus = $statusFilter;
-            $currentSport = $sportFilter;
+            $currentSport = 'all';
+            $sports = []; // Dropdown removed from view
 
             require __DIR__ . '/../Views/partials/recent_bets_sidebar.php';
         } catch (\Throwable $e) {

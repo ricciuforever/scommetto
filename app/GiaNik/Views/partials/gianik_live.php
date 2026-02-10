@@ -3,30 +3,6 @@
 $groupedMatches = $groupedMatches ?? [];
 $account = $account ?? ['available' => 0, 'exposure' => 0];
 
-$sportKeys = array_keys($groupedMatches);
-$activeSport = $sportKeys[0] ?? null;
-
-$translationMap = [
-    'Soccer' => 'Calcio',
-    'Football' => 'Calcio',
-    'Tennis' => 'Tennis',
-    'Basketball' => 'Basket',
-    'Volleyball' => 'Pallavolo',
-    'Cricket' => 'Cricket',
-    'Ice Hockey' => 'Hockey',
-    'American Football' => 'Football',
-    'Rugby Union' => 'Rugby',
-    'Rugby League' => 'Rugby',
-    'Golf' => 'Golf',
-    'Cycling' => 'Ciclismo',
-    'Motor Sport' => 'Motori',
-    'Darts' => 'Freccette',
-    'Snooker' => 'Snooker',
-    'Boxing' => 'Pugilato',
-    'Mixed Martial Arts' => 'MMA',
-    'Horse Racing' => 'Ippica',
-    'Greyhounds' => 'Levrieri'
-];
 ?>
 
 <style>
@@ -95,30 +71,13 @@ $translationMap = [
     </div>
 <?php else: ?>
 
-    <!-- Sport Switcher Tabs -->
-    <div class="flex border-b border-white/10 mb-6 overflow-x-auto no-scrollbar scroll-smooth">
-        <?php foreach ($groupedMatches as $sport => $matches):
-            $isActive = $sport === $activeSport;
-            $translated = $translationMap[$sport] ?? $sport;
-            $count = count($matches);
-            $sportId = preg_replace('/[^a-zA-Z0-9]/', '', $sport);
-            ?>
-            <button onclick="switchTab('<?php echo $sportId; ?>', this)"
-                class="tab-btn px-6 py-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex-shrink-0 flex items-center gap-2 <?php echo $isActive ? 'border-accent text-white bg-white/5' : 'border-transparent text-slate-500 hover:text-slate-300'; ?>">
-                <?php echo $translated; ?>
-                <span class="bg-white/10 px-1.5 py-0.5 rounded text-[10px] opacity-70"><?php echo $count; ?></span>
-            </button>
-        <?php endforeach; ?>
-    </div>
-
-    <!-- Content Sections -->
-    <?php foreach ($groupedMatches as $sport => $matches):
-        $isActive = $sport === $activeSport;
-        $sportId = preg_replace('/[^a-zA-Z0-9]/', '', $sport);
-        ?>
-        <div id="content-<?php echo $sportId; ?>" class="sport-content <?php echo $isActive ? 'animate-fade-in' : 'hidden'; ?>">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <?php foreach ($matches as $m):
+    <!-- Events Grid -->
+    <div class="animate-fade-in">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <?php
+            $allMatches = [];
+            foreach($groupedMatches as $matches) $allMatches = array_merge($allMatches, $matches);
+            foreach ($allMatches as $m):
                     $marketId = $m['marketId'];
                     $runners = $m['runners'] ?? [];
                     ?>
@@ -195,30 +154,10 @@ $translationMap = [
                     </div>
                 <?php endforeach; ?>
             </div>
-        </div>
-    <?php endforeach; ?>
+    </div>
 
 <?php endif; ?>
 
 <script>
     if (window.lucide) lucide.createIcons();
-
-    window.switchTab = function (sportId, btn) {
-        // Reset tabs
-        document.querySelectorAll('.tab-btn').forEach(b => {
-            b.classList.remove('border-accent', 'text-white', 'bg-white/5');
-            b.classList.add('border-transparent', 'text-slate-500');
-        });
-        // Activate button
-        btn.classList.remove('border-transparent', 'text-slate-500');
-        btn.classList.add('border-accent', 'text-white', 'bg-white/5');
-
-        // Toggle Content
-        document.querySelectorAll('.sport-content').forEach(c => c.classList.add('hidden'));
-        const target = document.getElementById('content-' + sportId);
-        if (target) {
-            target.classList.remove('hidden');
-            if (window.lucide) lucide.createIcons();
-        }
-    }
 </script>
