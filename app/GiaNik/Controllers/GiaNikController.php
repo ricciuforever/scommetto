@@ -192,53 +192,29 @@ class GiaNikController
                 $foundApiData = false;
                 if (true) { // Always soccer now
                     $countryCode = $m['country'];
-                    $mappedCountry = null;
-                    if ($countryCode) {
-                        $map = [
-                            'GB' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
-                            'UK' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
-                            'PT' => 'Portugal',
-                            'CO' => 'Colombia',
-                            'ES' => 'Spain',
-                            'IT' => 'Italy',
-                            'FR' => 'France',
-                            'DE' => 'Germany',
-                            'BR' => 'Brazil',
-                            'AR' => 'Argentina',
-                            'NL' => 'Netherlands',
-                            'BE' => 'Belgium',
-                            'TR' => 'Turkey',
-                            'GR' => 'Greece',
-                            'RU' => 'Russia',
-                            'UA' => 'Ukraine',
-                            'PL' => 'Poland',
-                            'RO' => 'Romania',
-                            'AT' => 'Austria',
-                            'CH' => 'Switzerland',
-                            'DK' => 'Denmark',
-                            'NO' => 'Norway',
-                            'SE' => 'Sweden',
-                            'HR' => 'Croatia',
-                            'CZ' => 'Czech Republic',
-                            'MX' => 'Mexico',
-                            'CL' => 'Chile',
-                            'PE' => 'Peru',
-                            'UY' => 'Uruguay',
-                            'PY' => 'Paraguay',
-                            'EC' => 'Ecuador',
-                            'VE' => 'Venezuela',
-                            'BO' => 'Bolivia',
-                            'US' => 'USA',
-                            'AU' => 'Australia',
-                            'JP' => 'Japan',
-                            'CN' => 'China',
-                            'KR' => 'South Korea',
-                            'SA' => 'Saudi Arabia',
-                        ];
-                        $mappedCountry = $map[$countryCode] ?? null;
+                    $mappedCountry = $this->getCountryMapping($countryCode);
+
+                    // Handle international/continental competitions
+                    $comp = strtolower($m['competition']);
+                    if (strpos($comp, 'champions league') !== false || 
+                        strpos($comp, 'europa league') !== false || 
+                        strpos($comp, 'conference league') !== false || 
+                        strpos($comp, 'friendly') !== false ||
+                        strpos($comp, 'cup') !== false ||
+                        strpos($comp, 'international') !== false ||
+                        strpos($comp, 'world cup') !== false ||
+                        strpos($comp, 'euro ') !== false ||
+                        strpos($comp, 'copa america') !== false) {
+                        if ($mappedCountry) {
+                            $mappedCountry = is_array($mappedCountry) ? $mappedCountry : [$mappedCountry];
+                            $mappedCountry[] = 'World';
+                        } else {
+                            $mappedCountry = 'World';
+                        }
                     }
 
                     $match = $this->footballData->searchInFixtureList($m['event'], $apiLiveMatches, $mappedCountry);
+
                     if ($match) {
                         $m['fixture_id'] = $match['fixture']['id'] ?? null;
                         $m['home_id'] = $match['teams']['home']['id'] ?? null;
@@ -938,53 +914,67 @@ class GiaNikController
         ];
     }
 
+    private function getCountryMapping($countryCode)
+    {
+        if (!$countryCode) return null;
+        $map = [
+            'GB' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
+            'UK' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
+            'PT' => 'Portugal',
+            'CO' => 'Colombia',
+            'ES' => 'Spain',
+            'IT' => 'Italy',
+            'FR' => 'France',
+            'DE' => 'Germany',
+            'BR' => 'Brazil',
+            'AR' => 'Argentina',
+            'NL' => 'Netherlands',
+            'BE' => 'Belgium',
+            'TR' => 'Turkey',
+            'GR' => 'Greece',
+            'RU' => 'Russia',
+            'UA' => 'Ukraine',
+            'PL' => 'Poland',
+            'RO' => 'Romania',
+            'AT' => 'Austria',
+            'CH' => 'Switzerland',
+            'DK' => 'Denmark',
+            'NO' => 'Norway',
+            'SE' => 'Sweden',
+            'HR' => 'Croatia',
+            'CZ' => 'Czech Republic',
+            'MX' => 'Mexico',
+            'CL' => 'Chile',
+            'PE' => 'Peru',
+            'UY' => 'Uruguay',
+            'PY' => 'Paraguay',
+            'EC' => 'Ecuador',
+            'VE' => 'Venezuela',
+            'BO' => 'Bolivia',
+            'BA' => 'Bosnia and Herzegovina',
+            'RS' => 'Serbia',
+            'BG' => 'Bulgaria',
+            'HU' => 'Hungary',
+            'SK' => 'Slovakia',
+            'SI' => 'Slovenia',
+            'CY' => 'Cyprus',
+            'IL' => 'Israel',
+            'US' => 'USA',
+            'AU' => 'Australia',
+            'JP' => 'Japan',
+            'CN' => 'China',
+            'KR' => 'South Korea',
+            'SA' => 'Saudi Arabia',
+            'AE' => 'UAE',
+            'QA' => 'Qatar',
+            'IE' => 'Ireland',
+        ];
+        return $map[strtoupper($countryCode)] ?? null;
+    }
+
     private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null, $countryCode = null)
     {
-        $mappedCountry = null;
-        if ($countryCode) {
-            $map = [
-                'GB' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
-                'UK' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
-                'PT' => 'Portugal',
-                'CO' => 'Colombia',
-                'ES' => 'Spain',
-                'IT' => 'Italy',
-                'FR' => 'France',
-                'DE' => 'Germany',
-                'BR' => 'Brazil',
-                'AR' => 'Argentina',
-                'NL' => 'Netherlands',
-                'BE' => 'Belgium',
-                'TR' => 'Turkey',
-                'GR' => 'Greece',
-                'RU' => 'Russia',
-                'UA' => 'Ukraine',
-                'PL' => 'Poland',
-                'RO' => 'Romania',
-                'AT' => 'Austria',
-                'CH' => 'Switzerland',
-                'DK' => 'Denmark',
-                'NO' => 'Norway',
-                'SE' => 'Sweden',
-                'HR' => 'Croatia',
-                'CZ' => 'Czech Republic',
-                'MX' => 'Mexico',
-                'CL' => 'Chile',
-                'PE' => 'Peru',
-                'UY' => 'Uruguay',
-                'PY' => 'Paraguay',
-                'EC' => 'Ecuador',
-                'VE' => 'Venezuela',
-                'BO' => 'Bolivia',
-                'US' => 'USA',
-                'AU' => 'Australia',
-                'JP' => 'Japan',
-                'CN' => 'China',
-                'KR' => 'South Korea',
-                'SA' => 'Saudi Arabia',
-            ];
-            $mappedCountry = $map[$countryCode] ?? null;
-        }
+        $mappedCountry = $this->getCountryMapping($countryCode);
         $liveFixtures = $preFetchedLive;
         if (!$liveFixtures) {
             $liveFixtures = $this->footballData->getLiveMatches()['response'] ?? [];
