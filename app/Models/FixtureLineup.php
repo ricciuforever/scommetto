@@ -18,13 +18,23 @@ class FixtureLineup
     public function save($fixture_id, $team_id, $data)
     {
         $sql = "INSERT INTO fixture_lineups (fixture_id, team_id, formation, coach_id, start_xi_json, substitutes_json)
-                VALUES (:fid, :tid, :formation, :coach_id, :start_xi, :subs)
-                ON DUPLICATE KEY UPDATE
+                VALUES (:fid, :tid, :formation, :coach_id, :start_xi, :subs)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(fixture_id, team_id) DO UPDATE SET
+                    formation = EXCLUDED.formation,
+                    coach_id = EXCLUDED.coach_id,
+                    start_xi_json = EXCLUDED.start_xi_json,
+                    substitutes_json = EXCLUDED.substitutes_json,
+                    last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE
                     formation = VALUES(formation),
                     coach_id = VALUES(coach_id),
                     start_xi_json = VALUES(start_xi_json),
                     substitutes_json = VALUES(substitutes_json),
                     last_updated = CURRENT_TIMESTAMP";
+        }
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([

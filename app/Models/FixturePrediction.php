@@ -30,11 +30,19 @@ class FixturePrediction
     public function save($fixtureId, $predictionData, $comparisonData)
     {
         $sql = "INSERT INTO fixture_predictions (fixture_id, prediction_json, comparison_json, last_updated)
-                VALUES (:fid, :pred, :comp, CURRENT_TIMESTAMP)
-                ON DUPLICATE KEY UPDATE
-                prediction_json = VALUES(prediction_json),
-                comparison_json = VALUES(comparison_json),
-                last_updated = CURRENT_TIMESTAMP";
+                VALUES (:fid, :pred, :comp, CURRENT_TIMESTAMP)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(fixture_id) DO UPDATE SET
+                    prediction_json = EXCLUDED.prediction_json,
+                    comparison_json = EXCLUDED.comparison_json,
+                    last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE
+                    prediction_json = VALUES(prediction_json),
+                    comparison_json = VALUES(comparison_json),
+                    last_updated = CURRENT_TIMESTAMP";
+        }
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([

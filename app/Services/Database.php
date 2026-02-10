@@ -54,4 +54,9 @@ class Database
     {
         return $this->conn;
     }
+
+    public function isSQLite()
+    {
+        return $this->conn->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+    }
 }

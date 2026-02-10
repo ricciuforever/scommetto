@@ -26,13 +26,13 @@ try {
           `name` VARCHAR(100) PRIMARY KEY,
           `code` VARCHAR(10),
           `flag` VARCHAR(255),
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "seasons" => "CREATE TABLE IF NOT EXISTS `seasons` (
           `year` INT PRIMARY KEY,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "leagues" => "CREATE TABLE IF NOT EXISTS `leagues` (
           `id` INT PRIMARY KEY,
@@ -43,8 +43,8 @@ try {
           `country_name` VARCHAR(100),
           `coverage_json` TEXT,
           `season` INT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "league_seasons" => "CREATE TABLE IF NOT EXISTS `league_seasons` (
           `league_id` INT,
@@ -56,15 +56,15 @@ try {
           `last_fixtures_sync` TIMESTAMP NULL,
           `last_standings_sync` TIMESTAMP NULL,
           PRIMARY KEY (`league_id`, `year`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "rounds" => "CREATE TABLE IF NOT EXISTS `rounds` (
           `league_id` INT,
           `season` INT,
           `round_name` VARCHAR(100),
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`league_id`, `season`, `round_name`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "teams" => "CREATE TABLE IF NOT EXISTS `teams` (
           `id` INT PRIMARY KEY,
@@ -78,16 +78,16 @@ try {
           `venue_name` VARCHAR(255),
           `venue_capacity` INT,
           `coach_id` INT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "team_leagues" => "CREATE TABLE IF NOT EXISTS `team_leagues` (
           `team_id` INT,
           `league_id` INT,
           `season` INT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`team_id`, `league_id`, `season`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "venues" => "CREATE TABLE IF NOT EXISTS `venues` (
           `id` INT PRIMARY KEY,
@@ -98,8 +98,8 @@ try {
           `capacity` INT,
           `surface` VARCHAR(50),
           `image` VARCHAR(255),
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "standings" => "CREATE TABLE IF NOT EXISTS `standings` (
           `league_id` INT,
@@ -119,10 +119,9 @@ try {
           `goals_against` INT DEFAULT 0,
           `home_stats_json` TEXT,
           `away_stats_json` TEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (`league_id`, `team_id`, `season`),
-          INDEX (`team_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (`league_id`, `team_id`, `season`)
+      )",
 
     "fixtures" => "CREATE TABLE IF NOT EXISTS `fixtures` (
           `id` INT PRIMARY KEY,
@@ -141,11 +140,11 @@ try {
           `score_away_ht` INT,
           `venue_id` INT,
           `last_detailed_update` TIMESTAMP NULL,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "fixture_events" => "CREATE TABLE IF NOT EXISTS `fixture_events` (
-          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `id` " . (\App\Services\Database::getInstance()->isSQLite() ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY") . ",
           `fixture_id` INT,
           `team_id` INT,
           `player_id` INT,
@@ -155,9 +154,8 @@ try {
           `type` VARCHAR(50),
           `detail` VARCHAR(100),
           `comments` TEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          INDEX (`fixture_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "fixture_lineups" => "CREATE TABLE IF NOT EXISTS `fixture_lineups` (
           `fixture_id` INT,
@@ -166,93 +164,90 @@ try {
           `coach_id` INT,
           `start_xi_json` LONGTEXT,
           `substitutes_json` LONGTEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`fixture_id`, `team_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "fixture_statistics" => "CREATE TABLE IF NOT EXISTS `fixture_statistics` (
           `fixture_id` INT,
           `team_id` INT,
           `stats_json` TEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`fixture_id`, `team_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "player_career" => "CREATE TABLE IF NOT EXISTS `player_career` (
           `player_id` INT,
           `team_id` INT,
-          `seasons_json` LONGTEXT COMMENT 'Array of seasons played',
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (`player_id`, `team_id`),
-          FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `seasons_json` LONGTEXT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (`player_id`, `team_id`)
+      )",
 
     "fixture_player_stats" => "CREATE TABLE IF NOT EXISTS `fixture_player_stats` (
           `fixture_id` INT,
           `team_id` INT,
           `player_id` INT,
           `stats_json` LONGTEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`fixture_id`, `team_id`, `player_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "fixture_injuries" => "CREATE TABLE IF NOT EXISTS `fixture_injuries` (
-          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `id` " . (\App\Services\Database::getInstance()->isSQLite() ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY") . ",
           `fixture_id` INT,
           `team_id` INT,
           `player_id` INT,
           `player_name` VARCHAR(100),
           `type` VARCHAR(50),
           `reason` VARCHAR(255),
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          INDEX (`fixture_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "league_topstats" => "CREATE TABLE IF NOT EXISTS `league_topstats` (
           `league_id` INT,
           `season` INT,
-          `type` ENUM('scorers', 'assists', 'yellowcards', 'redcards'),
-          `json_data` JSON,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `type` VARCHAR(50),
+          `json_data` TEXT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`league_id`, `season`, `type`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "player_transfers" => "CREATE TABLE IF NOT EXISTS `player_transfers` (
-          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `id` " . (\App\Services\Database::getInstance()->isSQLite() ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY") . ",
           `player_id` INT NOT NULL,
           `update_date` DATETIME,
-          `transfers_json` JSON,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY `unique_player` (`player_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `transfers_json` TEXT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "player_trophies" => "CREATE TABLE IF NOT EXISTS `player_trophies` (
           `player_id` INT NOT NULL,
-          `trophies_json` JSON,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `trophies_json` TEXT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`player_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "player_sidelined" => "CREATE TABLE IF NOT EXISTS `player_sidelined` (
           `player_id` INT NOT NULL,
-          `sidelined_json` JSON,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `sidelined_json` TEXT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`player_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "live_bet_types" => "CREATE TABLE IF NOT EXISTS `live_bet_types` (
           `id` INT PRIMARY KEY,
           `name` VARCHAR(255),
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "h2h_records" => "CREATE TABLE IF NOT EXISTS `h2h_records` (
           `team1_id` INT,
           `team2_id` INT,
           `h2h_json` LONGTEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`team1_id`, `team2_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "team_stats" => "CREATE TABLE IF NOT EXISTS `team_stats` (
           `team_id` INT,
@@ -270,12 +265,12 @@ try {
           `avg_goals_for` DECIMAL(8,2),
           `avg_goals_against` DECIMAL(8,2),
           `full_stats_json` LONGTEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`team_id`, `league_id`, `season`, `date`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "bets" => "CREATE TABLE IF NOT EXISTS `bets` (
-          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `id` " . (\App\Services\Database::getInstance()->isSQLite() ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY") . ",
           `fixture_id` VARCHAR(100) NOT NULL,
           `bookmaker_id` INT NULL,
           `bookmaker_name` VARCHAR(100) NULL,
@@ -286,49 +281,47 @@ try {
           `stake` DECIMAL(8,2),
           `urgency` VARCHAR(50),
           `confidence` INT DEFAULT 0,
-          `status` ENUM('pending','won','lost','void') DEFAULT 'pending',
+          `status` VARCHAR(20) DEFAULT 'pending',
           `timestamp` DATETIME DEFAULT CURRENT_TIMESTAMP,
           `result` VARCHAR(50),
           `betfair_id` VARCHAR(100) NULL,
           `adm_id` VARCHAR(100) NULL,
-          `notes` TEXT NULL,
-          INDEX (`fixture_id`),
-          INDEX (`status`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `notes` TEXT NULL
+      )",
 
     "api_usage" => "CREATE TABLE IF NOT EXISTS `api_usage` (
           `id` INT PRIMARY KEY DEFAULT 1,
           `requests_limit` INT DEFAULT 75000,
           `requests_used` INT DEFAULT 0,
           `requests_remaining` INT DEFAULT 75000,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "analyses" => "CREATE TABLE IF NOT EXISTS `analyses` (
           `fixture_id` INT PRIMARY KEY,
-          `last_checked` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `last_checked` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           `prediction_raw` TEXT
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "fixture_predictions" => "CREATE TABLE IF NOT EXISTS `fixture_predictions` (
           `fixture_id` INT PRIMARY KEY,
-          `prediction_json` JSON,
-          `comparison_json` JSON,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `prediction_json` TEXT,
+          `comparison_json` TEXT,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "player_seasons" => "CREATE TABLE IF NOT EXISTS `player_seasons` (
           `year` INT PRIMARY KEY,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "predictions" => "CREATE TABLE IF NOT EXISTS `predictions` (
           `fixture_id` INT PRIMARY KEY,
           `advice` TEXT,
-          `comparison_json` LONGTEXT,
+          `comparison_json` TEXT,
           `percent_json` TEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "players" => "CREATE TABLE IF NOT EXISTS `players` (
           `id` INT PRIMARY KEY,
@@ -344,19 +337,18 @@ try {
           `weight` VARCHAR(20),
           `injured` BOOLEAN DEFAULT FALSE,
           `photo` VARCHAR(255),
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "player_statistics" => "CREATE TABLE IF NOT EXISTS `player_statistics` (
-          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `id` " . (\App\Services\Database::getInstance()->isSQLite() ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY") . ",
           `player_id` INT,
           `team_id` INT,
           `league_id` INT,
           `season` INT,
           `stats_json` LONGTEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY `player_team_league_season` (`player_id`, `team_id`, `league_id`, `season`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "coaches" => "CREATE TABLE IF NOT EXISTS `coaches` (
           `id` INT PRIMARY KEY,
@@ -370,92 +362,84 @@ try {
           `team_id` INT,
           `photo` VARCHAR(255),
           `career_json` LONGTEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "squads" => "CREATE TABLE IF NOT EXISTS `squads` (
           `team_id` INT,
           `player_id` INT,
           `position` VARCHAR(50),
           `number` INT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`team_id`, `player_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "team_seasons" => "CREATE TABLE IF NOT EXISTS `team_seasons` (
           `team_id` INT,
           `year` INT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`team_id`, `year`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "bookmakers" => "CREATE TABLE IF NOT EXISTS `bookmakers` (
           `id` INT PRIMARY KEY,
           `name` VARCHAR(100),
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "bet_types" => "CREATE TABLE IF NOT EXISTS `bet_types` (
           `id` INT PRIMARY KEY,
           `name` VARCHAR(100),
-          `type` ENUM('pre-match', 'live') DEFAULT 'pre-match',
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `type` VARCHAR(20) DEFAULT 'pre-match',
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "fixture_odds" => "CREATE TABLE IF NOT EXISTS `fixture_odds` (
           `fixture_id` INT,
           `bookmaker_id` INT,
           `bet_id` INT,
           `odds_json` LONGTEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY (`fixture_id`, `bookmaker_id`, `bet_id`)
-          -- INDEX (`fixture_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+      )",
 
     "live_odds" => "CREATE TABLE IF NOT EXISTS `live_odds` (
           `fixture_id` INT PRIMARY KEY,
           `odds_json` LONGTEXT,
           `status_json` TEXT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "transfers" => "CREATE TABLE IF NOT EXISTS `transfers` (
-          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `id` " . (\App\Services\Database::getInstance()->isSQLite() ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY") . ",
           `player_id` INT,
           `transfer_date` DATE,
           `type` VARCHAR(100),
           `team_out_id` INT,
           `team_in_id` INT,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          INDEX (`player_id`),
-          INDEX (`team_in_id`),
-          INDEX (`team_out_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "trophies" => "CREATE TABLE IF NOT EXISTS `trophies` (
-          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `id` " . (\App\Services\Database::getInstance()->isSQLite() ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY") . ",
           `player_id` INT DEFAULT NULL,
           `coach_id` INT DEFAULT NULL,
           `league` VARCHAR(100),
           `country` VARCHAR(100),
           `season` VARCHAR(20),
           `place` VARCHAR(50),
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          INDEX (`player_id`),
-          INDEX (`coach_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
 
     "sidelined" => "CREATE TABLE IF NOT EXISTS `sidelined` (
-          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `id` " . (\App\Services\Database::getInstance()->isSQLite() ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY") . ",
           `player_id` INT,
           `coach_id` INT,
           `type` VARCHAR(100),
           `start_date` DATE,
           `end_date` DATE,
-          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          INDEX (`player_id`),
-          INDEX (`coach_id`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+          `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )"
   ];
 
   foreach ($tables as $name => $sql) {
@@ -471,7 +455,11 @@ try {
   }
 
   // Inizializza bookmakers base
-  $db->exec("INSERT IGNORE INTO bookmakers (id, name) VALUES (3, 'Betfair'), (7, 'William Hill')");
+  if (\App\Services\Database::getInstance()->isSQLite()) {
+    $db->exec("INSERT OR IGNORE INTO bookmakers (id, name) VALUES (3, 'Betfair'), (7, 'William Hill')");
+  } else {
+    $db->exec("INSERT IGNORE INTO bookmakers (id, name) VALUES (3, 'Betfair'), (7, 'William Hill')");
+  }
   echo "✅ Bookmakers base inizializzati.\n";
 
   // --- 2. PATCHING COLONNE MANCANTI ---
@@ -596,8 +584,7 @@ try {
   // --- 3. CREAZIONE VIEW ANALITICHE ---
 
   $views = [
-    "v_match_summary" => "CREATE OR REPLACE VIEW v_match_summary AS
-          SELECT f.id, f.date, f.status_short,
+    "v_match_summary" => "SELECT f.id, f.date, f.status_short,
                  t1.name as home_name, t1.logo as home_logo, f.score_home,
                  t2.name as away_name, t2.logo as away_logo, f.score_away,
                  l.name as league_name, l.country_name
@@ -608,7 +595,8 @@ try {
   ];
 
   foreach ($views as $name => $sql) {
-    $db->exec($sql);
+    $db->exec("DROP VIEW IF EXISTS `$name` ");
+    $db->exec("CREATE VIEW `$name` AS $sql");
     echo "✅ View '$name' creata/aggiornata.\n";
   }
 

@@ -21,12 +21,21 @@ class Venue
             return null;
 
         $sql = "INSERT INTO venues (id, name, address, city, country, capacity, surface, image)
-                VALUES (:id, :name, :address, :city, :country, :capacity, :surface, :image)
-                ON DUPLICATE KEY UPDATE 
+                VALUES (:id, :name, :address, :city, :country, :capacity, :surface, :image)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(id) DO UPDATE SET
+                    name = EXCLUDED.name, address = EXCLUDED.address, city = EXCLUDED.city,
+                    country = EXCLUDED.country,
+                    capacity = EXCLUDED.capacity, surface = EXCLUDED.surface, image = EXCLUDED.image,
+                    last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE
                     name = VALUES(name), address = VALUES(address), city = VALUES(city), 
                     country = VALUES(country),
                     capacity = VALUES(capacity), surface = VALUES(surface), image = VALUES(image),
                     last_updated = CURRENT_TIMESTAMP";
+        }
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([

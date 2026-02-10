@@ -109,6 +109,31 @@ try {
         return;
     }
 
+    if ($path === '/api/gianik/match-details') {
+        $fId = $_GET['fixtureId'] ?? null;
+        if ($fId) {
+            (new \App\GiaNik\Controllers\GiaNikController())->matchDetails($fId);
+            return;
+        }
+    }
+
+    if ($path === '/api/gianik/team-details') {
+        $tId = $_GET['teamId'] ?? null;
+        if ($tId) {
+            (new \App\GiaNik\Controllers\GiaNikController())->teamDetails($tId);
+            return;
+        }
+    }
+
+    if ($path === '/api/gianik/player-details') {
+        $pId = $_GET['playerId'] ?? null;
+        $fId = $_GET['fixtureId'] ?? null;
+        if ($pId && $fId) {
+            (new \App\GiaNik\Controllers\GiaNikController())->playerDetails($pId, $fId);
+            return;
+        }
+    }
+
     // --- MAIN APP ROUTES ---
     if (isset($viewRoutes[$path])) {
         (new $viewRoutes[$path]())->index();

@@ -18,8 +18,21 @@ class Fixture
     public function save($data)
     {
         $sql = "INSERT INTO fixtures (id, league_id, round, team_home_id, team_away_id, date, status_short, status_long, elapsed, score_home, score_away, score_home_ht, score_away_ht, venue_id)
-                VALUES (:id, :league_id, :round, :home_id, :away_id, :date, :status_short, :status_long, :elapsed, :score_home, :score_away, :score_home_ht, :score_away_ht, :venue_id)
-                ON DUPLICATE KEY UPDATE 
+                VALUES (:id, :league_id, :round, :home_id, :away_id, :date, :status_short, :status_long, :elapsed, :score_home, :score_away, :score_home_ht, :score_away_ht, :venue_id)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(id) DO UPDATE SET
+                    status_short = EXCLUDED.status_short,
+                    status_long = EXCLUDED.status_long,
+                    elapsed = EXCLUDED.elapsed,
+                    score_home = EXCLUDED.score_home,
+                    score_away = EXCLUDED.score_away,
+                    score_home_ht = EXCLUDED.score_home_ht,
+                    score_away_ht = EXCLUDED.score_away_ht,
+                    round = EXCLUDED.round,
+                    last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE
                     status_short = VALUES(status_short), 
                     status_long = VALUES(status_long),
                     elapsed = VALUES(elapsed),
@@ -29,6 +42,7 @@ class Fixture
                     score_away_ht = VALUES(score_away_ht),
                     round = VALUES(round),
                     last_updated = CURRENT_TIMESTAMP";
+        }
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([

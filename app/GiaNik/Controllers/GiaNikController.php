@@ -7,6 +7,7 @@ use App\Config\Config;
 use App\Services\BetfairService;
 use App\Services\GeminiService;
 use App\Services\FootballApiService;
+use App\Services\FootballDataService;
 use App\Services\BasketballApiService;
 use App\GiaNik\GiaNikDatabase;
 use PDO;
@@ -15,11 +16,13 @@ class GiaNikController
 {
     private $bf;
     private $db;
+    private $footballData;
 
     public function __construct()
     {
         $this->bf = new BetfairService();
         $this->db = GiaNikDatabase::getInstance()->getConnection();
+        $this->footballData = new FootballDataService();
     }
 
     public function index()
@@ -120,6 +123,9 @@ class GiaNikController
                     'marketId' => $marketId,
                     'event' => $mc['event']['name'],
                     'event_id' => $mc['event']['id'],
+                    'fixture_id' => null,
+                    'home_id' => null,
+                    'away_id' => null,
                     'competition' => $mc['competition']['name'] ?? '',
                     'sport' => $sport,
                     'totalMatched' => $mb['totalMatched'] ?? 0,
@@ -140,6 +146,9 @@ class GiaNikController
                 if (true) { // Always soccer now
                     $match = $this->searchInFixtureList($m['event'], $apiLiveMatches);
                     if ($match) {
+                        $m['fixture_id'] = $match['fixture']['id'] ?? null;
+                        $m['home_id'] = $match['teams']['home']['id'] ?? null;
+                        $m['away_id'] = $match['teams']['away']['id'] ?? null;
                         $m['score'] = ($match['goals']['home'] ?? '0') . '-' . ($match['goals']['away'] ?? '0');
                         $elapsed = $match['fixture']['status']['elapsed'] ?? 0;
                         $m['status_label'] = ($match['fixture']['status']['short'] ?? 'LIVE') . ($elapsed ? " $elapsed'" : "");
@@ -620,11 +629,21 @@ class GiaNikController
         $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive);
         if (!$apiMatch)
             return null;
-        $api = new FootballApiService();
-        $fullFixture = $api->fetchFixtureDetails($apiMatch['fixture']['id'])['response'][0] ?? $apiMatch;
-        $h2h = $api->fetchH2H($apiMatch['teams']['home']['id'] . '-' . $apiMatch['teams']['away']['id']);
-        $standings = (isset($apiMatch['league']['id'], $apiMatch['league']['season'])) ? $api->fetchStandings($apiMatch['league']['id'], $apiMatch['league']['season'])['response'][0]['league']['standings'] ?? null : null;
-        return ['fixture' => $fullFixture, 'h2h' => $h2h['response'] ?? [], 'standings' => $standings, 'predictions' => $api->fetchPredictions($apiMatch['fixture']['id'])['response'][0] ?? null];
+
+        $fid = $apiMatch['fixture']['id'];
+        $details = $this->footballData->getFixtureDetails($fid);
+        $status = $details['status_short'] ?? 'NS';
+
+        $h2h = $this->footballData->getH2H($apiMatch['teams']['home']['id'], $apiMatch['teams']['away']['id']);
+        $standings = (isset($apiMatch['league']['id'], $apiMatch['league']['season'])) ? $this->footballData->getStandings($apiMatch['league']['id'], $apiMatch['league']['season']) : null;
+        $preds = $this->footballData->getFixturePredictions($fid, $status);
+
+        return [
+            'fixture' => $details,
+            'h2h' => $h2h['h2h_json'] ?? [],
+            'standings' => $standings,
+            'predictions' => $preds['prediction_json'] ?? null
+        ];
     }
 
     private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null)
@@ -813,6 +832,81 @@ class GiaNikController
                 return;
             }
             require __DIR__ . '/../Views/partials/modals/bet_details.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function matchDetails($fixtureId)
+    {
+        try {
+            $details = $this->footballData->getFixtureDetails($fixtureId);
+            $statusShort = $details['status_short'] ?? 'NS';
+
+            $events = $this->footballData->getFixtureEvents($fixtureId, $statusShort);
+            $stats = $this->footballData->getFixtureStatistics($fixtureId, $statusShort);
+            $predictionsData = $this->footballData->getFixturePredictions($fixtureId, $statusShort);
+            $predictions = $predictionsData['prediction_json'] ?? null;
+
+            require __DIR__ . '/../Views/partials/match_details.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger text-[10px]">Error loading details: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function teamDetails($teamId)
+    {
+        try {
+            $teamData = $this->footballData->getTeamDetails($teamId);
+            if (!$teamData) {
+                echo '<div class="p-10 text-center text-danger">Team non trovato.</div>';
+                return;
+            }
+            // Mocking structure for view if needed
+            $team = ['team' => $teamData, 'venue' => $teamData]; // Team model getById returns merged data
+            require __DIR__ . '/../Views/partials/modals/team_details.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function playerDetails($playerId, $fixtureId)
+    {
+        try {
+            $details = $this->footballData->getFixtureDetails($fixtureId);
+            $statusShort = $details['status_short'] ?? 'NS';
+            $playersStats = $this->footballData->getFixturePlayerStatistics($fixtureId, $statusShort);
+
+            $player = null;
+            foreach ($playersStats as $teamStats) {
+                foreach ($teamStats['stats_json'] as $p) {
+                    if ($p['player']['id'] == $playerId) {
+                        $player = $p;
+                        $player['team'] = ['id' => $teamStats['team_id'], 'name' => $teamStats['team_name'], 'logo' => $teamStats['team_logo']];
+                        // Adapt to view expectations
+                        $player['statistics'] = [$p['statistics'][0] ?? []];
+                        break 2;
+                    }
+                }
+            }
+
+            if (!$player) {
+                $playerData = $this->footballData->getPlayer($playerId);
+                if ($playerData) {
+                    $stats = (new \App\Models\PlayerStatistics())->get($playerId, Config::getCurrentSeason());
+                    $player = [
+                        'player' => $playerData,
+                        'statistics' => json_decode($stats['stats_json'], true)
+                    ];
+                }
+            }
+
+            if (!$player) {
+                echo '<div class="p-10 text-center text-danger">Giocatore non trovato.</div>';
+                return;
+            }
+
+            require __DIR__ . '/../Views/partials/modals/player_stats.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
         }

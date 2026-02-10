@@ -22,10 +22,17 @@ class H2H
         $t2 = max($team1_id, $team2_id);
 
         $sql = "INSERT INTO h2h_records (team1_id, team2_id, h2h_json) 
-                VALUES (:t1, :t2, :h2h_json)
-                ON DUPLICATE KEY UPDATE 
-                h2h_json = VALUES(h2h_json), 
-                last_updated = CURRENT_TIMESTAMP";
+                VALUES (:t1, :t2, :h2h_json)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(team1_id, team2_id) DO UPDATE SET
+                    h2h_json = EXCLUDED.h2h_json,
+                    last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE
+                    h2h_json = VALUES(h2h_json),
+                    last_updated = CURRENT_TIMESTAMP";
+        }
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([

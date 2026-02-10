@@ -18,9 +18,15 @@ class FixturePlayerStatistics
     public function save($fixtureId, $teamId, $playerId, $stats)
     {
         $sql = "INSERT INTO fixture_player_stats (fixture_id, team_id, player_id, stats_json)
-                VALUES (:fid, :tid, :pid, :stats)
-                ON DUPLICATE KEY UPDATE
-                stats_json = VALUES(stats_json), last_updated = CURRENT_TIMESTAMP";
+                VALUES (:fid, :tid, :pid, :stats)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(fixture_id, team_id, player_id) DO UPDATE SET
+                    stats_json = EXCLUDED.stats_json, last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE
+                    stats_json = VALUES(stats_json), last_updated = CURRENT_TIMESTAMP";
+        }
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
