@@ -140,28 +140,6 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                             </div>
                         </div>
 
-                        <!-- Manual Betting Section (1X2) -->
-                        <div class="flex items-center gap-2 px-6">
-                            <?php foreach (($m['runners'] ?? []) as $r):
-                                if (in_array($r['name'], [$m['home_name'], $m['away_name'], 'The Draw'])):
-                                    $label = ($r['name'] === 'The Draw') ? 'X' : (($r['name'] === $m['home_name']) ? '1' : '2');
-                                    ?>
-                                    <button onclick='openManualBetModal(<?php echo json_encode([
-                                        "marketId" => $m["marketId"],
-                                        "marketName" => "Match Odds",
-                                        "selectionId" => $r["selectionId"],
-                                        "runnerName" => $r["name"],
-                                        "odds" => $r["back"],
-                                        "eventName" => $m["event"],
-                                        "sport" => $m["sport"]
-                                    ]); ?>)'
-                                        class="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-indigo-500/5 hover:bg-indigo-500/20 border border-indigo-500/10 transition-all">
-                                        <span class="text-[9px] font-black text-slate-500 uppercase"><?php echo $label; ?></span>
-                                        <span
-                                            class="text-xs font-black text-indigo-400 tabular-nums"><?php echo $r['back'] !== '-' ? number_format((float) $r['back'], 2) : '-'; ?></span>
-                                    </button>
-                                <?php endif; endforeach; ?>
-                        </div>
 
                         <!-- Away Team -->
                         <div class="flex items-center gap-4 flex-1 justify-start cursor-pointer hover:opacity-80 transition-opacity"
@@ -204,22 +182,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                                 <i data-lucide="brain-circuit" class="w-4 h-4"></i> Analisi IA
                             </button>
 
-                            <button hx-get="/api/gianik/predictions?fixtureId=<?php echo $fixtureId; ?>"
-                                hx-target="#global-modal-container"
-                                class="p-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/10 transition-all"
-                                title="Predictions Crystal Ball">
-                                <span class="text-lg">🔮</span>
-                            </button>
 
-                            <?php if ($fixtureId): ?>
-                                <div class="flex items-center gap-1">
-                                    <button onclick="openMatchH2HModal(<?php echo $fixtureId; ?>)"
-                                        class="p-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/10 transition-all"
-                                        title="🔄 H2H & Form">
-                                        <i data-lucide="arrow-left-right" class="w-4 h-4"></i>
-                                    </button>
-                                </div>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
