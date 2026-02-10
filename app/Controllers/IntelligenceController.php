@@ -4,9 +4,17 @@
 namespace App\Controllers;
 
 use App\Services\FootballApiService;
+use App\Services\FootballDataService;
 
 class IntelligenceController
 {
+    private $footballData;
+
+    public function __construct()
+    {
+        $this->footballData = new FootballDataService();
+    }
+
     /**
      * Renders the Intelligence Dashboard view
      */
@@ -29,7 +37,6 @@ class IntelligenceController
     {
         header('Content-Type: application/json');
         try {
-            $api = new FootballApiService();
             $params = [];
 
             // Apply filters from GET request
@@ -37,8 +44,8 @@ class IntelligenceController
                 $params['league'] = $_GET['league'];
             }
 
-            // Fetch live matches with complete data
-            $data = $api->fetchLiveMatches($params);
+            // Fetch live matches with complete data (centralized caching)
+            $data = $this->footballData->getLiveMatches($params);
 
             // The response structure from API-Football /fixtures?live=all:
             // response[]: { fixture: {...}, league: {...}, teams: {...}, goals: {...}, score: {...} }
