@@ -107,7 +107,10 @@ class FootballDataService
             $res = $this->api->fetchFixturePlayerStatistics($fixtureId);
             if (!empty($res['response'])) {
                 foreach ($res['response'] as $teamStats) {
-                    $model->save($fixtureId, $teamStats['team']['id'], $teamStats['players']);
+                    $teamId = $teamStats['team']['id'];
+                    foreach ($teamStats['players'] as $playerData) {
+                        $model->save($fixtureId, $teamId, $playerData['player']['id'], $playerData);
+                    }
                 }
             }
         }
@@ -185,8 +188,9 @@ class FootballDataService
         if (!$last || (time() - strtotime($last)) > 86400) {
             $res = $this->api->fetchPlayer(['id' => $id, 'season' => $season]);
             if (!empty($res['response'])) {
-                $model->save($res['response'][0]);
-                (new \App\Models\PlayerStatistics())->save($id, $res['response'][0]['statistics'][0]['team']['id'], $season, $res['response'][0]['statistics']);
+                $model->save($res['response'][0]['player']);
+                $stats = $res['response'][0]['statistics'][0];
+                (new \App\Models\PlayerStatistics())->save($id, $stats['team']['id'], $stats['league']['id'], $season, $res['response'][0]['statistics']);
             }
         }
         return $model->getById($id);

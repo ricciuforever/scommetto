@@ -179,16 +179,14 @@ try {
     if (preg_match('#^/gianik/player-modal/(\d+)$#i', $path, $matches)) {
         $playerId = $matches[1];
         $fixtureId = $_GET['fixture'] ?? null;
-        // TODO: Fetch player data and pass to modal
-        require __DIR__ . '/app/GiaNik/Views/partials/modals/player_stats.php';
+        (new \App\GiaNik\Controllers\GiaNikController())->playerDetails($playerId, $fixtureId);
         return;
     }
 
     // NEW: Team Modal (HTML)
     if (preg_match('#^/gianik/team-modal/(\d+)$#i', $path, $matches)) {
         $teamId = $matches[1];
-        // TODO: Fetch team data and pass to modal
-        require __DIR__ . '/app/GiaNik/Views/partials/modals/team_details.php';
+        (new \App\GiaNik\Controllers\GiaNikController())->teamDetails($teamId);
         return;
     }
 

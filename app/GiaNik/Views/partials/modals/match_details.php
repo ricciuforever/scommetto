@@ -169,13 +169,13 @@
             events.forEach(event => {
                 const icon = event.type === 'Goal' ? '⚽' : event.type === 'Card' ? (event.detail === 'Yellow Card' ? '🟨' : '🟥') : '🔄';
                 html += `
-                <div class="glass p-4 rounded-2xl border-white/5 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition-all" onclick="openPlayerModal(${event.player_id})">
+                <div class="glass p-4 rounded-2xl border-white/5 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition-all" onclick="openPlayerModal(${event.player_id || event.player.id}, ${matchData.fixture.id || matchData.fixture.fixture_id})">
                     <div class="text-2xl">${icon}</div>
                     <div class="flex-1">
                         <div class="text-sm font-black text-white">${event.detail}</div>
-                        <div class="text-xs text-slate-500 mt-1">Giocatore ID: ${event.player_id}</div>
+                        <div class="text-xs text-slate-500 mt-1">${event.player_name || event.player.name}</div>
                     </div>
-                    <div class="text-accent font-black text-sm">${event.time_elapsed}'</div>
+                    <div class="text-accent font-black text-sm">${event.time_elapsed || event.time.elapsed}'</div>
                 </div>
             `;
             });

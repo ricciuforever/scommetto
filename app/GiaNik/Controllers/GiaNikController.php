@@ -819,15 +819,11 @@ class GiaNikController
             $playersStats = $this->footballData->getFixturePlayerStatistics($fixtureId, $statusShort);
 
             $player = null;
-            foreach ($playersStats as $teamStats) {
-                foreach ($teamStats['stats_json'] as $p) {
-                    if ($p['player']['id'] == $playerId) {
-                        $player = $p;
-                        $player['team'] = ['id' => $teamStats['team_id'], 'name' => $teamStats['team_name'], 'logo' => $teamStats['team_logo']];
-                        // Adapt to view expectations
-                        $player['statistics'] = [$p['statistics'][0] ?? []];
-                        break 2;
-                    }
+            foreach ($playersStats as $row) {
+                if ($row['player_id'] == $playerId) {
+                    $player = $row['stats_json'];
+                    $player['team'] = ['id' => $row['team_id'], 'name' => $row['team_name'], 'logo' => $row['team_logo']];
+                    break;
                 }
             }
 
