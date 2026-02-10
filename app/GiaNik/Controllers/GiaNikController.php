@@ -366,7 +366,9 @@ class GiaNikController
             $event['requestedMarketId'] = $marketId;
 
             if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
-                $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition']);
+                // Pass the initial market book for fallback extraction
+                $mainBook = $booksMap[$marketId] ?? null;
+                $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition'], $mainBook);
             }
 
             $gemini = new GeminiService();
@@ -569,7 +571,10 @@ class GiaNikController
                     }
 
                     if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
-                        $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition']);
+                        // Pass the first market book for fallback extraction
+                        $firstMarketId = $event['markets'][0]['marketId'] ?? null;
+                        $firstBook = $booksMap[$firstMarketId] ?? null;
+                        $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook);
                     }
 
                     $vBalance = $this->getVirtualBalance();
@@ -674,12 +679,37 @@ class GiaNikController
         }
     }
 
-    private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $competition = '')
+    private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $competition = '', $bfMarketBook = null)
     {
         // Restricted to Soccer
         $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive);
-        if (!$apiMatch)
+
+        if (!$apiMatch) {
+            // FALLBACK: If API-Football match not found, try to extract basic live data from Betfair
+            if ($bfMarketBook && isset($bfMarketBook['marketDefinition'])) {
+                $def = $bfMarketBook['marketDefinition'];
+                $score = null;
+
+                if (isset($def['score']['homeScore'], $def['score']['awayScore'])) {
+                    $score = ['home' => (int)$def['score']['homeScore'], 'away' => (int)$def['score']['awayScore']];
+                }
+
+                if ($score || (isset($def['inPlay']) && $def['inPlay'])) {
+                    return [
+                        'live' => [
+                            'live_score' => $score ?: ['home' => 0, 'away' => 0],
+                            'live_status' => [
+                                'short' => ($def['inPlay'] ?? false) ? 'LIVE' : 'NS',
+                                'elapsed_minutes' => 0 // Betfair usually doesn't provide exact minute in API-NG easily
+                            ],
+                            'match_info' => ['fixture_id' => 'BF-' . ($bfMarketBook['marketId'] ?? 'unknown')]
+                        ],
+                        'note' => 'Dati estratti direttamente da Betfair (API-Football match non trovato).'
+                    ];
+                }
+            }
             return null;
+        }
 
         $fid = $apiMatch['fixture']['id'];
         $details = $this->footballData->getFixtureDetails($fid);

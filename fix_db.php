@@ -1,5 +1,5 @@
 <?php
-// fix_db.php - Scommetto DB Migration & Repair Script v8.6
+// fix_db.php - Scommetto DB Migration & Repair Script v8.7
 require_once __DIR__ . '/bootstrap.php';
 use App\Services\Database;
 
@@ -7,7 +7,7 @@ try {
   $db = Database::getInstance()->getConnection();
   $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-  echo "🚀 Inizio riparazione e migrazione database (v8.6)...\n";
+  echo "🚀 Inizio riparazione e migrazione database (v8.7)...\n";
 
   // --- 0. PULIZIA VECCHIE TABELLE DEPRECATE ---
   $deprecated = ["team_squads"];
@@ -529,8 +529,12 @@ try {
       "ALTER TABLE venues ADD COLUMN country VARCHAR(100) AFTER city"
     ],
     "coaches_updates" => [
+      "ALTER TABLE coaches ADD COLUMN firstname VARCHAR(100) AFTER name",
+      "ALTER TABLE coaches ADD COLUMN lastname VARCHAR(100) AFTER firstname",
       "ALTER TABLE coaches ADD COLUMN birth_date DATE AFTER age",
       "ALTER TABLE coaches ADD COLUMN birth_country VARCHAR(100) AFTER birth_date",
+      "ALTER TABLE coaches ADD COLUMN nationality VARCHAR(100) AFTER birth_country",
+      "ALTER TABLE coaches ADD COLUMN photo VARCHAR(255) AFTER nationality",
       "ALTER TABLE coaches ADD COLUMN career_json LONGTEXT AFTER team_id"
     ],
     "predictions_updates" => [
@@ -546,6 +550,13 @@ try {
       "CREATE INDEX idx_fixtures_date ON fixtures(date)",
       "CREATE INDEX idx_fixtures_status ON fixtures(status_short)",
       "CREATE INDEX idx_fixtures_teams ON fixtures(team_home_id, team_away_id)"
+    ],
+    "players_updates" => [
+      "ALTER TABLE players ADD COLUMN firstname VARCHAR(100) AFTER name",
+      "ALTER TABLE players ADD COLUMN lastname VARCHAR(100) AFTER firstname",
+      "ALTER TABLE players ADD COLUMN birth_date DATE AFTER age",
+      "ALTER TABLE players ADD COLUMN birth_place VARCHAR(100) AFTER birth_date",
+      "ALTER TABLE players ADD COLUMN birth_country VARCHAR(100) AFTER birth_place"
     ],
     "players_indexes" => [
       "CREATE INDEX idx_players_name ON players(name)"
@@ -617,7 +628,7 @@ try {
     }
   }
 
-  echo "\n✨ Database sincronizzato con successo v8.6.\n";
+  echo "\n✨ Database sincronizzato con successo v8.7.\n";
 
 } catch (\Throwable $e) {
   echo "❌ Errore critico: " . $e->getMessage() . "\n";

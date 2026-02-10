@@ -288,16 +288,24 @@ class FootballDataService
      */
     public function searchInFixtureList($bfEventName, $fixtures)
     {
-        $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $bfEventName);
+        // 1. Strip scores like "1-0", "0 - 0" if present in event name
+        $name = preg_replace('/\d+\s*-\s*\d+/', ' v ', $bfEventName);
+
+        $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $name);
         if (count($bfTeams) < 2)
             return null;
+
         $bfHome = $this->normalizeTeamName($bfTeams[0]);
         $bfAway = $this->normalizeTeamName($bfTeams[1]);
+
         foreach ($fixtures as $item) {
             $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
             $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
-            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) || ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome)))
+
+            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) ||
+                ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome))) {
                 return $item;
+            }
         }
         return null;
     }
@@ -308,69 +316,48 @@ class FootballDataService
     public function normalizeTeamName($name)
     {
         $name = strtolower($name);
+
+        // 1. Common abbreviations replacements (using word boundaries to avoid partial matches)
         $replacements = [
-            'man ' => 'manchester ',
-            'man utd' => 'manchester united',
-            'man city' => 'manchester city',
-            'st ' => 'saint ',
-            'int ' => 'inter ',
-            'ath ' => 'athletic ',
-            'atl ' => 'atletico ',
-            'de ' => ' ',
-            'la ' => ' '
+            'man' => 'manchester',
+            'man.' => 'manchester',
+            'utd' => 'united',
+            'manchester united' => 'manchester', // simplify to core
+            'manchester city' => 'manchester',
+            'st' => 'saint',
+            'st.' => 'saint',
+            'int' => 'inter',
+            'int.' => 'inter',
+            'ath' => 'athletic',
+            'atl' => 'atletico',
+            'sg' => 'saint germain'
         ];
-        foreach ($replacements as $search => $replace)
-            $name = str_replace($search, $replace, $name);
+        foreach ($replacements as $search => $replace) {
+            $name = preg_replace('/\b' . preg_quote($search, '/') . '\b/i', $replace, $name);
+        }
 
+        // 2. Remove common prefixes/suffixes (word boundaries)
+        // If the name would become empty, DON'T remove it (e.g. "Inter")
         $remove = [
-            'fc',
-            'united',
-            'city',
-            'town',
-            'real',
-            'atlético',
-            'atletico',
-            'inter',
-            'u23',
-            'u21',
-            'u19',
-            'women',
-            'donne',
-            'femminile',
-            'sports',
-            'sc',
-            'ac',
-            'as',
-            'cf',
-            'rc',
-            'de',
-            'rs',
-            'bk',
-            'fk',
-            'nk',
-            'hsk',
-            'acs',
-            'csc',
-            'csm',
-            'cs',
-            'afc',
-            'pfc',
-            'ff',
-            'if',
-            'is',
-            'sk',
-            'sv',
-            'spvgg',
-            'bsc',
-            'tsv',
-            'vfb',
-            'vfl',
-            'utd',
-            'ballklubb'
+            'fc', 'f.c.', 'united', 'city', 'town', 'real', 'atlético', 'atletico',
+            'u23', 'u21', 'u19', 'women', 'donne', 'femminile', 'sports', 'sc', 'ac', 'as',
+            'cf', 'rc', 'de', 'rs', 'bk', 'fk', 'nk', 'hsk', 'acs', 'csc', 'csm', 'cs', 'afc',
+            'pfc', 'ff', 'if', 'is', 'sk', 'sv', 'spvgg', 'bsc', 'tsv', 'vfb', 'vfl',
+            'ballklubb', 'club', 'sport', 'v.', 'vs'
         ];
-        foreach ($remove as $r)
-            $name = preg_replace('/\b' . preg_quote($r, '/') . '\b/i', '', $name);
 
+        $tempName = $name;
+        foreach ($remove as $r) {
+            $tempName = preg_replace('/\b' . preg_quote($r, '/') . '\b/i', '', $tempName);
+        }
+
+        $tempName = trim(preg_replace('/\s+/', ' ', $tempName));
+        if (!empty($tempName)) {
+            $name = $tempName;
+        }
+
+        // 3. Final cleanup: remove non-alphanumeric (except spaces), collapse multiple spaces
+        $name = preg_replace('/[^a-z0-9 ]/', '', $name);
         return trim(preg_replace('/\s+/', ' ', $name));
     }
 
@@ -381,10 +368,22 @@ class FootballDataService
     {
         if (empty($n1) || empty($n2))
             return false;
-        if (strpos($n1, $n2) !== false || strpos($n2, $n1) !== false)
+
+        // Exact match or substring
+        if ($n1 === $n2 || strpos($n1, $n2) !== false || strpos($n2, $n1) !== false) {
             return true;
-        if (levenshtein($n1, $n2) < 3)
+        }
+
+        $len1 = strlen($n1);
+        $len2 = strlen($n2);
+
+        // Adaptive Levenshtein threshold
+        $threshold = ($len1 > 10 && $len2 > 10) ? 4 : 3;
+
+        if (levenshtein($n1, $n2) < $threshold) {
             return true;
+        }
+
         return false;
     }
 }
