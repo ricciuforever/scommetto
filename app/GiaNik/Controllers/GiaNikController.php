@@ -837,6 +837,27 @@ class GiaNikController
         }
     }
 
+    public function predictions($fixtureId)
+    {
+        try {
+            $details = $this->footballData->getFixtureDetails($fixtureId);
+            $statusShort = $details['status_short'] ?? 'NS';
+            $predictionsData = $this->footballData->getFixturePredictions($fixtureId, $statusShort);
+
+            if (!$predictionsData) {
+                echo '<div class="p-10 text-center text-danger font-black uppercase italic">Pronostico non disponibile.</div>';
+                return;
+            }
+
+            $prediction = $predictionsData['prediction_json'];
+            $comparison = $predictionsData['comparison_json'];
+
+            require __DIR__ . '/../Views/partials/modals/prediction_details.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
     public function matchDetails($fixtureId)
     {
         try {

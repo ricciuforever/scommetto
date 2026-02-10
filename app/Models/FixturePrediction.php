@@ -18,12 +18,21 @@ class FixturePrediction
 
     private function ensureTableExists()
     {
-        $sql = "CREATE TABLE IF NOT EXISTS fixture_predictions (
-            fixture_id INT PRIMARY KEY,
-            prediction_json JSON,
-            comparison_json JSON,
-            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql = "CREATE TABLE IF NOT EXISTS fixture_predictions (
+                fixture_id INT PRIMARY KEY,
+                prediction_json TEXT,
+                comparison_json TEXT,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )";
+        } else {
+            $sql = "CREATE TABLE IF NOT EXISTS fixture_predictions (
+                fixture_id INT PRIMARY KEY,
+                prediction_json JSON,
+                comparison_json JSON,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        }
         $this->db->exec($sql);
     }
 
