@@ -813,8 +813,8 @@ class GiaNikController
     private function getVirtualBalance()
     {
         $vInit = 100.0;
-        $vProf = (float) $this->db->query("SELECT SUM(profit) FROM bets WHERE status IN ('won', 'lost')")->fetchColumn();
-        $vExp = (float) $this->db->query("SELECT SUM(stake) FROM bets WHERE status = 'pending'")->fetchColumn();
+        $vProf = (float) $this->db->query("SELECT SUM(profit) FROM bets WHERE status IN ('won', 'lost') AND sport IN ('Soccer', 'Football')")->fetchColumn();
+        $vExp = (float) $this->db->query("SELECT SUM(stake) FROM bets WHERE status = 'pending' AND sport IN ('Soccer', 'Football')")->fetchColumn();
         return [
             'available' => ($vInit + $vProf) - $vExp,
             'exposure' => $vExp,
