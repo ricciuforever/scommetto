@@ -19,7 +19,7 @@ require __DIR__ . '/../../Views/layout/top.php';
                 GiaNik Live <span class="text-accent">.</span>
             </h1>
             <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mt-2">
-                Betfair Multi-Sport Dashboard (Real-Time) - SEZIONE INDIPENDENTE
+                Betfair Multi-Sport Dashboard (Prossime 24 Ore) - SEZIONE INDIPENDENTE
             </p>
         </div>
         <div class="flex items-center gap-4">

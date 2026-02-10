@@ -41,16 +41,20 @@ class GiaNikController
             // 1. Get Event Types (Sports) - Restricted to Soccer (ID 1)
             $eventTypeIds = ['1'];
 
-            // 2. Get Live Events for Soccer
-            $liveEventsRes = $this->bf->getLiveEvents($eventTypeIds);
+            // 2. Get Upcoming Events for Soccer (Next 24h)
+            $liveEventsRes = $this->bf->getUpcomingEvents($eventTypeIds, 24);
             $events = $liveEventsRes['result'] ?? [];
 
             if (empty($events)) {
-                echo '<div class="text-center py-10"><span class="text-slate-500 text-sm font-bold uppercase">Nessun evento live su Betfair</span></div>';
+                echo '<div class="text-center py-10"><span class="text-slate-500 text-sm font-bold uppercase">Nessun evento nelle prossime 24 ore su Betfair</span></div>';
                 return;
             }
 
             $eventIds = array_map(fn($e) => $e['event']['id'], $events);
+            $eventStartTimes = [];
+            foreach ($events as $e) {
+                $eventStartTimes[$e['event']['id']] = $e['event']['openDate'] ?? null;
+            }
 
             // 3. Get Market Catalogues for these events (Match Odds)
             $marketCatalogues = [];
@@ -86,8 +90,25 @@ class GiaNikController
             }
 
             // --- Pre-fetch Enrichment Data ---
+            $today = date('Y-m-d');
+            $tomorrow = date('Y-m-d', strtotime('+1 day'));
             $apiLiveRes = $this->footballData->getLiveMatches();
-            $apiLiveMatches = $apiLiveRes['response'] ?? [];
+            $apiTodayRes = $this->footballData->getFixturesByDate($today);
+            $apiTomorrowRes = $this->footballData->getFixturesByDate($tomorrow);
+
+            $allApiFixtures = array_merge(
+                $apiLiveRes['response'] ?? [],
+                $apiTodayRes['response'] ?? [],
+                $apiTomorrowRes['response'] ?? []
+            );
+            // Deduplicate by fixture ID
+            $apiLiveMatchesMap = [];
+            foreach ($allApiFixtures as $f) {
+                if (isset($f['fixture']['id'])) {
+                    $apiLiveMatchesMap[$f['fixture']['id']] = $f;
+                }
+            }
+            $apiLiveMatches = array_values($apiLiveMatchesMap);
 
             // --- P&L Tracking for Real Bets ---
             $stmtBets = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND type = 'real'");
@@ -95,7 +116,8 @@ class GiaNikController
             $activeRealBets = $stmtBets->fetchAll(PDO::FETCH_ASSOC);
 
             // --- Score Tracking for Highlighting ---
-            if (session_status() === PHP_SESSION_NONE) session_start();
+            if (session_status() === PHP_SESSION_NONE)
+                session_start();
             $prevScores = $_SESSION['gianik_scores'] ?? [];
             $newScores = [];
 
@@ -128,6 +150,21 @@ class GiaNikController
                 $mb = $marketBooksMap[$marketId];
                 $sport = 'Soccer'; // Hardcoded as we only fetch eventType 1
 
+                $startTime = $eventStartTimes[$eventId] ?? null;
+                $statusLabel = 'LIVE';
+                if ($startTime) {
+                    $odt = new \DateTime($startTime);
+                    $odt->setTimezone(new \DateTimeZone('Europe/Rome'));
+                    $now = new \DateTime();
+                    if ($odt > $now && !($mb['marketDefinition']['inPlay'] ?? false)) {
+                        if ($odt->format('Y-m-d') === $now->format('Y-m-d')) {
+                            $statusLabel = $odt->format('H:i');
+                        } else {
+                            $statusLabel = $odt->format('d/m H:i');
+                        }
+                    }
+                }
+
                 $m = [
                     'marketId' => $marketId,
                     'event' => $mc['event']['name'],
@@ -139,7 +176,8 @@ class GiaNikController
                     'sport' => $sport,
                     'totalMatched' => $mb['totalMatched'] ?? 0,
                     'runners' => [],
-                    'status_label' => 'LIVE',
+                    'status_label' => $statusLabel,
+                    'start_time' => $startTime,
                     'score' => null,
                     'has_api_data' => false,
                     'home_logo' => null,
@@ -313,7 +351,7 @@ class GiaNikController
                             $currentOdds = 0;
                             foreach ($m['runners'] as $r) {
                                 if ($r['selectionId'] == $bet['selection_id']) {
-                                    $currentOdds = is_numeric($r['back']) ? (float)$r['back'] : 0;
+                                    $currentOdds = is_numeric($r['back']) ? (float) $r['back'] : 0;
                                     break;
                                 }
                             }
@@ -338,17 +376,21 @@ class GiaNikController
             $_SESSION['gianik_scores'] = $newScores;
 
             // Sort logic: 1. Real Bets, 2. Just Updated (15s), 3. Matched Vol
-            usort($allMatches, function($a, $b) {
+            usort($allMatches, function ($a, $b) {
                 // Priority 1: Active Real Bets
-                if ($a['has_active_real_bet'] && !$b['has_active_real_bet']) return -1;
-                if (!$a['has_active_real_bet'] && $b['has_active_real_bet']) return 1;
+                if ($a['has_active_real_bet'] && !$b['has_active_real_bet'])
+                    return -1;
+                if (!$a['has_active_real_bet'] && $b['has_active_real_bet'])
+                    return 1;
 
                 // Priority 2: Just Updated (within 15s)
                 $now = time();
                 $aRecent = ($a['just_updated'] && ($now - $a['just_updated'] <= 15));
                 $bRecent = ($b['just_updated'] && ($now - $b['just_updated'] <= 15));
-                if ($aRecent && !$bRecent) return -1;
-                if (!$aRecent && $bRecent) return 1;
+                if ($aRecent && !$bRecent)
+                    return -1;
+                if (!$aRecent && $bRecent)
+                    return 1;
 
                 // Priority 3: Matched Volume
                 return ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0);
@@ -492,10 +534,23 @@ class GiaNikController
             $predictionRaw = $gemini->analyze([$event], array_merge($balance, ['is_gianik' => true]));
 
             $analysis = [];
-            if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
-                $analysis = json_decode($matches[1], true);
+            $jsonContent = '';
+            if (preg_match('/```json\s*([\s\S]*?)(?:```|$)/', $predictionRaw, $matches)) {
+                $jsonContent = trim($matches[1]);
+                $analysis = json_decode($jsonContent, true);
+
+                // Fallback parsing if json_decode fails (e.g. truncated)
+                if ($analysis === null && !empty($jsonContent)) {
+                    // Try to fix missing closing braces
+                    $bracesOpen = substr_count($jsonContent, '{');
+                    $bracesClose = substr_count($jsonContent, '}');
+                    if ($bracesOpen > $bracesClose) {
+                        $jsonContent .= str_repeat('}', $bracesOpen - $bracesClose);
+                        $analysis = json_decode($jsonContent, true);
+                    }
+                }
             }
-            $reasoning = trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
+            $reasoning = trim(preg_replace('/```json[\s\S]*?(?:```|$)/', '', $predictionRaw));
 
             require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
         } catch (\Throwable $e) {
@@ -818,7 +873,7 @@ class GiaNikController
                 $score = null;
 
                 if (isset($def['score']['homeScore'], $def['score']['awayScore'])) {
-                    $score = ['home' => (int)$def['score']['homeScore'], 'away' => (int)$def['score']['awayScore']];
+                    $score = ['home' => (int) $def['score']['homeScore'], 'away' => (int) $def['score']['awayScore']];
                 }
 
                 if ($score || (isset($def['inPlay']) && $def['inPlay'])) {
@@ -930,17 +985,30 @@ class GiaNikController
             ];
             $mappedCountry = $map[$countryCode] ?? null;
         }
-        $liveFixtures = $preFetchedLive ?? $this->footballData->getLiveMatches()['response'] ?? [];
+        $liveFixtures = $preFetchedLive;
+        if (!$liveFixtures) {
+            $liveFixtures = $this->footballData->getLiveMatches()['response'] ?? [];
+            // Add today/tomorrow if not found or always?
+            // Better to always have a broader search for analysis even if not live
+            $today = date('Y-m-d');
+            $tomorrow = date('Y-m-d', strtotime('+1 day'));
+            $todayFixtures = $this->footballData->getFixturesByDate($today)['response'] ?? [];
+            $tomorrowFixtures = $this->footballData->getFixturesByDate($tomorrow)['response'] ?? [];
+            $liveFixtures = array_merge($liveFixtures, $todayFixtures, $tomorrowFixtures);
+        }
         return $this->footballData->searchInFixtureList($bfEventName, $liveFixtures, $mappedCountry);
     }
 
     public function recentBets()
     {
-        if (session_status() === PHP_SESSION_NONE) session_start();
+        if (session_status() === PHP_SESSION_NONE)
+            session_start();
         try {
             // Persistence via Session (Senior approach: lighter and more reliable for UI state)
-            if (isset($_GET['status'])) $_SESSION['recent_bets_status'] = $_GET['status'];
-            if (isset($_GET['type'])) $_SESSION['recent_bets_type'] = $_GET['type'];
+            if (isset($_GET['status']))
+                $_SESSION['recent_bets_status'] = $_GET['status'];
+            if (isset($_GET['type']))
+                $_SESSION['recent_bets_type'] = $_GET['type'];
 
             $statusFilter = $_SESSION['recent_bets_status'] ?? 'all';
             $typeFilter = $_SESSION['recent_bets_type'] ?? 'all';

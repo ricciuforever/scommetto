@@ -97,8 +97,9 @@ class GeminiService
                 "7. SOGLIA DI CONFIDENZA: Suggerisci l'operazione SOLO se la tua 'confidence' è pari o superiore all'80%. Se è inferiore, non scommettere sul mercato.\n" .
                 "8. REGOLE CALCIO (MULTI-ENTRY): Se le condizioni cambiano durante il match, puoi rientrare con nuove scommesse. Massimo 4 puntate totali per match: 2 nel Primo Tempo e 2 nel Secondo Tempo. Ogni ingresso deve avere confidence >= 80%.\n" .
                 "9. ⚠️ QUOTA MINIMA E VALORE (REGOLA FERREA): 1.25 è la tua quota MINIMA assoluta di ingresso. Non suggerire MAI quote inferiori a 1.25 nel campo 'odds'. Se la quota attuale del mercato è superiore a 1.25, usala. Se invece la quota attuale è inferiore (es. 1.01 - 1.24) ma la tua 'confidence' è >= 80%, devi OBBLIGATORIAMENTE impostare il campo 'odds' a 1.25 nel JSON. Questo creerà un ordine 'unmatched' che attenderà che il mercato salga a 1.25. Suggerire quote come 1.03 o 1.15 è VIETATO e considerato un errore grave.\n" .
-                "10. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
-                "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
+                "10. Restituisci SEMPRE un blocco JSON con i dettagli come PRIMA COSA nella tua risposta.\n" .
+                "11. STILE RISPOSTA: La 'motivation' deve essere sintetica (max 80 parole). Evita di ripetere dati già chiari.\n\n" .
+                "FORMATO RISPOSTA (JSON OBBLIGATORIO ALL'INIZIO):\n" .
                 "```json\n" .
                 "{\n" .
                 "  \"marketId\": \"1.XXXXX\",\n" .
@@ -107,9 +108,10 @@ class GeminiService
                 "  \"stake\": 5.0,\n" .
                 "  \"confidence\": 90,\n" .
                 "  \"sentiment\": \"Bullish/Bearish/Neutral\",\n" .
-                "  \"motivation\": \"Spiegazione tecnica dettagliata. Collega i dati statistici live con la scelta del mercato e dello stake.\"\n" .
+                "  \"motivation\": \"Sintesi tecnica qui.\"\n" .
                 "}\n" .
-                "```";
+                "```\n\n" .
+                "Dopo il JSON, puoi aggiungere un'analisi narrativa più libera se necessario, ma mantienila breve.";
         } else {
             $prompt = "Sei un TRADER ELITE di Betfair. Il tuo compito è analizzare il mercato live multi-sport e scovare la scommessa migliore tra quelle fornite.\n\n" .
                 $balanceText .
@@ -146,7 +148,7 @@ class GeminiService
             ],
             "generationConfig" => [
                 "temperature" => 0.1, // Più basso per maggiore precisione
-                "maxOutputTokens" => 1200
+                "maxOutputTokens" => 800
             ]
         ];
 

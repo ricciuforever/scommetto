@@ -634,6 +634,25 @@ class BetfairService
     }
 
     /**
+     * Fetch upcoming events for specific sport IDs within the next X hours
+     */
+    public function getUpcomingEvents(array $eventTypeIds = ["1"], int $hours = 24)
+    {
+        $from = gmdate('Y-m-d\TH:i:s\Z', time() - (2 * 3600)); // Include recently started
+        $to = gmdate('Y-m-d\TH:i:s\Z', time() + ($hours * 3600));
+
+        return $this->request('listEvents', [
+            'filter' => [
+                'eventTypeIds' => $eventTypeIds,
+                'marketStartTime' => [
+                    'from' => $from,
+                    'to' => $to
+                ]
+            ]
+        ]);
+    }
+
+    /**
      * Get Market Catalogues for a list of Event IDs with filtering and sorting
      */
     public function getMarketCatalogues(array $eventIds, int $maxResults = 50, array $marketTypeCodes = [], string $sort = 'MAXIMUM_TRADED')

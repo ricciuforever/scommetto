@@ -284,6 +284,49 @@ class FootballDataService
     }
 
     /**
+     * Get matches for a specific date with caching
+     */
+    public function getFixturesByDate($date, $cacheSeconds = 3600)
+    {
+        $db = \App\Services\Database::getInstance()->getConnection();
+        $stateKey = "last_date_sync_" . $date;
+        $cacheFile = Config::DATA_PATH . "api_football_date_" . $date . ".json";
+
+        $stmt = $db->prepare("SELECT updated_at FROM system_state WHERE `key` = ?");
+        $stmt->execute([$stateKey]);
+        $lastSync = $stmt->fetchColumn();
+
+        if ($lastSync && (time() - strtotime($lastSync)) < $cacheSeconds && file_exists($cacheFile)) {
+            return json_decode(file_get_contents($cacheFile), true);
+        }
+
+        $res = $this->api->request("/fixtures?date=$date&timezone=Europe/Rome");
+        if (isset($res['response'])) {
+            $fixtureModel = new Fixture();
+            foreach ($res['response'] as $item) {
+                $fixtureModel->save($item);
+            }
+
+            $sql = "INSERT INTO system_state (`key`, `value`, `updated_at`) VALUES (?, 'ok', CURRENT_TIMESTAMP) ";
+            if (\App\Services\Database::getInstance()->isSQLite()) {
+                $sql .= " ON CONFLICT(`key`) DO UPDATE SET updated_at = CURRENT_TIMESTAMP";
+            } else {
+                $sql .= " ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP";
+            }
+            $db->prepare($sql)->execute([$stateKey]);
+
+            file_put_contents($cacheFile, json_encode($res));
+            return $res;
+        }
+
+        if (file_exists($cacheFile)) {
+            return json_decode(file_get_contents($cacheFile), true);
+        }
+
+        return ['response' => []];
+    }
+
+    /**
      * Search a Betfair event in the fixture list using normalized names
      */
     public function searchInFixtureList($bfEventName, $fixtures, $mappedCountry = null)
@@ -311,8 +354,10 @@ class FootballDataService
             $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
             $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
 
-            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) ||
-                ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome))) {
+            if (
+                ($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) ||
+                ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome))
+            ) {
                 return $item;
             }
         }
@@ -334,13 +379,35 @@ class FootballDataService
 
         // 0. Transliterate common accented characters
         $chars = [
-            'ä' => 'a', 'ö' => 'o', 'ü' => 'u', 'ß' => 'ss',
-            'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
-            'á' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'å' => 'a',
-            'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i',
-            'ó' => 'o', 'ò' => 'o', 'ô' => 'o', 'õ' => 'o', 'ø' => 'o',
-            'ú' => 'u', 'ù' => 'u', 'û' => 'u',
-            'ñ' => 'n', 'ç' => 'c', 'ý' => 'y', 'ÿ' => 'y'
+            'ä' => 'a',
+            'ö' => 'o',
+            'ü' => 'u',
+            'ß' => 'ss',
+            'é' => 'e',
+            'è' => 'e',
+            'ê' => 'e',
+            'ë' => 'e',
+            'á' => 'a',
+            'à' => 'a',
+            'â' => 'a',
+            'ã' => 'a',
+            'å' => 'a',
+            'í' => 'i',
+            'ì' => 'i',
+            'î' => 'i',
+            'ï' => 'i',
+            'ó' => 'o',
+            'ò' => 'o',
+            'ô' => 'o',
+            'õ' => 'o',
+            'ø' => 'o',
+            'ú' => 'u',
+            'ù' => 'u',
+            'û' => 'u',
+            'ñ' => 'n',
+            'ç' => 'c',
+            'ý' => 'y',
+            'ÿ' => 'y'
         ];
         $name = strtr($name, $chars);
 
@@ -371,11 +438,59 @@ class FootballDataService
         // 2. Remove common prefixes/suffixes (word boundaries)
         // If the name would become empty, DON'T remove it (e.g. "Inter")
         $remove = [
-            'fc', 'f.c.', 'united', 'city', 'town', 'real', 'atlético', 'atletico',
-            'u23', 'u21', 'u19', 'women', 'donne', 'femminile', 'sports', 'sc', 'ac', 'as',
-            'cf', 'rc', 'de', 'rs', 'bk', 'fk', 'nk', 'hsk', 'acs', 'csc', 'csm', 'cs', 'afc',
-            'pfc', 'ff', 'if', 'is', 'sk', 'sv', 'spvgg', 'bsc', 'tsv', 'vfb', 'vfl', 'cp',
-            'ballklubb', 'club', 'sport', 'v.', 'vs', 'ii', ' b', 'lisbon', 'lisboa', 'utd'
+            'fc',
+            'f.c.',
+            'united',
+            'city',
+            'town',
+            'real',
+            'atlético',
+            'atletico',
+            'u23',
+            'u21',
+            'u19',
+            'women',
+            'donne',
+            'femminile',
+            'sports',
+            'sc',
+            'ac',
+            'as',
+            'cf',
+            'rc',
+            'de',
+            'rs',
+            'bk',
+            'fk',
+            'nk',
+            'hsk',
+            'acs',
+            'csc',
+            'csm',
+            'cs',
+            'afc',
+            'pfc',
+            'ff',
+            'if',
+            'is',
+            'sk',
+            'sv',
+            'spvgg',
+            'bsc',
+            'tsv',
+            'vfb',
+            'vfl',
+            'cp',
+            'ballklubb',
+            'club',
+            'sport',
+            'v.',
+            'vs',
+            'ii',
+            ' b',
+            'lisbon',
+            'lisboa',
+            'utd'
         ];
 
         $tempName = $name;
