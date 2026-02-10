@@ -314,19 +314,33 @@ class GiaNikController
                 if (!isset($booksMap[$mId]))
                     continue;
                 $book = $booksMap[$mId];
+                if (($book['status'] ?? '') !== 'OPEN')
+                    continue;
+
                 $m = [
                     'marketId' => $mId,
-                    'marketName' => $mc['marketName'],
-                    'totalMatched' => $book['totalMatched'],
+                    'marketName' => $mc['marketName'] ?? 'Unknown',
+                    'totalMatched' => (float) ($book['totalMatched'] ?? 0),
                     'runners' => []
                 ];
                 foreach ($book['runners'] as $r) {
                     $mR = array_filter($mc['runners'], fn($rm) => $rm['selectionId'] === $r['selectionId']);
                     $name = reset($mR)['runnerName'] ?? 'Unknown';
+
+                    // Prendi i migliori prezzi Back e Lay
+                    $backPrice = $r['ex']['availableToBack'][0]['price'] ?? 0;
+                    $layPrice = $r['ex']['availableToLay'][0]['price'] ?? 0;
+
+                    // Se non ci sono prezzi disponibili, prova a usare l'ultimo prezzo scambiato
+                    if ($backPrice == 0 && isset($r['lastPriceTraded'])) {
+                        $backPrice = $r['lastPriceTraded'];
+                    }
+
                     $m['runners'][] = [
                         'selectionId' => $r['selectionId'],
                         'name' => $name,
-                        'back' => $r['ex']['availableToBack'][0]['price'] ?? 0
+                        'back' => (float) $backPrice,
+                        'lay' => (float) $layPrice
                     ];
                 }
                 $event['markets'][] = $m;
@@ -335,6 +349,9 @@ class GiaNikController
             $vBalance = $this->getVirtualBalance();
             $balance = ['available_balance' => $vBalance['available'], 'current_portfolio' => $vBalance['total']];
 
+            // Aggiungiamo il marketId di partenza come suggerimento per l'AI
+            $event['requestedMarketId'] = $marketId;
+
             if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
                 $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition']);
             } elseif ($event['sport'] === 'Basketball') {
@@ -342,6 +359,10 @@ class GiaNikController
             }
 
             $gemini = new GeminiService();
+
+            // Debug $event
+            file_put_contents(Config::LOGS_PATH . 'gianik_event_debug.log', date('[Y-m-d H:i:s] ') . json_encode($event, JSON_PRETTY_PRINT) . PHP_EOL, FILE_APPEND);
+
             $predictionRaw = $gemini->analyze([$event], array_merge($balance, ['is_gianik' => true]));
 
             $analysis = [];

@@ -55,13 +55,14 @@ $event = $event ?? [];
                             <div class="text-sm font-black italic uppercase text-indigo-400">
                                 <?php
                                 $selMarket = null;
+                                $searchId = $analysis['marketId'] ?? ($event['requestedMarketId'] ?? '');
                                 foreach (($event['markets'] ?? []) as $m) {
-                                    if ($m['marketId'] === ($analysis['marketId'] ?? '')) {
+                                    if ($m['marketId'] === $searchId) {
                                         $selMarket = $m;
                                         break;
                                     }
                                 }
-                                echo htmlspecialchars($selMarket['marketName'] ?? 'N/A');
+                                echo htmlspecialchars($selMarket['marketName'] ?? 'Analisi Globale');
                                 ?>
                             </div>
                         </div>
