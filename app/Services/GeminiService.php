@@ -65,6 +65,12 @@ class GeminiService
                 "DATI STATISTICI AVANZATI (Se disponibili):\n" .
                 "Calcio: " . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili") . "\n" .
                 "Basket: " . (isset($candidates[0]['api_basketball']) ? json_encode($candidates[0]['api_basketball']) : "Non disponibili") . "\n\n" .
+                "🚨 DATI LIVE DEL MATCH:\n" .
+                "Se presenti in api_football.live, troverai:\n" .
+                "- live_score: {home, away, halftime_home, halftime_away} = SCORE ATTUALE E HALFTIME\n" .
+                "- live_status: {short, long, elapsed_minutes} = STATO MATCH E MINUTI TRASCORSI\n" .
+                "- match_info: {fixture_id, date, venue_id}\n" .
+                "USA QUESTI DATI per contestualizzare la tua analisi! Non dire mai che non conosci lo score o il minuto se questi dati sono presenti.\n\n" .
                 "REGOLE RIGIDE:\n" .
                 "1. Analizza TUTTI i mercati forniti (Match Odds, Double Chance, varie linee di Under/Over, BTTS).\n" .
                 "2. Scegli l'operazione che offre il miglior rapporto rischio/rendimento. Non sei obbligato a scegliere il mercato principale se un altro (es. Over 1.5) è più sicuro o profittevole.\n" .
