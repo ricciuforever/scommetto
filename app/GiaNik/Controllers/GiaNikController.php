@@ -246,9 +246,9 @@ class GiaNikController
 
             // Funds
             $account = ['available' => 0, 'exposure' => 0];
-            $funds = $this->bf->getFunds();
-            if (isset($funds['result'])) {
-                $funds = $funds['result'];
+            $fundsData = $this->bf->getFunds();
+            $funds = $fundsData['result'] ?? $fundsData;
+            if (isset($funds['availableToBetBalance'])) {
                 $account['available'] = $funds['availableToBetBalance'] ?? 0;
                 $account['exposure'] = abs($funds['exposure'] ?? 0);
             }

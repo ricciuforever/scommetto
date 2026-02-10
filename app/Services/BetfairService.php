@@ -608,6 +608,7 @@ class BetfairService
             return $this->getFunds(true);
         }
 
+        $this->log("getAccountFunds response: ", $decoded);
         return $decoded;
     }
 
