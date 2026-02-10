@@ -25,6 +25,7 @@ class GiaNikDatabase
         $this->connection->exec("CREATE TABLE IF NOT EXISTS bets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             market_id TEXT,
+            market_name TEXT,
             event_name TEXT,
             sport TEXT,
             selection_id TEXT,
@@ -45,7 +46,8 @@ class GiaNikDatabase
             'profit' => 'REAL DEFAULT 0',
             'settled_at' => 'DATETIME',
             'motivation' => 'TEXT',
-            'type' => "TEXT DEFAULT 'virtual'"
+            'type' => "TEXT DEFAULT 'virtual'",
+            'market_name' => 'TEXT'
         ];
 
         $stmt = $this->connection->query("PRAGMA table_info(bets)");

@@ -42,6 +42,28 @@ $event = $event ?? [];
                 </div>
 
                 <?php if (!empty($analysis)): ?>
+                    <div class="glass p-5 rounded-3xl border-white/5 flex items-center justify-between">
+                         <div>
+                            <div class="text-[8px] font-black text-slate-500 uppercase tracking-[.2em] mb-1">Mercato Selezionato</div>
+                            <div class="text-sm font-black italic uppercase text-indigo-400">
+                                <?php
+                                    $selMarket = null;
+                                    foreach(($event['markets'] ?? []) as $m) {
+                                        if ($m['marketId'] === ($analysis['marketId'] ?? '')) {
+                                            $selMarket = $m;
+                                            break;
+                                        }
+                                    }
+                                    echo htmlspecialchars($selMarket['marketName'] ?? 'N/A');
+                                ?>
+                            </div>
+                         </div>
+                         <div class="text-right">
+                             <div class="text-[8px] font-black text-slate-500 uppercase tracking-[.2em] mb-1">Market ID</div>
+                             <div class="text-[10px] font-mono text-slate-400"><?php echo htmlspecialchars($analysis['marketId'] ?? 'N/A'); ?></div>
+                         </div>
+                    </div>
+
                     <div class="grid grid-cols-2 gap-4">
                         <div class="glass p-5 rounded-3xl border-white/5">
                             <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Consiglio</div>
@@ -114,24 +136,33 @@ $event = $event ?? [];
             btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Elaborazione...';
             if (window.lucide) lucide.createIcons();
 
+            const analysis = <?php echo json_encode($analysis); ?>;
+            const eventData = <?php echo json_encode($event); ?>;
+
             const betData = {
-                marketId: <?php echo json_encode($event['marketId']); ?>,
-                eventName: <?php echo json_encode($event['event']); ?>,
-                sport: <?php echo json_encode($event['sport']); ?>,
-                advice: <?php echo json_encode($analysis['advice'] ?? ''); ?>,
-                odds: <?php echo (float)($analysis['odds'] ?? 0); ?>,
-                stake: 2.0, // Default stake for IT
+                marketId: analysis.marketId,
+                marketName: 'Unknown',
+                eventName: eventData.event,
+                sport: eventData.sport,
+                advice: analysis.advice,
+                odds: parseFloat(analysis.odds || 0),
+                stake: parseFloat(analysis.stake || 2.0),
                 type: window.gianikMode || 'virtual',
                 motivation: <?php echo json_encode($motivation); ?>,
-                // We need selectionId, we can try to find it from runners or let backend handle mapping
-                runnerName: <?php echo json_encode($analysis['advice'] ?? ''); ?>,
-                selectionId: null // Backend will map it
+                runnerName: analysis.advice,
+                selectionId: null
             };
 
-            // Attempt to find selectionId in client side first
-            const runners = <?php echo json_encode($event['runners']); ?>;
-            const runner = runners.find(r => r.name.toLowerCase().includes(betData.runnerName.toLowerCase()));
-            if (runner) betData.selectionId = runner.selectionId;
+            // Find market and runner info
+            const selectedMarket = (eventData.markets || []).find(m => m.marketId === betData.marketId);
+            if (selectedMarket) {
+                betData.marketName = selectedMarket.marketName;
+                const runner = (selectedMarket.runners || []).find(r =>
+                    r.name.toLowerCase() === betData.runnerName.toLowerCase() ||
+                    r.name.toLowerCase().includes(betData.runnerName.toLowerCase())
+                );
+                if (runner) betData.selectionId = runner.selectionId;
+            }
 
             try {
                 const response = await fetch('/api/gianik/place-bet', {
