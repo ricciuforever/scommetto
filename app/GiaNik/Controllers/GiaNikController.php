@@ -126,7 +126,11 @@ class GiaNikController
                     'runners' => [],
                     'status_label' => 'LIVE',
                     'score' => null,
-                    'has_api_data' => false
+                    'has_api_data' => false,
+                    'home_logo' => null,
+                    'away_logo' => null,
+                    'home_name' => null,
+                    'away_name' => null
                 ];
 
                 // --- Enrichment ---
@@ -138,7 +142,23 @@ class GiaNikController
                         $elapsed = $match['fixture']['status']['elapsed'] ?? 0;
                         $m['status_label'] = ($match['fixture']['status']['short'] ?? 'LIVE') . ($elapsed ? " $elapsed'" : "");
                         $m['has_api_data'] = true;
+                        $m['home_logo'] = $match['teams']['home']['logo'] ?? null;
+                        $m['away_logo'] = $match['teams']['away']['logo'] ?? null;
+                        $m['home_name'] = $match['teams']['home']['name'] ?? null;
+                        $m['away_name'] = $match['teams']['away']['name'] ?? null;
                         $foundApiData = true;
+                    }
+                }
+
+                // If no API data, try to split the event name for UI purposes
+                if (!$foundApiData) {
+                    $teams = preg_split('/\s+(v|vs|@)\s+/i', $m['event']);
+                    if (count($teams) >= 2) {
+                        $m['home_name'] = trim($teams[0]);
+                        $m['away_name'] = trim($teams[1]);
+                    } else {
+                        $m['home_name'] = $m['event'];
+                        $m['away_name'] = '';
                     }
                 }
 
