@@ -38,16 +38,21 @@ class Coach
     public function save($data, $teamId)
     {
         $sql = "INSERT INTO coaches (id, name, firstname, lastname, age, birth_date, birth_country, nationality, photo, team_id, career_json)
-                VALUES (:id, :name, :firstname, :lastname, :age, :birth_date, :birth_country, :nationality, :photo, :team_id, :career)
-                ON DUPLICATE KEY UPDATE 
-                name = VALUES(name),
-                age = VALUES(age),
-                photo = VALUES(photo),
-                team_id = VALUES(team_id),
-                birth_date = VALUES(birth_date),
-                birth_country = VALUES(birth_country),
-                career_json = VALUES(career_json),
-                last_updated = CURRENT_TIMESTAMP";
+                VALUES (:id, :name, :firstname, :lastname, :age, :birth_date, :birth_country, :nationality, :photo, :team_id, :career)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(id) DO UPDATE SET 
+                    name = EXCLUDED.name, age = EXCLUDED.age, photo = EXCLUDED.photo,
+                    team_id = EXCLUDED.team_id, birth_date = EXCLUDED.birth_date,
+                    birth_country = EXCLUDED.birth_country, career_json = EXCLUDED.career_json,
+                    last_updated = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE 
+                    name = VALUES(name), age = VALUES(age), photo = VALUES(photo),
+                    team_id = VALUES(team_id), birth_date = VALUES(birth_date),
+                    birth_country = VALUES(birth_country), career_json = VALUES(career_json),
+                    last_updated = CURRENT_TIMESTAMP";
+        }
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([

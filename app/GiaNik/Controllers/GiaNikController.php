@@ -158,6 +158,8 @@ class GiaNikController
                         $m['away_name'] = $match['teams']['away']['name'] ?? null;
                         $m['country'] = $match['league']['country'] ?? $m['country'];
                         $m['flag'] = $match['league']['flag'] ?? null;
+                        $m['league_id'] = $match['league']['id'] ?? null;
+                        $m['season'] = $match['league']['season'] ?? null;
                         $foundApiData = true;
                     }
                 }
@@ -831,7 +833,8 @@ class GiaNikController
             // We need teams IDs to get H2H
             $homeId = $details['teams']['home']['id'];
             $awayId = $details['teams']['away']['id'];
-            $h2h = $this->footballData->getH2H($homeId, $awayId);
+            $h2hData = $this->footballData->getH2H($homeId, $awayId);
+            $h2h = $h2hData['h2h_json'] ?? [];
             require __DIR__ . '/../Views/partials/modals/h2h.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
@@ -841,13 +844,41 @@ class GiaNikController
     public function teamDetails($teamId)
     {
         try {
+            $leagueId = $_GET['leagueId'] ?? null;
+            $season = $_GET['season'] ?? \App\Config\Config::getCurrentSeason();
+
             $teamData = $this->footballData->getTeamDetails($teamId);
             if (!$teamData) {
                 echo '<div class="p-10 text-center text-danger">Team non trovato.</div>';
                 return;
             }
-            // Mocking structure for view if needed
-            $team = ['team' => $teamData, 'venue' => $teamData]; // Team model getById returns merged data
+
+            $venue = (new \App\Models\Venue())->getById($teamData['venue_id'] ?? 0);
+            $coachData = $this->footballData->getCoach($teamId);
+            $squad = $this->footballData->getSquad($teamId);
+
+            $standings = [];
+            if ($leagueId) {
+                $standings = $this->footballData->getStandings($leagueId, $season, $teamId);
+            } else {
+                // Try to find if we have any standings for this team in current season
+                $db = \App\Services\Database::getInstance()->getConnection();
+                $stmt = $db->prepare("SELECT league_id FROM standings WHERE team_id = ? AND season = ? LIMIT 1");
+                $stmt->execute([$teamId, $season]);
+                $foundLeague = $stmt->fetchColumn();
+                if ($foundLeague) {
+                    $standings = $this->footballData->getStandings($foundLeague, $season, $teamId);
+                }
+            }
+
+            $team = [
+                'team' => $teamData,
+                'venue' => $venue ?: $teamData, // Fallback if venue not in separate table
+                'coach' => $coachData,
+                'squad' => $squad,
+                'standing' => $standings[0] ?? null
+            ];
+
             require __DIR__ . '/../Views/partials/modals/team_details.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
@@ -874,10 +905,10 @@ class GiaNikController
             if (!$player) {
                 $playerData = $this->footballData->getPlayer($playerId);
                 if ($playerData) {
-                    $stats = (new \App\Models\PlayerStatistics())->get($playerId, \App\Config\Config::getCurrentSeason());
+                    $statsRaw = (new \App\Models\PlayerStatistics())->get($playerId, \App\Config\Config::getCurrentSeason());
                     $player = [
                         'player' => $playerData,
-                        'statistics' => $stats ? json_decode($stats['stats_json'], true) : []
+                        'statistics' => ($statsRaw && isset($statsRaw['stats_json'])) ? json_decode($statsRaw['stats_json'], true) : []
                     ];
                 }
             }
@@ -887,24 +918,54 @@ class GiaNikController
                 return;
             }
 
+            // Ensure we have at least one statistics block to show live data
+            if (empty($player['statistics'])) {
+                $player['statistics'] = [
+                    [
+                        'team' => ['id' => null, 'name' => 'Live'],
+                        'league' => ['id' => null, 'name' => 'Live'],
+                        'games' => ['minutes' => 0, 'position' => 'N/A', 'rating' => null],
+                        'shots' => ['total' => 0, 'on' => 0],
+                        'goals' => ['total' => 0, 'assists' => 0],
+                        'passes' => ['total' => 0, 'accuracy' => 0],
+                        'tackles' => ['interceptions' => 0],
+                        'dribbles' => ['attempts' => 0, 'success' => 0],
+                        'cards' => ['yellow' => 0, 'red' => 0]
+                    ]
+                ];
+            }
+
             // CROSS-CHECK with Events to avoid data latency issues
             $eventGoals = 0;
+            $yellowCards = 0;
+            $redCards = 0;
             foreach ($events as $ev) {
-                if ($ev['player']['id'] == $playerId && strtolower($ev['type']) === 'goal') {
-                    $eventGoals++;
+                if (($ev['player']['id'] ?? null) == $playerId) {
+                    $type = strtolower($ev['type'] ?? '');
+                    if ($type === 'goal')
+                        $eventGoals++;
+                    if ($type === 'card') {
+                        $detail = strtolower($ev['detail'] ?? '');
+                        if (strpos($detail, 'yellow') !== false)
+                            $yellowCards++;
+                        if (strpos($detail, 'red') !== false)
+                            $redCards++;
+                    }
                 }
             }
 
-            // If events show more goals than stats, trust the events
+            // Trust events over stats for live updates
             if (isset($player['statistics'][0])) {
-                if (($player['statistics'][0]['goals']['total'] ?? 0) < $eventGoals) {
-                    $player['statistics'][0]['goals']['total'] = $eventGoals;
-                }
+                $stats = &$player['statistics'][0];
+                if (($stats['goals']['total'] ?? 0) < $eventGoals)
+                    $stats['goals']['total'] = $eventGoals;
+                if (($stats['cards']['yellow'] ?? 0) < $yellowCards)
+                    $stats['cards']['yellow'] = $yellowCards;
+                if (($stats['cards']['red'] ?? 0) < $redCards)
+                    $stats['cards']['red'] = $redCards;
 
-                // Also ensure minutes is at least something if he scored
-                if ($eventGoals > 0 && ($player['statistics'][0]['games']['minutes'] ?? 0) === 0) {
-                    // Try to guess minutes from last event or just set a placeholder
-                    $player['statistics'][0]['games']['minutes'] = 'Live';
+                if (($eventGoals > 0 || $yellowCards > 0 || $redCards > 0) && ($stats['games']['minutes'] ?? 0) === 0) {
+                    $stats['games']['minutes'] = 'Live';
                 }
             }
 

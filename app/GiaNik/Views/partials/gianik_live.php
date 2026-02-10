@@ -92,7 +92,8 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
 
                         <!-- Home Team -->
                         <div class="flex items-center gap-4 flex-1 justify-end cursor-pointer hover:opacity-80 transition-opacity"
-                            <?php if ($homeId): ?> hx-get="/api/gianik/team-details?teamId=<?php echo $homeId; ?>"
+                            <?php if ($homeId): ?>
+                                hx-get="/api/gianik/team-details?teamId=<?php echo $homeId; ?>&leagueId=<?php echo $m['league_id'] ?? ''; ?>&season=<?php echo $m['season'] ?? ''; ?>"
                                 hx-target="#global-modal-container" <?php endif; ?>>
                             <span class="text-xs font-black uppercase text-white truncate text-right max-w-[200px]">
                                 <?php echo $m['home_name']; ?>
@@ -141,7 +142,8 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
 
                         <!-- Away Team -->
                         <div class="flex items-center gap-4 flex-1 justify-start cursor-pointer hover:opacity-80 transition-opacity"
-                            <?php if ($awayId): ?> hx-get="/api/gianik/team-details?teamId=<?php echo $awayId; ?>"
+                            <?php if ($awayId): ?>
+                                hx-get="/api/gianik/team-details?teamId=<?php echo $awayId; ?>&leagueId=<?php echo $m['league_id'] ?? ''; ?>&season=<?php echo $m['season'] ?? ''; ?>"
                                 hx-target="#global-modal-container" <?php endif; ?>>
                             <?php if ($m['away_logo']): ?>
                                 <div

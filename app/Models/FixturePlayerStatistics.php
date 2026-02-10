@@ -63,6 +63,12 @@ class FixturePlayerStatistics
 
     public function needsRefresh($fixtureId, $statusShort)
     {
+        // Check count
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM fixture_player_stats WHERE fixture_id = ?");
+        $stmt->execute([$fixtureId]);
+        if ($stmt->fetchColumn() == 0)
+            return true;
+
         $stmt = $this->db->prepare("SELECT MAX(last_updated) as last_sync FROM fixture_player_stats WHERE fixture_id = ?");
         $stmt->execute([$fixtureId]);
         $row = $stmt->fetch();

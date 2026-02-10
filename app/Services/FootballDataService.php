@@ -15,6 +15,7 @@ use App\Models\Venue;
 use App\Models\Standing;
 use App\Models\H2H;
 use App\Models\Player;
+use App\Models\Coach;
 use App\Config\Config;
 
 class FootballDataService
@@ -160,6 +161,39 @@ class FootballDataService
         }
 
         return $model->getByLeagueAndSeason($leagueId, $season);
+    }
+
+    public function getCoach($teamId)
+    {
+        $model = new Coach();
+        if ($model->needsRefresh($teamId)) {
+            $res = $this->api->fetchCoach($teamId);
+            if (!empty($res['response'])) {
+                $model->save($res['response'][0], $teamId);
+            }
+        }
+        return $model->getByTeam($teamId);
+    }
+
+    public function getSquad($teamId, $forceSync = false)
+    {
+        $model = new Player();
+        // Check if there are any players for this team in the squads table
+        $db = \App\Services\Database::getInstance()->getConnection();
+        $stmt = $db->prepare("SELECT COUNT(*) FROM squads WHERE team_id = ?");
+        $stmt->execute([$teamId]);
+        $count = $stmt->fetchColumn();
+
+        if ($forceSync || $count == 0) {
+            $res = $this->api->fetchSquad($teamId);
+            if (!empty($res['response'][0]['players'])) {
+                foreach ($res['response'][0]['players'] as $p) {
+                    $model->save($p);
+                    $model->linkToSquad($teamId, $p, $p);
+                }
+            }
+        }
+        return $model->getByTeam($teamId);
     }
 
     public function getH2H($team1Id, $team2Id)

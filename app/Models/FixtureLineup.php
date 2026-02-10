@@ -58,7 +58,7 @@ class FixtureLineup
     {
         $sql = "SELECT fl.*, t.name as team_name, t.logo as team_logo
                 FROM fixture_lineups fl
-                JOIN teams t ON fl.team_id = t.id
+                LEFT JOIN teams t ON fl.team_id = t.id
                 WHERE fl.fixture_id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$fixture_id]);
@@ -74,6 +74,12 @@ class FixtureLineup
 
     public function needsRefresh($fixtureId, $statusShort)
     {
+        // Check count
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM fixture_lineups WHERE fixture_id = ?");
+        $stmt->execute([$fixtureId]);
+        if ($stmt->fetchColumn() == 0)
+            return true;
+
         $stmt = $this->db->prepare("SELECT MAX(last_updated) as last_sync FROM fixture_lineups WHERE fixture_id = ?");
         $stmt->execute([$fixtureId]);
         $row = $stmt->fetch();
