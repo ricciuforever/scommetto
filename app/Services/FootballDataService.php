@@ -78,8 +78,8 @@ class FootballDataService
         if ($model->needsRefresh($fixtureId, $statusShort)) {
             $res = $this->api->fetchPredictions($fixtureId);
             if (!empty($res['response'])) {
-                $pred = $res['response'][0];
-                $model->save($fixtureId, $pred['predictions'], $pred['comparison']);
+                // Salviamo l'INTERO response[0] che include predictions, comparison, teams, h2h
+                $model->save($fixtureId, $res['response'][0]);
             }
         }
         return $model->getByFixture($fixtureId);
@@ -172,7 +172,8 @@ class FootballDataService
 
     public function getPlayer($id, $season = null)
     {
-        if (!$season) $season = Config::getCurrentSeason();
+        if (!$season)
+            $season = Config::getCurrentSeason();
         $model = new Player();
         // Custom check for player refresh if model doesn't have it
         $db = \App\Services\Database::getInstance()->getConnection();
@@ -181,11 +182,11 @@ class FootballDataService
         $last = $stmt->fetchColumn();
 
         if (!$last || (time() - strtotime($last)) > 86400) {
-             $res = $this->api->fetchPlayer(['id' => $id, 'season' => $season]);
-             if (!empty($res['response'])) {
-                 $model->save($res['response'][0]);
-                 (new \App\Models\PlayerStatistics())->save($id, $res['response'][0]['statistics'][0]['team']['id'], $season, $res['response'][0]['statistics']);
-             }
+            $res = $this->api->fetchPlayer(['id' => $id, 'season' => $season]);
+            if (!empty($res['response'])) {
+                $model->save($res['response'][0]);
+                (new \App\Models\PlayerStatistics())->save($id, $res['response'][0]['statistics'][0]['team']['id'], $season, $res['response'][0]['statistics']);
+            }
         }
         return $model->getById($id);
     }
@@ -283,9 +284,42 @@ class FootballDataService
             $name = str_replace($search, $replace, $name);
 
         $remove = [
-            'fc', 'united', 'city', 'town', 'real', 'atlético', 'atletico', 'inter', 'u23', 'u21', 'u19',
-            'women', 'donne', 'femminile', 'sports', 'sc', 'ac', 'as', 'cf', 'rc', 'de', 'rs',
-            'bk', 'fk', 'ff', 'if', 'is', 'sk', 'sv', 'spvgg', 'bsc', 'tsv', 'vfb', 'vfl', 'utd', 'ballklubb'
+            'fc',
+            'united',
+            'city',
+            'town',
+            'real',
+            'atlético',
+            'atletico',
+            'inter',
+            'u23',
+            'u21',
+            'u19',
+            'women',
+            'donne',
+            'femminile',
+            'sports',
+            'sc',
+            'ac',
+            'as',
+            'cf',
+            'rc',
+            'de',
+            'rs',
+            'bk',
+            'fk',
+            'ff',
+            'if',
+            'is',
+            'sk',
+            'sv',
+            'spvgg',
+            'bsc',
+            'tsv',
+            'vfb',
+            'vfl',
+            'utd',
+            'ballklubb'
         ];
         foreach ($remove as $r)
             $name = preg_replace('/\b' . preg_quote($r, '/') . '\b/i', '', $name);

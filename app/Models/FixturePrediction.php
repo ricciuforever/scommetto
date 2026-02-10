@@ -36,8 +36,10 @@ class FixturePrediction
         $this->db->exec($sql);
     }
 
-    public function save($fixtureId, $predictionData, $comparisonData)
+    public function save($fixtureId, $fullPredictionResponse)
     {
+        // Salviamo l'INTERO response dell'API /predictions
+        // Include: predictions, comparison, teams (last_5, league stats), h2h
         $sql = "INSERT INTO fixture_predictions (fixture_id, prediction_json, comparison_json, last_updated)
                 VALUES (:fid, :pred, :comp, CURRENT_TIMESTAMP)";
 
@@ -56,8 +58,10 @@ class FixturePrediction
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
             'fid' => $fixtureId,
-            'pred' => json_encode($predictionData),
-            'comp' => json_encode($comparisonData)
+            // Salviamo TUTTO in prediction_json (backward compatible)
+            'pred' => json_encode($fullPredictionResponse),
+            // Manteniamo comparison separato per backward compatibility
+            'comp' => json_encode($fullPredictionResponse['comparison'] ?? [])
         ]);
     }
 
