@@ -22,9 +22,12 @@ class GeminiService
 
         $balanceText = "";
         if (isset($options['current_portfolio'])) {
+            $labelPortfolio = ($options['is_gianik'] ?? false) ? "Budget Totale Virtuale GiaNik" : "Portfolio Reale";
+            $labelAvailable = ($options['is_gianik'] ?? false) ? "Disponibilità Virtuale GiaNik" : "Disponibilità";
+
             $balanceText = "SITUAZIONE PORTAFOGLIO:\n" .
-                "- Portfolio Reale: " . number_format($options['current_portfolio'], 2) . "€\n" .
-                "- Disponibilità: " . number_format($options['available_balance'], 2) . "€\n\n";
+                "- $labelPortfolio: " . number_format($options['current_portfolio'], 2) . "€\n" .
+                "- $labelAvailable: " . number_format($options['available_balance'], 2) . "€\n\n";
         }
 
         $isUpcoming = $options['is_upcoming'] ?? false;
@@ -62,7 +65,7 @@ class GeminiService
                 "REGOLE RIGIDE:\n" .
                 "1. Analizza TUTTI i mercati forniti (Match Odds, Double Chance, Under/Over, BTTS).\n" .
                 "2. Scegli l'operazione che offre il miglior rapporto rischio/rendimento.\n" .
-                "3. Decidi lo STAKE (in Euro) da puntare, tra il 1% e il 5% del budget disponibile (minimo 2€).\n" .
+                "3. Decidi lo STAKE (in Euro) da puntare. Hai piena libertà di arrivare fino al 5% del Budget Disponibile Virtuale (minimo 2€).\n" .
                 "4. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE (tiri, possesso, cartellini, formazioni) se forniti.\n" .
                 "5. Usa la CLASSIFICA e i PRONOSTICI esterni (predictions) per validare la tua scelta.\n" .
                 "6. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
