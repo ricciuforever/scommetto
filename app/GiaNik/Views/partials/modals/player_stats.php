@@ -53,7 +53,8 @@ $getStat = function ($path) use ($stats) {
                 </div>
                 <div>
                     <h3 class="text-3xl font-black tracking-tight text-white uppercase italic leading-none">
-                        <?php echo $p['name']; ?></h3>
+                        <?php echo $p['name']; ?>
+                    </h3>
                     <div class="flex items-center gap-3 mt-2">
                         <span class="text-slate-400 text-xs font-black uppercase tracking-widest">
                             <?php echo $stats['games']['position'] ?? 'N/A'; ?> • <?php echo $p['nationality']; ?> •
@@ -98,7 +99,8 @@ $getStat = function ($path) use ($stats) {
                             <div class="text-center p-3 rounded-2xl bg-white/5">
                                 <div class="text-[8px] font-bold text-slate-500 uppercase">Rating</div>
                                 <div class="text-xl font-black text-accent">
-                                    <?php echo $getStat('games.rating') ?: '-'; ?></div>
+                                    <?php echo $getStat('games.rating') ?: '-'; ?>
+                                </div>
                             </div>
                         </div>
 
@@ -113,23 +115,34 @@ $getStat = function ($path) use ($stats) {
                     </div>
 
                     <!-- Physical / Info -->
-                    <div class="glass p-6 rounded-[32px] border-white/5">
-                        <div class="space-y-3">
-                            <div class="flex justify-between items-center text-[10px] uppercase">
-                                <span class="font-bold text-slate-500">Altezza</span>
-                                <span class="font-black text-white"><?php echo $p['height'] ?: 'N/D'; ?></span>
-                            </div>
-                            <div class="flex justify-between items-center text-[10px] uppercase">
-                                <span class="font-bold text-slate-500">Peso</span>
-                                <span class="font-black text-white"><?php echo $p['weight'] ?: 'N/D'; ?></span>
-                            </div>
-                            <div class="flex justify-between items-center text-[10px] uppercase">
-                                <span class="font-bold text-slate-500">Nascita</span>
-                                <span
-                                    class="font-black text-white"><?php echo $p['birth_date'] ? date('d/m/Y', strtotime($p['birth_date'])) : 'N/D'; ?></span>
+                    <?php
+                    $hasPhysical = !empty($p['height']) || !empty($p['weight']) || !empty($p['birth_date']);
+                    if ($hasPhysical):
+                        ?>
+                        <div class="glass p-6 rounded-[32px] border-white/5">
+                            <div class="space-y-3">
+                                <?php if ($p['height']): ?>
+                                    <div class="flex justify-between items-center text-[10px] uppercase">
+                                        <span class="font-bold text-slate-500">Altezza</span>
+                                        <span class="font-black text-white"><?php echo $p['height']; ?></span>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($p['weight']): ?>
+                                    <div class="flex justify-between items-center text-[10px] uppercase">
+                                        <span class="font-bold text-slate-500">Peso</span>
+                                        <span class="font-black text-white"><?php echo $p['weight']; ?></span>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($p['birth_date']): ?>
+                                    <div class="flex justify-between items-center text-[10px] uppercase">
+                                        <span class="font-bold text-slate-500">Nascita</span>
+                                        <span
+                                            class="font-black text-white"><?php echo date('d/m/Y', strtotime($p['birth_date'])); ?></span>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                         </div>
-                    </div>
+                    <?php endif; ?>
 
                     <!-- Trophies -->
                     <?php if ($trophies): ?>
@@ -143,7 +156,7 @@ $getStat = function ($path) use ($stats) {
                                 // Group trophies by name
                                 $groupedTrophies = [];
                                 foreach ($trophies as $t) {
-                                    $name = $t['league'];
+                                    $name = $t['league'] ?? 'Trophy';
                                     if (!isset($groupedTrophies[$name]))
                                         $groupedTrophies[$name] = 0;
                                     $groupedTrophies[$name]++;
@@ -165,35 +178,39 @@ $getStat = function ($path) use ($stats) {
                 <!-- Right: Career & Details -->
                 <div class="md:col-span-2 space-y-8">
                     <!-- Career Path -->
-                    <div>
-                        <div class="flex items-center justify-between mb-4">
-                            <h4
-                                class="text-sm font-black text-white uppercase italic tracking-widest flex items-center gap-2">
-                                <i data-lucide="history" class="w-4 h-4 text-accent"></i> Carriera
-                            </h4>
+                    <?php if ($career): ?>
+                        <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h4
+                                    class="text-sm font-black text-white uppercase italic tracking-widest flex items-center gap-2">
+                                    <i data-lucide="history" class="w-4 h-4 text-accent"></i> Carriera
+                                </h4>
+                            </div>
+                            <div class="space-y-3">
+                                <?php foreach (array_slice($career, 0, 5) as $c):
+                                    $seasons = json_decode($c['seasons_json'] ?? '[]', true);
+                                    ?>
+                                    <div class="flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/5">
+                                        <div class="w-8 h-8 rounded-lg bg-slate-800 p-1 flex items-center justify-center">
+                                            <img src="<?php echo $c['team_logo']; ?>" class="w-full h-full object-contain"
+                                                alt="">
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="text-xs font-black text-white uppercase italic">
+                                                <?php echo $c['team_name']; ?>
+                                            </div>
+                                            <div class="text-[9px] font-bold text-slate-500 uppercase">
+                                                <?php echo $c['team_country']; ?>
+                                            </div>
+                                        </div>
+                                        <div class="text-[10px] font-black text-accent bg-accent/10 px-2 py-1 rounded-lg">
+                                            <?php echo is_array($seasons) ? implode(', ', $seasons) : $seasons; ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
-                        <div class="space-y-3">
-                            <?php foreach (array_slice($career, 0, 5) as $c):
-                                $seasons = json_decode($c['seasons_json'], true);
-                                ?>
-                                <div class="flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/5">
-                                    <div class="w-8 h-8 rounded-lg bg-slate-800 p-1 flex items-center justify-center">
-                                        <img src="<?php echo $c['team_logo']; ?>" class="w-full h-full object-contain"
-                                            alt="">
-                                    </div>
-                                    <div class="flex-1">
-                                        <div class="text-xs font-black text-white uppercase italic">
-                                            <?php echo $c['team_name']; ?></div>
-                                        <div class="text-[9px] font-bold text-slate-500 uppercase">
-                                            <?php echo $c['team_country']; ?></div>
-                                    </div>
-                                    <div class="text-[10px] font-black text-accent bg-accent/10 px-2 py-1 rounded-lg">
-                                        <?php echo implode(', ', $seasons); ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
+                    <?php endif; ?>
 
                     <!-- Transfers -->
                     <?php if ($transfers): ?>
@@ -210,7 +227,8 @@ $getStat = function ($path) use ($stats) {
                                         class="flex items-center justify-between p-3 rounded-2xl bg-slate-800/50 border border-white/5">
                                         <div class="flex items-center gap-3">
                                             <div class="text-[10px] font-black text-slate-500 w-16">
-                                                <?php echo date('M Y', strtotime($tr['date'])); ?></div>
+                                                <?php echo date('M Y', strtotime($tr['date'])); ?>
+                                            </div>
                                             <div class="flex items-center gap-2">
                                                 <span
                                                     class="text-[10px] font-bold text-slate-400 uppercase truncate max-w-[80px]"><?php echo $tr['teams']['out']['name']; ?></span>
@@ -220,7 +238,8 @@ $getStat = function ($path) use ($stats) {
                                             </div>
                                         </div>
                                         <div class="text-[10px] font-black text-success uppercase">
-                                            <?php echo $tr['type'] ?: 'Definitivo'; ?></div>
+                                            <?php echo $tr['type'] ?: 'Definitivo'; ?>
+                                        </div>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
@@ -228,41 +247,63 @@ $getStat = function ($path) use ($stats) {
                     <?php endif; ?>
 
                     <!-- Detailed Stats -->
-                    <div class="glass p-6 rounded-[32px] border-white/5">
-                        <h4
-                            class="text-[10px] font-black text-accent uppercase tracking-widest mb-4 border-b border-white/5 pb-2">
-                            Dettagli Tecnici (Season)</h4>
-                        <div class="grid grid-cols-2 gap-y-4 gap-x-12">
-                            <div class="flex justify-between items-center">
-                                <span class="text-[9px] font-bold text-slate-500 uppercase">Tiri Totali</span>
-                                <span
-                                    class="text-xs font-black text-white"><?php echo $getStat('shots.total'); ?></span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-[9px] font-bold text-slate-500 uppercase">In Porta</span>
-                                <span class="text-xs font-black text-white"><?php echo $getStat('shots.on'); ?></span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-[9px] font-bold text-slate-500 uppercase">Passaggi</span>
-                                <span
-                                    class="text-xs font-black text-white"><?php echo $getStat('passes.total'); ?></span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-[9px] font-bold text-slate-500 uppercase">Precisione</span>
-                                <span
-                                    class="text-xs font-black text-white"><?php echo $getStat('passes.accuracy'); ?>%</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-[9px] font-bold text-slate-500 uppercase">Dribbling</span>
-                                <span
-                                    class="text-xs font-black text-white"><?php echo $getStat('dribbles.success'); ?>/<?php echo $getStat('dribbles.attempts'); ?></span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-[9px] font-bold text-slate-500 uppercase">Duelli Vinti</span>
-                                <span class="text-xs font-black text-white"><?php echo $getStat('duels.won'); ?></span>
+                    <?php
+                    $statList = [
+                        'shots.total',
+                        'shots.on',
+                        'passes.total',
+                        'passes.accuracy',
+                        'dribbles.success',
+                        'duels.won',
+                        'tackles.total',
+                        'interceptions'
+                    ];
+                    $hasStats = false;
+                    foreach ($statList as $sl) {
+                        if ($getStat($sl) > 0) {
+                            $hasStats = true;
+                            break;
+                        }
+                    }
+
+                    if ($hasStats):
+                        ?>
+                        <div class="glass p-6 rounded-[32px] border-white/5">
+                            <h4
+                                class="text-[10px] font-black text-accent uppercase tracking-widest mb-4 border-b border-white/5 pb-2">
+                                Dettagli Tecnici (Season)</h4>
+                            <div class="grid grid-cols-2 gap-y-4 gap-x-12">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[9px] font-bold text-slate-500 uppercase">Tiri Totali</span>
+                                    <span
+                                        class="text-xs font-black text-white"><?php echo $getStat('shots.total'); ?></span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[9px] font-bold text-slate-500 uppercase">In Porta</span>
+                                    <span class="text-xs font-black text-white"><?php echo $getStat('shots.on'); ?></span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[9px] font-bold text-slate-500 uppercase">Passaggi</span>
+                                    <span
+                                        class="text-xs font-black text-white"><?php echo $getStat('passes.total'); ?></span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[9px] font-bold text-slate-500 uppercase">Precisione</span>
+                                    <span
+                                        class="text-xs font-black text-white"><?php echo $getStat('passes.accuracy'); ?>%</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[9px] font-bold text-slate-500 uppercase">Dribbling</span>
+                                    <span
+                                        class="text-xs font-black text-white"><?php echo $getStat('dribbles.success'); ?>/<?php echo $getStat('dribbles.attempts'); ?></span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[9px] font-bold text-slate-500 uppercase">Duelli Vinti</span>
+                                    <span class="text-xs font-black text-white"><?php echo $getStat('duels.won'); ?></span>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    <?php endif; ?>
                 </div>
 
             </div>

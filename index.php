@@ -163,7 +163,7 @@ try {
     if ($path === '/api/gianik/player-details') {
         $pId = $_GET['playerId'] ?? null;
         $fId = $_GET['fixtureId'] ?? null;
-        if ($pId && $fId) {
+        if ($pId) {
             (new \App\GiaNik\Controllers\GiaNikController())->playerDetails($pId, $fId);
             return;
         }
