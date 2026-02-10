@@ -92,13 +92,15 @@ $venue = $details['fixture']['venue'] ?? null;
             <?php
             // Simple possession or shots stat if available
             foreach ($stats as $s) {
-                $teamName = $s['team']['name'];
+                $teamName = $s['team']['name'] ?? '';
                 $possession = 'N/A';
                 foreach ($s['statistics'] as $stat) {
                     if ($stat['type'] === 'Ball Possession')
                         $possession = $stat['value'];
                 }
-                echo "<span>$teamName: $possession</span>";
+                if ($possession !== 'N/A' && !empty($teamName)) {
+                    echo "<span>$teamName: $possession</span>";
+                }
             }
             ?>
         </div>

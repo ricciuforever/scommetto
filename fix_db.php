@@ -1,5 +1,5 @@
 <?php
-// fix_db.php - Scommetto DB Migration & Repair Script v8.7
+// fix_db.php - Scommetto DB Migration & Repair Script v8.8
 require_once __DIR__ . '/bootstrap.php';
 use App\Services\Database;
 
@@ -7,7 +7,7 @@ try {
   $db = Database::getInstance()->getConnection();
   $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-  echo "🚀 Inizio riparazione e migrazione database (v8.7)...\n";
+  echo "🚀 Inizio riparazione e migrazione database (v8.8)...\n";
 
   // --- 0. PULIZIA VECCHIE TABELLE DEPRECATE ---
   $deprecated = ["team_squads"];
@@ -556,7 +556,10 @@ try {
       "ALTER TABLE players ADD COLUMN lastname VARCHAR(100) AFTER firstname",
       "ALTER TABLE players ADD COLUMN birth_date DATE AFTER age",
       "ALTER TABLE players ADD COLUMN birth_place VARCHAR(100) AFTER birth_date",
-      "ALTER TABLE players ADD COLUMN birth_country VARCHAR(100) AFTER birth_place"
+      "ALTER TABLE players ADD COLUMN birth_country VARCHAR(100) AFTER birth_place",
+      "ALTER TABLE players ADD COLUMN height VARCHAR(20) AFTER birth_country",
+      "ALTER TABLE players ADD COLUMN weight VARCHAR(20) AFTER height",
+      "ALTER TABLE players ADD COLUMN injured TINYINT(1) DEFAULT 0 AFTER weight"
     ],
     "players_indexes" => [
       "CREATE INDEX idx_players_name ON players(name)"
@@ -628,7 +631,7 @@ try {
     }
   }
 
-  echo "\n✨ Database sincronizzato con successo v8.7.\n";
+  echo "\n✨ Database sincronizzato con successo v8.8.\n";
 
 } catch (\Throwable $e) {
   echo "❌ Errore critico: " . $e->getMessage() . "\n";
