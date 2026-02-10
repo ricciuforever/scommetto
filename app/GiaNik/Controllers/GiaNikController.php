@@ -247,10 +247,16 @@ class GiaNikController
             // Funds
             $account = ['available' => 0, 'exposure' => 0];
             $funds = $this->bf->getFunds();
-            if (isset($funds['result']))
+            if (isset($funds['result'])) {
                 $funds = $funds['result'];
-            $account['available'] = $funds['availableToBetBalance'] ?? 0;
-            $account['exposure'] = abs($funds['exposure'] ?? 0);
+                $account['available'] = $funds['availableToBetBalance'] ?? 0;
+                $account['exposure'] = abs($funds['exposure'] ?? 0);
+            }
+
+            // Global State for GiaNik
+            $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
+            $stmtMode->execute();
+            $operationalMode = $stmtMode->fetchColumn() ?: 'virtual';
 
             // Virtual
             $virtualAccount = $this->getVirtualBalance();
@@ -426,11 +432,41 @@ class GiaNikController
         }
     }
 
+    public function setMode()
+    {
+        header('Content-Type: application/json');
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $mode = $input['mode'] ?? 'virtual';
+
+            $stmt = $this->db->prepare("INSERT INTO system_state (key, value, updated_at) VALUES ('operational_mode', ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP");
+            $stmt->execute([$mode]);
+
+            echo json_encode(['status' => 'success', 'mode' => $mode]);
+        } catch (\Throwable $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function getMode()
+    {
+        header('Content-Type: application/json');
+        $stmt = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
+        $stmt->execute();
+        $mode = $stmt->fetchColumn() ?: 'virtual';
+        echo json_encode(['status' => 'success', 'mode' => $mode]);
+    }
+
     public function autoProcess()
     {
         header('Content-Type: application/json');
         $results = ['scanned' => 0, 'new_bets' => 0, 'errors' => []];
         try {
+            // Check operational mode
+            $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
+            $stmtMode->execute();
+            $globalMode = $stmtMode->fetchColumn() ?: 'virtual';
+
             // Restricted to Soccer (ID 1)
             $eventTypeIds = ['1'];
             $liveEventsRes = $this->bf->getLiveEvents($eventTypeIds);
@@ -567,6 +603,7 @@ class GiaNikController
                             $stake = (float) ($analysis['stake'] ?? 2.0);
                             if ($stake < 2.0)
                                 $stake = 2.0;
+
                             $vBalance = $this->getVirtualBalance();
                             if ($vBalance['available'] < $stake)
                                 continue;
@@ -575,9 +612,23 @@ class GiaNikController
                             $selectionId = $this->bf->mapAdviceToSelection($analysis['advice'], $runners);
 
                             if ($selectionId) {
+                                $betType = $globalMode;
+                                $betfairId = null;
+
+                                if ($betType === 'real') {
+                                    $res = $this->bf->placeBet($analysis['marketId'], $selectionId, $analysis['odds'], $stake);
+                                    if (($res['status'] ?? '') === 'SUCCESS') {
+                                        $betfairId = $res['instructionReports'][0]['betId'] ?? null;
+                                    } else {
+                                        // If real bet fails, record as virtual for tracking? Or just skip?
+                                        // For now, let's keep it as virtual so we see the fail in logs
+                                        $betType = 'virtual';
+                                    }
+                                }
+
                                 $motivation = $analysis['motivation'] ?? trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
-                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                                $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, 'virtual', $motivation]);
+                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation]);
                                 $results['new_bets']++;
                             }
                         }

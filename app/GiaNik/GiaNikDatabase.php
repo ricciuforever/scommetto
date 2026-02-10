@@ -41,6 +41,12 @@ class GiaNikDatabase
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
+        $this->connection->exec("CREATE TABLE IF NOT EXISTS system_state (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+
         // 2. Ensure all columns exist (Self-Repair)
         $requiredColumns = [
             'profit' => 'REAL DEFAULT 0',

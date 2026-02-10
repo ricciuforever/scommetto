@@ -136,6 +136,16 @@ try {
         return;
     }
 
+    if ($path === '/api/gianik/set-mode') {
+        (new \App\GiaNik\Controllers\GiaNikController())->setMode();
+        return;
+    }
+
+    if ($path === '/api/gianik/get-mode') {
+        (new \App\GiaNik\Controllers\GiaNikController())->getMode();
+        return;
+    }
+
     if ($path === '/api/gianik/match-details') {
         $fId = $_GET['fixtureId'] ?? null;
         if ($fId) {

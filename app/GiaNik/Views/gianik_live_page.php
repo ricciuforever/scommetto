@@ -159,8 +159,22 @@ require __DIR__ . '/../../Views/layout/top.php';
         }
     });
 
-    // GiaNik mode
+    // GiaNik mode initial state
     window.gianikMode = 'virtual';
+
+    // Auto-fetch mode on load
+    async function initGiaNikMode() {
+        try {
+            const res = await fetch('/api/gianik/get-mode');
+            const data = await res.json();
+            if (data.status === 'success') {
+                setGiaNikMode(data.mode, false); // false = don't save back to server
+            }
+        } catch (e) {
+            console.error('Error fetching Gianik mode:', e);
+        }
+    }
+    initGiaNikMode();
 
     window.openBetDetails = function (id) {
         htmx.ajax('GET', '/api/gianik/bet/' + id, {
@@ -169,10 +183,11 @@ require __DIR__ . '/../../Views/layout/top.php';
         });
     }
 
-    function setGiaNikMode(mode) {
+    function setGiaNikMode(mode, saveToServer = true) {
         window.gianikMode = mode;
         const vBtn = document.getElementById('mode-virtual');
         const rBtn = document.getElementById('mode-real');
+
         if (mode === 'virtual') {
             vBtn.classList.add('bg-accent', 'text-white');
             vBtn.classList.remove('text-slate-500');
@@ -183,6 +198,16 @@ require __DIR__ . '/../../Views/layout/top.php';
             rBtn.classList.remove('text-slate-500');
             vBtn.classList.remove('bg-accent', 'text-white');
             vBtn.classList.add('text-slate-500');
+        }
+
+        if (saveToServer) {
+            fetch('/api/gianik/set-mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: mode })
+            }).then(r => r.json()).then(data => {
+                console.log('Operational mode updated:', data.mode);
+            });
         }
     }
 </script>
