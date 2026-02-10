@@ -478,10 +478,34 @@ class GiaNikController
             // Aggiungiamo il marketId di partenza come suggerimento per l'AI
             $event['requestedMarketId'] = $marketId;
 
+            $currentPeriod = 0;
             if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
                 // Pass the initial market book for fallback extraction
                 $mainBook = $booksMap[$marketId] ?? null;
                 $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition'], $mainBook);
+
+                // Determine Period for limits
+                if (isset($event['api_football']['live'])) {
+                    $status = $event['api_football']['live']['live_status']['short'] ?? 'NS';
+                    if (in_array($status, ['1H', 'HT'])) $currentPeriod = 1;
+                    elseif (in_array($status, ['2H', 'ET', 'P'])) $currentPeriod = 2;
+                    elseif ($status === 'LIVE') {
+                        $el = $event['api_football']['live']['live_status']['elapsed_minutes'] ?? 0;
+                        $currentPeriod = ($el <= 45) ? 1 : 2;
+                    }
+                }
+
+                // Check Limits
+                if ($currentPeriod > 0) {
+                    $stmtCount = $this->db->prepare("SELECT COUNT(*) FROM bets WHERE event_name = ? AND period = ? AND created_at >= date('now')");
+                    $stmtCount->execute([$event['event'], $currentPeriod]);
+                    $periodCount = $stmtCount->fetchColumn();
+                    if ($periodCount >= 2) {
+                        $reasoning = "Limite raggiunto per questo tempo (2/2). Non è possibile effettuare altre analisi per il " . ($currentPeriod == 1 ? "1°" : "2°") . " tempo.";
+                        require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
+                        return;
+                    }
+                }
             }
 
             $gemini = new GeminiService();
@@ -521,6 +545,7 @@ class GiaNikController
             $sport = $input['sport'] ?? 'Unknown';
             $runnerName = $input['runnerName'] ?? 'Unknown';
             $motivation = $input['motivation'] ?? '';
+            $period = (int) ($input['period'] ?? 0);
 
             if (!$marketId || !$selectionId || !$odds) {
                 echo json_encode(['status' => 'error', 'message' => 'Dati mancanti']);
@@ -543,8 +568,8 @@ class GiaNikController
                 }
             }
 
-            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation]);
+            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation, $period]);
 
             echo json_encode(['status' => 'success', 'message' => 'Scommessa piazzata (' . $type . ')']);
         } catch (\Throwable $e) {
@@ -688,11 +713,34 @@ class GiaNikController
                         $event['markets'][] = $m;
                     }
 
+                    $currentPeriod = 0;
                     if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
                         // Pass the first market book for fallback extraction
                         $firstMarketId = $event['markets'][0]['marketId'] ?? null;
                         $firstBook = $booksMap[$firstMarketId] ?? null;
                         $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook);
+
+                        // Determine Period for limits
+                        if (isset($event['api_football']['live'])) {
+                            $status = $event['api_football']['live']['live_status']['short'] ?? 'NS';
+                            if (in_array($status, ['1H', 'HT'])) $currentPeriod = 1;
+                            elseif (in_array($status, ['2H', 'ET', 'P'])) $currentPeriod = 2;
+                            elseif ($status === 'LIVE') {
+                                $el = $event['api_football']['live']['live_status']['elapsed_minutes'] ?? 0;
+                                $currentPeriod = ($el <= 45) ? 1 : 2;
+                            }
+                        }
+
+                        // Strict Limit Check (2 per half, max 4 total)
+                        if ($currentPeriod > 0) {
+                            $stmtP = $this->db->prepare("SELECT COUNT(*) FROM bets WHERE event_name = ? AND period = ? AND created_at >= date('now')");
+                            $stmtP->execute([$event['event'], $currentPeriod]);
+                            $pCount = $stmtP->fetchColumn();
+                            if ($pCount >= 2) continue;
+                        }
+
+                        $totalCount = $matchBetCounts[$event['event']] ?? 0;
+                        if ($totalCount >= 4) continue;
                     }
 
                     $vBalance = $this->getVirtualBalance();
@@ -706,13 +754,7 @@ class GiaNikController
 
                     if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
                         $analysis = json_decode($matches[1], true);
-                        if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
-
-                            // Controllo limite 4 scommesse per match (Calcio)
-                            $currentCount = $matchBetCounts[$event['event']] ?? 0;
-                            if (($event['sport'] === 'Soccer' || $event['sport'] === 'Football') && $currentCount >= 4) {
-                                continue;
-                            }
+                        if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 90) {
                             $selectedMarket = null;
                             foreach ($event['markets'] as $m) {
                                 if ($m['marketId'] === $analysis['marketId']) {
@@ -755,8 +797,8 @@ class GiaNikController
                                 }
 
                                 $motivation = $analysis['motivation'] ?? trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
-                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                                $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation]);
+                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation, $currentPeriod]);
                                 $results['new_bets']++;
                             }
                         }
@@ -871,6 +913,12 @@ class GiaNikController
                 'venue_id' => $details['venue_id'] ?? null
             ]
         ];
+
+        // Sane Check: if status is NS but events exist, it's actually LIVE
+        if ($liveData['live_status']['short'] === 'NS' && !empty($events)) {
+            $liveData['live_status']['short'] = '1H'; // Assume 1st half if just started/events appearing
+            $liveData['live_status']['long'] = 'In Play (Data Correction)';
+        }
 
         return [
             'fixture' => $details,

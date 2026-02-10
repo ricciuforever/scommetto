@@ -165,7 +165,8 @@ $event = $event ?? [];
                     type: window.gianikMode || 'virtual',
                     motivation: <?php echo json_encode($motivation); ?>,
                     runnerName: analysis.advice,
-                    selectionId: null
+                    selectionId: null,
+                    period: <?php echo (int)($currentPeriod ?? 0); ?>
                 };
 
                 // Find market and runner info

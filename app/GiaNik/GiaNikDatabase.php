@@ -53,7 +53,8 @@ class GiaNikDatabase
             'settled_at' => 'DATETIME',
             'motivation' => 'TEXT',
             'type' => "TEXT DEFAULT 'virtual'",
-            'market_name' => 'TEXT'
+            'market_name' => 'TEXT',
+            'period' => 'INTEGER'
         ];
 
         $stmt = $this->connection->query("PRAGMA table_info(bets)");
