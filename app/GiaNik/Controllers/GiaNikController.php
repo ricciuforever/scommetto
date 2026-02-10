@@ -252,15 +252,17 @@ class GiaNikController
 
     public function analyze($marketId)
     {
+        set_time_limit(60); // Aumenta timeout per l'AI
         try {
             $resCat = $this->bf->request('listMarketCatalogue', [
                 'filter' => ['marketIds' => [$marketId]],
-                'marketProjection' => ['EVENT', 'COMPETITION', 'EVENT_TYPE']
+                'marketProjection' => ['EVENT', 'COMPETITION', 'EVENT_TYPE', 'RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION']
             ]);
             $initialMc = $resCat['result'][0] ?? null;
 
             if (!$initialMc) {
-                echo '<div class="glass p-10 rounded-3xl text-center border-danger/20 text-danger uppercase font-black italic">Evento non trovato.</div>';
+                $reasoning = "Evento non trovato o mercato non più attivo su Betfair.";
+                require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
                 return;
             }
 
@@ -349,7 +351,8 @@ class GiaNikController
 
             require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
         } catch (\Throwable $e) {
-            echo '<div class="text-danger p-4">Errore Analisi: ' . $e->getMessage() . '</div>';
+            $reasoning = "Si è verificato un errore durante l'analisi: " . $e->getMessage();
+            require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
         }
     }
 

@@ -27,12 +27,16 @@ use App\Controllers\VenueController;
 use App\Controllers\StandingController;
 use App\Controllers\OddsController;
 
-$request = $_SERVER['REQUEST_URI'] ?? '/';
+// Basic Routing & Path Normalization
+$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-// Basic Routing
-$path = parse_url($request, PHP_URL_PATH);
-$path = str_replace('/scommetto', '', $path); // Adjust if running in a subdirectory
+// Strip subdirectory if present (e.g., /scommetto/)
+$path = preg_replace('#^/scommetto#i', '', $path);
+// Ensure path starts with / and has no trailing slash (unless it's just /)
+$path = '/' . trim($path, '/');
+if ($path === '//')
+    $path = '/';
 
 try {
     // Gestione viste standard tramite Controller dedicati
@@ -56,21 +60,7 @@ try {
         '/standings' => StandingController::class,
     ];
 
-    if (isset($viewRoutes[$path])) {
-        (new $viewRoutes[$path]())->index();
-        return;
-    }
-
-    if ($path === '/gemini-bets') {
-        (new \App\Controllers\BetController())->index();
-        return;
-    }
-
-    if ($path === '/gemini-predictions') {
-        (new \App\Controllers\MatchController())->viewUpcomingPredictions();
-        return;
-    }
-
+    // --- GIANIK ROUTES ---
     if ($path === '/gianik-live') {
         (new \App\GiaNik\Controllers\GiaNikController())->index();
         return;
@@ -81,7 +71,7 @@ try {
         return;
     }
 
-    if (preg_match('#^/api/gianik/analyze/([\d\.]+)$#', $path, $matches)) {
+    if (preg_match('#^/api/gianik/analyze/([\d\.]+)$#i', $path, $matches)) {
         (new \App\GiaNik\Controllers\GiaNikController())->analyze($matches[1]);
         return;
     }
@@ -101,24 +91,40 @@ try {
         return;
     }
 
-    if (preg_match('#^/api/gianik/bet/(\d+)$#', $path, $matches)) {
+    if (preg_match('#^/api/gianik/bet/(\d+)$#i', $path, $matches)) {
         (new \App\GiaNik\Controllers\GiaNikController())->betDetails($matches[1]);
         return;
     }
 
-    // Intelligence Dashboard as Home
-    if (
-        $path === '/' || $path === '/index.php' || $path === '' ||
-        in_array(rtrim($path, '/'), ['/intelligence'])
-    ) {
-        (new \App\Controllers\IntelligenceController())->index();
+    // --- MAIN APP ROUTES ---
+    if (isset($viewRoutes[$path])) {
+        (new $viewRoutes[$path]())->index();
+        return;
     }
+
+    if ($path === '/gemini-bets') {
+        (new \App\Controllers\BetController())->index();
+        return;
+    }
+
+    if ($path === '/gemini-predictions') {
+        (new \App\Controllers\MatchController())->viewUpcomingPredictions();
+        return;
+    }
+
+    // Intelligence Dashboard as Home
+    if ($path === '/' || $path === '/intelligence') {
+        (new \App\Controllers\IntelligenceController())->index();
+        return;
+    }
+
     // Old Dashboard and other routes via MatchController (main.php wrapper)
-    elseif (
-        in_array(rtrim($path, '/'), ['/leagues', '/settings']) ||
-        preg_match('#^/(match|team|player)/(\d+)$#', $path)
+    if (
+        in_array($path, ['/leagues', '/settings']) ||
+        preg_match('#^/(match|team|player)/(\d+)$#i', $path)
     ) {
         (new MatchController())->index();
+        return;
     } elseif ($path === '/api/intelligence/live') {
         (new \App\Controllers\IntelligenceController())->live();
     } elseif ($path === '/api/live') {
@@ -205,7 +211,7 @@ try {
     } elseif ($path === '/api/team-stats') {
         (new TeamStatsController())->show();
     } elseif ($path === '/api/standings') {
-        (new StandingController())->list();
+        (new StandingController())->show();
     } elseif ($path === '/api/venues') {
         (new VenueController())->list();
     } elseif ($path === '/api/dashboard' || $path === '/api/view/dashboard') {
@@ -226,12 +232,12 @@ try {
         (new MatchController())->getUpcoming();
     } elseif ($path === '/api/history') {
         (new BetController())->getHistory();
-    } elseif (preg_match('#^/api/match/(\d+)$#', $path, $matches)) {
-        (new MatchController())->getMatch($matches[1]);
-    } elseif (preg_match('#^/api/analyze/(\d+)$#', $path, $matches)) {
+    } elseif (preg_match('#^/api/match/(\d+)$#i', $path, $matches)) {
+        (new MatchController())->viewMatch($matches[1]);
+    } elseif (preg_match('#^/api/analyze/(\d+)$#i', $path, $matches)) {
         (new MatchController())->analyze($matches[1]);
-    } elseif (preg_match('#^/api/predictions/(\d+)$#', $path, $matches)) {
-        (new MatchController())->getPrediction($matches[1]);
+    } elseif (preg_match('#^/api/predictions/(\d+)$#i', $path, $matches)) {
+        (new MatchController())->getPredictions($matches[1]);
     } elseif (preg_match('#^/api/standings/(\d+)$#', $path, $matches)) {
         (new MatchController())->getStandings($matches[1]);
     } elseif (preg_match('#^/api/leagues/stats/(\d+)$#', $path, $matches)) {

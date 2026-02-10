@@ -60,6 +60,17 @@
             animation: spin 1s linear infinite;
         }
 
+        .htmx-indicator {
+            opacity: 0;
+            transition: opacity 200ms ease-in;
+            pointer-events: none;
+        }
+
+        .htmx-request .htmx-indicator,
+        .htmx-request.htmx-indicator {
+            opacity: 1;
+        }
+
         @keyframes spin {
             from {
                 transform: rotate(0deg);

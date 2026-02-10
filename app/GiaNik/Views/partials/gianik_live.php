@@ -182,7 +182,12 @@ $translationMap = [
 
                         <div class="flex gap-2">
                             <button hx-get="/api/gianik/analyze/<?php echo $marketId; ?>" hx-target="#global-modal-container"
-                                class="flex-1 py-3 bg-accent/10 hover:bg-accent/20 text-accent rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                                hx-indicator="#indicator-<?php echo str_replace('.', '-', $marketId); ?>"
+                                class="flex-1 py-3 bg-accent/10 hover:bg-accent/20 text-accent rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 relative">
+                                <div id="indicator-<?php echo str_replace('.', '-', $marketId); ?>"
+                                    class="htmx-indicator absolute inset-0 flex items-center justify-center bg-accent/10 rounded-xl">
+                                    <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                                </div>
                                 <i data-lucide="brain-circuit" class="w-4 h-4"></i> Analisi IA
                             </button>
                         </div>
