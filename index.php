@@ -142,6 +142,47 @@ try {
         }
     }
 
+    // NEW: Match Details Modal (HTML)
+    if (preg_match('#^/gianik/match-details-modal/(\d+)$#i', $path, $matches)) {
+        require __DIR__ . '/app/GiaNik/Views/partials/modals/match_details.php';
+        return;
+    }
+
+    // NEW: Player Modal (HTML)
+    if (preg_match('#^/gianik/player-modal/(\d+)$#i', $path, $matches)) {
+        $playerId = $matches[1];
+        $fixtureId = $_GET['fixture'] ?? null;
+        // TODO: Fetch player data and pass to modal
+        require __DIR__ . '/app/GiaNik/Views/partials/modals/player_stats.php';
+        return;
+    }
+
+    // NEW: Team Modal (HTML)
+    if (preg_match('#^/gianik/team-modal/(\d+)$#i', $path, $matches)) {
+        $teamId = $matches[1];
+        // TODO: Fetch team data and pass to modal
+        require __DIR__ . '/app/GiaNik/Views/partials/modals/team_details.php';
+        return;
+    }
+
+    // NEW: API endpoint for complete match data
+    if (preg_match('#^/api/match-details/(\d+)$#i', $path, $matches)) {
+        (new \App\GiaNik\Controllers\MatchDataController())->getMatchDetails($matches[1]);
+        return;
+    }
+
+    // NEW: API endpoint for player data
+    if (preg_match('#^/api/player-details/(\d+)$#i', $path, $matches)) {
+        (new \App\GiaNik\Controllers\MatchDataController())->getPlayerDetails($matches[1]);
+        return;
+    }
+
+    // NEW: API endpoint for team data
+    if (preg_match('#^/api/team-details/(\d+)$#i', $path, $matches)) {
+        (new \App\GiaNik\Controllers\MatchDataController())->getTeamDetails($matches[1]);
+        return;
+    }
+
     // --- MAIN APP ROUTES ---
     if (isset($viewRoutes[$path])) {
         (new $viewRoutes[$path]())->index();

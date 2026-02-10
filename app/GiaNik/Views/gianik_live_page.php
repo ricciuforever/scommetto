@@ -12,8 +12,8 @@ require __DIR__ . '/../../Views/layout/top.php';
     <div class="flex items-center justify-between">
         <div>
             <div class="flex items-center gap-2 mb-2">
-                 <span class="w-2 h-2 bg-accent rounded-full animate-ping"></span>
-                 <span class="text-[8px] font-black uppercase text-accent tracking-[.2em]">Autonomous Agent Active</span>
+                <span class="w-2 h-2 bg-accent rounded-full animate-ping"></span>
+                <span class="text-[8px] font-black uppercase text-accent tracking-[.2em]">Autonomous Agent Active</span>
             </div>
             <h1 class="text-4xl font-black italic uppercase tracking-tighter text-white leading-none">
                 GiaNik Live <span class="text-accent">.</span>
@@ -25,8 +25,10 @@ require __DIR__ . '/../../Views/layout/top.php';
         <div class="flex items-center gap-4">
             <!-- Mode Switcher -->
             <div class="flex bg-white/5 p-1 rounded-xl border border-white/5">
-                <button onclick="setGiaNikMode('virtual')" id="mode-virtual" class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all bg-accent text-white">Virtual</button>
-                <button onclick="setGiaNikMode('real')" id="mode-real" class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all text-slate-500">Real</button>
+                <button onclick="setGiaNikMode('virtual')" id="mode-virtual"
+                    class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all bg-accent text-white">Virtual</button>
+                <button onclick="setGiaNikMode('real')" id="mode-real"
+                    class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all text-slate-500">Real</button>
             </div>
 
             <div class="flex flex-col items-end">
@@ -58,17 +60,19 @@ require __DIR__ . '/../../Views/layout/top.php';
 
 <!-- GiaNik Bets Sidebar -->
 <aside class="fixed top-[73px] right-0 bottom-0 w-72 border-l border-white/10 glass z-30 flex flex-col">
-    <div id="recent-bets-container" hx-get="/api/gianik/recent-bets" hx-trigger="load, every 30s" class="flex-1 overflow-hidden">
+    <div id="recent-bets-container" hx-get="/api/gianik/recent-bets" hx-trigger="load, every 30s"
+        class="flex-1 overflow-hidden">
         <div class="flex items-center justify-center p-20">
             <i data-lucide="loader-2" class="w-6 h-6 text-slate-500 animate-spin"></i>
         </div>
     </div>
 </aside>
 
+<script src="/js/modals.js"></script>
 <script>
     window.gianikMode = 'virtual';
 
-    window.openBetDetails = function(id) {
+    window.openBetDetails = function (id) {
         htmx.ajax('GET', '/api/gianik/bet/' + id, {
             target: '#global-modal-container',
             swap: 'innerHTML'
