@@ -86,7 +86,23 @@ class SyncController
             // 3. Fetch Market Catalogues in chunks
             $allMarketIds = [];
             $marketToEventMap = [];
-            $targetMarkets = ['MATCH_ODDS', 'WINNER', 'MONEYLINE', 'OVER_UNDER_25', 'BOTH_TEAMS_TO_SCORE'];
+            $targetMarkets = [
+                'MATCH_ODDS',
+                'WINNER',
+                'MONEYLINE',
+                'DOUBLE_CHANCE',
+                'DRAW_NO_BET',
+                'HALF_TIME',
+                'OVER_UNDER_05',
+                'OVER_UNDER_15',
+                'OVER_UNDER_25',
+                'OVER_UNDER_35',
+                'OVER_UNDER_45',
+                'BOTH_TEAMS_TO_SCORE',
+                'SET_BETTING',
+                'TOTAL_GAMES',
+                'TOTAL_SETS'
+            ];
 
             $eventChunks = array_chunk($allEventIds, 10);
             foreach ($eventChunks as $chunk) {
@@ -107,8 +123,15 @@ class SyncController
                         stripos($mName, 'Head To Head') !== false ||
                         stripos($mName, 'Testa a Testa') !== false ||
                         stripos($mName, 'Match Betting') !== false ||
-                        stripos($mName, 'Over/Under') !== false || // Add Goals
-                        stripos($mName, 'Handicap') !== false // Add Handicap
+                        stripos($mName, 'Over/Under') !== false ||
+                        stripos($mName, 'Handicap') !== false ||
+                        stripos($mName, 'Double Chance') !== false ||
+                        stripos($mName, 'Doppia Chance') !== false ||
+                        stripos($mName, 'Half Time') !== false ||
+                        stripos($mName, 'Primo Tempo') !== false ||
+                        stripos($mName, 'Draw No Bet') !== false ||
+                        stripos($mName, 'Both Teams To Score') !== false ||
+                        stripos($mName, 'Goal/No Goal') !== false
                     );
 
                     // If it's a 2-3 runner market, we generally want it (Tennis, Basketball, etc)
@@ -378,7 +401,20 @@ class SyncController
             $now = new \DateTime();
             $end = (new \DateTime())->add(new \DateInterval('P2D')); // Prossime 48 ore
 
-            $targetMarkets = ['MATCH_ODDS', 'WINNER', 'MONEYLINE', 'OVER_UNDER_25', 'BOTH_TEAMS_TO_SCORE'];
+            $targetMarkets = [
+                'MATCH_ODDS',
+                'WINNER',
+                'MONEYLINE',
+                'DOUBLE_CHANCE',
+                'DRAW_NO_BET',
+                'HALF_TIME',
+                'OVER_UNDER_05',
+                'OVER_UNDER_15',
+                'OVER_UNDER_25',
+                'OVER_UNDER_35',
+                'OVER_UNDER_45',
+                'BOTH_TEAMS_TO_SCORE'
+            ];
 
             foreach ($sports['result'] as $sport) {
                 $sportId = $sport['eventType']['id'];

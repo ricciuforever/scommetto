@@ -57,7 +57,24 @@ class GiaNikController
             $marketCatalogues = [];
             $chunks = array_chunk($eventIds, 40);
             foreach ($chunks as $chunk) {
-                $res = $this->bf->getMarketCatalogues($chunk, 100, ['MATCH_ODDS', 'WINNER', 'MONEYLINE']);
+                $targetMarkets = [
+                    'MATCH_ODDS',
+                    'WINNER',
+                    'MONEYLINE',
+                    'DOUBLE_CHANCE',
+                    'DRAW_NO_BET',
+                    'HALF_TIME',
+                    'OVER_UNDER_05',
+                    'OVER_UNDER_15',
+                    'OVER_UNDER_25',
+                    'OVER_UNDER_35',
+                    'OVER_UNDER_45',
+                    'BOTH_TEAMS_TO_SCORE',
+                    'SET_BETTING',
+                    'TOTAL_GAMES',
+                    'TOTAL_SETS'
+                ];
+                $res = $this->bf->getMarketCatalogues($chunk, 100, $targetMarkets);
                 if (isset($res['result'])) {
                     $marketCatalogues = array_merge($marketCatalogues, $res['result']);
                 }
@@ -252,7 +269,27 @@ class GiaNikController
             $competitionName = $initialMc['competition']['name'] ?? '';
             $sportName = $initialMc['eventType']['name'] ?? '';
 
-            $marketTypes = ['MATCH_ODDS', 'WINNER', 'MONEYLINE', 'OVER_UNDER_05', 'OVER_UNDER_15', 'OVER_UNDER_25', 'OVER_UNDER_35', 'OVER_UNDER_45', 'BOTH_TEAMS_TO_SCORE', 'DOUBLE_CHANCE'];
+            $marketTypes = [
+                'MATCH_ODDS',
+                'WINNER',
+                'MONEYLINE',
+                'OVER_UNDER_05',
+                'OVER_UNDER_15',
+                'OVER_UNDER_25',
+                'OVER_UNDER_35',
+                'OVER_UNDER_45',
+                'BOTH_TEAMS_TO_SCORE',
+                'DOUBLE_CHANCE',
+                'DRAW_NO_BET',
+                'HALF_TIME',
+                'HALF_TIME_FULL_TIME',
+                'MATCH_ODDS_AND_OU_25',
+                'MATCH_ODDS_AND_BTTS',
+                'SET_BETTING',
+                'TOTAL_GAMES',
+                'TOTAL_SETS'
+            ];
+
             $allMcRes = $this->bf->getMarketCatalogues([$eventId], 20, $marketTypes);
             $catalogues = $allMcRes['result'] ?? [$initialMc];
 
@@ -379,7 +416,27 @@ class GiaNikController
             }
 
             $eventIds = array_map(fn($e) => $e['event']['id'], $events);
-            $marketTypes = ['MATCH_ODDS', 'WINNER', 'MONEYLINE', 'OVER_UNDER_05', 'OVER_UNDER_15', 'OVER_UNDER_25', 'OVER_UNDER_35', 'OVER_UNDER_45', 'BOTH_TEAMS_TO_SCORE', 'DOUBLE_CHANCE'];
+            $marketTypes = [
+                'MATCH_ODDS',
+                'WINNER',
+                'MONEYLINE',
+                'OVER_UNDER_05',
+                'OVER_UNDER_15',
+                'OVER_UNDER_25',
+                'OVER_UNDER_35',
+                'OVER_UNDER_45',
+                'BOTH_TEAMS_TO_SCORE',
+                'DOUBLE_CHANCE',
+                'DRAW_NO_BET',
+                'HALF_TIME',
+                'HALF_TIME_FULL_TIME',
+                'MATCH_ODDS_AND_OU_25',
+                'MATCH_ODDS_AND_BTTS',
+                'SET_BETTING',
+                'TOTAL_GAMES',
+                'TOTAL_SETS'
+            ];
+
             $marketCatalogues = [];
             $chunks = array_chunk($eventIds, 40);
             foreach ($chunks as $chunk) {
@@ -397,6 +454,11 @@ class GiaNikController
             $stmtPending = $this->db->prepare("SELECT DISTINCT event_name FROM bets WHERE status = 'pending'");
             $stmtPending->execute();
             $pendingEventNames = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
+
+            // Recuperiamo il conteggio delle scommesse per oggi per ogni match (per limitare ingressi multipli)
+            $stmtCount = $this->db->prepare("SELECT event_name, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name");
+            $stmtCount->execute();
+            $matchBetCounts = $stmtCount->fetchAll(PDO::FETCH_KEY_PAIR);
 
             $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
@@ -463,7 +525,13 @@ class GiaNikController
 
                     if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
                         $analysis = json_decode($matches[1], true);
-                        if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 70) {
+                        if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
+
+                            // Controllo limite 4 scommesse per match (Calcio)
+                            $currentCount = $matchBetCounts[$event['event']] ?? 0;
+                            if (($event['sport'] === 'Soccer' || $event['sport'] === 'Football') && $currentCount >= 4) {
+                                continue;
+                            }
                             $selectedMarket = null;
                             foreach ($event['markets'] as $m) {
                                 if ($m['marketId'] === $analysis['marketId']) {

@@ -112,7 +112,8 @@ class BetfairService
 
     public function keepAlive()
     {
-        if (!$this->sessionToken) return false;
+        if (!$this->sessionToken)
+            return false;
 
         $this->log("Inizio Keep Alive per estendere la sessione...");
         $ch = curl_init();
@@ -152,7 +153,7 @@ class BetfairService
     {
         // 1. Verifica token in memoria e necessità di Keep Alive
         if ($this->sessionToken && !$force) {
-            $lastActivity = file_exists($this->activityFile) ? (int)file_get_contents($this->activityFile) : 0;
+            $lastActivity = file_exists($this->activityFile) ? (int) file_get_contents($this->activityFile) : 0;
             if (time() - $lastActivity > 14400) { // 4 ore
                 $this->keepAlive();
             }
@@ -233,7 +234,8 @@ class BetfairService
                     $this->sessionToken = $data['sessionToken'];
                     $this->savePersistentToken($this->sessionToken);
                     $this->log("Login con certificati riuscito.");
-                    if (file_exists($this->loginAttemptFile)) unlink($this->loginAttemptFile);
+                    if (file_exists($this->loginAttemptFile))
+                        unlink($this->loginAttemptFile);
                     flock($fp, LOCK_UN);
                     fclose($fp);
                     return $this->sessionToken;
@@ -263,7 +265,8 @@ class BetfairService
                 $this->sessionToken = $data['token'];
                 $this->savePersistentToken($this->sessionToken);
                 $this->log("Login senza certificati riuscito.");
-                if (file_exists($this->loginAttemptFile)) unlink($this->loginAttemptFile);
+                if (file_exists($this->loginAttemptFile))
+                    unlink($this->loginAttemptFile);
                 flock($fp, LOCK_UN);
                 fclose($fp);
                 return $this->sessionToken;
@@ -291,7 +294,7 @@ class BetfairService
         return null;
     }
 
-    public function request(string $method, array $params = [], $isRetry = false)
+    public function request(string $method, array $params = [], $isRetry = false, string $prefix = 'SportsAPING/v1.0/', ?string $url = null)
     {
         $token = $this->authenticate();
         if (!$token) {
@@ -309,13 +312,13 @@ class BetfairService
 
         $payload = json_encode([
             "jsonrpc" => "2.0",
-            "method" => "SportsAPING/v1.0/" . $method,
+            "method" => $prefix . $method,
             "params" => $params,
             "id" => 1
         ]);
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $this->apiUrl);
+        curl_setopt($ch, CURLOPT_URL, $url ?? $this->apiUrl);
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
