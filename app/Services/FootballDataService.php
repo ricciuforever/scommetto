@@ -375,7 +375,7 @@ class FootballDataService
             'u23', 'u21', 'u19', 'women', 'donne', 'femminile', 'sports', 'sc', 'ac', 'as',
             'cf', 'rc', 'de', 'rs', 'bk', 'fk', 'nk', 'hsk', 'acs', 'csc', 'csm', 'cs', 'afc',
             'pfc', 'ff', 'if', 'is', 'sk', 'sv', 'spvgg', 'bsc', 'tsv', 'vfb', 'vfl', 'cp',
-            'ballklubb', 'club', 'sport', 'v.', 'vs', 'ii', ' b'
+            'ballklubb', 'club', 'sport', 'v.', 'vs', 'ii', ' b', 'lisbon', 'lisboa', 'utd'
         ];
 
         $tempName = $name;
