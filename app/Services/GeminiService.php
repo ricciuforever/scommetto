@@ -80,6 +80,13 @@ class GeminiService
                 "- Total passes, Passes accurate, Passes %\n" .
                 "- Goalkeeper Saves\n" .
                 "USA QUESTE STATISTICHE per valutare il dominio del match, pericolosità, e probabilità di gol!\n\n" .
+                "⚽ EVENTS LIVE DEL MATCH:\n" .
+                "Se presenti in api_football.events, troverai cronologia eventi con:\n" .
+                "- Goal (Normal Goal, Own Goal, Penalty, Missed Penalty) + giocatore + assist + minuto\n" .
+                "- Card (Yellow Card, Red Card) + giocatore + minuto\n" .
+                "- Subst (Substitution 1/2/3) + giocatore IN/OUT + minuto\n" .
+                "- Var (Goal cancelled, Penalty confirmed)\n" .
+                "USA QUESTI EVENTI per capire momentum, espulsioni, cambi tattici, e chi ha segnato!\n\n" .
                 "REGOLE RIGIDE:\n" .
                 "1. Analizza TUTTI i mercati forniti (Match Odds, Double Chance, varie linee di Under/Over, BTTS).\n" .
                 "2. Scegli l'operazione che offre il miglior rapporto rischio/rendimento. Non sei obbligato a scegliere il mercato principale se un altro (es. Over 1.5) è più sicuro o profittevole.\n" .

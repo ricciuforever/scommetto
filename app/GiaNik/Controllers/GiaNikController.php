@@ -639,6 +639,9 @@ class GiaNikController
         // 🎯 STATISTICS LIVE (possesso palla, tiri, corner, ecc.)
         $stats = $this->footballData->getFixtureStatistics($fid, $status);
 
+        // ⚽ EVENTS LIVE (gol, cartellini, sostituzioni, VAR)
+        $events = $this->footballData->getFixtureEvents($fid, $status);
+
         // 🚨 DATI LIVE ESPLICITI per Gemini
         $liveData = [
             'live_score' => [
@@ -663,6 +666,7 @@ class GiaNikController
             'fixture' => $details,
             'live' => $liveData,  // ← DATI LIVE ESPLICITI
             'statistics' => $stats,  // ← STATISTICS LIVE (shots, possession, corners, ecc.)
+            'events' => $events,  // ← EVENTS LIVE (gol, cards, subs, VAR)
             'h2h' => $h2h['h2h_json'] ?? [],
             'standings' => $standings,
             'predictions' => $preds['prediction_json'] ?? null
