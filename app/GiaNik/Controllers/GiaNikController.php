@@ -497,6 +497,11 @@ class GiaNikController
                 return;
             }
 
+            // Enforce minimum odds as per system rule
+            if ($odds < Config::MIN_BETFAIR_ODDS) {
+                $odds = Config::MIN_BETFAIR_ODDS;
+            }
+
             $betfairId = null;
             if ($type === 'real') {
                 $res = $this->bf->placeBet($marketId, $selectionId, $odds, $stake);
@@ -700,6 +705,11 @@ class GiaNikController
                             $selectionId = $this->bf->mapAdviceToSelection($analysis['advice'], $runners);
 
                             if ($selectionId) {
+                                // Enforce minimum odds as per system rule
+                                if (($analysis['odds'] ?? 0) < Config::MIN_BETFAIR_ODDS) {
+                                    $analysis['odds'] = Config::MIN_BETFAIR_ODDS;
+                                }
+
                                 $betType = $globalMode;
                                 $betfairId = null;
 

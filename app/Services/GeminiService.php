@@ -96,7 +96,7 @@ class GeminiService
                 "6. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
                 "7. SOGLIA DI CONFIDENZA: Suggerisci l'operazione SOLO se la tua 'confidence' è pari o superiore all'80%. Se è inferiore, non scommettere sul mercato.\n" .
                 "8. REGOLE CALCIO (MULTI-ENTRY): Se le condizioni cambiano durante il match, puoi rientrare con nuove scommesse. Massimo 4 puntate totali per match: 2 nel Primo Tempo e 2 nel Secondo Tempo. Ogni ingresso deve avere confidence >= 80%.\n" .
-                "9. QUOTA MINIMA E VALORE: 1.25 è la tua quota MINIMA di ingresso. Se la quota attuale del mercato è superiore a 1.25, prendila così com'è. Se invece la quota attuale è inferiore (es. 1.10 - 1.20) ma hai una confidenza >= 80%, puoi suggerire di piazzare un ordine a 1.25 (Quota Minima Accettabile). In questo caso, forza il campo 'odds' a 1.25 nel JSON. L'ordine rimarrà in attesa (unmatched) sul mercato finché non viene raggiunto il prezzo.\n" .
+                "9. ⚠️ QUOTA MINIMA E VALORE (REGOLA FERREA): 1.25 è la tua quota MINIMA assoluta di ingresso. Non suggerire MAI quote inferiori a 1.25 nel campo 'odds'. Se la quota attuale del mercato è superiore a 1.25, usala. Se invece la quota attuale è inferiore (es. 1.01 - 1.24) ma la tua 'confidence' è >= 80%, devi OBBLIGATORIAMENTE impostare il campo 'odds' a 1.25 nel JSON. Questo creerà un ordine 'unmatched' che attenderà che il mercato salga a 1.25. Suggerire quote come 1.03 o 1.15 è VIETATO e considerato un errore grave.\n" .
                 "10. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
                 "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
                 "```json\n" .
