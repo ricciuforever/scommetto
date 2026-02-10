@@ -160,7 +160,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                                     <i data-lucide="brain-circuit" class="w-4 h-4"></i> Analisi IA
                                 </button>
 
-                                <button hx-get="/api/fixture-predictions?fixture=<?php echo $fixtureId; ?>"
+                                <button hx-get="/api/gianik/predictions?fixtureId=<?php echo $fixtureId; ?>"
                                     hx-target="#global-modal-container"
                                     class="p-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/10 transition-all"
                                     title="Predictions Crystal Ball">

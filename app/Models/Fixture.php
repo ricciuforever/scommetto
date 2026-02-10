@@ -111,12 +111,18 @@ class Fixture
     {
         // Match iniziati nelle ultime 3 ore (potrebbero essere ancora live)
         // o che inizieranno nelle prossime $bufferHours ore
-        $sql = "SELECT COUNT(*) as count FROM fixtures
-                WHERE (date BETWEEN DATE_SUB(NOW(), INTERVAL 3 HOUR) AND DATE_ADD(NOW(), INTERVAL ? HOUR))
-                OR status_short NOT IN ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD')";
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql = "SELECT COUNT(*) as count FROM fixtures
+                    WHERE (date BETWEEN datetime('now', '-3 hours') AND datetime('now', '+' || ? || ' hours'))
+                    OR status_short NOT IN ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD')";
+        } else {
+            $sql = "SELECT COUNT(*) as count FROM fixtures
+                    WHERE (date BETWEEN DATE_SUB(NOW(), INTERVAL 3 HOUR) AND DATE_ADD(NOW(), INTERVAL ? HOUR))
+                    OR status_short NOT IN ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD')";
+        }
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$bufferHours]);
+        $stmt->execute([(int)$bufferHours]);
         $row = $stmt->fetch();
         return ($row['count'] > 0);
     }
@@ -148,8 +154,14 @@ class Fixture
     public function touchLeagueSeason($leagueId, $season)
     {
         $sql = "INSERT INTO league_seasons (league_id, year, last_fixtures_sync)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-                ON DUPLICATE KEY UPDATE last_fixtures_sync = CURRENT_TIMESTAMP";
+                VALUES (?, ?, CURRENT_TIMESTAMP)";
+
+        if (\App\Services\Database::getInstance()->isSQLite()) {
+            $sql .= " ON CONFLICT(league_id, year) DO UPDATE SET last_fixtures_sync = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= " ON DUPLICATE KEY UPDATE last_fixtures_sync = CURRENT_TIMESTAMP";
+        }
+
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([$leagueId, $season]);
     }

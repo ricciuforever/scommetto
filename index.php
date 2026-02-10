@@ -125,6 +125,14 @@ try {
         }
     }
 
+    if ($path === '/api/gianik/predictions') {
+        $fId = $_GET['fixtureId'] ?? null;
+        if ($fId) {
+            (new \App\GiaNik\Controllers\GiaNikController())->predictions($fId);
+            return;
+        }
+    }
+
     if ($path === '/api/gianik/player-details') {
         $pId = $_GET['playerId'] ?? null;
         $fId = $_GET['fixtureId'] ?? null;
