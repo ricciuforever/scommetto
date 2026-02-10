@@ -120,6 +120,9 @@ class GiaNikController
                     'marketId' => $marketId,
                     'event' => $mc['event']['name'],
                     'event_id' => $mc['event']['id'],
+                    'fixture_id' => null,
+                    'home_id' => null,
+                    'away_id' => null,
                     'competition' => $mc['competition']['name'] ?? '',
                     'sport' => $sport,
                     'totalMatched' => $mb['totalMatched'] ?? 0,
@@ -140,6 +143,9 @@ class GiaNikController
                 if (true) { // Always soccer now
                     $match = $this->searchInFixtureList($m['event'], $apiLiveMatches);
                     if ($match) {
+                        $m['fixture_id'] = $match['fixture']['id'] ?? null;
+                        $m['home_id'] = $match['teams']['home']['id'] ?? null;
+                        $m['away_id'] = $match['teams']['away']['id'] ?? null;
                         $m['score'] = ($match['goals']['home'] ?? '0') . '-' . ($match['goals']['away'] ?? '0');
                         $elapsed = $match['fixture']['status']['elapsed'] ?? 0;
                         $m['status_label'] = ($match['fixture']['status']['short'] ?? 'LIVE') . ($elapsed ? " $elapsed'" : "");
@@ -813,6 +819,80 @@ class GiaNikController
                 return;
             }
             require __DIR__ . '/../Views/partials/modals/bet_details.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function matchDetails($fixtureId)
+    {
+        try {
+            $api = new FootballApiService();
+            $events = $api->fetchFixtureEvents($fixtureId)['response'] ?? [];
+            $details = $api->fetchFixtureDetails($fixtureId)['response'][0] ?? null;
+            $stats = $api->fetchFixtureStatistics($fixtureId)['response'] ?? [];
+            $predictionsRes = $api->fetchPredictions($fixtureId);
+            $predictions = $predictionsRes['response'][0]['predictions'] ?? null;
+
+            require __DIR__ . '/../Views/partials/match_details.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger text-[10px]">Error loading details: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function teamDetails($teamId)
+    {
+        try {
+            $api = new FootballApiService();
+            $res = $api->fetchTeam($teamId);
+            $team = $res['response'][0] ?? null;
+            if (!$team) {
+                echo '<div class="p-10 text-center text-danger">Team non trovato.</div>';
+                return;
+            }
+            require __DIR__ . '/../Views/partials/modals/team_details.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function playerDetails($playerId, $fixtureId)
+    {
+        try {
+            $api = new FootballApiService();
+            $res = $api->fetchFixturePlayerStatistics($fixtureId);
+            $playersStats = $res['response'] ?? [];
+
+            $player = null;
+            foreach ($playersStats as $teamStats) {
+                foreach ($teamStats['players'] as $p) {
+                    if ($p['player']['id'] == $playerId) {
+                        $player = $p;
+                        $player['team'] = $teamStats['team'];
+                        break 2;
+                    }
+                }
+            }
+
+            if (!$player) {
+                // Fallback to general player info if not found in fixture stats
+                $resP = $api->fetchPlayer(['id' => $playerId, 'season' => \App\Config\Config::getCurrentSeason()]);
+                $playerInfo = $resP['response'][0] ?? null;
+                if ($playerInfo) {
+                    $player = [
+                        'player' => $playerInfo['player'],
+                        'statistics' => $playerInfo['statistics'],
+                        'team' => $playerInfo['statistics'][0]['team'] ?? null
+                    ];
+                }
+            }
+
+            if (!$player) {
+                echo '<div class="p-10 text-center text-danger">Giocatore non trovato.</div>';
+                return;
+            }
+
+            require __DIR__ . '/../Views/partials/modals/player_stats.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
         }
