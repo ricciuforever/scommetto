@@ -41,8 +41,8 @@ class FixturePlayerStatistics
     {
         $sql = "SELECT fps.*, p.name as player_name, p.photo as player_photo, t.name as team_name, t.logo as team_logo
                 FROM fixture_player_stats fps
-                JOIN players p ON fps.player_id = p.id
-                JOIN teams t ON fps.team_id = t.id
+                LEFT JOIN players p ON fps.player_id = p.id
+                LEFT JOIN teams t ON fps.team_id = t.id
                 WHERE fps.fixture_id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$fixtureId]);

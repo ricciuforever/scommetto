@@ -313,6 +313,8 @@ class FootballDataService
             'rs',
             'bk',
             'fk',
+            'nk',
+            'hsk',
             'ff',
             'if',
             'is',

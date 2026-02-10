@@ -817,6 +817,7 @@ class GiaNikController
             $details = $this->footballData->getFixtureDetails($fixtureId);
             $statusShort = $details['status_short'] ?? 'NS';
             $playersStats = $this->footballData->getFixturePlayerStatistics($fixtureId, $statusShort);
+            $events = $this->footballData->getFixtureEvents($fixtureId, $statusShort);
 
             $player = null;
             foreach ($playersStats as $row) {
@@ -830,10 +831,10 @@ class GiaNikController
             if (!$player) {
                 $playerData = $this->footballData->getPlayer($playerId);
                 if ($playerData) {
-                    $stats = (new \App\Models\PlayerStatistics())->get($playerId, Config::getCurrentSeason());
+                    $stats = (new \App\Models\PlayerStatistics())->get($playerId, \App\Config\Config::getCurrentSeason());
                     $player = [
                         'player' => $playerData,
-                        'statistics' => json_decode($stats['stats_json'], true)
+                        'statistics' => $stats ? json_decode($stats['stats_json'], true) : []
                     ];
                 }
             }
@@ -841,6 +842,27 @@ class GiaNikController
             if (!$player) {
                 echo '<div class="p-10 text-center text-danger">Giocatore non trovato.</div>';
                 return;
+            }
+
+            // CROSS-CHECK with Events to avoid data latency issues
+            $eventGoals = 0;
+            foreach ($events as $ev) {
+                if ($ev['player']['id'] == $playerId && strtolower($ev['type']) === 'goal') {
+                    $eventGoals++;
+                }
+            }
+
+            // If events show more goals than stats, trust the events
+            if (isset($player['statistics'][0])) {
+                if (($player['statistics'][0]['goals']['total'] ?? 0) < $eventGoals) {
+                    $player['statistics'][0]['goals']['total'] = $eventGoals;
+                }
+
+                // Also ensure minutes is at least something if he scored
+                if ($eventGoals > 0 && ($player['statistics'][0]['games']['minutes'] ?? 0) === 0) {
+                    // Try to guess minutes from last event or just set a placeholder
+                    $player['statistics'][0]['games']['minutes'] = 'Live';
+                }
             }
 
             require __DIR__ . '/../Views/partials/modals/player_stats.php';
