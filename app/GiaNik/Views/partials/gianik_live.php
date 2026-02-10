@@ -91,8 +91,16 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                             </div>
 
                             <!-- Center: Score & Competition -->
-                            <div class="flex flex-col items-center min-w-[140px] px-4">
-                                <div class="text-[8px] font-black text-accent uppercase tracking-widest mb-1 truncate max-w-[130px] text-center">
+                            <div class="flex flex-col items-center min-w-[180px] px-4">
+                                <div class="flex items-center gap-1.5 mb-1">
+                                    <?php if ($m['flag']): ?>
+                                        <img src="<?php echo $m['flag']; ?>" class="w-3 h-2 object-cover rounded-sm opacity-80" alt="">
+                                    <?php endif; ?>
+                                    <span class="text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                                        <?php echo $m['country'] ?? ''; ?>
+                                    </span>
+                                </div>
+                                <div class="text-[9px] font-black text-accent uppercase tracking-widest mb-1 text-center leading-tight">
                                     <?php echo $m['competition']; ?>
                                 </div>
                                 <div class="flex items-center gap-2">
