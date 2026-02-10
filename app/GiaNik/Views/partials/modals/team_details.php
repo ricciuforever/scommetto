@@ -151,7 +151,9 @@ $standing = $team['standing'] ?? null;
                         foreach ($squad as $p):
                             ?>
                             <div
-                                class="group flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-accent/20 transition-all cursor-pointer">
+                                class="group flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-accent/20 transition-all cursor-pointer"
+                                hx-get="/api/gianik/player-details?playerId=<?php echo $p['id']; ?>&fixtureId=<?php echo $team['fixtureId'] ?? ''; ?>"
+                                hx-target="#global-modal-container">
                                 <div
                                     class="w-10 h-10 rounded-xl bg-slate-800 border border-white/10 overflow-hidden shrink-0">
                                     <img src="<?php echo $p['photo']; ?>" class="w-full h-full object-cover" alt="">
