@@ -28,7 +28,8 @@ use App\Controllers\StandingController;
 use App\Controllers\OddsController;
 
 // Basic Routing & Path Normalization
-$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+$requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+$path = parse_url($requestUri, PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 // Strip subdirectory if present (e.g., /scommetto/)
@@ -37,6 +38,10 @@ $path = preg_replace('#^/scommetto#i', '', $path);
 $path = '/' . trim($path, '/');
 if ($path === '//')
     $path = '/';
+
+// Debug Log
+$logMsg = date('[Y-m-d H:i:s] ') . $method . " " . $requestUri . " -> Normalized: " . $path . PHP_EOL;
+file_put_contents(__DIR__ . '/logs/router_debug.log', $logMsg, FILE_APPEND);
 
 try {
     // Gestione viste standard tramite Controller dedicati
@@ -69,6 +74,14 @@ try {
     if ($path === '/api/gianik/live') {
         (new \App\GiaNik\Controllers\GiaNikController())->live();
         return;
+    }
+
+    if ($path === '/api/gianik/analyze') {
+        $mId = $_GET['marketId'] ?? null;
+        if ($mId) {
+            (new \App\GiaNik\Controllers\GiaNikController())->analyze($mId);
+            return;
+        }
     }
 
     if (preg_match('#^/api/gianik/analyze/([\d\.]+)$#i', $path, $matches)) {
