@@ -31,7 +31,8 @@ class FootballDataService
         $model = new Fixture();
         $fixture = $model->getById($id);
 
-        if (!$fixture || $model->needsLeagueRefresh($fixture['league_id'] ?? 0, Config::getCurrentSeason(), 1)) {
+        // Usa needsRefresh() intelligente basato su status (LIVE=1min, Scheduled=1h, Finished=24h)
+        if (!$fixture || $model->needsRefresh($id)) {
             $res = $this->api->fetchFixtureDetails($id);
             if (!empty($res['response'])) {
                 foreach ($res['response'] as $item) {

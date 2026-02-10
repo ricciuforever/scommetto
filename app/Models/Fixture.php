@@ -122,7 +122,7 @@ class Fixture
         }
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([(int)$bufferHours]);
+        $stmt->execute([(int) $bufferHours]);
         $row = $stmt->fetch();
         return ($row['count'] > 0);
     }
@@ -146,6 +146,45 @@ class Fixture
         if (!$row || !$row['last_fixtures_sync'])
             return true;
         return (time() - strtotime($row['last_fixtures_sync'])) > ($hours * 3600);
+    }
+
+    /**
+     * Verifica se un singolo fixture necessita di refresh
+     * Basato su raccomandazioni API-Football:
+     * - LIVE (1H, HT, 2H, ET, P, BT): 1 minuto
+     * - Scheduled (NS, TBD): 1 ora
+     * - Finished (FT, AET, PEN): 1 giorno
+     * - Cancelled/Postponed: 1 giorno
+     */
+    public function needsRefresh($fixtureId)
+    {
+        $fixture = $this->getById($fixtureId);
+
+        if (!$fixture || !$fixture['last_updated'])
+            return true;
+
+        $lastSync = strtotime($fixture['last_updated']);
+        $status = $fixture['status_short'] ?? 'NS';
+
+        // Match LIVE: refresh ogni 1 minuto (API aggiorna ogni 15 sec, raccomandato 1 min)
+        $liveStatuses = ['1H', 'HT', '2H', 'ET', 'P', 'BT', 'LIVE', 'SUSP', 'INT'];
+        if (in_array($status, $liveStatuses)) {
+            return (time() - $lastSync) > 60;
+        }
+
+        // Match finiti: refresh ogni 24 ore (non dovrebbero cambiare)
+        $finishedStatuses = ['FT', 'AET', 'PEN', 'ABD', 'AWD', 'WO'];
+        if (in_array($status, $finishedStatuses)) {
+            return (time() - $lastSync) > 86400;
+        }
+
+        // Match posticipati/cancellati: refresh ogni 24 ore (potrebbero essere riprogrammati)
+        if (in_array($status, ['PST', 'CANC'])) {
+            return (time() - $lastSync) > 86400;
+        }
+
+        // Match scheduled (NS, TBD): refresh ogni 1 ora
+        return (time() - $lastSync) > 3600;
     }
 
     /**
