@@ -19,7 +19,7 @@ class BasketballApiService
 
     public function fetchLiveGames($params = [])
     {
-        $endpoint = '/games?live=all&timezone=Europe/London';
+        $endpoint = '/games?live=all&timezone=Europe/Rome';
         if (!empty($params)) {
             $queryString = http_build_query($params);
             $endpoint .= "&$queryString";
@@ -72,8 +72,7 @@ class BasketballApiService
         $headers = [];
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "x-rapidapi-host: v1.basketball.api-sports.io",
-            "x-rapidapi-key: " . $this->apiKey
+            "x-apisports-key: " . $this->apiKey
         ]);
 
         curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $header) use (&$headers) {
