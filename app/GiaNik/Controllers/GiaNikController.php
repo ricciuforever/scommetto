@@ -90,7 +90,7 @@ class GiaNikController
             }
 
             // Prioritize market types (Match Odds > Winner > Moneyline)
-            usort($marketCatalogues, function($a, $b) {
+            usort($marketCatalogues, function ($a, $b) {
                 $prio = ['MATCH_ODDS' => 1, 'WINNER' => 2, 'MONEYLINE' => 3];
                 $typeA = $a['description']['marketType'] ?? '';
                 $typeB = $b['description']['marketType'] ?? '';
@@ -103,8 +103,10 @@ class GiaNikController
                 $marketId = $mc['marketId'];
                 $eventId = $mc['event']['id'];
 
-                if (isset($processedEvents[$eventId])) continue;
-                if (!isset($marketBooksMap[$marketId])) continue;
+                if (isset($processedEvents[$eventId]))
+                    continue;
+                if (!isset($marketBooksMap[$marketId]))
+                    continue;
 
                 $processedEvents[$eventId] = true;
                 $mb = $marketBooksMap[$marketId];
@@ -124,51 +126,67 @@ class GiaNikController
                 ];
 
                 // --- Enrichment ---
+                $foundApiData = false;
                 if ($sport === 'Soccer' || $sport === 'Football') {
                     $match = $this->searchInFixtureList($m['event'], $apiLiveMatches);
                     if ($match) {
-                        $m['score'] = ($match['goals']['home'] ?? 0) . '-' . ($match['goals']['away'] ?? 0);
-                        $m['status_label'] = ($match['fixture']['status']['short'] ?? 'LIVE') . ' ' . ($match['fixture']['status']['elapsed'] ?? 0) . "'";
+                        $m['score'] = ($match['goals']['home'] ?? '0') . '-' . ($match['goals']['away'] ?? '0');
+                        $elapsed = $match['fixture']['status']['elapsed'] ?? 0;
+                        $m['status_label'] = ($match['fixture']['status']['short'] ?? 'LIVE') . ($elapsed ? " $elapsed'" : "");
                         $m['has_api_data'] = true;
+                        $foundApiData = true;
                     }
                 } elseif ($sport === 'Basketball') {
                     $match = $this->searchInBasketballGameList($m['event'], $apiBasketLiveMatches);
                     if ($match) {
-                        $m['score'] = ($match['scores']['home']['total'] ?? 0) . '-' . ($match['scores']['away']['total'] ?? 0);
-                        $m['status_label'] = ($match['status']['short'] ?? 'LIVE') . ' ' . ($match['status']['timer'] ?? '');
+                        $m['score'] = ($match['scores']['home']['total'] ?? '0') . '-' . ($match['scores']['away']['total'] ?? '0');
+                        $timer = $match['status']['timer'] ?? '';
+                        $m['status_label'] = ($match['status']['short'] ?? 'LIVE') . ($timer ? " $timer" : "");
                         $m['has_api_data'] = true;
+                        $foundApiData = true;
                     }
                 }
 
                 // Generic Betfair-based enrichment (fallback or additional info)
-                if (isset($mb['marketDefinition'])) {
+                if (!$foundApiData && isset($mb['marketDefinition'])) {
                     $def = $mb['marketDefinition'];
 
                     // 1. Try to get score from marketDefinition['score'] (Reliable for Tennis, Volley, etc)
                     if (isset($def['score'])) {
                         $s = $def['score'];
                         // Tennis sets/games style
-                        if (isset($s['homeSets']) || isset($s['awaySets'])) {
+                        if (isset($s['homeSets']) || isset($s['awaySets']) || isset($s['homeGames'])) {
                             $hs = $s['homeSets'] ?? 0;
                             $as = $s['awaySets'] ?? 0;
                             $m['score'] = "$hs-$as";
                             if (isset($s['homeGames'], $s['awayGames'])) {
                                 $m['score'] .= " (" . $s['homeGames'] . "-" . $s['awayGames'] . ")";
                             }
-                            if ($m['status_label'] === 'LIVE') $m['status_label'] = 'SET';
+                            if ($m['status_label'] === 'LIVE')
+                                $m['status_label'] = 'SET';
                         }
                         // Generic homeScore/awayScore
                         elseif (isset($s['homeScore'], $s['awayScore'])) {
-                            if (!$m['score']) $m['score'] = $s['homeScore'] . '-' . $s['awayScore'];
+                            if (!$m['score'])
+                                $m['score'] = $s['homeScore'] . '-' . $s['awayScore'];
                         }
                     }
 
-                    // 2. Fallback: Extract scores from event name if present (e.g. "Team A 1-0 Team B")
-                    if (!$m['score'] && preg_match('/(\d+)\s*-\s*(\d+)/', $m['event'], $scoreMatches)) {
+                    // 2. Score check in runner names (sometimes present in specific markets)
+                    if (!$m['score']) {
+                        foreach ($mb['runners'] as $runner) {
+                            if (isset($runner['description']['runnerName']) && preg_match('/(\d+)\s*-\s*(\d+)/', $runner['description']['runnerName'], $runnerScore)) {
+                                // $m['score'] = $runnerScore[1] . '-' . $runnerScore[2]; // Rischioso prenderlo dai runner
+                            }
+                        }
+                    }
+
+                    // 3. Fallback: Extract scores from event name if present (e.g. "Team A 1-0 Team B")
+                    if (!$m['score'] && preg_match('/(\d+)\s*[-]\s*(\d+)/', $m['event'], $scoreMatches)) {
                         $m['score'] = $scoreMatches[1] . '-' . $scoreMatches[2];
                     }
 
-                    // 3. Status label refinements
+                    // 4. Status label refinements
                     if (preg_match('/\((Q[1-4]|Set\s*[1-5]|HT|End\s*Set\s*\d)\)/i', $m['event'], $periodMatches)) {
                         $m['status_label'] = strtoupper($periodMatches[1]);
                     } elseif (isset($def['inPlay']) && $def['inPlay'] && $m['status_label'] === 'LIVE') {
@@ -193,14 +211,15 @@ class GiaNikController
                 $groupedMatches[$sport][] = $m;
             }
 
-            uksort($groupedMatches, function($a, $b) use ($groupedMatches) {
+            uksort($groupedMatches, function ($a, $b) use ($groupedMatches) {
                 return count($groupedMatches[$b]) <=> count($groupedMatches[$a]);
             });
 
             // Funds
             $account = ['available' => 0, 'exposure' => 0];
             $funds = $this->bf->getFunds();
-            if (isset($funds['result'])) $funds = $funds['result'];
+            if (isset($funds['result']))
+                $funds = $funds['result'];
             $account['available'] = $funds['availableToBetBalance'] ?? 0;
             $account['exposure'] = abs($funds['exposure'] ?? 0);
 
@@ -240,7 +259,8 @@ class GiaNikController
             $marketIds = array_map(fn($mc) => $mc['marketId'], $catalogues);
             $booksRes = $this->bf->getMarketBooks($marketIds);
             $booksMap = [];
-            foreach ($booksRes['result'] ?? [] as $b) $booksMap[$b['marketId']] = $b;
+            foreach ($booksRes['result'] ?? [] as $b)
+                $booksMap[$b['marketId']] = $b;
 
             $event = [
                 'event' => $eventName,
@@ -251,7 +271,8 @@ class GiaNikController
 
             foreach ($catalogues as $mc) {
                 $mId = $mc['marketId'];
-                if (!isset($booksMap[$mId])) continue;
+                if (!isset($booksMap[$mId]))
+                    continue;
                 $book = $booksMap[$mId];
                 $m = [
                     'marketId' => $mId,
@@ -304,8 +325,9 @@ class GiaNikController
             $marketName = $input['marketName'] ?? 'Unknown';
             $selectionId = $input['selectionId'] ?? null;
             $odds = $input['odds'] ?? null;
-            $stake = (float)($input['stake'] ?? 2.0);
-            if ($stake < 2.0) $stake = 2.0;
+            $stake = (float) ($input['stake'] ?? 2.0);
+            if ($stake < 2.0)
+                $stake = 2.0;
             $type = $input['type'] ?? 'virtual';
             $eventName = $input['eventName'] ?? 'Unknown';
             $sport = $input['sport'] ?? 'Unknown';
@@ -362,7 +384,8 @@ class GiaNikController
             $chunks = array_chunk($eventIds, 40);
             foreach ($chunks as $chunk) {
                 $res = $this->bf->getMarketCatalogues($chunk, 200, $marketTypes);
-                if (isset($res['result'])) $marketCatalogues = array_merge($marketCatalogues, $res['result']);
+                if (isset($res['result']))
+                    $marketCatalogues = array_merge($marketCatalogues, $res['result']);
             }
 
             $eventMarketsMap = [];
@@ -377,9 +400,11 @@ class GiaNikController
 
             $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
-                if ($eventCounter >= 3) break;
+                if ($eventCounter >= 3)
+                    break;
                 $mainEvent = $catalogues[0];
-                if (in_array($mainEvent['event']['name'], $pendingEventNames)) continue;
+                if (in_array($mainEvent['event']['name'], $pendingEventNames))
+                    continue;
 
                 try {
                     $results['scanned']++;
@@ -388,7 +413,8 @@ class GiaNikController
                     $marketIds = array_map(fn($mc) => $mc['marketId'], $catalogues);
                     $booksRes = $this->bf->getMarketBooks($marketIds);
                     $booksMap = [];
-                    foreach ($booksRes['result'] ?? [] as $b) $booksMap[$b['marketId']] = $b;
+                    foreach ($booksRes['result'] ?? [] as $b)
+                        $booksMap[$b['marketId']] = $b;
 
                     $event = [
                         'event' => $mainEvent['event']['name'],
@@ -399,7 +425,8 @@ class GiaNikController
 
                     foreach ($catalogues as $mc) {
                         $mId = $mc['marketId'];
-                        if (!isset($booksMap[$mId])) continue;
+                        if (!isset($booksMap[$mId]))
+                            continue;
                         $book = $booksMap[$mId];
                         $m = [
                             'marketId' => $mId,
@@ -438,12 +465,21 @@ class GiaNikController
                         $analysis = json_decode($matches[1], true);
                         if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 70) {
                             $selectedMarket = null;
-                            foreach ($event['markets'] as $m) { if ($m['marketId'] === $analysis['marketId']) { $selectedMarket = $m; break; } }
-                            if (!$selectedMarket) continue;
+                            foreach ($event['markets'] as $m) {
+                                if ($m['marketId'] === $analysis['marketId']) {
+                                    $selectedMarket = $m;
+                                    break;
+                                }
+                            }
+                            if (!$selectedMarket)
+                                continue;
 
-                            $stake = (float)($analysis['stake'] ?? 2.0);
-                            if ($stake < 2.0) $stake = 2.0;
-                            if (($vInit + $vProf - $vExp) < $stake) continue;
+                            $stake = (float) ($analysis['stake'] ?? 2.0);
+                            if ($stake < 2.0)
+                                $stake = 2.0;
+                            $vBalance = $this->getVirtualBalance();
+                            if ($vBalance['available'] < $stake)
+                                continue;
 
                             $runners = array_map(fn($r) => ['runnerName' => $r['name'], 'selectionId' => $r['selectionId']], $selectedMarket['runners']);
                             $selectionId = $this->bf->mapAdviceToSelection($analysis['advice'], $runners);
@@ -456,11 +492,15 @@ class GiaNikController
                             }
                         }
                     }
-                } catch (\Throwable $ex) { $results['errors'][] = $ex->getMessage(); }
+                } catch (\Throwable $ex) {
+                    $results['errors'][] = $ex->getMessage();
+                }
             }
             $this->settleBets();
             echo json_encode(['status' => 'success', 'results' => $results]);
-        } catch (\Throwable $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
+        } catch (\Throwable $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
     }
 
     public function settleBets()
@@ -474,7 +514,12 @@ class GiaNikController
                 $mb = $res['result'][0] ?? null;
                 if ($mb && $mb['status'] === 'CLOSED') {
                     $winner = null;
-                    foreach ($mb['runners'] as $r) { if (($r['status'] ?? '') === 'WINNER') { $winner = $r['selectionId']; break; } }
+                    foreach ($mb['runners'] as $r) {
+                        if (($r['status'] ?? '') === 'WINNER') {
+                            $winner = $r['selectionId'];
+                            break;
+                        }
+                    }
                     if ($winner) {
                         $isWin = ($winner == $bet['selection_id']);
                         $status = $isWin ? 'won' : 'lost';
@@ -483,14 +528,17 @@ class GiaNikController
                     }
                 }
             }
-        } catch (\Throwable $e) { error_log("GiaNik Settlement Error: " . $e->getMessage()); }
+        } catch (\Throwable $e) {
+            error_log("GiaNik Settlement Error: " . $e->getMessage());
+        }
     }
 
     private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $competition = '')
     {
         if ($sport === 'Soccer' || $sport === 'Football') {
             $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive);
-            if (!$apiMatch) return null;
+            if (!$apiMatch)
+                return null;
             $api = new FootballApiService();
             $fullFixture = $api->fetchFixtureDetails($apiMatch['fixture']['id'])['response'][0] ?? $apiMatch;
             $h2h = $api->fetchH2H($apiMatch['teams']['home']['id'] . '-' . $apiMatch['teams']['away']['id']);
@@ -498,7 +546,8 @@ class GiaNikController
             return ['fixture' => $fullFixture, 'h2h' => $h2h['response'] ?? [], 'standings' => $standings, 'predictions' => $api->fetchPredictions($apiMatch['fixture']['id'])['response'][0] ?? null];
         } elseif ($sport === 'Basketball') {
             $apiMatch = $this->findMatchingBasketballFixture($bfEventName, $preFetchedLive);
-            if (!$apiMatch) return null;
+            if (!$apiMatch)
+                return null;
             $api = new BasketballApiService();
             $h2h = $api->fetchH2H($apiMatch['teams']['home']['id'] . '-' . $apiMatch['teams']['away']['id']);
             $standings = (isset($apiMatch['league']['id'], $apiMatch['league']['season'])) ? $api->fetchStandings($apiMatch['league']['id'], $apiMatch['league']['season'])['response'] ?? null : null;
@@ -527,13 +576,15 @@ class GiaNikController
     private function searchInFixtureList($bfEventName, $fixtures)
     {
         $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $bfEventName);
-        if (count($bfTeams) < 2) return null;
+        if (count($bfTeams) < 2)
+            return null;
         $bfHome = $this->normalizeTeamName($bfTeams[0]);
         $bfAway = $this->normalizeTeamName($bfTeams[1]);
         foreach ($fixtures as $item) {
             $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
             $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
-            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) || ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome))) return $item;
+            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) || ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome)))
+                return $item;
         }
         return null;
     }
@@ -548,13 +599,15 @@ class GiaNikController
     private function searchInBasketballGameList($bfEventName, $games)
     {
         $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $bfEventName);
-        if (count($bfTeams) < 2) return null;
+        if (count($bfTeams) < 2)
+            return null;
         $bfHome = $this->normalizeTeamName($bfTeams[0]);
         $bfAway = $this->normalizeTeamName($bfTeams[1]);
         foreach ($games as $item) {
             $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
             $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
-            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) || ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome))) return $item;
+            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) || ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome)))
+                return $item;
         }
         return null;
     }
@@ -562,18 +615,91 @@ class GiaNikController
     private function normalizeTeamName($name)
     {
         $name = strtolower($name);
-        $replacements = ['man ' => 'manchester ', 'man utd' => 'manchester united', 'man city' => 'manchester city', 'st ' => 'saint ', 'int ' => 'inter ', 'ath ' => 'athletic ', 'atl ' => 'atletico '];
-        foreach ($replacements as $search => $replace) $name = str_replace($search, $replace, $name);
-        $remove = ['fc', 'united', 'city', 'town', 'real', 'atlético', 'atletico', 'inter', 'u23', 'u21', 'u19', 'women', 'donne', 'femminile', 'sports', 'sc'];
-        foreach ($remove as $r) $name = preg_replace('/\b' . preg_quote($r, '/') . '\b/i', '', $name);
+        $replacements = [
+            'man ' => 'manchester ',
+            'man utd' => 'manchester united',
+            'man city' => 'manchester city',
+            'st ' => 'saint ',
+            'int ' => 'inter ',
+            'ath ' => 'athletic ',
+            'atl ' => 'atletico ',
+            'de ' => ' ',
+            'la ' => ' '
+        ];
+        foreach ($replacements as $search => $replace)
+            $name = str_replace($search, $replace, $name);
+
+        $remove = [
+            'fc',
+            'united',
+            'city',
+            'town',
+            'real',
+            'atlético',
+            'atletico',
+            'inter',
+            'u23',
+            'u21',
+            'u19',
+            'women',
+            'donne',
+            'femminile',
+            'sports',
+            'sc',
+            'ac',
+            'as',
+            'cf',
+            'rc',
+            'de',
+            'rs',
+            'blazers',
+            'pistons',
+            'lakers',
+            'clippers',
+            'warriors',
+            'bulls',
+            'celtics',
+            'knicks',
+            'heat',
+            'jazz',
+            'nuggets',
+            'rockets',
+            'spurs',
+            'suns',
+            'mavericks',
+            'grizzlies',
+            'hornets',
+            'magic',
+            'bucks',
+            'pacers',
+            'cavs',
+            'cavaliers',
+            'hawks',
+            'nets',
+            '76ers',
+            'sixers',
+            'wizards',
+            'raptors',
+            'kings',
+            'pelicans',
+            'timberwolves',
+            'wolves',
+            'thunder'
+        ];
+        foreach ($remove as $r)
+            $name = preg_replace('/\b' . preg_quote($r, '/') . '\b/i', '', $name);
+
         return trim(preg_replace('/\s+/', ' ', $name));
     }
 
     private function isMatch($n1, $n2)
     {
-        if (empty($n1) || empty($n2)) return false;
-        if (strpos($n1, $n2) !== false || strpos($n2, $n1) !== false) return true;
-        if (levenshtein($n1, $n2) < 3) return true;
+        if (empty($n1) || empty($n2))
+            return false;
+        if (strpos($n1, $n2) !== false || strpos($n2, $n1) !== false)
+            return true;
+        if (levenshtein($n1, $n2) < 3)
+            return true;
         return false;
     }
 
@@ -582,19 +708,23 @@ class GiaNikController
         try {
             $statusFilter = $_GET['status'] ?? 'all';
             $sql = "SELECT * FROM bets";
-            if ($statusFilter === 'won') $sql .= " WHERE status = 'won'";
-            elseif ($statusFilter === 'lost') $sql .= " WHERE status = 'lost'";
+            if ($statusFilter === 'won')
+                $sql .= " WHERE status = 'won'";
+            elseif ($statusFilter === 'lost')
+                $sql .= " WHERE status = 'lost'";
             $sql .= " ORDER BY created_at DESC LIMIT 20";
             $bets = $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
             require __DIR__ . '/../Views/partials/recent_bets_sidebar.php';
-        } catch (\Throwable $e) { echo '<div class="text-danger p-2 text-[10px]">' . $e->getMessage() . '</div>'; }
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-2 text-[10px]">' . $e->getMessage() . '</div>';
+        }
     }
 
     private function getVirtualBalance()
     {
         $vInit = 100.0;
-        $vProf = (float)$this->db->query("SELECT SUM(profit) FROM bets WHERE status IN ('won', 'lost')")->fetchColumn();
-        $vExp = (float)$this->db->query("SELECT SUM(stake) FROM bets WHERE status = 'pending'")->fetchColumn();
+        $vProf = (float) $this->db->query("SELECT SUM(profit) FROM bets WHERE status IN ('won', 'lost')")->fetchColumn();
+        $vExp = (float) $this->db->query("SELECT SUM(stake) FROM bets WHERE status = 'pending'")->fetchColumn();
         return [
             'available' => ($vInit + $vProf) - $vExp,
             'exposure' => $vExp,
@@ -608,8 +738,13 @@ class GiaNikController
             $stmt = $this->db->prepare("SELECT * FROM bets WHERE id = ?");
             $stmt->execute([$id]);
             $bet = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$bet) { echo '<div class="p-10 text-center text-danger font-black uppercase italic">Scommessa non trovata.</div>'; return; }
+            if (!$bet) {
+                echo '<div class="p-10 text-center text-danger font-black uppercase italic">Scommessa non trovata.</div>';
+                return;
+            }
             require __DIR__ . '/../Views/partials/modals/bet_details.php';
-        } catch (\Throwable $e) { echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>'; }
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
     }
 }

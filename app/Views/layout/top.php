@@ -104,7 +104,9 @@
                 <a href="/gianik-live"
                     class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group border-l-2 border-accent/50 bg-accent/5">
                     <i data-lucide="zap" class="w-4 h-4 text-accent transition-colors"></i>
-                    <span class="text-[9px] font-black text-white transition-colors uppercase italic tracking-tighter leading-none">Analisi GiaNik <br> IA Betfair</span>
+                    <span
+                        class="text-xs font-black text-white transition-colors uppercase italic tracking-tighter leading-none">Gianik
+                        Live</span>
                 </a>
                 <a href="/gemini-bets"
                     class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
