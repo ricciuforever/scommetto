@@ -8,6 +8,7 @@ use App\Services\BetfairService;
 use App\Services\GeminiService;
 use App\Services\FootballApiService;
 use App\Services\BasketballApiService;
+use App\Services\NbaApiService;
 use App\GiaNik\GiaNikDatabase;
 use PDO;
 
@@ -86,6 +87,11 @@ class GiaNikController
             $apiBasketLiveRes = $apiBasket->fetchLiveGames();
             $apiBasketLiveMatches = $apiBasketLiveRes['response'] ?? [];
 
+            // API-NBA Live Enrichment
+            $apiNba = new NbaApiService();
+            $apiNbaLiveRes = $apiNba->fetchLiveGames();
+            $apiNbaLiveMatches = $apiNbaLiveRes['response'] ?? [];
+
             // 5. Merge Data
             $marketBooksMap = [];
             foreach ($marketBooks as $mb) {
@@ -122,11 +128,22 @@ class GiaNikController
                         $m['has_api_data'] = true;
                     }
                 } elseif ($sport === 'Basketball') {
-                    $match = $this->searchInBasketballGameList($m['event'], $apiBasketLiveMatches);
-                    if ($match) {
-                        $m['score'] = ($match['scores']['home']['total'] ?? 0) . '-' . ($match['scores']['away']['total'] ?? 0);
-                        $m['status_label'] = ($match['status']['short'] ?? 'LIVE') . ' ' . ($match['status']['timer'] ?? '');
-                        $m['has_api_data'] = true;
+                    $isNba = stripos($m['competition'], 'NBA') !== false || stripos($m['event'], 'NBA') !== false;
+
+                    if ($isNba) {
+                        $match = $this->searchInNbaGameList($m['event'], $apiNbaLiveMatches);
+                        if ($match) {
+                            $m['score'] = ($match['scores']['home']['points'] ?? 0) . '-' . ($match['scores']['away']['points'] ?? 0);
+                            $m['status_label'] = ($match['status']['short'] ?? 'LIVE') . ' ' . ($match['status']['clock'] ?? '');
+                            $m['has_api_data'] = true;
+                        }
+                    } else {
+                        $match = $this->searchInBasketballGameList($m['event'], $apiBasketLiveMatches);
+                        if ($match) {
+                            $m['score'] = ($match['scores']['home']['total'] ?? 0) . '-' . ($match['scores']['away']['total'] ?? 0);
+                            $m['status_label'] = ($match['status']['short'] ?? 'LIVE') . ' ' . ($match['status']['timer'] ?? '');
+                            $m['has_api_data'] = true;
+                        }
                     }
                 } else {
                     // Try to get from Betfair Market Definition or Event Name
@@ -279,9 +296,9 @@ class GiaNikController
 
             // --- ENRICHMENT WITH API-FOOTBALL / API-BASKETBALL ---
             if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
-                $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport']);
+                $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition']);
             } elseif ($event['sport'] === 'Basketball') {
-                $event['api_basketball'] = $this->enrichWithApiData($event['event'], $event['sport']);
+                $event['api_basketball'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition']);
             }
 
             $gemini = new GeminiService();
@@ -544,9 +561,11 @@ class GiaNikController
                         $event['markets'][] = $m;
                     }
 
-                    // Enriched with API-Football if available
+                    // Enriched with API-Football/NBA if available
                     if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
-                        $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures);
+                        $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition']);
+                    } elseif ($event['sport'] === 'Basketball') {
+                        $event['api_basketball'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition']);
                     }
 
                     // Calculate current virtual balance for Gemini context
@@ -658,7 +677,7 @@ class GiaNikController
         }
     }
 
-    private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null)
+    private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $competition = '')
     {
         if ($sport === 'Soccer' || $sport === 'Football') {
             $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive);
@@ -707,6 +726,78 @@ class GiaNikController
                 'h2h' => $h2h['response'] ?? [],
                 'standings' => $standings
             ];
+        } elseif ($sport === 'Basketball') {
+            $isNba = stripos($competition, 'NBA') !== false || stripos($bfEventName, 'NBA') !== false;
+
+            if ($isNba) {
+                $apiMatch = $this->findMatchingNbaFixture($bfEventName, $preFetchedLive);
+                if (!$apiMatch) return null;
+
+                $api = new NbaApiService();
+                $gameId = $apiMatch['id'];
+                $stats = $api->fetchStatistics($gameId);
+
+                return [
+                    'game' => $apiMatch,
+                    'statistics' => $stats['response'] ?? []
+                ];
+            } else {
+                $apiMatch = $this->findMatchingBasketballFixture($bfEventName, $preFetchedLive);
+                if (!$apiMatch) return null;
+
+                $api = new BasketballApiService();
+
+                // For basketball, we keep it light due to request limits
+                $h2h = $api->fetchH2H($apiMatch['teams']['home']['id'] . '-' . $apiMatch['teams']['away']['id']);
+
+                $standings = null;
+                if (isset($apiMatch['league']['id'], $apiMatch['league']['season'])) {
+                    $stRes = $api->fetchStandings($apiMatch['league']['id'], $apiMatch['league']['season']);
+                    $standings = $stRes['response'] ?? null;
+                }
+
+                return [
+                    'game' => $apiMatch,
+                    'h2h' => $h2h['response'] ?? [],
+                    'standings' => $standings
+                ];
+            }
+        }
+        return null;
+    }
+
+    private function findMatchingNbaFixture($bfEventName, $preFetchedLive = null)
+    {
+        $api = new NbaApiService();
+        $liveGames = $preFetchedLive;
+        if ($liveGames === null) {
+            $res = $api->fetchLiveGames();
+            $liveGames = $res['response'] ?? [];
+        }
+
+        if (!empty($liveGames)) {
+            $match = $this->searchInNbaGameList($bfEventName, $liveGames);
+            if ($match) return $match;
+        }
+        return null;
+    }
+
+    private function searchInNbaGameList($bfEventName, $games)
+    {
+        $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $bfEventName);
+        if (count($bfTeams) < 2) return null;
+
+        $bfHome = $this->normalizeTeamName($bfTeams[0]);
+        $bfAway = $this->normalizeTeamName($bfTeams[1]);
+
+        foreach ($games as $item) {
+            $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
+            $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
+
+            if (($this->isMatch($bfHome, $apiHome) && $this->isMatch($bfAway, $apiAway)) ||
+                ($this->isMatch($bfHome, $apiAway) && $this->isMatch($bfAway, $apiHome))) {
+                return $item;
+            }
         }
         return null;
     }
