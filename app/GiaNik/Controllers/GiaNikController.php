@@ -800,13 +800,95 @@ class GiaNikController
     {
         try {
             $statusFilter = $_GET['status'] ?? 'all';
+            $sportFilter = $_GET['sport'] ?? 'all';
+
+            // 1. Sport mapping
+            $sportMapping = [
+                'Soccer' => 'Calcio',
+                'Football' => 'Calcio',
+                'Tennis' => 'Tennis',
+                'Basketball' => 'Basket',
+                'Volleyball' => 'Volley',
+                'Horse Racing' => 'Ippica',
+                'Greyhounds' => 'Levrieri',
+                'Cricket' => 'Cricket',
+                'Rugby Union' => 'Rugby',
+                'Rugby League' => 'Rugby',
+                'American Football' => 'Football Am.',
+                'Ice Hockey' => 'Hockey su Ghiaccio',
+                'Darts' => 'Freccette',
+                'Golf' => 'Golf',
+                'Snooker' => 'Snooker',
+                'Boxing' => 'Pugilato',
+                'Mixed Martial Arts' => 'MMA',
+                'Motor Sport' => 'Motori',
+                'Esports' => 'Esports'
+            ];
+
+            // 2. Fetch all sports that have bets for counters
+            $countSql = "SELECT sport, COUNT(*) as count FROM bets";
+            $countWhere = [];
+            $countParams = [];
+            if ($statusFilter === 'won') {
+                $countWhere[] = "status = 'won'";
+            } elseif ($statusFilter === 'lost') {
+                $countWhere[] = "status = 'lost'";
+            }
+            if (!empty($countWhere)) {
+                $countSql .= " WHERE " . implode(" AND ", $countWhere);
+            }
+            $countSql .= " GROUP BY sport";
+            $stmtCounts = $this->db->prepare($countSql);
+            $stmtCounts->execute($countParams);
+            $sportCountsRaw = $stmtCounts->fetchAll(PDO::FETCH_ASSOC);
+
+            $sports = [];
+            foreach ($sportCountsRaw as $row) {
+                $engName = $row['sport'];
+                $sports[] = [
+                    'id' => $engName,
+                    'name' => $sportMapping[$engName] ?? $engName,
+                    'count' => $row['count']
+                ];
+            }
+
+            // Sort sports by name
+            usort($sports, fn($a, $b) => strcasecmp($a['name'], $b['name']));
+
+            // 3. Main query for bets
             $sql = "SELECT * FROM bets";
-            if ($statusFilter === 'won')
-                $sql .= " WHERE status = 'won'";
-            elseif ($statusFilter === 'lost')
-                $sql .= " WHERE status = 'lost'";
+            $where = [];
+            $params = [];
+
+            if ($statusFilter === 'won') {
+                $where[] = "status = 'won'";
+            } elseif ($statusFilter === 'lost') {
+                $where[] = "status = 'lost'";
+            }
+
+            if ($sportFilter !== 'all') {
+                $where[] = "sport = ?";
+                $params[] = $sportFilter;
+            }
+
+            if (!empty($where)) {
+                $sql .= " WHERE " . implode(" AND ", $where);
+            }
+
             $sql .= " ORDER BY created_at DESC LIMIT 20";
-            $bets = $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Map sport names for bets
+            foreach ($bets as &$bet) {
+                $bet['sport_it'] = $sportMapping[$bet['sport']] ?? $bet['sport'];
+            }
+
+            // Pass filters to the view
+            $currentStatus = $statusFilter;
+            $currentSport = $sportFilter;
+
             require __DIR__ . '/../Views/partials/recent_bets_sidebar.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-2 text-[10px]">' . $e->getMessage() . '</div>';

@@ -7,26 +7,44 @@ $bets = $bets ?? [];
     <div class="p-4 border-b border-white/10">
         <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Ultime Giocate GiaNik</h3>
 
-        <!-- Status Filters -->
-        <div class="flex gap-2">
-            <label class="cursor-pointer">
-                <input type="radio" name="status" value="all" checked
-                    hx-get="/api/gianik/recent-bets?status=all" hx-target="#recent-bets-container"
-                    class="hidden peer">
-                <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-white/10 bg-white/5 text-slate-500 peer-checked:bg-slate-500 peer-checked:text-white transition-all">Tutte</span>
-            </label>
-            <label class="cursor-pointer">
-                <input type="radio" name="status" value="won"
-                    hx-get="/api/gianik/recent-bets?status=won" hx-target="#recent-bets-container"
-                    class="hidden peer">
-                <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-success/20 bg-success/5 text-success peer-checked:bg-success peer-checked:text-white transition-all">Vinte</span>
-            </label>
-            <label class="cursor-pointer">
-                <input type="radio" name="status" value="lost"
-                    hx-get="/api/gianik/recent-bets?status=lost" hx-target="#recent-bets-container"
-                    class="hidden peer">
-                <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-danger/20 bg-danger/5 text-danger peer-checked:bg-danger peer-checked:text-white transition-all">Perse</span>
-            </label>
+        <div class="flex flex-col gap-3">
+            <!-- Status Filters -->
+            <div class="flex gap-2">
+                <label class="cursor-pointer">
+                    <input type="radio" name="status" value="all" <?php echo ($currentStatus === 'all' ? 'checked' : ''); ?>
+                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked, [name='sport']" hx-target="#recent-bets-container"
+                        class="hidden peer">
+                    <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-white/10 bg-white/5 text-slate-500 peer-checked:bg-slate-500 peer-checked:text-white transition-all">Tutte</span>
+                </label>
+                <label class="cursor-pointer">
+                    <input type="radio" name="status" value="won" <?php echo ($currentStatus === 'won' ? 'checked' : ''); ?>
+                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked, [name='sport']" hx-target="#recent-bets-container"
+                        class="hidden peer">
+                    <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-success/20 bg-success/5 text-success peer-checked:bg-success peer-checked:text-white transition-all">Vinte</span>
+                </label>
+                <label class="cursor-pointer">
+                    <input type="radio" name="status" value="lost" <?php echo ($currentStatus === 'lost' ? 'checked' : ''); ?>
+                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked, [name='sport']" hx-target="#recent-bets-container"
+                        class="hidden peer">
+                    <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-danger/20 bg-danger/5 text-danger peer-checked:bg-danger peer-checked:text-white transition-all">Perse</span>
+                </label>
+            </div>
+
+            <!-- Sport Filter -->
+            <div>
+                <select name="sport"
+                    hx-get="/api/gianik/recent-bets"
+                    hx-include="[name='status']:checked, [name='sport']"
+                    hx-target="#recent-bets-container"
+                    class="w-full bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-slate-300 px-2 py-1 focus:outline-none focus:border-accent transition-all appearance-none cursor-pointer">
+                    <option value="all">Tutti gli Sport</option>
+                    <?php foreach ($sports as $s): ?>
+                        <option value="<?php echo $s['id']; ?>" <?php echo ($currentSport === $s['id'] ? 'selected' : ''); ?>>
+                            <?php echo $s['name']; ?> (<?php echo $s['count']; ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
         </div>
     </div>
 
@@ -57,7 +75,7 @@ $bets = $bets ?? [];
                         </div>
                     <?php endif; ?>
 
-                    <div class="text-[8px] font-black text-accent uppercase mb-1 opacity-60"><?php echo $bet['sport']; ?></div>
+                    <div class="text-[8px] font-black text-accent uppercase mb-1 opacity-60"><?php echo $bet['sport_it'] ?? $bet['sport']; ?></div>
                     <div class="text-[10px] font-bold text-white leading-tight mb-2 group-hover:text-accent transition-colors truncate"><?php echo $bet['event_name']; ?></div>
 
                     <div class="flex items-center justify-between mt-2">
@@ -84,11 +102,10 @@ $bets = $bets ?? [];
     // Maintain radio state after HTMX swap and update container hx-get for auto-refresh
     (function() {
         const container = document.querySelector('#recent-bets-container');
-        const status = new URLSearchParams(container.getAttribute('hx-get').split('?')[1] || '').get('status') || 'all';
-        const radio = document.querySelector(`input[name="status"][value="${status}"]`);
-        if (radio) radio.checked = true;
+        const status = "<?php echo $currentStatus; ?>";
+        const sport = "<?php echo $currentSport; ?>";
 
-        // Ensure the container's own hx-get attribute includes the status for the next 'every 30s' trigger
-        container.setAttribute('hx-get', '/api/gianik/recent-bets?status=' + status);
+        // Ensure the container's own hx-get attribute includes both filters for the next 'every 30s' trigger
+        container.setAttribute('hx-get', '/api/gianik/recent-bets?status=' + status + '&sport=' + sport);
     })();
 </script>
