@@ -68,9 +68,9 @@ require __DIR__ . '/../../Views/layout/top.php';
     </div>
 </aside>
 
-<script src="js/modals.js"></script>
+<script src="/js/modals.js"></script>
 <script>
-    // Modal helpers (Remaining helpers not in modals.js)
+    // Modal helpers
     async function openMatchStatsModal(fixtureId) {
         try {
             const response = await fetch(`/gianik/stats-modal/${fixtureId}`);
@@ -107,6 +107,43 @@ require __DIR__ . '/../../Views/layout/top.php';
             if (window.lucide) lucide.createIcons();
         } catch (error) {
             console.error('Error opening H2H modal:', error);
+        }
+    }
+
+
+
+    async function openPlayerModal(playerId, fixtureId = null) {
+        closeAllModals(); // Close other modals first if needed
+        try {
+            const url = fixtureId
+                ? `/gianik/player-modal/${playerId}?fixture=${fixtureId}`
+                : `/gianik/player-modal/${playerId}`;
+
+            const response = await fetch(url);
+            const html = await response.text();
+
+            const container = document.createElement('div');
+            container.innerHTML = html;
+            document.body.appendChild(container.firstElementChild);
+
+            if (window.lucide) lucide.createIcons();
+        } catch (error) {
+            console.error('Error opening player modal:', error);
+        }
+    }
+
+    async function openTeamModal(teamId) {
+        try {
+            const response = await fetch(`/gianik/team-modal/${teamId}`);
+            const html = await response.text();
+
+            const container = document.createElement('div');
+            container.innerHTML = html;
+            document.body.appendChild(container.firstElementChild);
+
+            if (window.lucide) lucide.createIcons();
+        } catch (error) {
+            console.error('Error opening team modal:', error);
         }
     }
 

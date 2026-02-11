@@ -483,7 +483,7 @@ class BetfairService
         return null;
     }
 
-    public function placeBet(string $marketId, string $selectionId, float $price, float $size, string $side = 'BACK', $isRetry = false): array
+    public function placeBet(string $marketId, string $selectionId, float $price, float $size, $isRetry = false): array
     {
         // Regole Betfair.it: Minimo 2€, multipli di 0.50€
         if ($size < \App\Config\Config::MIN_BETFAIR_STAKE) {
@@ -499,7 +499,7 @@ class BetfairService
             $size = $roundedStake;
         }
 
-        $this->log("Placing bet: Market=$marketId, Selection=$selectionId, Price=$price, Size=$size, Side=$side");
+        $this->log("Placing bet: Market=$marketId, Selection=$selectionId, Price=$price, Size=$size");
         $token = $this->authenticate();
         if (!$token) {
             $this->log("PlaceBet Failed: No Auth Token");
@@ -515,7 +515,7 @@ class BetfairService
                 [
                     'selectionId' => (string) $selectionId,
                     'handicap' => '0',
-                    'side' => strtoupper($side),
+                    'side' => 'BACK',
                     'orderType' => 'LIMIT',
                     'limitOrder' => [
                         'size' => number_format((float) $size, 2, '.', ''),

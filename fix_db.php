@@ -279,7 +279,6 @@ try {
           `market` VARCHAR(100),
           `odds` DECIMAL(8,2),
           `stake` DECIMAL(8,2),
-          `side` VARCHAR(10) DEFAULT 'BACK',
           `urgency` VARCHAR(50),
           `confidence` INT DEFAULT 0,
           `status` VARCHAR(20) DEFAULT 'pending',
@@ -578,8 +577,7 @@ try {
     "bets_identifiers" => [
       "ALTER TABLE bets ADD COLUMN betfair_id VARCHAR(100) NULL AFTER result",
       "ALTER TABLE bets ADD COLUMN adm_id VARCHAR(100) NULL AFTER betfair_id",
-      "ALTER TABLE bets ADD COLUMN notes TEXT NULL AFTER adm_id",
-      "ALTER TABLE bets ADD COLUMN side VARCHAR(10) DEFAULT 'BACK' AFTER stake"
+      "ALTER TABLE bets ADD COLUMN notes TEXT NULL AFTER adm_id"
     ],
     "bets_fix_fixture_id" => [
       "ALTER TABLE bets MODIFY COLUMN fixture_id VARCHAR(100) NOT NULL"
@@ -630,40 +628,6 @@ try {
       } catch (\Exception $e) {
         // Ignora se la colonna esiste già
       }
-    }
-  }
-
-  echo "\n🔥 Inserimento scommesse manuali (Flamengo)...\n";
-  $flamengoBets = [
-    ['ref' => '418082718784', 'odds' => 1.70, 'stake' => 7.50],
-    ['ref' => '418082855475', 'odds' => 1.71, 'stake' => 7.50],
-    ['ref' => '418082915358', 'odds' => 1.74, 'stake' => 7.50]
-  ];
-
-  foreach ($flamengoBets as $fb) {
-    $stmt = $db->prepare("SELECT COUNT(*) FROM bets WHERE betfair_id = ?");
-    $stmt->execute([$fb['ref']]);
-    if ($stmt->fetchColumn() == 0) {
-      $ins = $db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, side, type, betfair_id, motivation, status) 
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-      $ins->execute([
-        '1.239617300',
-        'Match Odds',
-        'Flamengo v Nova Iguacu',
-        'Soccer',
-        '30075',
-        'Flamengo',
-        $fb['odds'],
-        $fb['stake'],
-        'BACK',
-        'real',
-        $fb['ref'],
-        'Recupero manuale Flamengo',
-        'pending'
-      ]);
-      echo "✅ Inserita scommessa {$fb['ref']} (@{$fb['odds']})\n";
-    } else {
-      echo "⏩ Scommessa {$fb['ref']} già presente.\n";
     }
   }
 
