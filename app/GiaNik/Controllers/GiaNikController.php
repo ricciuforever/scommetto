@@ -38,6 +38,9 @@ class GiaNikController
                 return;
             }
 
+            // --- Auto-Sync with Betfair ---
+            $this->syncWithBetfair();
+
             // 1. Get Event Types (Sports) - Restricted to Soccer (ID 1)
             $eventTypeIds = ['1'];
 
@@ -196,15 +199,17 @@ class GiaNikController
 
                     // Handle international/continental competitions
                     $comp = strtolower($m['competition']);
-                    if (strpos($comp, 'champions league') !== false || 
-                        strpos($comp, 'europa league') !== false || 
-                        strpos($comp, 'conference league') !== false || 
+                    if (
+                        strpos($comp, 'champions league') !== false ||
+                        strpos($comp, 'europa league') !== false ||
+                        strpos($comp, 'conference league') !== false ||
                         strpos($comp, 'friendly') !== false ||
                         strpos($comp, 'cup') !== false ||
                         strpos($comp, 'international') !== false ||
                         strpos($comp, 'world cup') !== false ||
                         strpos($comp, 'euro ') !== false ||
-                        strpos($comp, 'copa america') !== false) {
+                        strpos($comp, 'copa america') !== false
+                    ) {
                         if ($mappedCountry) {
                             $mappedCountry = is_array($mappedCountry) ? $mappedCountry : [$mappedCountry];
                             $mappedCountry[] = 'World';
@@ -916,7 +921,8 @@ class GiaNikController
 
     private function getCountryMapping($countryCode)
     {
-        if (!$countryCode) return null;
+        if (!$countryCode)
+            return null;
         $map = [
             'GB' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
             'UK' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
@@ -1362,6 +1368,57 @@ class GiaNikController
             require __DIR__ . '/../Views/partials/modals/player_stats.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+    public function syncWithBetfair()
+    {
+        try {
+            // 1. Get Cleared (Settled) Orders - Last 48 hours
+            $cleared = $this->bf->getClearedOrders();
+            $clearedOrders = $cleared['clearedOrders'] ?? [];
+
+            foreach ($clearedOrders as $order) {
+                $betId = $order['betId'] ?? null;
+                if (!$betId)
+                    continue;
+
+                $status = ($order['betOutcome'] === 'WIN' || $order['betOutcome'] === 'WON') ? 'won' : 'lost';
+                if ($order['betOutcome'] === 'VOIDED' || $order['betOutcome'] === 'CANCELLED')
+                    $status = 'cancelled';
+
+                $profit = (float) ($order['profit'] ?? 0);
+
+                // Update settled bets in DB
+                $stmt = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE betfair_id = ? AND status = 'pending'");
+                $stmt->execute([$status, $profit, $betId]);
+            }
+
+            // 2. Get Current (Open) Orders
+            $current = $this->bf->getCurrentOrders();
+            $currentOrders = $current['currentOrders'] ?? [];
+            $openBetfairIds = [];
+            foreach ($currentOrders as $order) {
+                if (isset($order['betId']))
+                    $openBetfairIds[] = $order['betId'];
+            }
+
+            // 3. Sync pending real bets from DB
+            $stmt = $this->db->prepare("SELECT betfair_id FROM bets WHERE type = 'real' AND status = 'pending' AND betfair_id IS NOT NULL");
+            $stmt->execute();
+            $pendingRealBets = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+            $clearedIds = array_map(fn($o) => $o['betId'], $clearedOrders);
+
+            foreach ($pendingRealBets as $dbBetId) {
+                if (!in_array($dbBetId, $openBetfairIds) && !in_array($dbBetId, $clearedIds)) {
+                    // Update to cancelled/removed
+                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = 'cancelled', motivation = 'Sync: Scommessa non trovata su Betfair (Prob. non abbinata o rimossa)' WHERE betfair_id = ?");
+                    $stmtUpdate->execute([$dbBetId]);
+                }
+            }
+
+        } catch (\Throwable $e) {
+            file_put_contents(Config::LOGS_PATH . 'gianik_sync_error.log', date('[Y-m-d H:i:s] ') . $e->getMessage() . PHP_EOL, FILE_APPEND);
         }
     }
 }
