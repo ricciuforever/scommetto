@@ -640,6 +640,9 @@ class GiaNikController
         header('Content-Type: application/json');
         $results = ['scanned' => 0, 'new_bets' => 0, 'errors' => []];
         try {
+            // Sincronizza lo stato reale prima di procedere
+            $this->syncWithBetfair();
+
             // Check operational mode
             $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
             $stmtMode->execute();
@@ -846,25 +849,43 @@ class GiaNikController
     public function settleBets()
     {
         try {
+            // Recupera tutte le scommesse pendenti (virtuali e reali)
             $stmt = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND created_at < datetime('now', '-5 minutes')");
             $stmt->execute();
             $pending = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            foreach ($pending as $bet) {
-                $res = $this->bf->getMarketBooks([$bet['market_id']]);
-                $mb = $res['result'][0] ?? null;
-                if ($mb && $mb['status'] === 'CLOSED') {
-                    $winner = null;
-                    foreach ($mb['runners'] as $r) {
-                        if (($r['status'] ?? '') === 'WINNER') {
-                            $winner = $r['selectionId'];
-                            break;
+
+            if (empty($pending)) return;
+
+            $marketIds = array_values(array_unique(array_column($pending, 'market_id')));
+            $chunks = array_chunk($marketIds, 50);
+
+            foreach ($chunks as $chunk) {
+                $res = $this->bf->getMarketBooks($chunk);
+                $marketBooks = $res['result'] ?? [];
+
+                foreach ($marketBooks as $mb) {
+                    if ($mb['status'] === 'CLOSED') {
+                        $winnerSelectionId = null;
+                        foreach ($mb['runners'] as $r) {
+                            if (($r['status'] ?? '') === 'WINNER') {
+                                $winnerSelectionId = $r['selectionId'];
+                                break;
+                            }
                         }
-                    }
-                    if ($winner) {
-                        $isWin = ($winner == $bet['selection_id']);
-                        $status = $isWin ? 'won' : 'lost';
-                        $profit = $isWin ? ($bet['stake'] * ($bet['odds'] - 1)) : -$bet['stake'];
-                        $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$status, $profit, $bet['id']]);
+
+                        if ($winnerSelectionId !== null) {
+                            // Troviamo tutte le scommesse locali per questo mercato
+                            foreach ($pending as $bet) {
+                                if ($bet['market_id'] === $mb['marketId']) {
+                                    $isWin = ($winnerSelectionId == $bet['selection_id']);
+                                    $status = $isWin ? 'won' : 'lost';
+                                    $profit = $isWin ? ($bet['stake'] * ($bet['odds'] - 1)) : -$bet['stake'];
+
+                                    $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?")
+                                             ->execute([$status, $profit, $bet['id']]);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1064,6 +1085,10 @@ class GiaNikController
                 $where[] = "status = 'won'";
             } elseif ($statusFilter === 'lost') {
                 $where[] = "status = 'lost'";
+            } else {
+                // Se non stiamo filtrando esplicitamente, escludiamo le scommesse cancellate/voided con profitto zero
+                // per mantenere la lista pulita e solo con scommesse "live" o chiuse con esito.
+                $where[] = "status NOT IN ('cancelled', 'voided')";
             }
 
             if ($typeFilter === 'real') {
