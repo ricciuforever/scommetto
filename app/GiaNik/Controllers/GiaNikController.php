@@ -1422,11 +1422,15 @@ class GiaNikController
 
             // 2. Recupera Info Mercati per i nomi se non li abbiamo
             $marketInfoMap = [];
-            $marketIdsToFetch = array_unique($marketIdsToFetch);
+            $marketIdsToFetch = array_values(array_unique($marketIdsToFetch));
             if (!empty($marketIdsToFetch)) {
+                // Betfair listMarketCatalogue default is OPEN only. We need CLOSED too for settled bets.
                 $catRes = $this->bf->request('listMarketCatalogue', [
-                    'filter' => ['marketIds' => $marketIdsToFetch],
-                    'maxResults' => count($marketIdsToFetch),
+                    'filter' => [
+                        'marketIds' => $marketIdsToFetch,
+                        'marketStatus' => ['OPEN', 'CLOSED', 'INACTIVE']
+                    ],
+                    'maxResults' => 1000,
                     'marketProjection' => ['EVENT', 'MARKET_DESCRIPTION', 'RUNNER_DESCRIPTION']
                 ]);
                 foreach ($catRes['result'] ?? [] as $cat) {
