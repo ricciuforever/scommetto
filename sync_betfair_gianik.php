@@ -4,9 +4,12 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-require_once __DIR__ . '/vendor/autoload.php';
+// Carica l'autoloader solo se esiste
+if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+    require_once __DIR__ . '/vendor/autoload.php';
+}
 
-// Se l'autoloader non è configurato per App\, forziamo le inclusioni nell'ordine corretto
+// Assicuriamoci che i file necessari siano inclusi manualmente
 require_once __DIR__ . '/app/Config/Config.php';
 require_once __DIR__ . '/app/GiaNik/GiaNikDatabase.php';
 
