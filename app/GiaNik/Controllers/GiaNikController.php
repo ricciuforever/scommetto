@@ -1373,12 +1373,25 @@ class GiaNikController
     public function syncWithBetfair()
     {
         try {
+            // --- PEZZO 0: Pulisci Duplicati Accidentali dal DB ---
+            // Rimuove record reali che hanno lo stesso market_id, odds e stake ma hanno betfair_id NULL
+            // se esiste un record identico con betfair_id valorizzato (o se sono semplici doppioni)
+            $this->db->exec("DELETE FROM bets WHERE id IN (
+                SELECT b1.id FROM bets b1
+                JOIN bets b2 ON b1.event_name = b2.event_name 
+                AND b1.market_id = b2.market_id 
+                AND b1.odds = b2.odds 
+                AND b1.stake = b2.stake
+                WHERE b1.betfair_id IS NULL AND b2.betfair_id IS NOT NULL
+            )");
+
             // 1. Get Cleared (Settled) Orders - Last 48 hours
             $cleared = $this->bf->getClearedOrders();
             $clearedOrders = $cleared['clearedOrders'] ?? [];
 
             foreach ($clearedOrders as $order) {
                 $betId = $order['betId'] ?? null;
+                $marketId = $order['marketId'] ?? null;
                 if (!$betId)
                     continue;
 
@@ -1388,32 +1401,62 @@ class GiaNikController
 
                 $profit = (float) ($order['profit'] ?? 0);
 
-                // Update settled bets in DB
+                // Update by Betfair ID (Standard)
                 $stmt = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE betfair_id = ? AND status = 'pending'");
                 $stmt->execute([$status, $profit, $betId]);
+
+                // Update by Market ID + Odds + Stake if Betfair ID was missing but it's the same bet
+                // This fixes the manual entries from before
+                if ($stmt->rowCount() === 0 && $marketId) {
+                    $stmtAlt = $this->db->prepare("UPDATE bets SET betfair_id = ?, status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP 
+                        WHERE market_id = ? AND odds = ? AND stake = ? AND type = 'real' AND status = 'pending'");
+                    $stmtAlt->execute([$betId, $status, $profit, $marketId, (float) $order['priceRequested'], (float) $order['sizeSettled']]);
+                }
             }
 
             // 2. Get Current (Open) Orders
             $current = $this->bf->getCurrentOrders();
             $currentOrders = $current['currentOrders'] ?? [];
             $openBetfairIds = [];
+            $openMarketIds = [];
             foreach ($currentOrders as $order) {
                 if (isset($order['betId']))
                     $openBetfairIds[] = $order['betId'];
+                if (isset($order['marketId']))
+                    $openMarketIds[] = $order['marketId'];
             }
 
             // 3. Sync pending real bets from DB
-            $stmt = $this->db->prepare("SELECT betfair_id FROM bets WHERE type = 'real' AND status = 'pending' AND betfair_id IS NOT NULL");
+            $stmt = $this->db->prepare("SELECT id, betfair_id, market_id, odds, stake FROM bets WHERE type = 'real' AND status = 'pending'");
             $stmt->execute();
-            $pendingRealBets = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            $pendingRealBets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             $clearedIds = array_map(fn($o) => $o['betId'], $clearedOrders);
+            $clearedMarketIds = array_map(fn($o) => $o['marketId'], $clearedOrders);
 
-            foreach ($pendingRealBets as $dbBetId) {
-                if (!in_array($dbBetId, $openBetfairIds) && !in_array($dbBetId, $clearedIds)) {
-                    // Update to cancelled/removed
-                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = 'cancelled', motivation = 'Sync: Scommessa non trovata su Betfair (Prob. non abbinata o rimossa)' WHERE betfair_id = ?");
-                    $stmtUpdate->execute([$dbBetId]);
+            foreach ($pendingRealBets as $bet) {
+                $dbBetId = $bet['betfair_id'];
+                $dbMarketId = $bet['market_id'];
+
+                $foundOnBetfair = false;
+                if ($dbBetId) {
+                    if (in_array($dbBetId, $openBetfairIds) || in_array($dbBetId, $clearedIds))
+                        $foundOnBetfair = true;
+                } elseif ($dbMarketId) {
+                    // Match by Market + Odds + Stake
+                    if (in_array($dbMarketId, $openMarketIds) || in_array($dbMarketId, $clearedMarketIds))
+                        $foundOnBetfair = true;
+                }
+
+                if (!$foundOnBetfair && $bet['market_id']) {
+                    // One last check: maybe the market is simply closed
+                    $mRes = $this->bf->getMarketBooks([$bet['market_id']]);
+                    if (isset($mRes['result'][0]['status']) && $mRes['result'][0]['status'] === 'CLOSED') {
+                        // Let settleBets handle it via scores if it's a "ghost" we want to keep, 
+                        // but if it's REAL and not on Betfair, it must be cancelled.
+                        $stmtUpdate = $this->db->prepare("UPDATE bets SET status = 'cancelled', motivation = 'Sync: Non trovata su Betfair (Prob. non abbinata)' WHERE id = ?");
+                        $stmtUpdate->execute([$bet['id']]);
+                    }
                 }
             }
 
