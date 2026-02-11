@@ -734,7 +734,11 @@ class BetfairService
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/listClearedOrders/');
         curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['betStatus' => 'SETTLED', 'recordCount' => 250]));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+            'betStatus' => 'SETTLED',
+            'recordCount' => 1000,
+            'includeItemDescription' => true
+        ]));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             "X-Application: {$this->appKey}",
