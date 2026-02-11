@@ -1377,6 +1377,10 @@ class GiaNikController
     public function syncWithBetfair()
     {
         try {
+            // --- SUPER PULIZIA ORFANI --- 
+            // Eliminiamo ogni scommessa reale che non ha ID Betfair (residui manuali o vecchi errori)
+            // teniamo solo quelle create negli ultimi 2 minuti (che potrebbero essere in fase di piazzamento)
+            $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND created_at < datetime('now', '-2 minutes')");
             // 1. Recupera ordini da Betfair (Settled e Current)
             $clearedRes = $this->bf->getClearedOrders();
             $clearedOrders = $clearedRes['clearedOrders'] ?? [];
@@ -1466,6 +1470,31 @@ class GiaNikController
                         'market' => $cat['marketName'] ?? 'Unknown',
                         'runners' => $runners
                     ];
+                }
+            }
+
+
+            // --- PEZZO 2.1: Fallback Estremo tramite Account Statement ---
+            $unknownMarketIds = [];
+            foreach ($allBfOrders as $betId => $o) {
+                if (!isset($marketInfoMap[$o['marketId']]))
+                    $unknownMarketIds[] = $o['marketId'];
+            }
+            if (!empty($unknownMarketIds)) {
+                $statement = $this->bf->getAccountStatement();
+                foreach ($statement['accountStatement'] ?? [] as $item) {
+                    $mId = $item['itemClassData']['marketId'] ?? ($item['itemClassData']['refId'] ?? null);
+                    if ($mId && in_array($mId, $unknownMarketIds)) {
+                        $fullDesc = $item['itemClassData']['marketName'] ?? ($item['itemClassData']['fullMarketName'] ?? '');
+                        if (empty($fullDesc))
+                            continue;
+                        $parts = preg_split('/[\/|]/', $fullDesc);
+                        $marketInfoMap[$mId] = [
+                            'event' => trim($parts[0] ?? 'Settled Order'),
+                            'market' => trim($parts[1] ?? ($parts[0] ?? 'Betfair Hist')),
+                            'runners' => []
+                        ];
+                    }
                 }
             }
 
