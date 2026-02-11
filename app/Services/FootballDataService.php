@@ -611,7 +611,7 @@ class FootballDataService
         if (empty($n1) || empty($n2))
             return false;
 
-        // 1. Exact match or substring
+        // 1. Exact match or substring (CRITICAL: check this after word-based if needed, but here is fine)
         if ($n1 === $n2 || strpos($n1, $n2) !== false || strpos($n2, $n1) !== false) {
             return true;
         }
@@ -619,6 +619,9 @@ class FootballDataService
         // 2. Word-based matching (e.g., "Gimnasia Jujuy" vs "Gimnasia y Esgrima de Jujuy")
         $w1 = explode(' ', $n1);
         $w2 = explode(' ', $n2);
+
+        // If they are only 1 word each, we already checked exact match/substring above.
+        // If at least one has 2+ words, try subset matching.
         if (count($w1) >= 2 || count($w2) >= 2) {
             $shorter = (count($w1) < count($w2)) ? $w1 : $w2;
             $longer = (count($w1) < count($w2)) ? $w2 : $w1;
@@ -628,8 +631,9 @@ class FootballDataService
                 if (in_array($w, $longer))
                     $matchCount++;
             }
-            // If all words of shorter exist in longer (min 2 words)
-            if ($matchCount >= count($shorter) && count($shorter) >= 2) {
+
+            // If all words of shorter exist in longer
+            if ($matchCount >= count($shorter) && count($shorter) >= 1) {
                 return true;
             }
 

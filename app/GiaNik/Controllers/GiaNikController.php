@@ -256,9 +256,11 @@ class GiaNikController
                         }
 
                         $m['score'] = "$scoreHome-$scoreAway";
-                        // Use start time if match hasn't started (NS)
-                        if ($statusShort === 'NS') {
-                            // Keep the previously calculated status_label which has the time
+
+                        // If match is NOT started (NS, TBD) or it's just 'LIVE' with 0 elapsed (scheduled to start), 
+                        // keep the Betfair start time instead of the status tag.
+                        if (in_array($statusShort, ['NS', 'TBD'])) {
+                            // Keep the time label we already have
                         } else {
                             $m['status_label'] = $statusShort . ($elapsed ? " $elapsed'" : "");
                         }
