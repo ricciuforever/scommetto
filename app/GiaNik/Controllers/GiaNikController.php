@@ -188,7 +188,8 @@ class GiaNikController
                     'home_name' => null,
                     'away_name' => null,
                     'country' => $mc['event']['countryCode'] ?? null,
-                    'flag' => null
+                    'flag' => null,
+                    'is_in_play' => $mb['marketDefinition']['inPlay'] ?? false
                 ];
 
                 // --- Enrichment ---
@@ -324,6 +325,8 @@ class GiaNikController
                     $m['current_pl'] = 0;
                     $m['just_updated'] = false;
 
+                    $m['has_active_virtual_bet'] = false;
+
                     // Calculate P&L for real bets
                     foreach ($activeRealBets as $bet) {
                         if ($bet['market_id'] === $m['marketId']) {
@@ -343,6 +346,13 @@ class GiaNikController
                         }
                     }
 
+                    // Check for virtual bets
+                    $stmtV = $this->db->prepare("SELECT id FROM bets WHERE market_id = ? AND type = 'virtual' AND status = 'pending'");
+                    $stmtV->execute([$m['marketId']]);
+                    if ($stmtV->fetch()) {
+                        $m['has_active_virtual_bet'] = true;
+                    }
+
                     // Detect Score Changes
                     $scoreKey = $m['event_id'];
                     $currentScore = $m['score'] ?? '0-0';
@@ -356,7 +366,7 @@ class GiaNikController
             }
             $_SESSION['gianik_scores'] = $newScores;
 
-            // Sort logic: 1. Real Bets, 2. Just Updated (15s), 3. Matched Vol
+            // Sort logic: 1. Real Bets, 2. Virtual Bets, 3. Live (In Play), 4. Just Updated (15s), 5. Matched Vol
             usort($allMatches, function ($a, $b) {
                 // Priority 1: Active Real Bets
                 if ($a['has_active_real_bet'] && !$b['has_active_real_bet'])
@@ -364,7 +374,19 @@ class GiaNikController
                 if (!$a['has_active_real_bet'] && $b['has_active_real_bet'])
                     return 1;
 
-                // Priority 2: Just Updated (within 15s)
+                // Priority 2: Active Virtual Bets
+                if (($a['has_active_virtual_bet'] ?? false) && !($b['has_active_virtual_bet'] ?? false))
+                    return -1;
+                if (!($a['has_active_virtual_bet'] ?? false) && ($b['has_active_virtual_bet'] ?? false))
+                    return 1;
+
+                // Priority 3: Is Live (In Play)
+                if ($a['is_in_play'] && !$b['is_in_play'])
+                    return -1;
+                if (!$a['is_in_play'] && $b['is_in_play'])
+                    return 1;
+
+                // Priority 4: Just Updated (within 15s)
                 $now = time();
                 $aRecent = ($a['just_updated'] && ($now - $a['just_updated'] <= 15));
                 $bRecent = ($b['just_updated'] && ($now - $b['just_updated'] <= 15));
@@ -373,7 +395,7 @@ class GiaNikController
                 if (!$aRecent && $bRecent)
                     return 1;
 
-                // Priority 3: Matched Volume
+                // Priority 5: Matched Volume
                 return ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0);
             });
 
@@ -1043,7 +1065,7 @@ class GiaNikController
                 $sql .= " WHERE " . implode(" AND ", $where);
             }
 
-            $sql .= " GROUP BY event_name, market_name, runner_name, type, created_at";
+            $sql .= " GROUP BY market_id, selection_id, odds, stake, type, status";
             $sql .= " ORDER BY created_at DESC LIMIT 20";
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
@@ -1500,10 +1522,14 @@ class GiaNikController
 
             // 3. MIRRORING: Aggiorna o Inserisci ogni ordine di Betfair nel DB
             foreach ($allBfOrders as $betId => $o) {
-                // Priorità nomi: 1. Betfair Catalogue, 2. Cleared ItemDescription, 3. EventNameMap
+                // Priorità nomi: 
+                // 1. Betfair Catalogue (se non è Unknown)
+                // 2. Account Statement (se avevamo Unknown)
+                // 3. Cleared ItemDescription
+                // 4. EventNameMap
                 $info = $marketInfoMap[$o['marketId']] ?? null;
-                $eventName = $info['event'] ?? ($eventNameMap[$o['eventId'] ?? ''] ?? 'Unknown Event');
-                $marketName = $info['market'] ?? ($o['marketName'] ?? 'Unknown Market');
+                $eventName = ($info['event'] ?? 'Unknown' !== 'Unknown') ? $info['event'] : ($eventNameMap[$o['eventId'] ?? ''] ?? 'Unknown Event');
+                $marketName = ($info['market'] ?? 'Unknown Market' !== 'Unknown Market') ? $info['market'] : ($o['marketName'] ?? 'Unknown Market');
                 $runnerName = $info['runners'][$o['selectionId']] ?? ($o['runnerName'] ?? 'Selection ' . $o['selectionId']);
 
                 // Vediamo se esiste già

@@ -48,26 +48,26 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
         </div>
 
         <?php if ($operationalMode !== 'real'): ?>
-        <div class="h-8 w-px bg-white/10 mx-2"></div>
+            <div class="h-8 w-px bg-white/10 mx-2"></div>
 
-        <!-- Virtual GiaNik Account -->
-        <div class="flex items-center gap-4">
-            <div>
-                <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual Disponibile</span>
-                <div class="text-lg font-black tabular-nums text-white leading-none">
-                    €<?php echo number_format($virtualAccount['available'], 2); ?></div>
+            <!-- Virtual GiaNik Account -->
+            <div class="flex items-center gap-4">
+                <div>
+                    <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual Disponibile</span>
+                    <div class="text-lg font-black tabular-nums text-white leading-none">
+                        €<?php echo number_format($virtualAccount['available'], 2); ?></div>
+                </div>
+                <div>
+                    <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual In Gioco</span>
+                    <div class="text-lg font-black tabular-nums text-accent leading-none">
+                        €<?php echo number_format($virtualAccount['exposure'], 2); ?></div>
+                </div>
+                <div>
+                    <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual Totale</span>
+                    <div class="text-lg font-black tabular-nums text-slate-400 leading-none">
+                        €<?php echo number_format($virtualAccount['total'], 2); ?></div>
+                </div>
             </div>
-            <div>
-                <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual In Gioco</span>
-                <div class="text-lg font-black tabular-nums text-accent leading-none">
-                    €<?php echo number_format($virtualAccount['exposure'], 2); ?></div>
-            </div>
-            <div>
-                <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual Totale</span>
-                <div class="text-lg font-black tabular-nums text-slate-400 leading-none">
-                    €<?php echo number_format($virtualAccount['total'], 2); ?></div>
-            </div>
-        </div>
         <?php endif; ?>
     </div>
 </div>
@@ -89,21 +89,30 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
             $awayId = $m['away_id'];
             $isJustUpdated = ($m['just_updated'] && (time() - $m['just_updated'] <= 15));
             ?>
-            <div
-                id="match-card-<?php echo str_replace('.', '-', $marketId); ?>"
+            <div id="match-card-<?php echo str_replace('.', '-', $marketId); ?>"
                 class="glass p-4 rounded-[32px] border <?php echo $isJustUpdated ? 'border-accent shadow-[0_0_20px_rgba(var(--accent-rgb),0.3)] animate-pulse' : 'border-white/5'; ?> hover:border-accent/20 transition-all group flex flex-col gap-4 relative">
 
                 <?php if ($m['has_active_real_bet']): ?>
                     <div class="absolute -top-2 -right-2 z-10 flex items-center gap-2">
-                        <div class="bg-accent px-3 py-1 rounded-full shadow-lg border border-white/20 flex items-center gap-1.5 animate-bounce-slow">
+                        <div
+                            class="bg-accent px-3 py-1 rounded-full shadow-lg border border-white/20 flex items-center gap-1.5 animate-bounce-slow">
                             <i data-lucide="zap" class="w-3 h-3 text-white"></i>
                             <span class="text-[9px] font-black uppercase text-white tracking-widest">Active Bet</span>
                         </div>
-                        <?php if (isset($m['current_pl'])): ?>
-                            <div class="px-3 py-1 rounded-full shadow-lg border border-white/20 font-black text-[10px] <?php echo $m['current_pl'] >= 0 ? 'bg-success text-white' : 'bg-danger text-white'; ?>">
+                        <?php if (isset($m['current_pl']) && $m['current_pl'] != 0): ?>
+                            <div
+                                class="px-3 py-1 rounded-full shadow-lg border border-white/20 font-black text-[10px] <?php echo $m['current_pl'] >= 0 ? 'bg-success text-white' : 'bg-danger text-white'; ?>">
                                 <?php echo ($m['current_pl'] > 0 ? '+' : '') . number_format($m['current_pl'], 2); ?>€
                             </div>
                         <?php endif; ?>
+                    </div>
+                <?php elseif ($m['has_active_virtual_bet'] ?? false): ?>
+                    <div class="absolute -top-2 -right-2 z-10 flex items-center gap-2">
+                        <div
+                            class="bg-indigo-600 px-3 py-1 rounded-full shadow-lg border border-white/20 flex items-center gap-1.5 opacity-90 backdrop-blur-md">
+                            <i data-lucide="ghost" class="w-3 h-3 text-white"></i>
+                            <span class="text-[9px] font-black uppercase text-white tracking-widest">Virtual Bet</span>
+                        </div>
                     </div>
                 <?php endif; ?>
 
@@ -230,7 +239,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
     if (window.lucide) lucide.createIcons();
 
     // Event Highlighting & Sound
-    (function() {
+    (function () {
         const justUpdated = <?php echo json_encode(array_values(array_filter(array_map(fn($m) => $m['just_updated'] ? $m['marketId'] : null, $allMatches)))); ?>;
         if (justUpdated.length > 0) {
             const sound = document.getElementById('gianik-event-sound');
