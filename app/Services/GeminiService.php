@@ -36,80 +36,71 @@ class GeminiService
 
         if ($isUpcoming) {
             $prompt = "Sei un ANALISTA ELITE di Betfair. Il tuo compito è analizzare gli eventi FUTURI forniti e suggerire i migliori pronostici (max 10).\n\n" .
-                "LISTA EVENTI CANDIDATI:\n" . json_encode($candidates) . "\n\n" .
+                "DATA INPUT:\n" . json_encode($candidates) . "\n\n" .
                 "REGOLE:\n" .
                 "1. Analizza sport, competizione e volumi.\n" .
-                "2. Suggerisci fino a 10 pronostici interessanti.\n" .
-                "3. Per ogni pronostico specifica l'advice, la motivazione tecnica (motivation) e il sentiment globale del mercato.\n\n" .
-                "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
-                "```json\n" .
-                "[\n" .
-                "  {\n" .
-                "    \"marketId\": \"1.XXXXX\",\n" .
-                "    \"event\": \"Team A v Team B\",\n" .
-                "    \"sport\": \"Soccer\",\n" .
-                "    \"competition\": \"Premier League\",\n" .
-                "    \"advice\": \"Runner Name\",\n" .
-                "    \"odds\": 1.80,\n" .
-                "    \"confidence\": 85,\n" .
-                "    \"totalMatched\": 5000,\n" .
-                "    \"sentiment\": \"Bullish/Bearish/Neutral\",\n" .
-                "    \"motivation\": \"Spiegazione tecnica del perché questo pronostico è di valore.\"\n" .
-                "  }\n" .
-                "]\n" .
-                "```";
-        } elseif ($isGiaNik) {
-            $prompt = "Sei un ANALISTA ELITE e TRADER di Betfair GiaNik. Il tuo compito è analizzare un EVENTO LIVE e decidere l'operazione migliore con precisione chirurgica.\n\n" .
-                $balanceText .
-                "DATI EVENTO, MERCATI E STATISTICHE LIVE:\n" . json_encode($candidates[0]) . "\n\n" .
-                "CRITERI DI ANALISI (Dati API-Football):\n" .
-                "- live_score & elapsed_minutes: Fondamentali per il contesto temporale.\n" .
-                "- statistics: Analizza Shots on Goal, Possession, Corners e Goalkeeper Saves per determinare il dominio del match.\n" .
-                "- events: Monitora Goals, Cards (soprattutto Red Cards) e Substitutions per capire cambi di momentum.\n" .
-                "- active_bets: Se presenti, valuta se la situazione è peggiorata rispetto all'ingresso e suggerisci un Cash-out (azione: cashout, side: LAY) per limitare perdite o proteggere profitti.\n\n" .
-                "REGOLE FERREE:\n" .
-                "1. QUOTA MINIMA 1.25: Se vuoi puntare ma la quota attuale è < 1.25, DEVI impostare 'odds': 1.25 nel JSON (ordine unmatched). MAI suggerire quote inferiori a 1.25.\n" .
-                "2. RISPOSTA SOLO JSON: Non aggiungere commenti, introduzioni o saluti. Restituisci SOLO il blocco JSON.\n" .
-                "3. MOTIVAZIONE TECNICA: Il campo 'motivation' deve essere un riassunto tecnico fulmineo (max 2 righe) che colleghi le stats live alla scelta operativa.\n" .
-                "4. MULTI-ENTRY: Massimo 4 scommesse totali per match (limite: 2 nel 1° tempo, 2 nel 2° tempo).\n" .
-                "5. SOGLIA OPERATIVA: Suggerisci un'azione (bet/cashout) solo se la tua 'confidence' è >= 80%. Altrimenti action: 'nothing'.\n\n" .
-                "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
-                "```json\n" .
+                "2. Suggerisci fino a 10 pronostici di valore.\n" .
+                "3. Restituisci SOLO un array JSON di oggetti.\n\n" .
+                "SCHEMA OGGETTO:\n" .
                 "{\n" .
-                "  \"action\": \"bet | cashout | nothing\",\n" .
                 "  \"marketId\": \"1.XXXXX\",\n" .
+                "  \"event\": \"Team A v Team B\",\n" .
+                "  \"sport\": \"Soccer\",\n" .
+                "  \"competition\": \"Premier League\",\n" .
                 "  \"advice\": \"Runner Name\",\n" .
-                "  \"side\": \"BACK | LAY\",\n" .
+                "  \"odds\": 1.80,\n" .
+                "  \"confidence\": 85,\n" .
+                "  \"sentiment\": \"Bullish/Bearish/Neutral\",\n" .
+                "  \"motivation\": \"Max 20 parole.\"\n" .
+                "}";
+        } elseif ($isGiaNik) {
+            $dataContext = json_encode([
+                'market_data' => $candidates[0],
+                'stats_football' => $candidates[0]['api_football'] ?? null,
+                'stats_basketball' => $candidates[0]['api_basketball'] ?? null,
+                'portfolio' => [
+                    'total' => $options['current_portfolio'] ?? 0,
+                    'available' => $options['available_balance'] ?? 0
+                ]
+            ]);
+
+            $prompt = "Sei un TRADER ALGORITMICO ELITE. Analizza i dati JSON forniti ed emetti un ordine di trading immediato.\n\n" .
+                "INPUT DATA:\n" . $dataContext . "\n\n" .
+                "OBIETTIVO: Identificare valore/rischio basandosi su statistiche live (tiri, possesso, momentum) e volumi.\n\n" .
+                "REGOLE DI OUTPUT (FERREE):\n" .
+                "1. Restituisci SOLO un oggetto JSON valido (niente testo prima/dopo).\n" .
+                "2. 'motivation': Max 15-20 parole. Stile telegrafico.\n" .
+                "3. 'odds': Minimo 1.25. Se mercato < 1.25 e vuoi puntare, usa 1.25 (ordine unmatched).\n" .
+                "4. 'action': 'bet' per puntare, 'cashout' per coprire (side LAY), 'nothing' se incerto.\n" .
+                "5. 'stake': Max 5% disponibile. Sii conservativo.\n\n" .
+                "SCHEMA JSON:\n" .
+                "{\n" .
+                "  \"action\": \"bet|cashout|nothing\",\n" .
+                "  \"marketId\": \"1.xxxx\",\n" .
+                "  \"advice\": \"Runner Name\",\n" .
+                "  \"side\": \"BACK|LAY\",\n" .
                 "  \"odds\": 1.25,\n" .
-                "  \"stake\": 2.0,\n" .
+                "  \"stake\": 2.00,\n" .
                 "  \"confidence\": 95,\n" .
-                "  \"motivation\": \"Sintesi tecnica dell'operazione.\"\n" .
-                "}\n" .
-                "```";
+                "  \"motivation\": \"Sintesi tecnica.\"\n" .
+                "}";
         } else {
-            $prompt = "Sei un TRADER ELITE di Betfair. Il tuo compito è analizzare il mercato live multi-sport e scovare la scommessa migliore tra quelle fornite.\n\n" .
-                $balanceText .
-                "LISTA EVENTI LIVE CANDIDATI:\n" . json_encode($candidates) . "\n\n" .
-                "REGOLE RIGIDE:\n" .
-                "1. Analizza i volumi (totalMatched) e le quote Back/Lay.\n" .
-                "2. SCEGLI SOLO 1 EVENTO dalla lista che ritieni più profittevole.\n" .
-                "3. Se nessun evento è convincente (risk/reward scarso), non scegliere nulla.\n" .
-                "4. NON INVENTARE QUOTE: usa solo quelle presenti nel JSON per il runner scelto.\n" .
-                "5. Stake: 1-5% del portfolio.\n" .
-                "6. QUOTA MINIMA: 1.25 è la quota minima di ingresso. Se la quota attuale è superiore, usala. Se è inferiore ma l'evento è eccezionale, scrivi '1.25' nel campo 'odds' per piazzare un ordine limite.\n" .
-                "7. Se per uno sport non hai dati statistici (ma solo quote), sii più prudente e cerca solo 'Value Bets' evidenti.\n\n" .
-                "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
-                "```json\n" .
+            $prompt = "Sei un TRADER ELITE di Betfair. Analizza il mercato live e scova la scommessa migliore.\n\n" .
+                "INPUT DATA:\n" . json_encode($candidates) . "\n\n" .
+                "REGOLE:\n" .
+                "1. Restituisci SOLO un oggetto JSON.\n" .
+                "2. 'motivation': Max 20 parole.\n" .
+                "3. 'odds': Minimo 1.25.\n" .
+                "4. 'stake': 1-5% portfolio.\n\n" .
+                "SCHEMA JSON:\n" .
                 "{\n" .
                 "  \"marketId\": \"1.XXXXX\",\n" .
                 "  \"advice\": \"Runner Name\",\n" .
                 "  \"odds\": 1.80,\n" .
                 "  \"stake\": 2.0,\n" .
                 "  \"confidence\": 90,\n" .
-                "  \"sentiment\": \"Testo breve sul sentiment del mercato\",\n" .
-                "  \"motivation\": \"Spiegazione tecnica dettagliata (perché questo evento e questo runner?)\"\n" .
-                "}\n" .
-                "```";
+                "  \"motivation\": \"Analisi rapida.\"\n" .
+                "}";
         }
 
         $data = [
@@ -121,8 +112,9 @@ class GeminiService
                 ]
             ],
             "generationConfig" => [
-                "temperature" => 0.1, // Più basso per maggiore precisione
-                "maxOutputTokens" => 1200
+                "temperature" => 0.1,
+                "maxOutputTokens" => 400,
+                "responseMimeType" => "application/json"
             ]
         ];
 
