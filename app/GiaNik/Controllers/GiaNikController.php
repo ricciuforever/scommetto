@@ -1412,11 +1412,10 @@ class GiaNikController
     public function syncWithBetfair()
     {
         try {
-            // --- SUPER PULIZIA ORFANI --- 
-            // Eliminiamo ogni scommessa reale che non ha ID Betfair (residui manuali o vecchi errori)
-            // teniamo solo quelle create negli ultimi 2 minuti (che potrebbero essere in fase di piazzamento)
+            // 1. Pulizia orfani immediati (record reali creati ma non ancora associati a un ID Betfair, scaduti)
             $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND created_at < datetime('now', '-2 minutes')");
-            // 1. Recupera ordini da Betfair (Settled e Current)
+
+            // 2. Recupera ordini da Betfair (Settled e Current)
             $clearedRes = $this->bf->getClearedOrders();
             $clearedOrders = $clearedRes['clearedOrders'] ?? [];
 
@@ -1427,11 +1426,12 @@ class GiaNikController
             $marketIdsToFetch = [];
             $eventIdsToFetch = [];
 
+            // Elabora scommesse APERTE
             foreach ($currentOrders as $o) {
                 $allBfOrders[$o['betId']] = [
                     'id' => $o['betId'],
                     'marketId' => $o['marketId'],
-                    'eventId' => null, // listCurrentOrders non dà eventId direttamente
+                    'eventId' => null,
                     'selectionId' => $o['selectionId'],
                     'odds' => $o['priceSize']['price'] ?? 0,
                     'stake' => $o['priceSize']['size'] ?? 0,
@@ -1442,9 +1442,11 @@ class GiaNikController
                     'marketName' => null,
                     'runnerName' => null
                 ];
+                // listCurrentOrders non dà descrizioni, quindi dobbiamo recuperarle dal catalogo
                 $marketIdsToFetch[] = $o['marketId'];
             }
 
+            // Elabora scommesse CHIUSE
             foreach ($clearedOrders as $o) {
                 $itemDesc = $o['itemDescription'] ?? [];
                 $allBfOrders[$o['betId']] = [
@@ -1458,12 +1460,17 @@ class GiaNikController
                     'profit' => (float) ($o['profit'] ?? 0),
                     'side' => $o['side'] ?? 'BACK',
                     'placedDate' => $o['placedDate'] ?? null,
-                    'marketName' => $itemDesc['marketName'] ?? null,
-                    'runnerName' => $itemDesc['runnerName'] ?? null
+                    'marketName' => $itemDesc['marketDesc'] ?? ($itemDesc['marketName'] ?? null),
+                    'runnerName' => $itemDesc['runnerDesc'] ?? ($itemDesc['runnerName'] ?? null),
+                    'eventName' => $itemDesc['eventDesc'] ?? null
                 ];
-                $marketIdsToFetch[] = $o['marketId'];
-                if (isset($o['eventId']))
-                    $eventIdsToFetch[] = $o['eventId'];
+
+                if (isset($o['eventId'])) $eventIdsToFetch[] = $o['eventId'];
+
+                // Se non abbiamo nomi per mercati chiusi, aggiungiamo ai marketId da recuperare come fallback
+                if (empty($allBfOrders[$o['betId']]['marketName'])) {
+                    $marketIdsToFetch[] = $o['marketId'];
+                }
             }
 
             if (empty($allBfOrders)) {
@@ -1472,92 +1479,71 @@ class GiaNikController
                 return;
             }
 
-            // 2. Recupera Info Mercati e Eventi per i nomi
-            $marketInfoMap = [];
+            // 3. Recupera Info Mancanti (Nomi Eventi e Cataloghi Mercati)
             $eventNameMap = [];
+            $marketInfoMap = [];
 
-            // 2a. Fetch Event Names (Molto affidabile anche per match chiusi)
-            $eventIdsToFetch = array_values(array_unique($eventIdsToFetch));
+            // 3a. Recupero Nomi Eventi tramite listEvents
+            $eventIdsToFetch = array_values(array_unique(array_filter($eventIdsToFetch)));
             if (!empty($eventIdsToFetch)) {
-                $evRes = $this->bf->request('listEvents', ['filter' => ['eventIds' => $eventIdsToFetch]]);
-                foreach ($evRes['result'] ?? [] as $ev) {
-                    $eventNameMap[$ev['event']['id']] = $ev['event']['name'];
+                $chunks = array_chunk($eventIdsToFetch, 50);
+                foreach ($chunks as $chunk) {
+                    $evRes = $this->bf->request('listEvents', ['filter' => ['eventIds' => $chunk]]);
+                    foreach ($evRes['result'] ?? [] as $ev) {
+                        $eventNameMap[$ev['event']['id']] = $ev['event']['name'];
+                    }
                 }
             }
 
-            // 2b. Fetch Market Catalogues (Per i mercati che listMarketCatalogue ancora espone)
-            $marketIdsToFetch = array_values(array_unique($marketIdsToFetch));
+            // 3b. Recupero Cataloghi Mercati tramite listMarketCatalogue (Solo se necessari)
+            $marketIdsToFetch = array_values(array_unique(array_filter($marketIdsToFetch)));
             if (!empty($marketIdsToFetch)) {
-                $catRes = $this->bf->request('listMarketCatalogue', [
-                    'filter' => [
-                        'marketIds' => $marketIdsToFetch,
-                        'marketStatus' => ['OPEN', 'CLOSED', 'INACTIVE', 'COMPLETED']
-                    ],
-                    'maxResults' => 1000,
-                    'marketProjection' => ['EVENT', 'MARKET_DESCRIPTION', 'RUNNER_DESCRIPTION']
-                ]);
-                foreach ($catRes['result'] ?? [] as $cat) {
-                    $runners = [];
-                    foreach ($cat['runners'] as $r)
-                        $runners[$r['selectionId']] = $r['runnerName'];
-                    $marketInfoMap[$cat['marketId']] = [
-                        'event' => $cat['event']['name'] ?? 'Unknown',
-                        'market' => $cat['marketName'] ?? 'Unknown',
-                        'runners' => $runners
-                    ];
-                }
-            }
-
-
-            // --- PEZZO 2.1: Fallback Estremo tramite Account Statement ---
-            $unknownMarketIds = [];
-            foreach ($allBfOrders as $betId => $o) {
-                if (!isset($marketInfoMap[$o['marketId']]))
-                    $unknownMarketIds[] = $o['marketId'];
-            }
-            if (!empty($unknownMarketIds)) {
-                $statement = $this->bf->getAccountStatement();
-                foreach ($statement['accountStatement'] ?? [] as $item) {
-                    $mId = $item['itemClassData']['marketId'] ?? ($item['itemClassData']['refId'] ?? null);
-                    if ($mId && in_array($mId, $unknownMarketIds)) {
-                        $fullDesc = $item['itemClassData']['marketName'] ?? ($item['itemClassData']['fullMarketName'] ?? '');
-                        if (empty($fullDesc))
-                            continue;
-                        $parts = preg_split('/[\/|]/', $fullDesc);
-                        $marketInfoMap[$mId] = [
-                            'event' => trim($parts[0] ?? 'Settled Order'),
-                            'market' => trim($parts[1] ?? ($parts[0] ?? 'Betfair Hist')),
-                            'runners' => []
+                $chunks = array_chunk($marketIdsToFetch, 50);
+                foreach ($chunks as $chunk) {
+                    $catRes = $this->bf->request('listMarketCatalogue', [
+                        'filter' => [
+                            'marketIds' => $chunk,
+                            'marketStatus' => ['OPEN', 'CLOSED', 'INACTIVE', 'COMPLETED']
+                        ],
+                        'maxResults' => 1000,
+                        'marketProjection' => ['EVENT', 'MARKET_DESCRIPTION', 'RUNNER_DESCRIPTION']
+                    ]);
+                    foreach ($catRes['result'] ?? [] as $cat) {
+                        $runners = [];
+                        foreach ($cat['runners'] as $r) {
+                            $runners[$r['selectionId']] = $r['runnerName'];
+                        }
+                        $marketInfoMap[$cat['marketId']] = [
+                            'event' => $cat['event']['name'] ?? null,
+                            'market' => $cat['marketName'] ?? null,
+                            'runners' => $runners
                         ];
                     }
                 }
             }
 
-            // 3. MIRRORING: Aggiorna o Inserisci ogni ordine di Betfair nel DB
+            // 4. MIRRORING & UPDATE: Sincronizza lo stato locale con Betfair
             foreach ($allBfOrders as $betId => $o) {
-                // Priorità nomi: 
-                // 1. Betfair Catalogue (se non è Unknown)
-                // 2. Account Statement (se avevamo Unknown)
-                // 3. Cleared ItemDescription
-                // 4. EventNameMap
                 $info = $marketInfoMap[$o['marketId']] ?? null;
-                $eventName = ($info['event'] ?? 'Unknown' !== 'Unknown') ? $info['event'] : ($eventNameMap[$o['eventId'] ?? ''] ?? 'Unknown Event');
-                $marketName = ($info['market'] ?? 'Unknown Market' !== 'Unknown Market') ? $info['market'] : ($o['marketName'] ?? 'Unknown Market');
+
+                // Priorità Nome Evento: 1. Catalogo, 2. ItemDesc (eventDesc), 3. EventMap
+                $eventName = $info['event'] ?? ($o['eventName'] ?? ($eventNameMap[$o['eventId'] ?? ''] ?? 'Unknown Event'));
+                $marketName = $info['market'] ?? ($o['marketName'] ?? 'Unknown Market');
                 $runnerName = $info['runners'][$o['selectionId']] ?? ($o['runnerName'] ?? 'Selection ' . $o['selectionId']);
 
-                // Vediamo se esiste già
+                $placedDate = isset($o['placedDate']) ? date('Y-m-d H:i:s', strtotime($o['placedDate'])) : date('Y-m-d H:i:s');
+
+                // Verifica esistenza nel DB locale
                 $stmt = $this->db->prepare("SELECT id FROM bets WHERE betfair_id = ?");
                 $stmt->execute([$betId]);
                 $dbId = $stmt->fetchColumn();
 
-                $placedDate = isset($o['placedDate']) ? date('Y-m-d H:i:s', strtotime($o['placedDate'])) : date('Y-m-d H:i:s');
-
                 if ($dbId) {
-                    // Update
+                    // Update: aggiorna sempre per avere l'ultimo stato (profitto, status)
                     $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, created_at = ? WHERE id = ?");
                     $stmtUpdate->execute([$o['status'], $o['profit'], $o['marketId'], $marketName, $eventName, $runnerName, $placedDate, $dbId]);
                 } else {
-                    // Import Automatico
+                    // Import Automatico (se non esisteva)
                     $stmtInsert = $this->db->prepare("INSERT INTO bets 
                         (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, status, type, profit, created_at) 
                         VALUES (?, ?, ?, ?, 'Soccer', ?, ?, ?, ?, ?, 'real', ?, ?)");
@@ -1577,21 +1563,22 @@ class GiaNikController
                 }
             }
 
-            // 4. CLEANUP: Rimuovi record reali nel DB che non esistono su Betfair
+            // 5. MIRRORING TOTALE: Rimuovi record locali REAL non presenti su Betfair
             $bfIdsList = array_keys($allBfOrders);
             if (!empty($bfIdsList)) {
                 $placeholders = implode(',', array_fill(0, count($bfIdsList), '?'));
-                // Cancelliamo o segniamo come cancelled quelli non presenti
-                $stmtClean = $this->db->prepare("UPDATE bets SET status = 'cancelled', motivation = 'Sync: Eliminata perché non presente su Betfair' 
-                    WHERE type = 'real' AND status = 'pending' AND betfair_id NOT IN ($placeholders)");
-                $stmtClean->execute($bfIdsList);
+                // Eliminiamo DEFINITIVAMENTE le scommesse reali che non sono più presenti nei feed di Betfair
+                // (saltiamo i record creati negli ultimi 2 minuti per evitare race conditions durante il piazzamento)
+                $sqlDelete = "DELETE FROM bets WHERE type = 'real' AND created_at < datetime('now', '-2 minutes') AND betfair_id NOT IN ($placeholders)";
+                $stmtDelete = $this->db->prepare($sqlDelete);
+                $stmtDelete->execute($bfIdsList);
 
-                // E anche quelli carichi a mano senza Betfair ID che sono ancora pending (visto che abbiamo fatto l'import di tutto, questi sono scarti)
-                $this->db->exec("UPDATE bets SET status = 'cancelled', motivation = 'Sync: Record manuale senza match' WHERE type = 'real' AND status = 'pending' AND betfair_id IS NULL");
+                // Pulizia anche per quelli manuali pendenti senza ID Betfair (se sono più vecchi di 2 minuti)
+                $this->db->exec("DELETE FROM bets WHERE type = 'real' AND status = 'pending' AND betfair_id IS NULL AND created_at < datetime('now', '-2 minutes')");
             }
 
         } catch (\Throwable $e) {
-            file_put_contents(Config::LOGS_PATH . 'gianik_sync_error.log', date('[Y-m-d H:i:s] ') . "Sync Error: " . $e->getMessage() . PHP_EOL, FILE_APPEND);
+            file_put_contents(\App\Config\Config::LOGS_PATH . 'gianik_sync_error.log', date('[Y-m-d H:i:s] ') . "Sync Error: " . $e->getMessage() . PHP_EOL, FILE_APPEND);
         }
     }
 }
