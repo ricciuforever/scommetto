@@ -1,6 +1,12 @@
 <?php
 // sync_betfair_gianik.php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 require_once __DIR__ . '/vendor/autoload.php';
+
+// Se l'autoloader non è configurato per App\, forziamo le inclusioni nell'ordine corretto
 require_once __DIR__ . '/app/Config/Config.php';
 require_once __DIR__ . '/app/GiaNik/GiaNikDatabase.php';
 
@@ -8,7 +14,11 @@ use App\GiaNik\GiaNikDatabase;
 
 header('Content-Type: text/html; charset=utf-8');
 
-$db = GiaNikDatabase::getInstance()->getConnection();
+try {
+    $db = GiaNikDatabase::getInstance()->getConnection();
+} catch (\Throwable $e) {
+    die("Errore connessione database: " . $e->getMessage());
+}
 
 $betsToSync = [
     [
