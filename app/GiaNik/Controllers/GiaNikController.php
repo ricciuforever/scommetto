@@ -667,9 +667,11 @@ class GiaNikController
                 $eventMarketsMap[$eid][] = $mc;
             }
 
-            $stmtPending = $this->db->prepare("SELECT DISTINCT event_name FROM bets WHERE status = 'pending'");
+            $stmtPending = $this->db->prepare("SELECT DISTINCT event_name, market_id FROM bets WHERE status = 'pending'");
             $stmtPending->execute();
-            $pendingEventNames = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
+            $pendingBetsRaw = $stmtPending->fetchAll(PDO::FETCH_ASSOC);
+            $pendingEventNames = array_column($pendingBetsRaw, 'event_name');
+            $pendingMarketIds = array_column($pendingBetsRaw, 'market_id');
 
             // Recuperiamo il conteggio delle scommesse per oggi per ogni match (per limitare ingressi multipli)
             $stmtCount = $this->db->prepare("SELECT event_name, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name");
@@ -756,7 +758,7 @@ class GiaNikController
                                     break;
                                 }
                             }
-                            if (!$selectedMarket)
+                            if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds))
                                 continue;
 
                             $stake = (float) ($analysis['stake'] ?? 2.0);
@@ -1382,36 +1384,47 @@ class GiaNikController
             $currentRes = $this->bf->getCurrentOrders();
             $currentOrders = $currentRes['currentOrders'] ?? [];
 
-            // Uniamo tutti gli ordini per una mappatura completa
             $allBfOrders = [];
             $marketIdsToFetch = [];
+            $eventIdsToFetch = [];
 
             foreach ($currentOrders as $o) {
                 $allBfOrders[$o['betId']] = [
                     'id' => $o['betId'],
                     'marketId' => $o['marketId'],
+                    'eventId' => null, // listCurrentOrders non dà eventId direttamente
                     'selectionId' => $o['selectionId'],
                     'odds' => $o['priceSize']['price'] ?? 0,
                     'stake' => $o['priceSize']['size'] ?? 0,
                     'status' => 'pending',
                     'profit' => 0,
-                    'side' => $o['side'] ?? 'BACK'
+                    'side' => $o['side'] ?? 'BACK',
+                    'placedDate' => $o['placedDate'] ?? null,
+                    'marketName' => null,
+                    'runnerName' => null
                 ];
                 $marketIdsToFetch[] = $o['marketId'];
             }
 
             foreach ($clearedOrders as $o) {
+                $itemDesc = $o['itemDescription'] ?? [];
                 $allBfOrders[$o['betId']] = [
                     'id' => $o['betId'],
                     'marketId' => $o['marketId'],
+                    'eventId' => $o['eventId'] ?? null,
                     'selectionId' => $o['selectionId'],
                     'odds' => $o['priceRequested'] ?? 0,
                     'stake' => $o['sizeSettled'] ?? 0,
                     'status' => ($o['betOutcome'] === 'WIN' || $o['betOutcome'] === 'WON') ? 'won' : (($o['betOutcome'] === 'VOIDED' || $o['betOutcome'] === 'CANCELLED') ? 'cancelled' : 'lost'),
                     'profit' => (float) ($o['profit'] ?? 0),
-                    'side' => $o['side'] ?? 'BACK'
+                    'side' => $o['side'] ?? 'BACK',
+                    'placedDate' => $o['placedDate'] ?? null,
+                    'marketName' => $itemDesc['marketName'] ?? null,
+                    'runnerName' => $itemDesc['runnerName'] ?? null
                 ];
                 $marketIdsToFetch[] = $o['marketId'];
+                if (isset($o['eventId']))
+                    $eventIdsToFetch[] = $o['eventId'];
             }
 
             if (empty($allBfOrders)) {
@@ -1420,11 +1433,22 @@ class GiaNikController
                 return;
             }
 
-            // 2. Recupera Info Mercati per i nomi se non li abbiamo
+            // 2. Recupera Info Mercati e Eventi per i nomi
             $marketInfoMap = [];
+            $eventNameMap = [];
+
+            // 2a. Fetch Event Names (Molto affidabile anche per match chiusi)
+            $eventIdsToFetch = array_values(array_unique($eventIdsToFetch));
+            if (!empty($eventIdsToFetch)) {
+                $evRes = $this->bf->request('listEvents', ['filter' => ['eventIds' => $eventIdsToFetch]]);
+                foreach ($evRes['result'] ?? [] as $ev) {
+                    $eventNameMap[$ev['event']['id']] = $ev['event']['name'];
+                }
+            }
+
+            // 2b. Fetch Market Catalogues (Per i mercati che listMarketCatalogue ancora espone)
             $marketIdsToFetch = array_values(array_unique($marketIdsToFetch));
             if (!empty($marketIdsToFetch)) {
-                // Betfair listMarketCatalogue default is OPEN only. We need CLOSED too for settled bets.
                 $catRes = $this->bf->request('listMarketCatalogue', [
                     'filter' => [
                         'marketIds' => $marketIdsToFetch,
@@ -1445,34 +1469,13 @@ class GiaNikController
                 }
             }
 
-            // --- PEZZO 2.1: Fallback Estremo tramite Account Statement ---
-            $unknownMarketIds = [];
-            foreach ($allBfOrders as $betId => $o) {
-                if (!isset($marketInfoMap[$o['marketId']]))
-                    $unknownMarketIds[] = $o['marketId'];
-            }
-            if (!empty($unknownMarketIds)) {
-                $statement = $this->bf->getAccountStatement();
-                foreach ($statement['accountStatement'] ?? [] as $item) {
-                    $mId = $item['itemClassData']['marketId'] ?? ($item['itemClassData']['refId'] ?? null);
-                    if ($mId && in_array($mId, $unknownMarketIds)) {
-                        $fullDesc = $item['itemClassData']['marketName'] ?? ($item['itemClassData']['fullMarketName'] ?? '');
-                        if (empty($fullDesc))
-                            continue;
-                        $parts = explode(' / ', $fullDesc);
-                        $marketInfoMap[$mId] = [
-                            'event' => $parts[1] ?? ($parts[0] ?? 'Settled Order'),
-                            'market' => $parts[2] ?? ($parts[1] ?? 'Betfair Hist'),
-                            'runners' => []
-                        ];
-                    }
-                }
-            }
-
             // 3. MIRRORING: Aggiorna o Inserisci ogni ordine di Betfair nel DB
             foreach ($allBfOrders as $betId => $o) {
-                $info = $marketInfoMap[$o['marketId']] ?? ['event' => 'Unknown', 'market' => 'Unknown Market', 'runners' => []];
-                $runnerName = $info['runners'][$o['selectionId']] ?? 'Selection ' . $o['selectionId'];
+                // Priorità nomi: 1. Betfair Catalogue, 2. Cleared ItemDescription, 3. EventNameMap
+                $info = $marketInfoMap[$o['marketId']] ?? null;
+                $eventName = $info['event'] ?? ($eventNameMap[$o['eventId'] ?? ''] ?? 'Unknown Event');
+                $marketName = $info['market'] ?? ($o['marketName'] ?? 'Unknown Market');
+                $runnerName = $info['runners'][$o['selectionId']] ?? ($o['runnerName'] ?? 'Selection ' . $o['selectionId']);
 
                 // Vediamo se esiste già
                 $stmt = $this->db->prepare("SELECT id FROM bets WHERE betfair_id = ?");
@@ -1484,7 +1487,7 @@ class GiaNikController
                 if ($dbId) {
                     // Update
                     $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, created_at = ? WHERE id = ?");
-                    $stmtUpdate->execute([$o['status'], $o['profit'], $o['marketId'], $info['market'], $info['event'], $runnerName, $placedDate, $dbId]);
+                    $stmtUpdate->execute([$o['status'], $o['profit'], $o['marketId'], $marketName, $eventName, $runnerName, $placedDate, $dbId]);
                 } else {
                     // Import Automatico
                     $stmtInsert = $this->db->prepare("INSERT INTO bets 
@@ -1493,8 +1496,8 @@ class GiaNikController
                     $stmtInsert->execute([
                         $betId,
                         $o['marketId'],
-                        $info['market'],
-                        $info['event'],
+                        $marketName,
+                        $eventName,
                         $o['selectionId'],
                         $runnerName,
                         $o['odds'],
