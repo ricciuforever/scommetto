@@ -496,11 +496,11 @@ class GiaNikController
 
             $predictionRaw = $gemini->analyze([$event], array_merge($balance, ['is_gianik' => true]));
 
-            $analysis = [];
-            if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
+            $analysis = json_decode($predictionRaw, true);
+            if (!$analysis && preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
                 $analysis = json_decode($matches[1], true);
             }
-            $reasoning = trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
+            $reasoning = $analysis['motivation'] ?? trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
 
             require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
         } catch (\Throwable $e) {
@@ -712,8 +712,12 @@ class GiaNikController
                         'current_portfolio' => $vBalance['total']
                     ]);
 
-                    if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
+                    $analysis = json_decode($predictionRaw, true);
+                    if (!$analysis && preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
                         $analysis = json_decode($matches[1], true);
+                    }
+
+                    if ($analysis) {
                         if ($analysis && ($analysis['action'] ?? '') !== 'nothing' && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
 
                             // Controllo limite 4 scommesse per match (Calcio) - solo per nuovi ingressi (bet)
@@ -765,7 +769,7 @@ class GiaNikController
                                     }
                                 }
 
-                                $motivation = $analysis['motivation'] ?? trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
+                                $motivation = $analysis['motivation'] ?? '';
                                 $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, side) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                                 $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation, $side]);
                                 $results['new_bets']++;
