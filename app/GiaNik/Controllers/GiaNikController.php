@@ -95,14 +95,17 @@ class GiaNikController
             // --- Pre-fetch Enrichment Data ---
             $today = date('Y-m-d');
             $tomorrow = date('Y-m-d', strtotime('+1 day'));
-            $apiLiveRes = $this->footballData->getLiveMatches();
+            // Fetch Live with short cache (15s) for high reactivity in GiaNik
+            $apiLiveRes = $this->footballData->getLiveMatches([], 15);
             $apiTodayRes = $this->footballData->getFixturesByDate($today);
             $apiTomorrowRes = $this->footballData->getFixturesByDate($tomorrow);
 
+            // Merge order: Today/Tomorrow first, then Live.
+            // This ensures Live data (most fresh) overwrites any stale Today/Tomorrow cached records in the map.
             $allApiFixtures = array_merge(
-                $apiLiveRes['response'] ?? [],
                 $apiTodayRes['response'] ?? [],
-                $apiTomorrowRes['response'] ?? []
+                $apiTomorrowRes['response'] ?? [],
+                $apiLiveRes['response'] ?? []
             );
             // Deduplicate by fixture ID
             $apiLiveMatchesMap = [];
@@ -254,6 +257,8 @@ class GiaNikController
 
                         $m['score'] = "$scoreHome-$scoreAway";
                         $m['status_label'] = $statusShort . ($elapsed ? " $elapsed'" : "");
+                        $m['elapsed'] = $elapsed;
+                        $m['status_short'] = $statusShort;
                         $m['has_api_data'] = true;
                         $m['home_logo'] = $match['teams']['home']['logo'] ?? null;
                         $m['away_logo'] = $match['teams']['away']['logo'] ?? null;
@@ -411,11 +416,8 @@ class GiaNikController
                 if (!$a['is_in_play'] && $b['is_in_play']) return 1;
                 if ($a['is_in_play'] && $b['is_in_play']) {
                     // Among live matches, sort by elapsed time descending (ending soonest first)
-                    $aElapsed = 0;
-                    if (preg_match('/(\d+)\'/', $a['status_label'], $m)) $aElapsed = (int)$m[1];
-                    $bElapsed = 0;
-                    if (preg_match('/(\d+)\'/', $b['status_label'], $m)) $bElapsed = (int)$m[1];
-
+                    $aElapsed = $a['elapsed'] ?? 0;
+                    $bElapsed = $b['elapsed'] ?? 0;
                     if ($aElapsed !== $bElapsed) return $bElapsed <=> $aElapsed;
                 }
 

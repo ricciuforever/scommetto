@@ -515,7 +515,14 @@ class FootballDataService
             ' b',
             'lisbon',
             'lisboa',
-            'utd'
+            'utd',
+            'unam',
+            'u.n.a.m.',
+            'universidad',
+            'univ',
+            'catolica',
+            'nacional',
+            'municipal'
         ];
 
         $tempName = $name;
