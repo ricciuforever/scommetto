@@ -41,7 +41,7 @@ $displayMax = $maxMinutes > 90 ? $maxMinutes + 5 : 95;
         </div>
 
         <div
-            class="relative w-full h-24 bg-white/[0.02] rounded-[32px] border border-white/5 overflow-hidden backdrop-blur-sm group/timeline">
+            class="relative w-full h-24 bg-white/[0.02] rounded-[32px] border border-white/5 backdrop-blur-sm group/timeline z-10">
             <!-- Halftime divider -->
             <div class="absolute left-1/2 top-0 bottom-0 w-px bg-white/10 z-10"></div>
             <!-- Center horizontal line (The actual timeline bar) -->
@@ -56,7 +56,8 @@ $displayMax = $maxMinutes > 90 ? $maxMinutes + 5 : 95;
                 class="absolute left-1/2 top-2 -translate-x-1/2 text-[7px] font-black text-slate-700 tracking-[0.3em] uppercase">
                 HT</div>
             <div class="absolute right-4 top-1/2 -translate-y-1/2 -mr-8 text-[8px] font-black text-slate-700">
-                <?php echo $displayMax; ?>'</div>
+                <?php echo $displayMax; ?>'
+            </div>
 
             <!-- Event Icons -->
             <?php foreach ($timelineEvents as $e):
@@ -91,7 +92,7 @@ $displayMax = $maxMinutes > 90 ? $maxMinutes + 5 : 95;
 
                 $dotColor = $isHome ? 'bg-accent' : 'bg-indigo-400';
                 ?>
-                    <div class="absolute flex flex-col items-center group/event z-20 transition-all hover:z-30"
+                <div class="absolute flex flex-col items-center group/event z-20 transition-all hover:z-30"
                     style="left: <?php echo $pos; ?>%; <?php echo $isHome ? 'bottom: 50%' : 'top: 50%'; ?>; transform: translateX(-50%);">
 
                     <!-- Hover Popup -->
@@ -100,7 +101,8 @@ $displayMax = $maxMinutes > 90 ? $maxMinutes + 5 : 95;
                         <div
                             class="bg-slate-900/95 border border-white/10 p-2.5 rounded-[20px] shadow-2xl backdrop-blur-xl flex items-center gap-3 whitespace-nowrap">
                             <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-lg">
-                             <?php echo $icon; ?></div>
+                                <?php echo $icon; ?>
+                            </div>
                             <div class="flex flex-col">
                                 <span
                                     class="text-[10px] font-black text-white uppercase leading-none mb-1"><?php echo htmlspecialchars($e['player']['name']); ?></span>
