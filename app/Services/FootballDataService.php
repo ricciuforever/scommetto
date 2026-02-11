@@ -336,8 +336,15 @@ class FootballDataService
 
         $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $name);
         if (count($bfTeams) < 2) {
-            // Fallback: try splitting by ' / ' if standard separators fail
-            $bfTeams = preg_split('/\s+\/\s+/', $name);
+            // Fallback: try splitting by '/' with optional spaces (Team1/Team2 or Team1 / Team2)
+            $bfTeams = preg_split('/\s*\/\s*/', $name);
+        }
+
+        if (count($bfTeams) < 2) {
+            // Last resort: split by ' - ' if it's there and not a score
+            if (strpos($name, ' - ') !== false) {
+                $bfTeams = explode(' - ', $name);
+            }
         }
 
         if (count($bfTeams) < 2)
@@ -623,6 +630,11 @@ class FootballDataService
             }
             // If all words of shorter exist in longer (min 2 words)
             if ($matchCount >= count($shorter) && count($shorter) >= 2) {
+                return true;
+            }
+
+            // If at least 2 words match and they are at least 50% of the longer name
+            if ($matchCount >= 2 && $matchCount >= (count($longer) * 0.5)) {
                 return true;
             }
         }

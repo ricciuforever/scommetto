@@ -256,7 +256,12 @@ class GiaNikController
                         }
 
                         $m['score'] = "$scoreHome-$scoreAway";
-                        $m['status_label'] = $statusShort . ($elapsed ? " $elapsed'" : "");
+                        // Use start time if match hasn't started (NS)
+                        if ($statusShort === 'NS') {
+                            // Keep the previously calculated status_label which has the time
+                        } else {
+                            $m['status_label'] = $statusShort . ($elapsed ? " $elapsed'" : "");
+                        }
                         $m['elapsed'] = $elapsed;
                         $m['status_short'] = $statusShort;
                         $m['has_api_data'] = true;
