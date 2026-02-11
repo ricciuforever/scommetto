@@ -35,7 +35,7 @@ require __DIR__ . '/../../Views/layout/top.php';
                 <span class="text-[10px] font-black uppercase text-slate-500">Auto-Refresh</span>
                 <span class="text-xs font-bold text-success flex items-center gap-1.5">
                     <span class="w-2 h-2 bg-success rounded-full animate-pulse"></span>
-                    ATTIVO (30s)
+                    ATTIVO (60s)
                 </span>
             </div>
             <button hx-get="/api/gianik/live" hx-target="#gianik-live-container"
@@ -46,7 +46,7 @@ require __DIR__ . '/../../Views/layout/top.php';
     </div>
 
     <!-- Container per il caricamento asincrono -->
-    <div id="gianik-live-container" hx-get="/api/gianik/live" hx-trigger="load, every 30s" class="min-h-[400px]">
+    <div id="gianik-live-container" hx-get="/api/gianik/live" hx-trigger="load, every 60s" class="min-h-[400px]">
         <div class="flex items-center justify-center p-20">
             <div class="flex flex-col items-center gap-4">
                 <i data-lucide="loader-2" class="w-12 h-12 text-accent animate-spin"></i>
@@ -60,7 +60,7 @@ require __DIR__ . '/../../Views/layout/top.php';
 
 <!-- GiaNik Bets Sidebar -->
 <aside class="fixed top-[73px] right-0 bottom-0 w-72 border-l border-white/10 glass z-30 flex flex-col">
-    <div id="recent-bets-container" hx-get="/api/gianik/recent-bets" hx-trigger="load, every 30s"
+    <div id="recent-bets-container" hx-get="/api/gianik/recent-bets" hx-trigger="load, every 60s"
         class="flex-1 overflow-hidden">
         <div class="flex items-center justify-center p-20">
             <i data-lucide="loader-2" class="w-6 h-6 text-slate-500 animate-spin"></i>
