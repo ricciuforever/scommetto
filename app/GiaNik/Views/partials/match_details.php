@@ -62,7 +62,7 @@ $displayMax = $maxMinutes > 90 ? $maxMinutes + 5 : 95;
             <?php foreach ($timelineEvents as $e):
                 $min = (int) $e['time']['elapsed'];
                 $extra = (int) ($e['time']['extra'] ?? 0);
-                $displayMin = $min + ($extra ? "+$extra" : "");
+                $displayMin = $min . ($extra ? "+$extra" : "");
                 // Scale min to fits into 4..96% (considering 4px margins)
                 $pos = 4 + (($min / $displayMax) * 92);
 
@@ -91,7 +91,7 @@ $displayMax = $maxMinutes > 90 ? $maxMinutes + 5 : 95;
 
                 $dotColor = $isHome ? 'bg-accent' : 'bg-indigo-400';
                 ?>
-                <div class="absolute flex flex-col items-center group/event z-20 transition-all hover:z-30"
+                    <div class="absolute flex flex-col items-center group/event z-20 transition-all hover:z-30"
                     style="left: <?php echo $pos; ?>%; <?php echo $isHome ? 'bottom: 50%' : 'top: 50%'; ?>; transform: translateX(-50%);">
 
                     <!-- Hover Popup -->
@@ -100,7 +100,7 @@ $displayMax = $maxMinutes > 90 ? $maxMinutes + 5 : 95;
                         <div
                             class="bg-slate-900/95 border border-white/10 p-2.5 rounded-[20px] shadow-2xl backdrop-blur-xl flex items-center gap-3 whitespace-nowrap">
                             <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-lg">
-                                <?php echo $icon; ?></div>
+                             <?php echo $icon; ?></div>
                             <div class="flex flex-col">
                                 <span
                                     class="text-[10px] font-black text-white uppercase leading-none mb-1"><?php echo htmlspecialchars($e['player']['name']); ?></span>
