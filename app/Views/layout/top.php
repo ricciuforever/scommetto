@@ -119,29 +119,11 @@
                         class="text-xs font-black text-white transition-colors uppercase italic tracking-tighter leading-none">Gianik
                         Live</span>
                 </a>
-                <a href="/gemini-bets"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="history"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Giocate
-                        Gemini</span>
-                </a>
-                <a href="/gemini-predictions"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="sparkles"
-                        class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Pronostici
-                        7gg</span>
-                </a>
+
             </nav>
         </div>
 
-        <div class="p-4 border-t border-white/10">
-            <a href="/settings"
-                class="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2">
-                <i data-lucide="settings" class="w-4 h-4"></i> Impostazioni
-            </a>
-        </div>
+
     </aside>
 
     <div class="flex-1 flex flex-col min-h-screen">
