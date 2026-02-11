@@ -101,7 +101,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                         </div>
                         <?php if (isset($m['current_pl'])): ?>
                             <div
-                                class="px-3 py-1 rounded-full shadow-lg border border-white/20 font-black text-[10px] <?php echo $m['current_pl'] >= 0 ? 'bg-success text-white' : 'bg-danger text-white'; ?>">
+                                class="px-3 py-1 rounded-full shadow-lg border border-white/20 font-black text-[10px] <?php echo $m['current_pl'] > 0 ? 'bg-success text-white' : ($m['current_pl'] < 0 ? 'bg-danger text-white' : 'bg-white/10 text-slate-400'); ?>">
                                 <?php echo ($m['current_pl'] > 0 ? '+' : '') . number_format($m['current_pl'], 2); ?>€
                             </div>
                         <?php endif; ?>
@@ -164,7 +164,9 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                                 <?php if ($m['has_api_data']): ?>
                                     <div class="w-1 h-1 rounded-full bg-success shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
                                 <?php endif; ?>
-                                <span class="text-[9px] font-black uppercase text-slate-500 tracking-tighter">
+                                <span class="match-status-label text-[9px] font-black uppercase text-slate-500 tracking-tighter"
+                                      data-elapsed="<?php echo $m['elapsed'] ?? 0; ?>"
+                                      data-status="<?php echo $m['status_short'] ?? ''; ?>">
                                     <?php echo $m['status_label']; ?>
                                 </span>
                             </div>
@@ -237,6 +239,27 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
 
 <script>
     if (window.lucide) lucide.createIcons();
+
+    // Client-side Match Timer Ticker
+    (function() {
+        if (window.gianikTimerInterval) clearInterval(window.gianikTimerInterval);
+
+        window.gianikTimerInterval = setInterval(() => {
+            const labels = document.querySelectorAll('.match-status-label');
+            labels.forEach(label => {
+                const status = label.getAttribute('data-status');
+                let elapsed = parseInt(label.getAttribute('data-elapsed'));
+
+                // Only increment if match is live (1H or 2H) and not stalled
+                const liveStatuses = ['1H', '2H', 'LIVE'];
+                if (liveStatuses.includes(status) && elapsed > 0 && elapsed < 120) {
+                    elapsed++;
+                    label.setAttribute('data-elapsed', elapsed);
+                    label.innerText = `${status} ${elapsed}'`;
+                }
+            });
+        }, 60000); // Tick every 60 seconds
+    })();
 
     // Event Highlighting & Sound
     (function () {
