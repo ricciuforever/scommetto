@@ -53,6 +53,12 @@ $bet = $bet ?? [];
                             <?php echo htmlspecialchars($bet['market_name'] ?? 'Esito Finale'); ?>
                         </div>
                      </div>
+                     <div class="text-right">
+                        <div class="text-[8px] font-black text-slate-500 uppercase tracking-[.2em] mb-1">Tipo</div>
+                        <div class="text-xs font-black uppercase text-white">
+                            <?php echo htmlspecialchars($bet['side'] ?? 'BACK'); ?>
+                        </div>
+                     </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">

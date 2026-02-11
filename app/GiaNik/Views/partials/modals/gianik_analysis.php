@@ -47,67 +47,61 @@ $event = $event ?? [];
                     </div>
                 </div>
 
-                <?php if (!empty($analysis)): ?>
-                    <div class="glass p-5 rounded-3xl border-white/5 flex items-center justify-between">
-                        <div>
-                            <div class="text-[8px] font-black text-slate-500 uppercase tracking-[.2em] mb-1">Mercato
-                                Selezionato</div>
-                            <div class="text-sm font-black italic uppercase text-indigo-400">
+                <?php if (!empty($analysis) && ($analysis['action'] ?? '') !== 'nothing'): ?>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="glass p-4 rounded-2xl border-white/5">
+                            <div class="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Azione</div>
+                            <div class="text-xs font-black uppercase <?php echo ($analysis['action'] === 'cashout') ? 'text-orange-400' : 'text-emerald-400'; ?>">
+                                <?php echo htmlspecialchars($analysis['action'] ?? 'BET'); ?>
+                            </div>
+                        </div>
+                        <div class="glass p-4 rounded-2xl border-white/5 text-center">
+                            <div class="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Tipo</div>
+                            <div class="text-xs font-black uppercase text-indigo-400">
+                                <?php echo htmlspecialchars($analysis['side'] ?? 'BACK'); ?>
+                            </div>
+                        </div>
+                        <div class="glass p-4 rounded-2xl border-white/5 text-center">
+                            <div class="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Quota</div>
+                            <div class="text-xs font-black text-white">
+                                @<?php echo htmlspecialchars($analysis['odds'] ?? '0.00'); ?>
+                            </div>
+                        </div>
+                        <div class="glass p-4 rounded-2xl border-white/5 text-right">
+                            <div class="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Confidenza</div>
+                            <div class="text-xs font-black text-accent">
+                                <?php echo htmlspecialchars($analysis['confidence'] ?? 0); ?>%
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass p-5 rounded-2xl border-white/5">
+                        <div class="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Consiglio & Mercato</div>
+                        <div class="flex items-center justify-between">
+                            <div class="text-sm font-black italic uppercase text-white">
+                                <?php echo htmlspecialchars($analysis['advice'] ?? 'N/A'); ?>
+                            </div>
+                            <div class="text-[9px] font-bold text-slate-400 uppercase">
                                 <?php
                                 $selMarket = null;
                                 $searchId = $analysis['marketId'] ?? ($event['requestedMarketId'] ?? '');
                                 foreach (($event['markets'] ?? []) as $m) {
-                                    if ($m['marketId'] === $searchId) {
-                                        $selMarket = $m;
-                                        break;
-                                    }
+                                    if ($m['marketId'] === $searchId) { $selMarket = $m; break; }
                                 }
-                                echo htmlspecialchars($selMarket['marketName'] ?? 'Analisi Globale');
+                                echo htmlspecialchars($selMarket['marketName'] ?? 'Mercato');
                                 ?>
                             </div>
                         </div>
-                        <div class="text-right">
-                            <div class="text-[8px] font-black text-slate-500 uppercase tracking-[.2em] mb-1">Market ID</div>
-                            <div class="text-[10px] font-mono text-slate-400">
-                                <?php echo htmlspecialchars($analysis['marketId'] ?? 'N/A'); ?></div>
-                        </div>
                     </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="glass p-5 rounded-3xl border-white/5">
-                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Consiglio</div>
-                            <div class="text-lg font-black italic uppercase text-accent">
-                                <?php echo htmlspecialchars($analysis['advice'] ?? 'N/A'); ?>
-                            </div>
-                        </div>
-                        <div class="glass p-5 rounded-3xl border-white/5">
-                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Quota Suggerita
-                            </div>
-                            <div class="text-xl font-black italic uppercase text-white">
-                                @ <?php echo htmlspecialchars($analysis['odds'] ?? '0.00'); ?>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="glass p-6 rounded-3xl border-indigo-500/20 bg-indigo-500/5">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Confidence &
-                                Sentiment</div>
-                            <div class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 text-[10px] font-black italic">
-                                <?php echo htmlspecialchars($analysis['confidence'] ?? 0); ?>%
-                            </div>
-                        </div>
-                        <div class="text-sm font-bold text-white italic">
-                            "<?php echo htmlspecialchars($analysis['sentiment'] ?? 'Analisi neutrale'); ?>"
-                        </div>
+                <?php elseif (!empty($analysis) && ($analysis['action'] ?? '') === 'nothing'): ?>
+                    <div class="glass p-6 rounded-3xl border-white/5 text-center">
+                        <div class="text-slate-500 font-black uppercase italic tracking-widest">Nessuna operazione consigliata</div>
                     </div>
                 <?php endif; ?>
 
-                <div class="glass p-6 rounded-3xl border-white/5">
-                    <div class="text-[10px] font-black text-accent uppercase tracking-widest mb-3">Motivazione Tecnica
-                        AI</div>
-                    <div
-                        class="text-sm italic text-slate-300 bg-black/20 p-5 rounded-2xl max-h-48 overflow-y-auto leading-relaxed">
+                <div class="glass p-5 rounded-2xl border-white/5">
+                    <div class="text-[8px] font-black text-accent uppercase tracking-widest mb-2">Sintesi Tecnica</div>
+                    <div class="text-xs italic text-slate-300 leading-relaxed">
                         <?php
                         $motivation = $analysis['motivation'] ?? $reasoning;
                         echo nl2br(htmlspecialchars($motivation));
@@ -115,17 +109,18 @@ $event = $event ?? [];
                     </div>
                 </div>
 
-                <div class="pt-4 flex gap-4">
+                <div class="pt-2 flex gap-3">
                     <button onclick="document.getElementById('gianik-analysis-modal').remove()"
-                        class="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest text-xs transition-all border border-white/5">
+                        class="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest text-[10px] transition-all border border-white/5">
                         Chiudi
                     </button>
 
-                    <?php if (!empty($analysis)): ?>
+                    <?php if (!empty($analysis) && ($analysis['action'] ?? '') !== 'nothing'): ?>
                         <button onclick="placeGiaNikBet()" id="bet-btn"
-                            class="flex-[2] py-4 rounded-2xl bg-accent hover:bg-accent/80 text-white font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2">
-                            <i data-lucide="zap" class="w-4 h-4"></i> Piazza Scommessa <span id="btn-mode-label"
-                                class="opacity-50 ml-1"></span>
+                            class="flex-[2] py-3 rounded-xl bg-accent hover:bg-accent/80 text-white font-black uppercase tracking-widest text-[10px] transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2">
+                            <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+                            <?php echo ($analysis['action'] === 'cashout') ? 'Esegui Cash-out' : 'Piazza Scommessa'; ?>
+                            <span id="btn-mode-label" class="opacity-50 ml-1"></span>
                         </button>
                     <?php endif; ?>
                 </div>
@@ -148,7 +143,7 @@ $event = $event ?? [];
                 const btn = document.getElementById('bet-btn');
                 const originalContent = btn.innerHTML;
                 btn.disabled = true;
-                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Elaborazione...';
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Attendere...';
                 if (window.lucide) lucide.createIcons();
 
                 const analysis = <?php echo json_encode($analysis); ?>;
@@ -163,19 +158,26 @@ $event = $event ?? [];
                     odds: parseFloat(analysis.odds || 0),
                     stake: parseFloat(analysis.stake || 2.0),
                     type: window.gianikMode || 'virtual',
-                    motivation: <?php echo json_encode($motivation); ?>,
+                    motivation: analysis.motivation || <?php echo json_encode($reasoning); ?>,
                     runnerName: analysis.advice,
-                    selectionId: null
+                    selectionId: null,
+                    side: analysis.side || 'BACK'
                 };
 
                 // Find market and runner info
                 const selectedMarket = (eventData.markets || []).find(m => m.marketId === betData.marketId);
                 if (selectedMarket) {
                     betData.marketName = selectedMarket.marketName;
-                    const runner = (selectedMarket.runners || []).find(r =>
-                        r.name.toLowerCase() === betData.runnerName.toLowerCase() ||
-                        r.name.toLowerCase().includes(betData.runnerName.toLowerCase())
+                    // Robust matching for selectionId
+                    let runner = (selectedMarket.runners || []).find(r =>
+                        r.name.toLowerCase() === betData.runnerName.toLowerCase()
                     );
+                    if (!runner) {
+                        runner = (selectedMarket.runners || []).find(r =>
+                            r.name.toLowerCase().includes(betData.runnerName.toLowerCase()) ||
+                            betData.runnerName.toLowerCase().includes(r.name.toLowerCase())
+                        );
+                    }
                     if (runner) betData.selectionId = runner.selectionId;
                 }
 
