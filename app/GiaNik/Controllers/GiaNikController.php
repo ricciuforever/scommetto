@@ -196,15 +196,17 @@ class GiaNikController
 
                     // Handle international/continental competitions
                     $comp = strtolower($m['competition']);
-                    if (strpos($comp, 'champions league') !== false || 
-                        strpos($comp, 'europa league') !== false || 
-                        strpos($comp, 'conference league') !== false || 
+                    if (
+                        strpos($comp, 'champions league') !== false ||
+                        strpos($comp, 'europa league') !== false ||
+                        strpos($comp, 'conference league') !== false ||
                         strpos($comp, 'friendly') !== false ||
                         strpos($comp, 'cup') !== false ||
                         strpos($comp, 'international') !== false ||
                         strpos($comp, 'world cup') !== false ||
                         strpos($comp, 'euro ') !== false ||
-                        strpos($comp, 'copa america') !== false) {
+                        strpos($comp, 'copa america') !== false
+                    ) {
                         if ($mappedCountry) {
                             $mappedCountry = is_array($mappedCountry) ? $mappedCountry : [$mappedCountry];
                             $mappedCountry[] = 'World';
@@ -372,8 +374,12 @@ class GiaNikController
                 return ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0);
             });
 
-            // Re-group for view compatibility if needed, but the view expects $allMatches now
-            // Wait, the view was iterating over $groupedMatches? No, I'll update the view too.
+            // Limit to 10 matches per request (Lazy Loading)
+            $offset = (int) ($_GET['offset'] ?? 0);
+            $limit = 10;
+            $totalMatches = count($allMatches);
+            $hasMore = ($totalMatches > ($offset + $limit));
+            $allMatches = array_slice($allMatches, $offset, $limit);
 
             // Funds
             $account = ['available' => 0, 'exposure' => 0];
@@ -574,8 +580,8 @@ class GiaNikController
                 }
             }
 
-            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation]);
+            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, side, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, 'BACK', $type, $betfairId, $motivation]);
 
             echo json_encode(['status' => 'success', 'message' => 'Scommessa piazzata (' . $type . ')']);
         } catch (\Throwable $e) {
@@ -728,11 +734,17 @@ class GiaNikController
 
                     $vBalance = $this->getVirtualBalance();
 
+                    // Recupera scommesse APERTE per questo match per permettere Cash-out/Hedging
+                    $stmtOpen = $this->db->prepare("SELECT runner_name, odds, stake, side, created_at FROM bets WHERE event_name = ? AND status = 'pending'");
+                    $stmtOpen->execute([$event['event']]);
+                    $openBets = $stmtOpen->fetchAll(PDO::FETCH_ASSOC);
+
                     $gemini = new GeminiService();
                     $predictionRaw = $gemini->analyze([$event], [
                         'is_gianik' => true,
                         'available_balance' => $vBalance['available'],
-                        'current_portfolio' => $vBalance['total']
+                        'current_portfolio' => $vBalance['total'],
+                        'open_bets' => $openBets
                     ]);
 
                     if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
@@ -766,28 +778,27 @@ class GiaNikController
                             $selectionId = $this->bf->mapAdviceToSelection($analysis['advice'], $runners);
 
                             if ($selectionId) {
-                                // Enforce minimum odds as per system rule
-                                if (($analysis['odds'] ?? 0) < Config::MIN_BETFAIR_ODDS) {
+                                // Enforce minimum odds as per system rule (only for BACK)
+                                if (($analysis['side'] ?? 'BACK') === 'BACK' && ($analysis['odds'] ?? 0) < Config::MIN_BETFAIR_ODDS) {
                                     $analysis['odds'] = Config::MIN_BETFAIR_ODDS;
                                 }
 
                                 $betType = $globalMode;
                                 $betfairId = null;
+                                $side = strtoupper($analysis['side'] ?? 'BACK');
 
                                 if ($betType === 'real') {
-                                    $res = $this->bf->placeBet($analysis['marketId'], $selectionId, $analysis['odds'], $stake);
+                                    $res = $this->bf->placeBet($analysis['marketId'], $selectionId, $analysis['odds'], $stake, $side);
                                     if (($res['status'] ?? '') === 'SUCCESS') {
                                         $betfairId = $res['instructionReports'][0]['betId'] ?? null;
                                     } else {
-                                        // If real bet fails, record as virtual for tracking? Or just skip?
-                                        // For now, let's keep it as virtual so we see the fail in logs
                                         $betType = 'virtual';
                                     }
                                 }
 
                                 $motivation = $analysis['motivation'] ?? trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
-                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                                $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation]);
+                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, side, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $side, $betType, $betfairId, $motivation]);
                                 $results['new_bets']++;
                             }
                         }
@@ -916,7 +927,8 @@ class GiaNikController
 
     private function getCountryMapping($countryCode)
     {
-        if (!$countryCode) return null;
+        if (!$countryCode)
+            return null;
         $map = [
             'GB' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
             'UK' => ['England', 'Scotland', 'Wales', 'Northern Ireland'],
