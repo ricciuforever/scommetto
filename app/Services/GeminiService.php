@@ -59,31 +59,55 @@ class GeminiService
                 "]\n" .
                 "```";
         } elseif ($isGiaNik) {
-            $prompt = "Sei un ANALISTA ELITE e TRADER di Betfair GiaNik. Il tuo compito è analizzare un EVENTO LIVE e decidere l'operazione migliore con precisione chirurgica.\n\n" .
+            $prompt = "Sei un ANALISTA ELITE e TRADER di Betfair. Il tuo compito è analizzare un EVENTO LIVE con i suoi molteplici mercati e decidere l'operazione migliore.\n\n" .
                 $balanceText .
-                "DATI EVENTO, MERCATI E STATISTICHE LIVE:\n" . json_encode($candidates[0]) . "\n\n" .
-                "CRITERI DI ANALISI (Dati API-Football):\n" .
-                "- live_score & elapsed_minutes: Fondamentali per il contesto temporale.\n" .
-                "- statistics: Analizza Shots on Goal, Possession, Corners e Goalkeeper Saves per determinare il dominio del match.\n" .
-                "- events: Monitora Goals, Cards (soprattutto Red Cards) e Substitutions per capire cambi di momentum.\n" .
-                "- active_bets: Se presenti, valuta se la situazione è peggiorata rispetto all'ingresso e suggerisci un Cash-out (azione: cashout, side: LAY) per limitare perdite o proteggere profitti.\n\n" .
-                "REGOLE FERREE:\n" .
-                "1. QUOTA MINIMA 1.25: Se vuoi puntare ma la quota attuale è < 1.25, DEVI impostare 'odds': 1.25 nel JSON (ordine unmatched). MAI suggerire quote inferiori a 1.25.\n" .
-                "2. RISPOSTA SOLO JSON: Non aggiungere commenti, introduzioni o saluti. Restituisci SOLO il blocco JSON.\n" .
-                "3. MOTIVAZIONE TECNICA: Il campo 'motivation' deve essere un riassunto tecnico fulmineo (max 2 righe) che colleghi le stats live alla scelta operativa.\n" .
-                "4. MULTI-ENTRY: Massimo 4 scommesse totali per match (limite: 2 nel 1° tempo, 2 nel 2° tempo).\n" .
-                "5. SOGLIA OPERATIVA: Suggerisci un'azione (bet/cashout) solo se la tua 'confidence' è >= 80%. Altrimenti action: 'nothing'.\n\n" .
+                "DATI EVENTO E MERCATI:\n" . json_encode($candidates[0]) . "\n\n" .
+                "DATI STATISTICI AVANZATI (Se disponibili):\n" .
+                "Calcio: " . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili") . "\n" .
+                "Basket: " . (isset($candidates[0]['api_basketball']) ? json_encode($candidates[0]['api_basketball']) : "Non disponibili") . "\n\n" .
+                "🚨 DATI LIVE DEL MATCH:\n" .
+                "Se presenti in api_football.live, troverai:\n" .
+                "- live_score: {home, away, halftime_home, halftime_away} = SCORE ATTUALE E HALFTIME\n" .
+                "- live_status: {short, long, elapsed_minutes} = STATO MATCH E MINUTI TRASCORSI\n" .
+                "- match_info: {fixture_id, date, venue_id}\n" .
+                "USA QUESTI DATI per contestualizzare la tua analisi! Non dire mai che non conosci lo score o il minuto se questi dati sono presenti.\n\n" .
+                "📊 STATISTICS LIVE DEL MATCH:\n" .
+                "Se presenti in api_football.statistics, troverai array per home/away con:\n" .
+                "- Shots on Goal, Shots off Goal, Total Shots, Blocked Shots\n" .
+                "- Ball Possession (% possesso palla)\n" .
+                "- Corner Kicks, Offsides, Fouls\n" .
+                "- Yellow Cards, Red Cards\n" .
+                "- Total passes, Passes accurate, Passes %\n" .
+                "- Goalkeeper Saves\n" .
+                "USA QUESTE STATISTICHE per valutare il dominio del match, pericolosità, e probabilità di gol!\n\n" .
+                "⚽ EVENTS LIVE DEL MATCH:\n" .
+                "Se presenti in api_football.events, troverai cronologia eventi con:\n" .
+                "- Goal (Normal Goal, Own Goal, Penalty, Missed Penalty) + giocatore + assist + minuto\n" .
+                "- Card (Yellow Card, Red Card) + giocatore + minuto\n" .
+                "- Subst (Substitution 1/2/3) + giocatore IN/OUT + minuto\n" .
+                "- Var (Goal cancelled, Penalty confirmed)\n" .
+                "USA QUESTI EVENTI per capire momentum, espulsioni, cambi tattici, e chi ha segnato!\n\n" .
+                "REGOLE RIGIDE:\n" .
+                "1. Analizza TUTTI i mercati forniti (Match Odds, Double Chance, varie linee di Under/Over, BTTS).\n" .
+                "2. Scegli l'operazione che offre il miglior rapporto rischio/rendimento. Non sei obbligato a scegliere il mercato principale se un altro (es. Over 1.5) è più sicuro o profittevole.\n" .
+                "3. Decidi lo STAKE (in Euro) da puntare. Hai piena libertà di arrivare fino al 5% del Budget Disponibile Virtuale (minimo 2€).\n" .
+                "4. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE. Per il Basket guarda attentamente a tiri totali, rimbalzi, assist e percentuali dal campo se forniti.\n" .
+                "5. Usa la CLASSIFICA e i PRONOSTICI esterni (predictions) per validare la tua scelta.\n" .
+                "6. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
+                "7. SOGLIA DI CONFIDENZA: Suggerisci l'operazione SOLO se la tua 'confidence' è pari o superiore all'80%. Se è inferiore, non scommettere sul mercato.\n" .
+                "8. REGOLE CALCIO (MULTI-ENTRY): Se le condizioni cambiano durante il match, puoi rientrare con nuove scommesse. Massimo 4 puntate totali per match: 2 nel Primo Tempo e 2 nel Secondo Tempo. Ogni ingresso deve avere confidence >= 80%.\n" .
+                "9. ⚠️ QUOTA MINIMA E VALORE (REGOLA FERREA): 1.25 è la tua quota MINIMA assoluta di ingresso. Non suggerire MAI quote inferiori a 1.25 nel campo 'odds'. Se la quota attuale del mercato è superiore a 1.25, usala. Se invece la quota attuale è inferiore (es. 1.01 - 1.24) ma la tua 'confidence' è >= 80%, devi OBBLIGATORIAMENTE impostare il campo 'odds' a 1.25 nel JSON. Questo creerà un ordine 'unmatched' che attenderà che il mercato salga a 1.25. Suggerire quote come 1.03 o 1.15 è VIETATO e considerato un errore grave.\n" .
+                "10. Restituisci SEMPRE un blocco JSON con i dettagli.\n\n" .
                 "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
                 "```json\n" .
                 "{\n" .
-                "  \"action\": \"bet | cashout | nothing\",\n" .
                 "  \"marketId\": \"1.XXXXX\",\n" .
                 "  \"advice\": \"Runner Name\",\n" .
-                "  \"side\": \"BACK | LAY\",\n" .
-                "  \"odds\": 1.25,\n" .
-                "  \"stake\": 2.0,\n" .
-                "  \"confidence\": 95,\n" .
-                "  \"motivation\": \"Sintesi tecnica dell'operazione.\"\n" .
+                "  \"odds\": 1.80,\n" .
+                "  \"stake\": 5.0,\n" .
+                "  \"confidence\": 90,\n" .
+                "  \"sentiment\": \"Bullish/Bearish/Neutral\",\n" .
+                "  \"motivation\": \"Spiegazione tecnica dettagliata. Collega i dati statistici live con la scelta del mercato e dello stake.\"\n" .
                 "}\n" .
                 "```";
         } else {
