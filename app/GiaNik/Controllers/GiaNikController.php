@@ -700,6 +700,19 @@ class GiaNikController
             $stmtCount->execute();
             $matchBetCounts = $stmtCount->fetchAll(PDO::FETCH_KEY_PAIR);
 
+            // Fetch correct balance for Gemini based on operational mode
+            $activeBalance = ['available' => 0, 'total' => 0];
+            if ($globalMode === 'real') {
+                $fundsData = $this->bf->getFunds();
+                $funds = $fundsData['result'] ?? $fundsData;
+                $activeBalance['available'] = (float) ($funds['availableToBetBalance'] ?? 0);
+                $activeBalance['total'] = $activeBalance['available'] + abs((float) ($funds['exposure'] ?? 0));
+            } else {
+                $vBal = $this->getVirtualBalance();
+                $activeBalance['available'] = $vBal['available'];
+                $activeBalance['total'] = $vBal['total'];
+            }
+
             $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
                 if ($eventCounter >= 3)
@@ -755,13 +768,11 @@ class GiaNikController
                         $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook);
                     }
 
-                    $vBalance = $this->getVirtualBalance();
-
                     $gemini = new GeminiService();
                     $predictionRaw = $gemini->analyze([$event], [
                         'is_gianik' => true,
-                        'available_balance' => $vBalance['available'],
-                        'current_portfolio' => $vBalance['total']
+                        'available_balance' => $activeBalance['available'],
+                        'current_portfolio' => $activeBalance['total']
                     ]);
 
                     if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
@@ -1091,8 +1102,10 @@ class GiaNikController
     private function getVirtualBalance()
     {
         $vInit = 100.0;
-        $vProf = (float) $this->db->query("SELECT SUM(profit) FROM bets WHERE status IN ('won', 'lost') AND sport IN ('Soccer', 'Football')")->fetchColumn();
-        $vExp = (float) $this->db->query("SELECT SUM(stake) FROM bets WHERE status = 'pending' AND sport IN ('Soccer', 'Football')")->fetchColumn();
+        // Sum only VIRTUAL bets profit
+        $vProf = (float) $this->db->query("SELECT SUM(profit) FROM bets WHERE type = 'virtual' AND status IN ('won', 'lost') AND sport IN ('Soccer', 'Football')")->fetchColumn();
+        // Sum only VIRTUAL bets exposure
+        $vExp = (float) $this->db->query("SELECT SUM(stake) FROM bets WHERE type = 'virtual' AND status = 'pending' AND sport IN ('Soccer', 'Football')")->fetchColumn();
         return [
             'available' => ($vInit + $vProf) - $vExp,
             'exposure' => $vExp,
