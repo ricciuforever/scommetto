@@ -400,32 +400,40 @@ class GiaNikController
             // Sort logic: 1. Real Bets (P&L DESC), 2. Virtual Bets, 3. Live (Elapsed DESC), 4. Upcoming (Start ASC)
             usort($allMatches, function ($a, $b) {
                 // Priority 1: Active Real Bets
-                if ($a['has_active_real_bet'] && !$b['has_active_real_bet']) return -1;
-                if (!$a['has_active_real_bet'] && $b['has_active_real_bet']) return 1;
+                if ($a['has_active_real_bet'] && !$b['has_active_real_bet'])
+                    return -1;
+                if (!$a['has_active_real_bet'] && $b['has_active_real_bet'])
+                    return 1;
                 if ($a['has_active_real_bet'] && $b['has_active_real_bet']) {
                     // Sort by absolute P&L value to put the most "active" positions first
                     return abs($b['current_pl']) <=> abs($a['current_pl']);
                 }
 
                 // Priority 2: Active Virtual Bets
-                if (($a['has_active_virtual_bet'] ?? false) && !($b['has_active_virtual_bet'] ?? false)) return -1;
-                if (!($a['has_active_virtual_bet'] ?? false) && ($b['has_active_virtual_bet'] ?? false)) return 1;
+                if (($a['has_active_virtual_bet'] ?? false) && !($b['has_active_virtual_bet'] ?? false))
+                    return -1;
+                if (!($a['has_active_virtual_bet'] ?? false) && ($b['has_active_virtual_bet'] ?? false))
+                    return 1;
 
                 // Priority 3: Is Live (In Play)
-                if ($a['is_in_play'] && !$b['is_in_play']) return -1;
-                if (!$a['is_in_play'] && $b['is_in_play']) return 1;
+                if ($a['is_in_play'] && !$b['is_in_play'])
+                    return -1;
+                if (!$a['is_in_play'] && $b['is_in_play'])
+                    return 1;
                 if ($a['is_in_play'] && $b['is_in_play']) {
                     // Among live matches, sort by elapsed time descending (ending soonest first)
                     $aElapsed = $a['elapsed'] ?? 0;
                     $bElapsed = $b['elapsed'] ?? 0;
-                    if ($aElapsed !== $bElapsed) return $bElapsed <=> $aElapsed;
+                    if ($aElapsed !== $bElapsed)
+                        return $bElapsed <=> $aElapsed;
                 }
 
                 // Priority 4: Upcoming Matches (Start Time)
                 if (!$a['is_in_play'] && !$b['is_in_play']) {
                     $aStart = $a['start_time'] ?? '9999-99-99';
                     $bStart = $b['start_time'] ?? '9999-99-99';
-                    if ($aStart !== $bStart) return $aStart <=> $bStart;
+                    if ($aStart !== $bStart)
+                        return $aStart <=> $bStart;
                 }
 
                 // Priority 5: Matched Volume
@@ -444,13 +452,10 @@ class GiaNikController
                 $account['exposure'] = abs($funds['exposure'] ?? 0);
             }
 
-            // Global State for GiaNik
-            $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
-            $stmtMode->execute();
-            $operationalMode = $stmtMode->fetchColumn() ?: 'virtual';
+            // Operational mode is now forced to real
+            $operationalMode = 'real';
 
-            // Virtual
-            $virtualAccount = $this->getVirtualBalance();
+            // Balance is already fetched above in $account from real Betfair
 
             $this->settleBets();
             require __DIR__ . '/../Views/partials/gianik_live.php';
@@ -550,8 +555,12 @@ class GiaNikController
                 $event['markets'][] = $m;
             }
 
-            $vBalance = $this->getVirtualBalance();
-            $balance = ['available_balance' => $vBalance['available'], 'current_portfolio' => $vBalance['total']];
+            $fundsData = $this->bf->getFunds();
+            $funds = $fundsData['result'] ?? $fundsData;
+            $balance = [
+                'available_balance' => (float) ($funds['availableToBetBalance'] ?? 0),
+                'current_portfolio' => (float) ($funds['availableToBetBalance'] ?? 0) + abs((float) ($funds['exposure'] ?? 0))
+            ];
 
             // Aggiungiamo il marketId di partenza come suggerimento per l'AI
             $event['requestedMarketId'] = $marketId;
@@ -607,7 +616,7 @@ class GiaNikController
             $stake = (float) ($input['stake'] ?? 2.0);
             if ($stake < 2.0)
                 $stake = 2.0;
-            $type = $input['type'] ?? 'virtual';
+            $type = 'real'; // Forced to real
             $eventName = $input['eventName'] ?? 'Unknown';
             $sport = $input['sport'] ?? 'Unknown';
             $runnerName = $input['runnerName'] ?? 'Unknown';
@@ -676,10 +685,8 @@ class GiaNikController
             // Sincronizza lo stato reale prima di procedere
             $this->syncWithBetfair();
 
-            // Check operational mode
-            $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
-            $stmtMode->execute();
-            $globalMode = $stmtMode->fetchColumn() ?: 'virtual';
+            // Force real mode
+            $globalMode = 'real';
 
             // Restricted to Soccer (ID 1)
             $eventTypeIds = ['1'];
@@ -736,18 +743,11 @@ class GiaNikController
             $stmtCount->execute();
             $matchBetCounts = $stmtCount->fetchAll(PDO::FETCH_KEY_PAIR);
 
-            // Fetch correct balance for Gemini based on operational mode
-            $activeBalance = ['available' => 0, 'total' => 0];
-            if ($globalMode === 'real') {
-                $fundsData = $this->bf->getFunds();
-                $funds = $fundsData['result'] ?? $fundsData;
-                $activeBalance['available'] = (float) ($funds['availableToBetBalance'] ?? 0);
-                $activeBalance['total'] = $activeBalance['available'] + abs((float) ($funds['exposure'] ?? 0));
-            } else {
-                $vBal = $this->getVirtualBalance();
-                $activeBalance['available'] = $vBal['available'];
-                $activeBalance['total'] = $vBal['total'];
-            }
+            // Fetch real balance from Betfair
+            $fundsData = $this->bf->getFunds();
+            $funds = $fundsData['result'] ?? $fundsData;
+            $activeBalance['available'] = (float) ($funds['availableToBetBalance'] ?? 0);
+            $activeBalance['total'] = $activeBalance['available'] + abs((float) ($funds['exposure'] ?? 0));
 
             $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
@@ -834,8 +834,7 @@ class GiaNikController
                             if ($stake < 2.0)
                                 $stake = 2.0;
 
-                            $vBalance = $this->getVirtualBalance();
-                            if ($vBalance['available'] < $stake)
+                            if ($activeBalance['available'] < $stake)
                                 continue;
 
                             $runners = array_map(fn($r) => ['runnerName' => $r['name'], 'selectionId' => $r['selectionId']], $selectedMarket['runners']);
@@ -887,7 +886,8 @@ class GiaNikController
             $stmt->execute();
             $pending = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            if (empty($pending)) return;
+            if (empty($pending))
+                return;
 
             $marketIds = array_values(array_unique(array_column($pending, 'market_id')));
             $chunks = array_chunk($marketIds, 50);
@@ -915,7 +915,7 @@ class GiaNikController
                                     $profit = $isWin ? ($bet['stake'] * ($bet['odds'] - 1)) : -$bet['stake'];
 
                                     $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?")
-                                             ->execute([$status, $profit, $bet['id']]);
+                                        ->execute([$status, $profit, $bet['id']]);
                                 }
                             }
                         }
@@ -1091,43 +1091,34 @@ class GiaNikController
         try {
             // Sincronizza prima di mostrare la sidebar
             $this->syncWithBetfair();
-            // Persistence via Session (Senior approach: lighter and more reliable for UI state)
+
             if (isset($_GET['status']))
                 $_SESSION['recent_bets_status'] = $_GET['status'];
-            if (isset($_GET['type']))
-                $_SESSION['recent_bets_type'] = $_GET['type'];
 
             $statusFilter = $_SESSION['recent_bets_status'] ?? 'all';
-            $typeFilter = $_SESSION['recent_bets_type'] ?? 'all';
 
-            // 1. Sport mapping (only soccer needed now but kept for consistency)
+            // 1. Sport mapping
             $sportMapping = [
                 'Soccer' => 'Calcio',
-                'Football' => 'Calcio'
+                'Football' => 'Calcio',
+                'Tennis' => 'Tennis',
+                'Basketball' => 'Basket'
             ];
 
-            // 2. Main query for bets - use GROUP BY to collapse accidental duplicates
+            // 2. Main query for bets
             $sql = "SELECT * FROM bets";
             $where = [];
             $params = [];
-
-            // Restricted to Soccer/Football
-            $where[] = "sport IN ('Soccer', 'Football')";
 
             if ($statusFilter === 'won') {
                 $where[] = "status = 'won'";
             } elseif ($statusFilter === 'lost') {
                 $where[] = "status = 'lost'";
+            } elseif ($statusFilter === 'pending') {
+                $where[] = "status = 'pending'";
             } else {
-                // Se non stiamo filtrando esplicitamente, escludiamo le scommesse cancellate/voided con profitto zero
-                // per mantenere la lista pulita e solo con scommesse "live" o chiuse con esito.
+                // Default: exclude technical cancellations
                 $where[] = "status NOT IN ('cancelled', 'voided')";
-            }
-
-            if ($typeFilter === 'real') {
-                $where[] = "type = 'real'";
-            } elseif ($typeFilter === 'virtual') {
-                $where[] = "type = 'virtual'";
             }
 
             if (!empty($where)) {
@@ -1135,21 +1126,18 @@ class GiaNikController
             }
 
             $sql .= " GROUP BY market_id, selection_id, odds, stake, type, status";
-            $sql .= " ORDER BY created_at DESC LIMIT 20";
+            $sql .= " ORDER BY created_at DESC LIMIT 30";
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
             $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // Map sport names for bets
             foreach ($bets as &$bet) {
-                $bet['sport_it'] = $sportMapping[$bet['sport']] ?? 'Calcio';
+                $bet['sport_it'] = $sportMapping[$bet['sport']] ?? $bet['sport'];
             }
 
-            // Pass filters to the view
             $currentStatus = $statusFilter;
-            $currentType = $typeFilter;
-            $currentSport = 'all';
-            $sports = []; // Dropdown removed from view
+            $currentType = 'all'; // Legacy support for view variables
 
             require __DIR__ . '/../Views/partials/recent_bets_sidebar.php';
         } catch (\Throwable $e) {
@@ -1160,10 +1148,10 @@ class GiaNikController
     private function getVirtualBalance()
     {
         $vInit = 100.0;
-        // Sum only VIRTUAL bets profit
-        $vProf = (float) $this->db->query("SELECT SUM(profit) FROM bets WHERE type = 'virtual' AND status IN ('won', 'lost') AND sport IN ('Soccer', 'Football')")->fetchColumn();
-        // Sum only VIRTUAL bets exposure
-        $vExp = (float) $this->db->query("SELECT SUM(stake) FROM bets WHERE type = 'virtual' AND status = 'pending' AND sport IN ('Soccer', 'Football')")->fetchColumn();
+        // Sum ALL virtual bets profit
+        $vProf = (float) $this->db->query("SELECT SUM(profit) FROM bets WHERE type = 'virtual' AND status IN ('won', 'lost')")->fetchColumn();
+        // Sum ALL virtual bets exposure
+        $vExp = (float) $this->db->query("SELECT SUM(stake) FROM bets WHERE type = 'virtual' AND status = 'pending'")->fetchColumn();
         return [
             'available' => ($vInit + $vProf) - $vExp,
             'exposure' => $vExp,
@@ -1523,7 +1511,8 @@ class GiaNikController
                     'eventName' => $itemDesc['eventDesc'] ?? null
                 ];
 
-                if (isset($o['eventId'])) $eventIdsToFetch[] = $o['eventId'];
+                if (isset($o['eventId']))
+                    $eventIdsToFetch[] = $o['eventId'];
 
                 // Se non abbiamo nomi per mercati chiusi, aggiungiamo ai marketId da recuperare come fallback
                 if (empty($allBfOrders[$o['betId']]['marketName'])) {

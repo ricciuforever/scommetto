@@ -47,28 +47,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
             </div>
         </div>
 
-        <?php if ($operationalMode !== 'real'): ?>
-            <div class="h-8 w-px bg-white/10 mx-2"></div>
 
-            <!-- Virtual GiaNik Account -->
-            <div class="flex items-center gap-4">
-                <div>
-                    <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual Disponibile</span>
-                    <div class="text-lg font-black tabular-nums text-white leading-none">
-                        €<?php echo number_format($virtualAccount['available'], 2); ?></div>
-                </div>
-                <div>
-                    <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual In Gioco</span>
-                    <div class="text-lg font-black tabular-nums text-accent leading-none">
-                        €<?php echo number_format($virtualAccount['exposure'], 2); ?></div>
-                </div>
-                <div>
-                    <span class="text-[9px] font-black uppercase text-accent/50 tracking-wider">Virtual Totale</span>
-                    <div class="text-lg font-black tabular-nums text-slate-400 leading-none">
-                        €<?php echo number_format($virtualAccount['total'], 2); ?></div>
-                </div>
-            </div>
-        <?php endif; ?>
     </div>
 </div>
 
@@ -105,14 +84,6 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                                 <?php echo ($m['current_pl'] > 0 ? '+' : '') . number_format($m['current_pl'], 2); ?>€
                             </div>
                         <?php endif; ?>
-                    </div>
-                <?php elseif ($m['has_active_virtual_bet'] ?? false): ?>
-                    <div class="absolute -top-2 -right-2 z-10 flex items-center gap-2">
-                        <div
-                            class="bg-indigo-600 px-3 py-1 rounded-full shadow-lg border border-white/20 flex items-center gap-1.5 opacity-90 backdrop-blur-md">
-                            <i data-lucide="ghost" class="w-3 h-3 text-white"></i>
-                            <span class="text-[9px] font-black uppercase text-white tracking-widest">Virtual Bet</span>
-                        </div>
                     </div>
                 <?php endif; ?>
 
@@ -165,8 +136,8 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                                     <div class="w-1 h-1 rounded-full bg-success shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
                                 <?php endif; ?>
                                 <span class="match-status-label text-[9px] font-black uppercase text-slate-500 tracking-tighter"
-                                      data-elapsed="<?php echo $m['elapsed'] ?? 0; ?>"
-                                      data-status="<?php echo $m['status_short'] ?? ''; ?>">
+                                    data-elapsed="<?php echo $m['elapsed'] ?? 0; ?>"
+                                    data-status="<?php echo $m['status_short'] ?? ''; ?>">
                                     <?php echo $m['status_label']; ?>
                                 </span>
                             </div>
@@ -241,7 +212,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
     if (window.lucide) lucide.createIcons();
 
     // Client-side Match Timer Ticker
-    (function() {
+    (function () {
         if (window.gianikTimerInterval) clearInterval(window.gianikTimerInterval);
 
         window.gianikTimerInterval = setInterval(() => {

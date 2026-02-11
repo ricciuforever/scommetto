@@ -23,20 +23,15 @@ require __DIR__ . '/../../Views/layout/top.php';
             </p>
         </div>
         <div class="flex items-center gap-4">
-            <!-- Mode Switcher -->
-            <div class="flex bg-white/5 p-1 rounded-xl border border-white/5">
-                <button onclick="setGiaNikMode('virtual')" id="mode-virtual"
-                    class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all bg-accent text-white">Virtual</button>
-                <button onclick="setGiaNikMode('real')" id="mode-real"
-                    class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all text-slate-500">Real</button>
-            </div>
-
-            <div class="flex flex-col items-end">
-                <span class="text-[10px] font-black uppercase text-slate-500">Auto-Refresh</span>
-                <span class="text-xs font-bold text-success flex items-center gap-1.5">
-                    <span class="w-2 h-2 bg-success rounded-full animate-pulse"></span>
-                    ATTIVO (60s)
-                </span>
+            <!-- Auto-Refresh Info Only -->
+            <div class="flex items-center gap-4 bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                <div class="flex flex-col items-end">
+                    <span class="text-[10px] font-black uppercase text-slate-500">Auto-Refresh</span>
+                    <span class="text-xs font-bold text-success flex items-center gap-1.5">
+                        <span class="w-2 h-2 bg-success rounded-full animate-pulse"></span>
+                        ATTIVO (60s)
+                    </span>
+                </div>
             </div>
             <button hx-get="/api/gianik/live" hx-target="#gianik-live-container"
                 class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/5 transition-all text-slate-400 hover:text-white">
@@ -159,56 +154,14 @@ require __DIR__ . '/../../Views/layout/top.php';
         }
     });
 
-    // GiaNik mode initial state
-    window.gianikMode = 'virtual';
-
-    // Auto-fetch mode on load
-    async function initGiaNikMode() {
-        try {
-            const res = await fetch('/api/gianik/get-mode');
-            const data = await res.json();
-            if (data.status === 'success') {
-                setGiaNikMode(data.mode, false); // false = don't save back to server
-            }
-        } catch (e) {
-            console.error('Error fetching Gianik mode:', e);
-        }
-    }
-    initGiaNikMode();
+    // GiaNik mode is always REAL
+    window.gianikMode = 'real';
 
     window.openBetDetails = function (id) {
         htmx.ajax('GET', '/api/gianik/bet/' + id, {
             target: '#global-modal-container',
             swap: 'innerHTML'
         });
-    }
-
-    function setGiaNikMode(mode, saveToServer = true) {
-        window.gianikMode = mode;
-        const vBtn = document.getElementById('mode-virtual');
-        const rBtn = document.getElementById('mode-real');
-
-        if (mode === 'virtual') {
-            vBtn.classList.add('bg-accent', 'text-white');
-            vBtn.classList.remove('text-slate-500');
-            rBtn.classList.remove('bg-accent', 'text-white');
-            rBtn.classList.add('text-slate-500');
-        } else {
-            rBtn.classList.add('bg-accent', 'text-white');
-            rBtn.classList.remove('text-slate-500');
-            vBtn.classList.remove('bg-accent', 'text-white');
-            vBtn.classList.add('text-slate-500');
-        }
-
-        if (saveToServer) {
-            fetch('/api/gianik/set-mode', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: mode })
-            }).then(r => r.json()).then(data => {
-                console.log('Operational mode updated:', data.mode);
-            });
-        }
     }
 </script>
 

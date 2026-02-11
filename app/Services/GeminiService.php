@@ -23,8 +23,8 @@ class GeminiService
 
         $balanceText = "";
         if (isset($options['current_portfolio'])) {
-            $labelPortfolio = ($options['is_gianik'] ?? false) ? "Budget Totale Virtuale GiaNik" : "Portfolio Reale";
-            $labelAvailable = ($options['is_gianik'] ?? false) ? "Disponibilità Virtuale GiaNik" : "Disponibilità";
+            $labelPortfolio = "Budget_Totale_Reale";
+            $labelAvailable = "Disponibilità_Liquida_Reale";
 
             $balanceText = "SITUAZIONE PORTAFOGLIO:\n" .
                 "- $labelPortfolio: " . number_format($options['current_portfolio'], 2) . "€\n" .
@@ -90,7 +90,7 @@ class GeminiService
                 "REGOLE RIGIDE:\n" .
                 "1. Analizza TUTTI i mercati forniti (Match Odds, Double Chance, varie linee di Under/Over, BTTS).\n" .
                 "2. Scegli l'operazione che offre il miglior rapporto rischio/rendimento. Non sei obbligato a scegliere il mercato principale se un altro (es. Over 1.5) è più sicuro o profittevole.\n" .
-                "3. Decidi lo STAKE (in Euro) da puntare. Hai piena libertà di arrivare fino al 5% del Budget Disponibile Virtuale (minimo 2€).\n" .
+                "3. Decidi lo STAKE (in Euro) da puntare. Hai piena libertà di arrivare fino al 5% del 'Budget_Totale' (es. se Budget_Totale=100€, stake max 5€). Attenzione: non superare mai la 'Disponibilità_Liquida' fornita. Scommessa minima 2€.\n" .
                 "4. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE. Per il Basket guarda attentamente a tiri totali, rimbalzi, assist e percentuali dal campo se forniti.\n" .
                 "5. Usa la CLASSIFICA e i PRONOSTICI esterni (predictions) per validare la tua scelta.\n" .
                 "6. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
