@@ -1428,7 +1428,7 @@ class GiaNikController
                 $catRes = $this->bf->request('listMarketCatalogue', [
                     'filter' => [
                         'marketIds' => $marketIdsToFetch,
-                        'marketStatus' => ['OPEN', 'CLOSED', 'INACTIVE']
+                        'marketStatus' => ['OPEN', 'CLOSED', 'INACTIVE', 'COMPLETED']
                     ],
                     'maxResults' => 1000,
                     'marketProjection' => ['EVENT', 'MARKET_DESCRIPTION', 'RUNNER_DESCRIPTION']
@@ -1442,6 +1442,30 @@ class GiaNikController
                         'market' => $cat['marketName'] ?? 'Unknown',
                         'runners' => $runners
                     ];
+                }
+            }
+
+            // --- PEZZO 2.1: Fallback Estremo tramite Account Statement ---
+            $unknownMarketIds = [];
+            foreach ($allBfOrders as $betId => $o) {
+                if (!isset($marketInfoMap[$o['marketId']]))
+                    $unknownMarketIds[] = $o['marketId'];
+            }
+            if (!empty($unknownMarketIds)) {
+                $statement = $this->bf->getAccountStatement();
+                foreach ($statement['accountStatement'] ?? [] as $item) {
+                    $mId = $item['itemClassData']['marketId'] ?? ($item['itemClassData']['refId'] ?? null);
+                    if ($mId && in_array($mId, $unknownMarketIds)) {
+                        $fullDesc = $item['itemClassData']['marketName'] ?? ($item['itemClassData']['fullMarketName'] ?? '');
+                        if (empty($fullDesc))
+                            continue;
+                        $parts = explode(' / ', $fullDesc);
+                        $marketInfoMap[$mId] = [
+                            'event' => $parts[1] ?? ($parts[0] ?? 'Settled Order'),
+                            'market' => $parts[2] ?? ($parts[1] ?? 'Betfair Hist'),
+                            'runners' => []
+                        ];
+                    }
                 }
             }
 
