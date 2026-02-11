@@ -89,10 +89,7 @@ $bets = $bets ?? [];
 
                     <div class="flex items-center justify-between mt-2">
                         <div class="flex flex-col">
-                            <span class="text-[8px] text-slate-500 uppercase font-black">
-                                <?php echo htmlspecialchars($bet['market_name'] ?? 'Runner'); ?>
-                                <span class="text-indigo-400 ml-1"><?php echo strtoupper($bet['side'] ?? 'BACK'); ?></span>
-                            </span>
+                            <span class="text-[8px] text-slate-500 uppercase font-black"><?php echo htmlspecialchars($bet['market_name'] ?? 'Runner'); ?></span>
                             <span class="text-[10px] font-black text-slate-300"><?php echo $bet['runner_name']; ?></span>
                         </div>
                         <div class="text-right">

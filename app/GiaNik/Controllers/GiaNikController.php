@@ -478,11 +478,6 @@ class GiaNikController
             // Aggiungiamo il marketId di partenza come suggerimento per l'AI
             $event['requestedMarketId'] = $marketId;
 
-            // Fetch active bets for this event to allow cash-out analysis
-            $stmtActive = $this->db->prepare("SELECT * FROM bets WHERE event_name = ? AND status = 'pending'");
-            $stmtActive->execute([$eventName]);
-            $event['active_bets'] = $stmtActive->fetchAll(PDO::FETCH_ASSOC);
-
             if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
                 // Pass the initial market book for fallback extraction
                 $mainBook = $booksMap[$marketId] ?? null;
@@ -526,7 +521,6 @@ class GiaNikController
             $sport = $input['sport'] ?? 'Unknown';
             $runnerName = $input['runnerName'] ?? 'Unknown';
             $motivation = $input['motivation'] ?? '';
-            $side = $input['side'] ?? 'BACK';
 
             if (!$marketId || !$selectionId || !$odds) {
                 echo json_encode(['status' => 'error', 'message' => 'Dati mancanti']);
@@ -540,7 +534,7 @@ class GiaNikController
 
             $betfairId = null;
             if ($type === 'real') {
-                $res = $this->bf->placeBet($marketId, $selectionId, $odds, $stake, $side);
+                $res = $this->bf->placeBet($marketId, $selectionId, $odds, $stake);
                 if (($res['status'] ?? '') === 'SUCCESS') {
                     $betfairId = $res['instructionReports'][0]['betId'] ?? null;
                 } else {
@@ -549,8 +543,8 @@ class GiaNikController
                 }
             }
 
-            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, side) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation, $side]);
+            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation]);
 
             echo json_encode(['status' => 'success', 'message' => 'Scommessa piazzata (' . $type . ')']);
         } catch (\Throwable $e) {
@@ -637,10 +631,9 @@ class GiaNikController
                 $eventMarketsMap[$eid][] = $mc;
             }
 
-            // Recuperiamo tutte le scommesse pendenti per passarle a Gemini per analisi cash-out
-            $stmtActiveAll = $this->db->prepare("SELECT event_name, bets.* FROM bets WHERE status = 'pending'");
-            $stmtActiveAll->execute();
-            $allActiveBets = $stmtActiveAll->fetchAll(PDO::FETCH_GROUP | PDO::FETCH_ASSOC);
+            $stmtPending = $this->db->prepare("SELECT DISTINCT event_name FROM bets WHERE status = 'pending'");
+            $stmtPending->execute();
+            $pendingEventNames = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
 
             // Recuperiamo il conteggio delle scommesse per oggi per ogni match (per limitare ingressi multipli)
             $stmtCount = $this->db->prepare("SELECT event_name, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name");
@@ -652,7 +645,8 @@ class GiaNikController
                 if ($eventCounter >= 3)
                     break;
                 $mainEvent = $catalogues[0];
-                $eventName = $mainEvent['event']['name'];
+                if (in_array($mainEvent['event']['name'], $pendingEventNames))
+                    continue;
 
                 try {
                     $results['scanned']++;
@@ -694,8 +688,6 @@ class GiaNikController
                         $event['markets'][] = $m;
                     }
 
-                    $event['active_bets'] = $allActiveBets[$eventName] ?? [];
-
                     if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
                         // Pass the first market book for fallback extraction
                         $firstMarketId = $event['markets'][0]['marketId'] ?? null;
@@ -714,14 +706,12 @@ class GiaNikController
 
                     if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
                         $analysis = json_decode($matches[1], true);
-                        if ($analysis && ($analysis['action'] ?? '') !== 'nothing' && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
+                        if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
 
-                            // Controllo limite 4 scommesse per match (Calcio) - solo per nuovi ingressi (bet)
-                            if ($analysis['action'] === 'bet') {
-                                $currentCount = $matchBetCounts[$event['event']] ?? 0;
-                                if (($event['sport'] === 'Soccer' || $event['sport'] === 'Football') && $currentCount >= 4) {
-                                    continue;
-                                }
+                            // Controllo limite 4 scommesse per match (Calcio)
+                            $currentCount = $matchBetCounts[$event['event']] ?? 0;
+                            if (($event['sport'] === 'Soccer' || $event['sport'] === 'Football') && $currentCount >= 4) {
+                                continue;
                             }
                             $selectedMarket = null;
                             foreach ($event['markets'] as $m) {
@@ -753,9 +743,8 @@ class GiaNikController
                                 $betType = $globalMode;
                                 $betfairId = null;
 
-                                $side = $analysis['side'] ?? 'BACK';
                                 if ($betType === 'real') {
-                                    $res = $this->bf->placeBet($analysis['marketId'], $selectionId, $analysis['odds'], $stake, $side);
+                                    $res = $this->bf->placeBet($analysis['marketId'], $selectionId, $analysis['odds'], $stake);
                                     if (($res['status'] ?? '') === 'SUCCESS') {
                                         $betfairId = $res['instructionReports'][0]['betId'] ?? null;
                                     } else {
@@ -766,8 +755,8 @@ class GiaNikController
                                 }
 
                                 $motivation = $analysis['motivation'] ?? trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
-                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, side) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                                $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation, $side]);
+                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation]);
                                 $results['new_bets']++;
                             }
                         }
@@ -801,16 +790,9 @@ class GiaNikController
                         }
                     }
                     if ($winner) {
-                        $side = strtoupper($bet['side'] ?? 'BACK');
-                        if ($side === 'LAY') {
-                            $isWin = ($winner != $bet['selection_id']);
-                            $status = $isWin ? 'won' : 'lost';
-                            $profit = $isWin ? $bet['stake'] : -($bet['stake'] * ($bet['odds'] - 1));
-                        } else {
-                            $isWin = ($winner == $bet['selection_id']);
-                            $status = $isWin ? 'won' : 'lost';
-                            $profit = $isWin ? ($bet['stake'] * ($bet['odds'] - 1)) : -$bet['stake'];
-                        }
+                        $isWin = ($winner == $bet['selection_id']);
+                        $status = $isWin ? 'won' : 'lost';
+                        $profit = $isWin ? ($bet['stake'] * ($bet['odds'] - 1)) : -$bet['stake'];
                         $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$status, $profit, $bet['id']]);
                     }
                 }
@@ -865,16 +847,7 @@ class GiaNikController
         $preds = $this->footballData->getFixturePredictions($fid, $status);
 
         // 🎯 STATISTICS LIVE (possesso palla, tiri, corner, ecc.)
-        $statsRaw = $this->footballData->getFixtureStatistics($fid, $status);
-        $stats = [];
-        foreach ($statsRaw as $teamStats) {
-            $teamName = $teamStats['team_name'] ?? 'Unknown';
-            $formatted = [];
-            foreach (($teamStats['stats_json'] ?? []) as $s) {
-                $formatted[$s['type']] = $s['value'];
-            }
-            $stats[$teamName] = $formatted;
-        }
+        $stats = $this->footballData->getFixtureStatistics($fid, $status);
 
         // ⚽ EVENTS LIVE (gol, cartellini, sostituzioni, VAR)
         $events = $this->footballData->getFixtureEvents($fid, $status);
