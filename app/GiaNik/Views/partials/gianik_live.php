@@ -99,7 +99,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                             <i data-lucide="zap" class="w-3 h-3 text-white"></i>
                             <span class="text-[9px] font-black uppercase text-white tracking-widest">Active Bet</span>
                         </div>
-                        <?php if (isset($m['current_pl']) && $m['current_pl'] != 0): ?>
+                        <?php if (isset($m['current_pl'])): ?>
                             <div
                                 class="px-3 py-1 rounded-full shadow-lg border border-white/20 font-black text-[10px] <?php echo $m['current_pl'] >= 0 ? 'bg-success text-white' : 'bg-danger text-white'; ?>">
                                 <?php echo ($m['current_pl'] > 0 ? '+' : '') . number_format($m['current_pl'], 2); ?>€

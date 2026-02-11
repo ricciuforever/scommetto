@@ -113,6 +113,14 @@ class GiaNikController
             }
             $apiLiveMatches = array_values($apiLiveMatchesMap);
 
+            // --- Truth Overlay from Local DB (for most up-to-date individual status) ---
+            $fixtureModel = new \App\Models\Fixture();
+            $dbFixtures = $fixtureModel->getActiveFixtures();
+            $dbFixturesMap = [];
+            foreach ($dbFixtures as $f) {
+                $dbFixturesMap[$f['id']] = $f;
+            }
+
             // --- P&L Tracking for Real Bets ---
             $stmtBets = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND type = 'real'");
             $stmtBets->execute();
@@ -222,12 +230,30 @@ class GiaNikController
                     $match = $this->footballData->searchInFixtureList($m['event'], $apiLiveMatches, $mappedCountry);
 
                     if ($match) {
-                        $m['fixture_id'] = $match['fixture']['id'] ?? null;
+                        $fid = $match['fixture']['id'] ?? null;
+                        $m['fixture_id'] = $fid;
                         $m['home_id'] = $match['teams']['home']['id'] ?? null;
                         $m['away_id'] = $match['teams']['away']['id'] ?? null;
-                        $m['score'] = ($match['goals']['home'] ?? '0') . '-' . ($match['goals']['away'] ?? '0');
+
+                        $scoreHome = $match['goals']['home'] ?? '0';
+                        $scoreAway = $match['goals']['away'] ?? '0';
+                        $statusShort = $match['fixture']['status']['short'] ?? 'LIVE';
                         $elapsed = $match['fixture']['status']['elapsed'] ?? 0;
-                        $m['status_label'] = ($match['fixture']['status']['short'] ?? 'LIVE') . ($elapsed ? " $elapsed'" : "");
+
+                        // Overlay with DB data if we have it and it's newer or more detailed
+                        if ($fid && isset($dbFixturesMap[$fid])) {
+                            $dbf = $dbFixturesMap[$fid];
+                            // If DB has a higher elapsed time or a different (more advanced) status, use it
+                            if ($dbf['elapsed'] > $elapsed || in_array($dbf['status_short'], ['FT', 'AET', 'PEN'])) {
+                                $scoreHome = $dbf['score_home'];
+                                $scoreAway = $dbf['score_away'];
+                                $statusShort = $dbf['status_short'];
+                                $elapsed = $dbf['elapsed'];
+                            }
+                        }
+
+                        $m['score'] = "$scoreHome-$scoreAway";
+                        $m['status_label'] = $statusShort . ($elapsed ? " $elapsed'" : "");
                         $m['has_api_data'] = true;
                         $m['home_logo'] = $match['teams']['home']['logo'] ?? null;
                         $m['away_logo'] = $match['teams']['away']['logo'] ?? null;
@@ -366,34 +392,39 @@ class GiaNikController
             }
             $_SESSION['gianik_scores'] = $newScores;
 
-            // Sort logic: 1. Real Bets, 2. Virtual Bets, 3. Live (In Play), 4. Just Updated (15s), 5. Matched Vol
+            // Sort logic: 1. Real Bets (P&L DESC), 2. Virtual Bets, 3. Live (Elapsed DESC), 4. Upcoming (Start ASC)
             usort($allMatches, function ($a, $b) {
                 // Priority 1: Active Real Bets
-                if ($a['has_active_real_bet'] && !$b['has_active_real_bet'])
-                    return -1;
-                if (!$a['has_active_real_bet'] && $b['has_active_real_bet'])
-                    return 1;
+                if ($a['has_active_real_bet'] && !$b['has_active_real_bet']) return -1;
+                if (!$a['has_active_real_bet'] && $b['has_active_real_bet']) return 1;
+                if ($a['has_active_real_bet'] && $b['has_active_real_bet']) {
+                    // Sort by absolute P&L value to put the most "active" positions first
+                    return abs($b['current_pl']) <=> abs($a['current_pl']);
+                }
 
                 // Priority 2: Active Virtual Bets
-                if (($a['has_active_virtual_bet'] ?? false) && !($b['has_active_virtual_bet'] ?? false))
-                    return -1;
-                if (!($a['has_active_virtual_bet'] ?? false) && ($b['has_active_virtual_bet'] ?? false))
-                    return 1;
+                if (($a['has_active_virtual_bet'] ?? false) && !($b['has_active_virtual_bet'] ?? false)) return -1;
+                if (!($a['has_active_virtual_bet'] ?? false) && ($b['has_active_virtual_bet'] ?? false)) return 1;
 
                 // Priority 3: Is Live (In Play)
-                if ($a['is_in_play'] && !$b['is_in_play'])
-                    return -1;
-                if (!$a['is_in_play'] && $b['is_in_play'])
-                    return 1;
+                if ($a['is_in_play'] && !$b['is_in_play']) return -1;
+                if (!$a['is_in_play'] && $b['is_in_play']) return 1;
+                if ($a['is_in_play'] && $b['is_in_play']) {
+                    // Among live matches, sort by elapsed time descending (ending soonest first)
+                    $aElapsed = 0;
+                    if (preg_match('/(\d+)\'/', $a['status_label'], $m)) $aElapsed = (int)$m[1];
+                    $bElapsed = 0;
+                    if (preg_match('/(\d+)\'/', $b['status_label'], $m)) $bElapsed = (int)$m[1];
 
-                // Priority 4: Just Updated (within 15s)
-                $now = time();
-                $aRecent = ($a['just_updated'] && ($now - $a['just_updated'] <= 15));
-                $bRecent = ($b['just_updated'] && ($now - $b['just_updated'] <= 15));
-                if ($aRecent && !$bRecent)
-                    return -1;
-                if (!$aRecent && $bRecent)
-                    return 1;
+                    if ($aElapsed !== $bElapsed) return $bElapsed <=> $aElapsed;
+                }
+
+                // Priority 4: Upcoming Matches (Start Time)
+                if (!$a['is_in_play'] && !$b['is_in_play']) {
+                    $aStart = $a['start_time'] ?? '9999-99-99';
+                    $bStart = $b['start_time'] ?? '9999-99-99';
+                    if ($aStart !== $bStart) return $aStart <=> $bStart;
+                }
 
                 // Priority 5: Matched Volume
                 return ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0);
