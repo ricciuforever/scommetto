@@ -1063,6 +1063,27 @@ class GiaNikController
             'AE' => 'UAE',
             'QA' => 'Qatar',
             'IE' => 'Ireland',
+            'PA' => 'Panama',
+            'HN' => 'Honduras',
+            'NI' => 'Nicaragua',
+            'GT' => 'Guatemala',
+            'SV' => 'El Salvador',
+            'CR' => 'Costa Rica',
+            'TH' => 'Thailand',
+            'ID' => 'Indonesia',
+            'MY' => 'Malaysia',
+            'VN' => 'Vietnam',
+            'EG' => 'Egypt',
+            'MA' => 'Morocco',
+            'TN' => 'Tunisia',
+            'DZ' => 'Algeria',
+            'ZA' => 'South Africa',
+            'NG' => 'Nigeria',
+            'GH' => 'Ghana',
+            'CM' => 'Cameroon',
+            'FI' => 'Finland',
+            'IS' => 'Iceland',
+            'AM' => 'Armenia'
         ];
         return $map[strtoupper($countryCode)] ?? null;
     }
@@ -1072,14 +1093,21 @@ class GiaNikController
         $mappedCountry = $this->getCountryMapping($countryCode);
         $liveFixtures = $preFetchedLive;
         if (!$liveFixtures) {
+            // Priority 1: Live matches (Centralized cache)
             $liveFixtures = $this->footballData->getLiveMatches()['response'] ?? [];
-            // Add today/tomorrow if not found or always?
-            // Better to always have a broader search for analysis even if not live
-            $today = date('Y-m-d');
-            $tomorrow = date('Y-m-d', strtotime('+1 day'));
-            $todayFixtures = $this->footballData->getFixturesByDate($today)['response'] ?? [];
-            $tomorrowFixtures = $this->footballData->getFixturesByDate($tomorrow)['response'] ?? [];
-            $liveFixtures = array_merge($liveFixtures, $todayFixtures, $tomorrowFixtures);
+
+            // Priority 2: Broad date range (Yesterday to +2 days)
+            $dates = [
+                date('Y-m-d', strtotime('-1 day')),
+                date('Y-m-d'),
+                date('Y-m-d', strtotime('+1 day')),
+                date('Y-m-d', strtotime('+2 days')),
+            ];
+
+            foreach ($dates as $date) {
+                $dateRes = $this->footballData->getFixturesByDate($date)['response'] ?? [];
+                $liveFixtures = array_merge($liveFixtures, $dateRes);
+            }
         }
         return $this->footballData->searchInFixtureList($bfEventName, $liveFixtures, $mappedCountry);
     }

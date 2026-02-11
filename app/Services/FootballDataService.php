@@ -335,6 +335,11 @@ class FootballDataService
         $name = preg_replace('/\d+\s*-\s*\d+/', ' v ', $bfEventName);
 
         $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $name);
+        if (count($bfTeams) < 2) {
+            // Fallback: try splitting by ' / ' if standard separators fail
+            $bfTeams = preg_split('/\s+\/\s+/', $name);
+        }
+
         if (count($bfTeams) < 2)
             return null;
 
@@ -375,9 +380,14 @@ class FootballDataService
      */
     public function normalizeTeamName($name)
     {
+        // 0. Preliminary cleanup: remove content in parentheses (e.g., "(SdE)", "(KSA)")
+        $name = preg_replace('/\s*\(.*?\)/', '', $name);
+        // Replace '/' or '-' with space to handle split names or different conventions
+        $name = str_replace(['/', '-', ' - '], ' ', $name);
+
         $name = strtolower($name);
 
-        // 0. Transliterate common accented characters
+        // 1. Transliterate common accented characters
         $chars = [
             'ä' => 'a',
             'ö' => 'o',
@@ -411,7 +421,7 @@ class FootballDataService
         ];
         $name = strtr($name, $chars);
 
-        // 1. Common abbreviations replacements (using word boundaries to avoid partial matches)
+        // 2. Common abbreviations / Core name simplification
         $replacements = [
             'man' => 'manchester',
             'man.' => 'manchester',
@@ -439,14 +449,17 @@ class FootballDataService
             'forest' => 'nottingham',
             'wednesday' => 'wed',
             'mk' => 'milton keynes',
-            'alder' => 'aldershot'
+            'alder' => 'aldershot',
+            'dhamk' => 'damac',
+            'taawoun' => 'taawon',
+            'uniao' => 'union',
+            'athletico' => 'atletico'
         ];
         foreach ($replacements as $search => $replace) {
             $name = preg_replace('/\b' . preg_quote($search, '/') . '\b/i', $replace, $name);
         }
 
-        // 2. Remove common prefixes/suffixes (word boundaries)
-        // If the name would become empty, DON'T remove it (e.g. "Inter")
+        // 3. Remove common prefixes/suffixes and noise words
         $remove = [
             'fc',
             'f.c.',
@@ -513,6 +526,7 @@ class FootballDataService
             'vs',
             'ii',
             ' b',
+            ' w',
             'lisbon',
             'lisboa',
             'utd',
@@ -522,7 +536,49 @@ class FootballDataService
             'univ',
             'catolica',
             'nacional',
-            'municipal'
+            'municipal',
+            'y',
+            'de',
+            'la',
+            'el',
+            'da',
+            'do',
+            'dos',
+            'das',
+            'van',
+            'der',
+            'di',
+            'e',
+            'ksa',
+            'sde',
+            'sp',
+            'ba',
+            'rj',
+            'mg',
+            'rs',
+            'ce',
+            'pe',
+            'sc',
+            'go',
+            'pr',
+            'pb',
+            'al',
+            'rn',
+            'pi',
+            'mt',
+            'ms',
+            'se',
+            'pa',
+            'to',
+            'df',
+            'ro',
+            'ac',
+            'rr',
+            'ap',
+            'buraidah',
+            'riyadh',
+            'jeddah',
+            'damman'
         ];
 
         $tempName = $name;
@@ -535,7 +591,7 @@ class FootballDataService
             $name = $tempName;
         }
 
-        // 3. Final cleanup: remove non-alphanumeric (except spaces), collapse multiple spaces
+        // 4. Final cleanup: remove non-alphanumeric (except spaces), collapse multiple spaces
         $name = preg_replace('/[^a-z0-9 ]/', '', $name);
         return trim(preg_replace('/\s+/', ' ', $name));
     }
@@ -548,15 +604,32 @@ class FootballDataService
         if (empty($n1) || empty($n2))
             return false;
 
-        // Exact match or substring
+        // 1. Exact match or substring
         if ($n1 === $n2 || strpos($n1, $n2) !== false || strpos($n2, $n1) !== false) {
             return true;
         }
 
+        // 2. Word-based matching (e.g., "Gimnasia Jujuy" vs "Gimnasia y Esgrima de Jujuy")
+        $w1 = explode(' ', $n1);
+        $w2 = explode(' ', $n2);
+        if (count($w1) >= 2 || count($w2) >= 2) {
+            $shorter = (count($w1) < count($w2)) ? $w1 : $w2;
+            $longer = (count($w1) < count($w2)) ? $w2 : $w1;
+
+            $matchCount = 0;
+            foreach ($shorter as $w) {
+                if (in_array($w, $longer))
+                    $matchCount++;
+            }
+            // If all words of shorter exist in longer (min 2 words)
+            if ($matchCount >= count($shorter) && count($shorter) >= 2) {
+                return true;
+            }
+        }
+
+        // 3. Adaptive Levenshtein threshold
         $len1 = strlen($n1);
         $len2 = strlen($n2);
-
-        // Adaptive Levenshtein threshold
         $threshold = ($len1 > 10 && $len2 > 10) ? 4 : 3;
 
         if (levenshtein($n1, $n2) < $threshold) {
