@@ -81,6 +81,27 @@ class GiaNikController
                 }
             }
 
+            // --- FORCE PENDING MARKETS ---
+            // Ensure any market with an active bet is included in the catalogues, even if not Match Odds
+            $stmtPending = $this->db->prepare("SELECT market_id FROM bets WHERE status = 'pending'");
+            $stmtPending->execute();
+            $forceMarketIds = array_unique($stmtPending->fetchAll(\PDO::FETCH_COLUMN));
+
+            if (!empty($forceMarketIds)) {
+                $resForce = $this->bf->request('listMarketCatalogue', [
+                    'filter' => ['marketIds' => $forceMarketIds],
+                    'marketProjection' => ['EVENT', 'COMPETITION', 'EVENT_TYPE', 'RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION']
+                ]);
+                if (isset($resForce['result'])) {
+                    $existingMarketIds = array_column($marketCatalogues, 'marketId');
+                    foreach ($resForce['result'] as $mcForce) {
+                        if (!in_array($mcForce['marketId'], $existingMarketIds)) {
+                            $marketCatalogues[] = $mcForce;
+                        }
+                    }
+                }
+            }
+
             // 4. Get Market Books (Prices)
             $marketIds = array_map(fn($m) => $m['marketId'], $marketCatalogues);
             $marketBooks = [];
@@ -129,6 +150,16 @@ class GiaNikController
             $stmtBets->execute();
             $activeRealBets = $stmtBets->fetchAll(PDO::FETCH_ASSOC);
 
+            // Fetch virtual bets too for priority
+            $stmtBetsV = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND type = 'virtual'");
+            $stmtBetsV->execute();
+            $activeVirtualBets = $stmtBetsV->fetchAll(PDO::FETCH_ASSOC);
+
+            $betMarketIds = array_unique(array_merge(
+                array_column($activeRealBets, 'market_id'),
+                array_column($activeVirtualBets, 'market_id')
+            ));
+
             // --- Score Tracking for Highlighting ---
             if (session_status() === PHP_SESSION_NONE)
                 session_start();
@@ -141,8 +172,15 @@ class GiaNikController
                 $marketBooksMap[$mb['marketId']] = $mb;
             }
 
-            // Prioritize market types (Match Odds > Winner > Moneyline)
-            usort($marketCatalogues, function ($a, $b) {
+            // Prioritize market types (Markets with bets > Match Odds > Winner > Moneyline)
+            usort($marketCatalogues, function ($a, $b) use ($betMarketIds) {
+                $hasBetA = in_array($a['marketId'], $betMarketIds);
+                $hasBetB = in_array($b['marketId'], $betMarketIds);
+                if ($hasBetA && !$hasBetB)
+                    return -1;
+                if (!$hasBetA && $hasBetB)
+                    return 1;
+
                 $prio = ['MATCH_ODDS' => 1, 'WINNER' => 2, 'MONEYLINE' => 3];
                 $typeA = $a['description']['marketType'] ?? '';
                 $typeB = $b['description']['marketType'] ?? '';
@@ -164,7 +202,7 @@ class GiaNikController
                 $mb = $marketBooksMap[$marketId];
                 $sport = 'Soccer'; // Hardcoded as we only fetch eventType 1
 
-                $startTime = $eventStartTimes[$eventId] ?? null;
+                $startTime = $eventStartTimes[$eventId] ?? ($mc['event']['openDate'] ?? null);
                 $statusLabel = 'LIVE';
                 if ($startTime) {
                     $odt = new \DateTime($startTime);
@@ -380,6 +418,14 @@ class GiaNikController
                             if ($currentOdds > 1.0) {
                                 // Estimated Cashout: (Placed Odds / Current Odds) * Stake - Stake
                                 $m['current_pl'] += (($bet['odds'] / $currentOdds) * $bet['stake']) - $bet['stake'];
+                            }
+                        } else {
+                            // Fallback: match by event name to at least show the "Active" badge
+                            $normBetEvent = $this->footballData->normalizeTeamName($bet['event_name']);
+                            $normMatchEvent = $this->footballData->normalizeTeamName($m['event']);
+                            if (!empty($normBetEvent) && $normBetEvent === $normMatchEvent) {
+                                $m['has_active_real_bet'] = true;
+                                // P&L calculation skipped as we don't have odds for the other market here
                             }
                         }
                     }
