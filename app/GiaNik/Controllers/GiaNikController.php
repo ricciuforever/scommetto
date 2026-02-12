@@ -237,7 +237,7 @@ class GiaNikController
                         }
                     }
 
-                    $match = $this->footballData->searchInFixtureList($m['event'], $apiLiveMatches, $mappedCountry);
+                    $match = $this->findMatchingFixture($m['event'], $sport, $apiLiveMatches, $countryCode, $startTime, $m['event_id']);
 
                     if ($match) {
                         $fid = $match['fixture']['id'] ?? null;
