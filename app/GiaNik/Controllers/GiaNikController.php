@@ -753,6 +753,22 @@ class GiaNikController
         header('Content-Type: application/json');
         $results = ['scanned' => 0, 'new_bets' => 0, 'errors' => []];
         try {
+            // --- ATOMIC LOCKING ---
+            // Impedisce esecuzioni concorrenti che causano scommesse duplicate
+            $db = \App\Services\Database::getInstance()->getConnection();
+            $stmtLock = $db->prepare("SELECT updated_at FROM system_state WHERE `key` = 'gianik_processing_lock'");
+            $stmtLock->execute();
+            $lockTime = $stmtLock->fetchColumn();
+
+            if ($lockTime && (time() - strtotime($lockTime)) < 300) { // 5 minuti di timeout
+                echo json_encode(['status' => 'error', 'message' => 'Un altro processo GiaNik è già in esecuzione. Attendere.']);
+                return;
+            }
+
+            // Imposta il Lock
+            $db->prepare("INSERT INTO system_state (`key`, `value`, updated_at) VALUES ('gianik_processing_lock', '1', CURRENT_TIMESTAMP) 
+                          ON CONFLICT(`key`) DO UPDATE SET updated_at = CURRENT_TIMESTAMP")->execute();
+
             // Sincronizza lo stato reale prima di procedere
             $this->syncWithBetfair();
             $this->processActiveBets(); // ← TRADE/CASHOUT LOGIC
@@ -964,8 +980,16 @@ class GiaNikController
                 }
             }
             $this->settleBets();
+
+            // --- UNLOCK ---
+            $db->prepare("DELETE FROM system_state WHERE `key` = 'gianik_processing_lock'")->execute();
+
             echo json_encode(['status' => 'success', 'results' => $results]);
         } catch (\Throwable $e) {
+            // Unlock on error too
+            if (isset($db)) {
+                $db->prepare("DELETE FROM system_state WHERE `key` = 'gianik_processing_lock'")->execute();
+            }
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
     }
