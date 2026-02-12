@@ -377,6 +377,9 @@ class FootballDataService
     {
         $name = strtolower($name);
 
+        // 0a. Remove years (e.g., 2018, 1904)
+        $name = preg_replace('/\b(19|20)\d{2}\b/', '', $name);
+
         // 0. Transliterate common accented characters
         $chars = [
             'ä' => 'a',
@@ -446,7 +449,19 @@ class FootballDataService
             'al-hilal' => 'hilal',
             'al-nassr' => 'nassr',
             'al-shabab' => 'shabab',
-            'al-ittihad' => 'ittihad'
+            'al-ittihad' => 'ittihad',
+            'al-qadsiah' => 'qadisiya',
+            'al-qadsia' => 'qadisiya',
+            'al-qadisiyah' => 'qadisiya',
+            'al-quadisiya' => 'qadisiya',
+            'qadsiah' => 'qadisiya',
+            'agf' => 'aarhus',
+            'athletico' => 'athletico',
+            'athletico-pr' => 'athletico',
+            'athletico pr' => 'athletico',
+            'paranaense' => 'athletico',
+            'gloria bistrita' => 'gloria',
+            'bistrita-nasaud' => 'bistrita'
         ];
         foreach ($replacements as $search => $replace) {
             $name = preg_replace('/\b' . preg_quote($search, '/') . '\b/i', $replace, $name);
@@ -539,7 +554,16 @@ class FootballDataService
             'jeddah',
             'dammam',
             'makkah',
-            'medina'
+            'medina',
+            'ksa',
+            'dk',
+            'ro',
+            'br',
+            'pr',
+            'sp',
+            'rj',
+            'mg',
+            'rs'
         ];
 
         $tempName = $name;
