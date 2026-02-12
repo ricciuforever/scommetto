@@ -45,6 +45,27 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                 <div class="text-lg font-black tabular-nums text-slate-400 leading-none">
                     €<?php echo number_format($account['available'] + $account['exposure'], 2); ?></div>
             </div>
+
+            <div class="h-8 w-px bg-white/10 mx-2"></div>
+
+            <div>
+                <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">P&L Settled</span>
+                <div
+                    class="text-lg font-black tabular-nums <?php echo $portfolioStats['net_profit'] >= 0 ? 'text-success' : 'text-danger'; ?> leading-none">
+                    €<?php echo number_format($portfolioStats['net_profit'], 2); ?></div>
+            </div>
+            <div>
+                <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">Win Rate</span>
+                <div class="text-lg font-black tabular-nums text-indigo-400 leading-none">
+                    <?php echo $portfolioStats['win_rate']; ?>%
+                </div>
+            </div>
+            <div>
+                <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">ROI</span>
+                <div class="text-lg font-black tabular-nums text-accent leading-none">
+                    <?php echo $portfolioStats['roi']; ?>%
+                </div>
+            </div>
         </div>
 
         <?php if ($operationalMode !== 'real'): ?>
@@ -69,6 +90,21 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                 </div>
             </div>
         <?php endif; ?>
+    </div>
+</div>
+
+<!-- Portfolio Trend Chart -->
+<div class="glass p-6 rounded-[32px] border-white/5 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h4 class="text-[10px] font-black uppercase text-slate-500 tracking-[.2em]">Andamento Portafoglio (Start 100€)
+        </h4>
+        <div
+            class="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white/5 px-3 py-1 rounded-full border border-white/5">
+            <?php echo $portfolioStats['total_bets'] ?? 0; ?> Scommesse Chiuse
+        </div>
+    </div>
+    <div class="h-48 w-full">
+        <canvas id="portfolioChart"></canvas>
     </div>
 </div>
 
@@ -415,4 +451,91 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
             }
         };
     }
+</script>
+
+<!-- Initialize Chart.js safely -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    (function () {
+        // Prevent double init if already active
+        if (window.myPortfolioChart) {
+            window.myPortfolioChart.destroy();
+        }
+
+        const ctx = document.getElementById('portfolioChart');
+        if (!ctx) return;
+
+        // Wait for Chart.js to load if using CDN
+        const initChart = () => {
+            if (typeof Chart === 'undefined') {
+                setTimeout(initChart, 100);
+                return;
+            }
+
+            window.myPortfolioChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: <?php echo json_encode($portfolioStats['labels'] ?? []); ?>,
+                    datasets: [{
+                        label: 'Bilancio (€)',
+                        data: <?php echo json_encode($portfolioStats['history'] ?? [100]); ?>,
+                        borderColor: '#06b6d4', // Cyan accent
+                        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 3,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#06b6d4',
+                        pointBorderColor: '#0f172a',
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            titleFont: { size: 10, weight: 'bold' },
+                            bodyFont: { size: 12, weight: '900' },
+                            padding: 12,
+                            displayColors: false,
+                            callbacks: {
+                                label: function (context) {
+                                    return '€' + context.parsed.y.toFixed(2);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#64748b', font: { size: 9, weight: '900' } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
+                            ticks: { 
+                                color: '#64748b', 
+                                font: { size: 9, weight: '700' },
+                                callback: function(value) { return '€' + value; }
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        if (window.Chart) {
+            initChart();
+        } else {
+            // Find the script tag and wait for load
+            const script = document.querySelector('script[src*="chart.js"]');
+            if (script) {
+                script.addEventListener('load', initChart);
+            } else {
+                initChart();
+            }
+        }
+    })();
 </script>

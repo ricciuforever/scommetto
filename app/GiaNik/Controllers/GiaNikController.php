@@ -466,10 +466,8 @@ class GiaNikController
             $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
             $stmtMode->execute();
             $operationalMode = $stmtMode->fetchColumn() ?: 'virtual';
-
-            // Virtual
+            $portfolioStats = $this->getPortfolioStats($operationalMode);
             $virtualAccount = $this->getVirtualBalance();
-
             $settlementResults = $this->settleBets();
             require __DIR__ . '/../Views/partials/gianik_live.php';
         } catch (\Throwable $e) {
@@ -1731,5 +1729,45 @@ class GiaNikController
         } catch (\Throwable $e) {
             file_put_contents(\App\Config\Config::LOGS_PATH . 'gianik_sync_error.log', date('[Y-m-d H:i:s] ') . "Sync Error: " . $e->getMessage() . PHP_EOL, FILE_APPEND);
         }
+    }
+
+    private function getPortfolioStats($type = 'virtual')
+    {
+        $stmt = $this->db->prepare("SELECT profit, stake, status, settled_at FROM bets WHERE status IN ('won', 'lost') AND type = ? ORDER BY settled_at ASC");
+        $stmt->execute([$type]);
+        $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $totalStake = 0;
+        $netProfit = 0;
+        $wins = 0;
+        $losses = 0;
+        $history = [100.0];
+        $labels = ['START'];
+
+        $currentBalance = 100.0;
+        foreach ($bets as $b) {
+            $totalStake += (float) ($b['stake'] ?? 0);
+            $netProfit += (float) ($b['profit'] ?? 0);
+            if ($b['status'] === 'won')
+                $wins++;
+            else
+                $losses++;
+
+            $currentBalance += (float) ($b['profit'] ?? 0);
+            $history[] = round($currentBalance, 2);
+            $labels[] = date('d/m H:i', strtotime($b['settled_at']));
+        }
+
+        $totalBets = $wins + $losses;
+        return [
+            'wins' => $wins,
+            'losses' => $losses,
+            'total_bets' => $totalBets,
+            'win_rate' => $totalBets > 0 ? round(($wins / $totalBets) * 100, 1) : 0,
+            'net_profit' => $netProfit,
+            'roi' => $totalStake > 0 ? round(($netProfit / $totalStake) * 100, 2) : 0,
+            'history' => $history,
+            'labels' => $labels
+        ];
     }
 }
