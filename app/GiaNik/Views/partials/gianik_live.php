@@ -519,10 +519,10 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                         },
                         y: {
                             grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
-                            ticks: { 
-                                color: '#64748b', 
+                            ticks: {
+                                color: '#64748b',
                                 font: { size: 9, weight: '700' },
-                                callback: function(value) { return '€' + value; }
+                                callback: function (value) { return '€' + value; }
                             }
                         }
                     }
@@ -535,12 +535,35 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                         ctx.save();
                         ctx.beginPath();
                         ctx.lineWidth = 1;
-                        ctx.setLineDash([5, 5]);
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // Sottile ma visibile
                         ctx.moveTo(left, yPos);
                         ctx.lineTo(right, yPos);
                         ctx.stroke();
                         ctx.restore();
+                    }
+                }],
+                datasets: [{
+                    label: 'Bilancio (€)',
+                    data: <?php echo json_encode($portfolioStats['history'] ?? [100]); ?>,
+                    borderWidth: 3,
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    pointBackgroundColor: (ctx) => {
+                        const val = ctx.raw;
+                        return val >= 100 ? '#22c55e' : '#ef4444';
+                    },
+                    fill: {
+                        target: { value: 100 },
+                        above: 'rgba(34, 197, 94, 0.15)', // Più marcato sopra
+                        below: 'rgba(239, 68, 68, 0.15)'  // Più marcato sotto
+                    },
+                    tension: 0.4,
+                    segment: {
+                        borderColor: ctx => {
+                            if (ctx.p1.parsed.y > 100) return '#22c55e';
+                            if (ctx.p1.parsed.y < 100) return '#ef4444';
+                            return '#64748b';
+                        }
                     }
                 }]
             });
