@@ -820,16 +820,24 @@ class GiaNikController
                 $eventMarketsMap[$eid][] = $mc;
             }
 
-            $stmtPending = $this->db->prepare("SELECT DISTINCT event_name, market_id FROM bets WHERE status = 'pending'");
+            // Migliorato: Carichiamo anche betfair_id per un controllo più robusto
+            $stmtPending = $this->db->prepare("SELECT DISTINCT event_name, market_id, betfair_id FROM bets WHERE status = 'pending'");
             $stmtPending->execute();
             $pendingBetsRaw = $stmtPending->fetchAll(PDO::FETCH_ASSOC);
             $pendingEventNames = array_column($pendingBetsRaw, 'event_name');
             $pendingMarketIds = array_column($pendingBetsRaw, 'market_id');
 
-            // Recuperiamo il conteggio delle scommesse per oggi per ogni match (per limitare ingressi multipli)
-            $stmtCount = $this->db->prepare("SELECT event_name, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name");
+            // Recuperiamo il conteggio dettagliato delle scommesse per oggi (per match e per tempo)
+            $stmtCount = $this->db->prepare("SELECT event_name, period, COUNT(*) as cnt FROM bets WHERE created_at >= date('now', 'start of day') GROUP BY event_name, period");
             $stmtCount->execute();
-            $matchBetCounts = $stmtCount->fetchAll(PDO::FETCH_KEY_PAIR);
+            $matchBetStats = $stmtCount->fetchAll(PDO::FETCH_ASSOC);
+            $matchBetCounts = [];
+            foreach ($matchBetStats as $stat) {
+                $mName = $stat['event_name'];
+                $period = $stat['period'];
+                $matchBetCounts[$mName]['total'] = ($matchBetCounts[$mName]['total'] ?? 0) + $stat['cnt'];
+                $matchBetCounts[$mName][$period] = $stat['cnt'];
+            }
 
             // Fetch real balance from Betfair
             $fundsData = $this->bf->getFunds();
@@ -906,6 +914,8 @@ class GiaNikController
                         $firstMarketId = $event['markets'][0]['marketId'] ?? null;
                         $firstBook = $booksMap[$firstMarketId] ?? null;
                         $firstPriceTrend = $newPricesForHistory[$firstMarketId] ?? null;
+
+                        // Pass country code if available for more precise matching
                         $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook, $firstPriceTrend);
                     }
 
@@ -923,10 +933,19 @@ class GiaNikController
                         $analysis = json_decode($matches[1], true);
                         if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
 
-                            // Controllo limite 4 scommesse per match (Calcio)
-                            $currentCount = $matchBetCounts[$event['event']] ?? 0;
-                            if (($event['sport'] === 'Soccer' || $event['sport'] === 'Football') && $currentCount >= 4) {
-                                continue;
+                            // Determiniamo il periodo corrente del match (1H o 2H)
+                            $currentPeriod = 'UNKNOWN';
+                            if (isset($event['api_football']['live']['live_status']['short'])) {
+                                $statusShort = $event['api_football']['live']['live_status']['short'];
+                                if ($statusShort === '1H') $currentPeriod = '1H';
+                                elseif ($statusShort === '2H') $currentPeriod = '2H';
+                            }
+
+                            // Controllo limite 4 scommesse per match (Calcio) e 2 per tempo
+                            $stats = $matchBetCounts[$event['event']] ?? ['total' => 0];
+                            if (($event['sport'] === 'Soccer' || $event['sport'] === 'Football')) {
+                                if ($stats['total'] >= 4) continue;
+                                if ($currentPeriod !== 'UNKNOWN' && ($stats[$currentPeriod] ?? 0) >= 2) continue;
                             }
                             $selectedMarket = null;
                             foreach ($event['markets'] as $m) {
@@ -939,8 +958,16 @@ class GiaNikController
                                 continue;
 
                             $stake = (float) ($analysis['stake'] ?? 2.0);
-                            if ($stake < 2.0)
-                                $stake = 2.0;
+                            if ($stake < Config::MIN_BETFAIR_STAKE)
+                                $stake = Config::MIN_BETFAIR_STAKE;
+                            if ($stake > Config::MAX_BETFAIR_STAKE)
+                                $stake = Config::MAX_BETFAIR_STAKE;
+
+                            // Controllo liquidità (totalMatched del mercato scelto)
+                            $minLiquidity = $stake * 50; // Almeno 50 volte lo stake come volume minimo
+                            if ($selectedMarket['totalMatched'] < $minLiquidity) {
+                                continue;
+                            }
 
                             if ($activeBalance['available'] < $stake)
                                 continue;
@@ -969,8 +996,8 @@ class GiaNikController
                                 }
 
                                 $motivation = $analysis['motivation'] ?? trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
-                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                                $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation]);
+                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation, $currentPeriod]);
                                 $results['new_bets']++;
                             }
                         }
@@ -1810,8 +1837,8 @@ class GiaNikController
                 $dbId = $stmt->fetchColumn();
 
                 if ($dbId) {
-                    // Update: aggiorna sempre per avere l'ultimo stato (profitto, status)
-                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, created_at = ? WHERE id = ?");
+                    // Update: aggiorna sempre per avere l'ultimo stato (profitto, status) e resetta missing_count
+                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, created_at = ?, last_seen_at = CURRENT_TIMESTAMP, missing_count = 0 WHERE id = ?");
                     $stmtUpdate->execute([$o['status'], $o['profit'], $o['marketId'], $marketName, $eventName, $runnerName, $placedDate, $dbId]);
                 } else {
                     // Import Automatico (se non esisteva)
@@ -1843,19 +1870,23 @@ class GiaNikController
             $isValidResponse = isset($clearedRes['clearedOrders']) || isset($currentRes['currentOrders']);
 
             if ($isValidResponse) {
-                $sqlDelete = "DELETE FROM bets WHERE type = 'real' AND created_at < datetime('now', '-2 minutes')";
+                // Invece di cancellare subito, incrementiamo missing_count per i record reali non visti
                 if (!empty($bfIdsList)) {
                     $placeholders = implode(',', array_fill(0, count($bfIdsList), '?'));
-                    $sqlDelete .= " AND betfair_id NOT IN ($placeholders)";
-                    $stmtDelete = $this->db->prepare($sqlDelete);
-                    $stmtDelete->execute($bfIdsList);
+                    $stmtInc = $this->db->prepare("UPDATE bets SET missing_count = missing_count + 1 WHERE type = 'real' AND betfair_id NOT IN ($placeholders) AND status = 'pending'");
+                    $stmtInc->execute($bfIdsList);
                 } else {
-                    // Se Betfair conferma che non ci sono ordini, svuotiamo la lista 'real' locale (vecchia)
-                    $this->db->exec($sqlDelete);
+                    $this->db->exec("UPDATE bets SET missing_count = missing_count + 1 WHERE type = 'real' AND status = 'pending'");
                 }
 
+                // Cancella definitivamente solo se missing_count è alto (es. > 3 cicli) o se record vecchi e conclusi
+                $this->db->exec("DELETE FROM bets WHERE type = 'real' AND (
+                    (missing_count > 3 AND status = 'pending') OR
+                    (status IN ('won', 'lost', 'cancelled') AND created_at < datetime('now', '-24 hours'))
+                )");
+
                 // Pulizia record manuali senza ID Betfair (residui orfani oramai vecchi)
-                $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND created_at < datetime('now', '-2 minutes')");
+                $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND created_at < datetime('now', '-5 minutes')");
             }
 
         } catch (\Throwable $e) {
