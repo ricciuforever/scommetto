@@ -160,17 +160,33 @@ class GiaNikController
                 array_column($activeVirtualBets, 'market_id')
             ));
 
-            // --- Score Tracking for Highlighting ---
+            // --- Price Tracking for Trends ---
             if (session_status() === PHP_SESSION_NONE)
                 session_start();
+            $prevPrices = $_SESSION['gianik_prices'] ?? [];
+            $newPrices = [];
+
+            // --- Score Tracking for Highlighting ---
             $prevScores = $_SESSION['gianik_scores'] ?? [];
             $newScores = [];
 
             // 5. Merge Data
             $marketBooksMap = [];
             foreach ($marketBooks as $mb) {
-                $marketBooksMap[$mb['marketId']] = $mb;
+                $marketId = $mb['marketId'];
+                $marketBooksMap[$marketId] = $mb;
+
+                // Track price movement
+                $currentBack = $mb['runners'][0]['ex']['availableToBack'][0]['price'] ?? 0;
+                if ($currentBack > 0) {
+                    $newPrices[$marketId] = [
+                        'price' => $currentBack,
+                        'trend' => isset($prevPrices[$marketId]) ? ($currentBack <=> $prevPrices[$marketId]['price']) : 0,
+                        'prev' => $prevPrices[$marketId]['price'] ?? $currentBack
+                    ];
+                }
             }
+            $_SESSION['gianik_prices'] = $newPrices;
 
             // Prioritize market types (Markets with bets > Match Odds > Winner > Moneyline)
             usort($marketCatalogues, function ($a, $b) use ($betMarketIds) {
@@ -436,6 +452,8 @@ class GiaNikController
                     if ($stmtV->fetch()) {
                         $m['has_active_virtual_bet'] = true;
                     }
+
+                    $m['price_trend'] = $newPrices[$m['marketId']] ?? null;
 
                     // Detect Score Changes
                     $scoreKey = $m['event_id'];
@@ -737,6 +755,7 @@ class GiaNikController
         try {
             // Sincronizza lo stato reale prima di procedere
             $this->syncWithBetfair();
+            $this->processActiveBets(); // ← TRADE/CASHOUT LOGIC
 
             // Force real mode
             $globalMode = 'real';
@@ -802,6 +821,11 @@ class GiaNikController
             $activeBalance['available'] = (float) ($funds['availableToBetBalance'] ?? 0);
             $activeBalance['total'] = $activeBalance['available'] + abs((float) ($funds['exposure'] ?? 0));
 
+            if (session_status() === PHP_SESSION_NONE)
+                session_start();
+            $prevPrices = $_SESSION['gianik_prices'] ?? [];
+            $newPricesForHistory = [];
+
             $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
                 if ($eventCounter >= 3)
@@ -817,8 +841,19 @@ class GiaNikController
                     $marketIds = array_map(fn($mc) => $mc['marketId'], $catalogues);
                     $booksRes = $this->bf->getMarketBooks($marketIds);
                     $booksMap = [];
-                    foreach ($booksRes['result'] ?? [] as $b)
+                    foreach ($booksRes['result'] ?? [] as $b) {
                         $booksMap[$b['marketId']] = $b;
+
+                        // Capture price for history
+                        $cb = $b['runners'][0]['ex']['availableToBack'][0]['price'] ?? 0;
+                        if ($cb > 0) {
+                            $newPricesForHistory[$b['marketId']] = [
+                                'price' => $cb,
+                                'trend' => isset($prevPrices[$b['marketId']]) ? ($cb <=> $prevPrices[$b['marketId']]['price']) : 0,
+                                'prev' => $prevPrices[$b['marketId']]['price'] ?? $cb
+                            ];
+                        }
+                    }
 
                     $event = [
                         'event' => $mainEvent['event']['name'],
@@ -854,8 +889,12 @@ class GiaNikController
                         // Pass the first market book for fallback extraction
                         $firstMarketId = $event['markets'][0]['marketId'] ?? null;
                         $firstBook = $booksMap[$firstMarketId] ?? null;
-                        $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook);
+                        $firstPriceTrend = $newPricesForHistory[$firstMarketId] ?? null;
+                        $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook, $firstPriceTrend);
                     }
+
+                    // Update global price history
+                    $_SESSION['gianik_prices'] = array_merge($_SESSION['gianik_prices'] ?? [], $newPricesForHistory);
 
                     $gemini = new GeminiService();
                     $predictionRaw = $gemini->analyze([$event], [
@@ -931,11 +970,83 @@ class GiaNikController
         }
     }
 
+    public function processActiveBets()
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND type = 'real'");
+            $stmt->execute();
+            $pending = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($pending))
+                return;
+
+            $marketIds = array_values(array_unique(array_column($pending, 'market_id')));
+            $res = $this->bf->getMarketBooks($marketIds);
+            $booksMap = [];
+            foreach ($res['result'] ?? [] as $b)
+                $booksMap[$b['marketId']] = $b;
+
+            $gemini = new \App\Services\GeminiService();
+
+            foreach ($pending as $bet) {
+                if (!isset($booksMap[$bet['market_id']]))
+                    continue;
+
+                $mb = $booksMap[$bet['market_id']];
+                if ($mb['status'] !== 'OPEN')
+                    continue;
+
+                // Enrich with live data
+                $enriched = $this->enrichWithApiData($bet['event_name'], $bet['sport'], null, null, $mb);
+
+                $context = [
+                    'active_bet' => $bet,
+                    'current_market' => $mb,
+                    'is_gianik' => true,
+                    'trading_mode' => true // Signal Gemini we want a Stay/Cashout decision
+                ];
+
+                $prompt = "Hai una scommessa attiva su: " . $bet['event_name'] . " (" . $bet['market_name'] . ").
+                           Puntata: " . $bet['stake'] . "€ a quota " . $bet['odds'] . ". Runner: " . $bet['runner_name'] . ".
+                           Situazione Live: " . json_encode($enriched) . ".
+                           DECIDI: restare in gioco o fare CASH OUT? 
+                           Rispondi in JSON: {\"action\": \"STAY\"|\"CASHOUT\", \"confidence\": 0-100, \"motivation\": \"...\"}";
+
+                $decisionRaw = $gemini->analyze([$context], ['raw_prompt' => $prompt]);
+                if (preg_match('/```json\s*([\s\S]*?)\s*```/', $decisionRaw, $matches)) {
+                    $dec = json_decode($matches[1], true);
+                    if ($dec && $dec['action'] === 'CASHOUT' && ($dec['confidence'] ?? 0) >= 85) {
+                        // Esegui scommessa di chiusura (LAY sul runner puntato se era un BACK)
+                        // Per semplicità usiamo l'ultima quota disponibile
+                        $layPrice = 0;
+                        foreach ($mb['runners'] as $r) {
+                            if ($r['selectionId'] == $bet['selection_id']) {
+                                $layPrice = $r['ex']['availableToLay'][0]['price'] ?? $r['lastPriceTraded'];
+                                break;
+                            }
+                        }
+
+                        if ($layPrice > 0) {
+                            // Semplificato: punteremo la stessa stake in LAY per coprire (o calcolo proporzionale se avanzato)
+                            $this->bf->placeBet($bet['market_id'], $bet['selection_id'], $layPrice, $bet['stake'], 'LAY');
+                            // Segnamo come chiusa manualmente o aspettiamo settle? 
+                            // Meglio aggiornare il log dei risultati
+                            $this->db->prepare("UPDATE bets SET motivation = ? WHERE id = ?")
+                                ->execute(["[CASHOUT ESEGUITO]: " . $dec['motivation'], $bet['id']]);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log("GiaNik Trading Error: " . $e->getMessage());
+        }
+    }
+
     public function settleBets()
     {
         try {
             // Recupera tutte le scommesse pendenti (virtuali e reali)
-            $stmt = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND created_at < datetime('now', '-5 minutes')");
+            $stmt = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND created_at < datetime('now', '-3 minutes')");
             $stmt->execute();
             $pending = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -980,7 +1091,7 @@ class GiaNikController
         }
     }
 
-    private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $competition = '', $bfMarketBook = null)
+    private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $competition = '', $bfMarketBook = null, $priceTrend = null)
     {
         // Restricted to Soccer
         $countryCode = null;
@@ -1005,10 +1116,11 @@ class GiaNikController
                             'live_score' => $score ?: ['home' => 0, 'away' => 0],
                             'live_status' => [
                                 'short' => ($def['inPlay'] ?? false) ? 'LIVE' : 'NS',
-                                'elapsed_minutes' => 0 // Betfair usually doesn't provide exact minute in API-NG easily
+                                'elapsed_minutes' => 0
                             ],
                             'match_info' => ['fixture_id' => 'BF-' . ($bfMarketBook['marketId'] ?? 'unknown')]
                         ],
+                        'price_trend' => $priceTrend,
                         'note' => 'Dati estratti direttamente da Betfair (API-Football match non trovato).'
                     ];
                 }
@@ -1024,11 +1136,22 @@ class GiaNikController
         $standings = (isset($apiMatch['league']['id'], $apiMatch['league']['season'])) ? $this->footballData->getStandings($apiMatch['league']['id'], $apiMatch['league']['season']) : null;
         $preds = $this->footballData->getFixturePredictions($fid, $status);
 
-        // 🎯 STATISTICS LIVE (possesso palla, tiri, corner, ecc.)
+        // 🎯 STATISTICS LIVE
         $stats = $this->footballData->getFixtureStatistics($fid, $status);
 
-        // ⚽ EVENTS LIVE (gol, cartellini, sostituzioni, VAR)
+        // ⚽ EVENTS LIVE
         $events = $this->footballData->getFixtureEvents($fid, $status);
+
+        // Calculate "Pressure Index" (Recent events in last 15 mins)
+        $elapsed = (int) ($details['elapsed'] ?? 0);
+        $recentEvents = [];
+        if ($elapsed > 5) {
+            foreach ($events as $ev) {
+                if ($ev['time_elapsed'] >= ($elapsed - 15)) {
+                    $recentEvents[] = $ev;
+                }
+            }
+        }
 
         // 🚨 DATI LIVE ESPLICITI per Gemini
         $liveData = [
@@ -1041,7 +1164,7 @@ class GiaNikController
             'live_status' => [
                 'short' => $details['status_short'] ?? 'NS',
                 'long' => $details['status_long'] ?? 'Not Started',
-                'elapsed_minutes' => $details['elapsed'] ?? 0
+                'elapsed_minutes' => $elapsed
             ],
             'match_info' => [
                 'fixture_id' => $fid,
@@ -1052,9 +1175,11 @@ class GiaNikController
 
         return [
             'fixture' => $details,
-            'live' => $liveData,  // ← DATI LIVE ESPLICITI
-            'statistics' => $stats,  // ← STATISTICS LIVE (shots, possession, corners, ecc.)
-            'events' => $events,  // ← EVENTS LIVE (gol, cards, subs, VAR)
+            'live' => $liveData,
+            'statistics' => $stats,
+            'events' => $events,
+            'recent_events' => $recentEvents, // ← PRESSURE INDEX (Last 15m)
+            'price_trend' => $priceTrend,     // ← MARKET TREND
             'h2h' => $h2h['h2h_json'] ?? [],
             'standings' => $standings,
             'predictions' => $preds['prediction_json'] ?? null
