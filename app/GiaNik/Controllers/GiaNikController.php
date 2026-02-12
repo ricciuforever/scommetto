@@ -83,7 +83,7 @@ class GiaNikController
 
             // --- FORCE PENDING MARKETS ---
             // Ensure any market with an active bet is included in the catalogues, even if not Match Odds
-            $stmtPending = $this->db->prepare("SELECT market_id FROM bets WHERE status = 'pending'");
+            $stmtPending = $this->db->prepare("SELECT market_id FROM gianik_bets WHERE status = 'pending'");
             $stmtPending->execute();
             $forceMarketIds = array_unique($stmtPending->fetchAll(\PDO::FETCH_COLUMN));
 
@@ -146,12 +146,12 @@ class GiaNikController
             }
 
             // --- P&L Tracking for Real Bets ---
-            $stmtBets = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND type = 'real'");
+            $stmtBets = $this->db->prepare("SELECT * FROM gianik_bets WHERE status = 'pending' AND type = 'real'");
             $stmtBets->execute();
             $activeRealBets = $stmtBets->fetchAll(PDO::FETCH_ASSOC);
 
-            // Fetch virtual bets too for priority
-            $stmtBetsV = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND type = 'virtual'");
+            // Fetch virtual gianik_bets too for priority
+            $stmtBetsV = $this->db->prepare("SELECT * FROM gianik_bets WHERE status = 'pending' AND type = 'virtual'");
             $stmtBetsV->execute();
             $activeVirtualBets = $stmtBetsV->fetchAll(PDO::FETCH_ASSOC);
 
@@ -188,7 +188,7 @@ class GiaNikController
             }
             $_SESSION['gianik_prices'] = $newPrices;
 
-            // Prioritize market types (Markets with bets > Match Odds > Winner > Moneyline)
+            // Prioritize market types (Markets with gianik_bets > Match Odds > Winner > Moneyline)
             usort($marketCatalogues, function ($a, $b) use ($betMarketIds) {
                 $hasBetA = in_array($a['marketId'], $betMarketIds);
                 $hasBetB = in_array($b['marketId'], $betMarketIds);
@@ -419,7 +419,7 @@ class GiaNikController
 
                     $m['has_active_virtual_bet'] = false;
 
-                    // Calculate P&L for real bets
+                    // Calculate P&L for real gianik_bets
                     foreach ($activeRealBets as $bet) {
                         if ($bet['market_id'] === $m['marketId']) {
                             $m['has_active_real_bet'] = true;
@@ -446,8 +446,8 @@ class GiaNikController
                         }
                     }
 
-                    // Check for virtual bets
-                    $stmtV = $this->db->prepare("SELECT id FROM bets WHERE market_id = ? AND type = 'virtual' AND status = 'pending'");
+                    // Check for virtual gianik_bets
+                    $stmtV = $this->db->prepare("SELECT id FROM gianik_bets WHERE market_id = ? AND type = 'virtual' AND status = 'pending'");
                     $stmtV->execute([$m['marketId']]);
                     if ($stmtV->fetch()) {
                         $m['has_active_virtual_bet'] = true;
@@ -714,7 +714,7 @@ class GiaNikController
                 }
             }
 
-            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt = $this->db->prepare("INSERT INTO gianik_bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation]);
 
             echo json_encode(['status' => 'success', 'message' => 'Scommessa piazzata (' . $type . ')']);
@@ -730,7 +730,8 @@ class GiaNikController
             $input = json_decode(file_get_contents('php://input'), true);
             $mode = $input['mode'] ?? 'virtual';
 
-            $stmt = $this->db->prepare("INSERT INTO system_state (key, value, updated_at) VALUES ('operational_mode', ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP");
+            // Cross-platform UPSERT using REPLACE INTO
+            $stmt = $this->db->prepare("REPLACE INTO gianik_system_state (`key`, `value`, updated_at) VALUES ('operational_mode', ?, CURRENT_TIMESTAMP)");
             $stmt->execute([$mode]);
 
             echo json_encode(['status' => 'success', 'mode' => $mode]);
@@ -742,7 +743,7 @@ class GiaNikController
     public function getMode()
     {
         header('Content-Type: application/json');
-        $stmt = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
+        $stmt = $this->db->prepare("SELECT value FROM gianik_system_state WHERE key = 'operational_mode'");
         $stmt->execute();
         $mode = $stmt->fetchColumn() ?: 'virtual';
         echo json_encode(['status' => 'success', 'mode' => $mode]);
@@ -755,7 +756,7 @@ class GiaNikController
         try {
             // --- ATOMIC LOCKING (Uses GiaNik DB) ---
             // Impedisce esecuzioni concorrenti che causano scommesse duplicate
-            $stmtLock = $this->db->prepare("SELECT updated_at FROM system_state WHERE `key` = 'gianik_processing_lock'");
+            $stmtLock = $this->db->prepare("SELECT updated_at FROM gianik_system_state WHERE `key` = 'gianik_processing_lock'");
             $stmtLock->execute();
             $lockTime = $stmtLock->fetchColumn();
 
@@ -764,9 +765,8 @@ class GiaNikController
                 return;
             }
 
-            // Imposta il Lock
-            $this->db->prepare("INSERT INTO system_state (`key`, `value`, updated_at) VALUES ('gianik_processing_lock', '1', CURRENT_TIMESTAMP)
-                          ON CONFLICT(`key`) DO UPDATE SET updated_at = CURRENT_TIMESTAMP")->execute();
+            // Imposta il Lock (Cross-platform REPLACE)
+            $this->db->prepare("REPLACE INTO gianik_system_state (`key`, `value`, updated_at) VALUES ('gianik_processing_lock', '1', CURRENT_TIMESTAMP)")->execute();
 
             // Sincronizza lo stato reale prima di procedere
             $this->syncWithBetfair();
@@ -778,6 +778,16 @@ class GiaNikController
             // Restricted to Soccer (ID 1)
             $eventTypeIds = ['1'];
             $liveEventsRes = $this->bf->getLiveEvents($eventTypeIds);
+
+            // Check for authentication or API failure
+            if ($liveEventsRes === null) {
+                $this->logSkippedMatch('SISTEMA', 'ALL', 'Auth Failure', 'Impossibile connettersi a Betfair. Controllare credenziali o sessione nel .env.');
+                echo json_encode(['status' => 'error', 'message' => 'Errore Autenticazione Betfair']);
+                // Unlock before exit
+                $this->db->prepare("DELETE FROM gianik_system_state WHERE `key` = 'gianik_processing_lock'")->execute();
+                return;
+            }
+
             $events = $liveEventsRes['result'] ?? [];
 
             $apiLiveRes = $this->footballData->getLiveMatches();
@@ -785,6 +795,8 @@ class GiaNikController
 
             if (empty($events)) {
                 echo json_encode(['status' => 'success', 'message' => 'Nessun evento live']);
+                // Unlock before exit
+                $this->db->prepare("DELETE FROM gianik_system_state WHERE `key` = 'gianik_processing_lock'")->execute();
                 return;
             }
 
@@ -820,15 +832,16 @@ class GiaNikController
             }
 
             // Migliorato: Carichiamo anche betfair_id per un controllo più robusto
-            $stmtPending = $this->db->prepare("SELECT DISTINCT event_name, market_id, betfair_id FROM bets WHERE status = 'pending'");
+            $stmtPending = $this->db->prepare("SELECT DISTINCT event_name, market_id, betfair_id FROM gianik_bets WHERE status = 'pending'");
             $stmtPending->execute();
             $pendingBetsRaw = $stmtPending->fetchAll(PDO::FETCH_ASSOC);
             $pendingEventNames = array_column($pendingBetsRaw, 'event_name');
             $pendingMarketIds = array_column($pendingBetsRaw, 'market_id');
 
             // Recuperiamo il conteggio dettagliato delle scommesse per oggi (per match e per tempo)
-            $stmtCount = $this->db->prepare("SELECT event_name, period, COUNT(*) as cnt FROM bets WHERE created_at >= date('now', 'start of day') GROUP BY event_name, period");
-            $stmtCount->execute();
+            $todayStart = date('Y-m-d 00:00:00');
+            $stmtCount = $this->db->prepare("SELECT event_name, period, COUNT(*) as cnt FROM gianik_bets WHERE created_at >= ? GROUP BY event_name, period");
+            $stmtCount->execute([$todayStart]);
             $matchBetStats = $stmtCount->fetchAll(PDO::FETCH_ASSOC);
             $matchBetCounts = [];
             foreach ($matchBetStats as $stat) {
@@ -839,7 +852,7 @@ class GiaNikController
             }
 
             // Recupera le ultime 5 scommesse perse per il feedback all'IA
-            $stmtLost = $this->db->prepare("SELECT event_name, market_name, runner_name, odds, stake, motivation FROM bets WHERE status = 'lost' ORDER BY settled_at DESC LIMIT 5");
+            $stmtLost = $this->db->prepare("SELECT event_name, market_name, runner_name, odds, stake, motivation FROM gianik_bets WHERE status = 'lost' ORDER BY settled_at DESC LIMIT 5");
             $stmtLost->execute();
             $recentLostBets = $stmtLost->fetchAll(PDO::FETCH_ASSOC);
 
@@ -1059,7 +1072,7 @@ class GiaNikController
                                 }
 
                                 $motivation = ($analysis['motivation'] ?? trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw))) . $stakeReductionReason;
-                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmtInsert = $this->db->prepare("INSERT INTO gianik_bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                                 $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation, $currentPeriod]);
                                 $results['new_bets']++;
                             }
@@ -1072,12 +1085,12 @@ class GiaNikController
             $this->settleBets();
 
             // --- UNLOCK ---
-            $this->db->prepare("DELETE FROM system_state WHERE `key` = 'gianik_processing_lock'")->execute();
+            $this->db->prepare("DELETE FROM gianik_system_state WHERE `key` = 'gianik_processing_lock'")->execute();
 
             echo json_encode(['status' => 'success', 'results' => $results]);
         } catch (\Throwable $e) {
             // Unlock on error too
-            $this->db->prepare("DELETE FROM system_state WHERE `key` = 'gianik_processing_lock'")->execute();
+            $this->db->prepare("DELETE FROM gianik_system_state WHERE `key` = 'gianik_processing_lock'")->execute();
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
     }
@@ -1085,7 +1098,7 @@ class GiaNikController
     public function processActiveBets()
     {
         try {
-            $stmt = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND type = 'real'");
+            $stmt = $this->db->prepare("SELECT * FROM gianik_bets WHERE status = 'pending' AND type = 'real'");
             $stmt->execute();
             $pending = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -1143,7 +1156,7 @@ class GiaNikController
                             $this->bf->placeBet($bet['market_id'], $bet['selection_id'], $layPrice, $bet['stake'], 'LAY');
                             // Segnamo come chiusa manualmente o aspettiamo settle? 
                             // Meglio aggiornare il log dei risultati
-                            $this->db->prepare("UPDATE bets SET motivation = ? WHERE id = ?")
+                            $this->db->prepare("UPDATE gianik_bets SET motivation = ? WHERE id = ?")
                                 ->execute(["[CASHOUT ESEGUITO]: " . $dec['motivation'], $bet['id']]);
                         }
                     }
@@ -1158,8 +1171,9 @@ class GiaNikController
     {
         try {
             // Recupera tutte le scommesse pendenti (virtuali e reali)
-            $stmt = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND created_at < datetime('now', '-3 minutes')");
-            $stmt->execute();
+            $threeMinsAgo = date('Y-m-d H:i:s', strtotime('-3 minutes'));
+            $stmt = $this->db->prepare("SELECT * FROM gianik_bets WHERE status = 'pending' AND created_at < ?");
+            $stmt->execute([$threeMinsAgo]);
             $pending = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             if (empty($pending))
@@ -1190,7 +1204,7 @@ class GiaNikController
                                     $status = $isWin ? 'won' : 'lost';
                                     $profit = $isWin ? ($bet['stake'] * ($bet['odds'] - 1)) : -$bet['stake'];
 
-                                    $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?")
+                                    $this->db->prepare("UPDATE gianik_bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?")
                                         ->execute([$status, $profit, $bet['id']]);
                                 }
                             }
@@ -1405,7 +1419,7 @@ class GiaNikController
     public function skippedMatches()
     {
         try {
-            $stmt = $this->db->prepare("SELECT * FROM skipped_matches ORDER BY created_at DESC LIMIT 15");
+            $stmt = $this->db->prepare("SELECT * FROM gianik_skipped_matches ORDER BY created_at DESC LIMIT 15");
             $stmt->execute();
             $skippedMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
             require __DIR__ . '/../Views/partials/skipped_matches_sidebar.php';
@@ -1435,8 +1449,8 @@ class GiaNikController
                 'Basketball' => 'Basket'
             ];
 
-            // 2. Main query for bets
-            $sql = "SELECT * FROM bets";
+            // 2. Main query for gianik_bets
+            $sql = "SELECT * FROM gianik_bets";
             $where = [];
             $params = [];
 
@@ -1481,10 +1495,10 @@ class GiaNikController
     private function getVirtualBalance()
     {
         $vInit = 100.0;
-        // Sum ALL virtual bets profit
-        $vProf = (float) $this->db->query("SELECT SUM(profit) FROM bets WHERE type = 'virtual' AND status IN ('won', 'lost')")->fetchColumn();
-        // Sum ALL virtual bets exposure
-        $vExp = (float) $this->db->query("SELECT SUM(stake) FROM bets WHERE type = 'virtual' AND status = 'pending'")->fetchColumn();
+        // Sum ALL virtual gianik_bets profit
+        $vProf = (float) $this->db->query("SELECT SUM(profit) FROM gianik_bets WHERE type = 'virtual' AND status IN ('won', 'lost')")->fetchColumn();
+        // Sum ALL virtual gianik_bets exposure
+        $vExp = (float) $this->db->query("SELECT SUM(stake) FROM gianik_bets WHERE type = 'virtual' AND status = 'pending'")->fetchColumn();
         return [
             'available' => ($vInit + $vProf) - $vExp,
             'exposure' => $vExp,
@@ -1495,7 +1509,7 @@ class GiaNikController
     public function betDetails($id)
     {
         try {
-            $stmt = $this->db->prepare("SELECT * FROM bets WHERE id = ?");
+            $stmt = $this->db->prepare("SELECT * FROM gianik_bets WHERE id = ?");
             $stmt->execute([$id]);
             $bet = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$bet) {
@@ -1791,10 +1805,16 @@ class GiaNikController
     private function logSkippedMatch($event, $market, $reason, $details)
     {
         try {
-            // Mantieni solo gli ultimi 100 log per non ingolfare il DB
-            $this->db->exec("DELETE FROM skipped_matches WHERE id IN (SELECT id FROM skipped_matches ORDER BY created_at DESC LIMIT -1 OFFSET 100)");
+            // Mantieni solo gli ultimi 100 log per non ingolfare il DB (Cross-platform cleanup)
+            $limit = 100;
+            if (\App\Services\Database::getInstance()->isSQLite()) {
+                $this->db->exec("DELETE FROM gianik_skipped_matches WHERE id NOT IN (SELECT id FROM gianik_skipped_matches ORDER BY created_at DESC LIMIT $limit)");
+            } else {
+                // MySQL requires extra nesting for subqueries on the same table
+                $this->db->exec("DELETE FROM gianik_skipped_matches WHERE id NOT IN (SELECT id FROM (SELECT id FROM gianik_skipped_matches ORDER BY created_at DESC LIMIT $limit) as tmp)");
+            }
 
-            $stmt = $this->db->prepare("INSERT INTO skipped_matches (event_name, market_name, reason, details) VALUES (?, ?, ?, ?)");
+            $stmt = $this->db->prepare("INSERT INTO gianik_skipped_matches (event_name, market_name, reason, details) VALUES (?, ?, ?, ?)");
             $stmt->execute([$event, $market, $reason, $details]);
         } catch (\Throwable $e) {
             error_log("GiaNik Skip Log Error: " . $e->getMessage());
@@ -1805,10 +1825,12 @@ class GiaNikController
     {
         try {
             // 0. Purge non-soccer records from GiaNik module
-            $this->db->exec("DELETE FROM bets WHERE sport NOT IN ('Soccer', 'Football')");
+            $this->db->exec("DELETE FROM gianik_bets WHERE sport NOT IN ('Soccer', 'Football')");
 
             // 1. Pulizia orfani immediati (record reali creati ma non ancora associati a un ID Betfair, scaduti)
-            $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND created_at < datetime('now', '-2 minutes')");
+            $twoMinsAgo = date('Y-m-d H:i:s', strtotime('-2 minutes'));
+            $stmtOrphans = $this->db->prepare("DELETE FROM gianik_bets WHERE type = 'real' AND betfair_id IS NULL AND created_at < ?");
+            $stmtOrphans->execute([$twoMinsAgo]);
 
             // 2. Recupera ordini da Betfair (Settled e Current)
             $clearedRes = $this->bf->getClearedOrders();
@@ -1924,17 +1946,17 @@ class GiaNikController
                 $placedDate = isset($o['placedDate']) ? date('Y-m-d H:i:s', strtotime($o['placedDate'])) : date('Y-m-d H:i:s');
 
                 // Verifica esistenza nel DB locale
-                $stmt = $this->db->prepare("SELECT id FROM bets WHERE betfair_id = ?");
+                $stmt = $this->db->prepare("SELECT id FROM gianik_bets WHERE betfair_id = ?");
                 $stmt->execute([$betId]);
                 $dbId = $stmt->fetchColumn();
 
                 if ($dbId) {
                     // Update: aggiorna sempre per avere l'ultimo stato (profitto, status) e resetta missing_count
-                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, created_at = ?, last_seen_at = CURRENT_TIMESTAMP, missing_count = 0 WHERE id = ?");
+                    $stmtUpdate = $this->db->prepare("UPDATE gianik_bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, created_at = ?, last_seen_at = CURRENT_TIMESTAMP, missing_count = 0 WHERE id = ?");
                     $stmtUpdate->execute([$o['status'], $o['profit'], $o['marketId'], $marketName, $eventName, $runnerName, $placedDate, $dbId]);
                 } else {
                     // Import Automatico (se non esisteva)
-                    $stmtInsert = $this->db->prepare("INSERT INTO bets 
+                    $stmtInsert = $this->db->prepare("INSERT INTO gianik_bets
                         (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, status, type, profit, created_at) 
                         VALUES (?, ?, ?, ?, 'Soccer', ?, ?, ?, ?, ?, 'real', ?, ?)");
                     $stmtInsert->execute([
@@ -1955,7 +1977,11 @@ class GiaNikController
 
             // 5. MIRRORING TOTALE: Rimuovi record locali REAL non presenti su Betfair
             // Pulizia Preventiva Duplicati locali per BetID (salvaguardia contro record orfani duplicati)
-            $this->db->exec("DELETE FROM bets WHERE id NOT IN (SELECT MIN(id) FROM bets WHERE betfair_id IS NOT NULL GROUP BY betfair_id) AND betfair_id IS NOT NULL AND type = 'real'");
+            if (\App\Services\Database::getInstance()->isSQLite()) {
+                $this->db->exec("DELETE FROM gianik_bets WHERE id NOT IN (SELECT MIN(id) FROM gianik_bets WHERE betfair_id IS NOT NULL GROUP BY betfair_id) AND betfair_id IS NOT NULL AND type = 'real'");
+            } else {
+                $this->db->exec("DELETE FROM gianik_bets WHERE id NOT IN (SELECT mid FROM (SELECT MIN(id) as mid FROM gianik_bets WHERE betfair_id IS NOT NULL GROUP BY betfair_id) as tmp) AND betfair_id IS NOT NULL AND type = 'real'");
+            }
 
             $bfIdsList = array_keys($allBfOrders);
             // Verifica se abbiamo avuto risposte valide (anche se vuote) da Betfair per procedere alla pulizia
@@ -1965,20 +1991,24 @@ class GiaNikController
                 // Invece di cancellare subito, incrementiamo missing_count per i record reali non visti
                 if (!empty($bfIdsList)) {
                     $placeholders = implode(',', array_fill(0, count($bfIdsList), '?'));
-                    $stmtInc = $this->db->prepare("UPDATE bets SET missing_count = missing_count + 1 WHERE type = 'real' AND betfair_id NOT IN ($placeholders) AND status = 'pending'");
+                    $stmtInc = $this->db->prepare("UPDATE gianik_bets SET missing_count = missing_count + 1 WHERE type = 'real' AND betfair_id NOT IN ($placeholders) AND status = 'pending'");
                     $stmtInc->execute($bfIdsList);
                 } else {
-                    $this->db->exec("UPDATE bets SET missing_count = missing_count + 1 WHERE type = 'real' AND status = 'pending'");
+                    $this->db->exec("UPDATE gianik_bets SET missing_count = missing_count + 1 WHERE type = 'real' AND status = 'pending'");
                 }
 
                 // Cancella definitivamente solo se missing_count è alto (es. > 3 cicli) o se record vecchi e conclusi
-                $this->db->exec("DELETE FROM bets WHERE type = 'real' AND (
+                $twentyFourHoursAgo = date('Y-m-d H:i:s', strtotime('-24 hours'));
+                $stmtCleanup = $this->db->prepare("DELETE FROM gianik_bets WHERE type = 'real' AND (
                     (missing_count > 3 AND status = 'pending') OR
-                    (status IN ('won', 'lost', 'cancelled') AND created_at < datetime('now', '-24 hours'))
+                    (status IN ('won', 'lost', 'cancelled') AND created_at < ?)
                 )");
+                $stmtCleanup->execute([$twentyFourHoursAgo]);
 
                 // Pulizia record manuali senza ID Betfair (residui orfani oramai vecchi)
-                $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND created_at < datetime('now', '-5 minutes')");
+                $fiveMinsAgo = date('Y-m-d H:i:s', strtotime('-5 minutes'));
+                $stmtManualOrphans = $this->db->prepare("DELETE FROM gianik_bets WHERE type = 'real' AND betfair_id IS NULL AND created_at < ?");
+                $stmtManualOrphans->execute([$fiveMinsAgo]);
             }
 
         } catch (\Throwable $e) {
