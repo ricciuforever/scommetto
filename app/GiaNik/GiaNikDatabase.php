@@ -38,6 +38,9 @@ class GiaNikDatabase
             motivation TEXT,
             profit REAL DEFAULT 0,
             settled_at DATETIME,
+            period TEXT,
+            last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            missing_count INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
@@ -53,7 +56,10 @@ class GiaNikDatabase
             'settled_at' => 'DATETIME',
             'motivation' => 'TEXT',
             'type' => "TEXT DEFAULT 'virtual'",
-            'market_name' => 'TEXT'
+            'market_name' => 'TEXT',
+            'period' => 'TEXT',
+            'last_seen_at' => 'DATETIME DEFAULT CURRENT_TIMESTAMP',
+            'missing_count' => 'INTEGER DEFAULT 0'
         ];
 
         $stmt = $this->connection->query("PRAGMA table_info(bets)");
