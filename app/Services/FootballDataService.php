@@ -334,7 +334,7 @@ class FootballDataService
         // 1. Strip scores like "1-0", "0 - 0" if present in event name
         $name = preg_replace('/\d+\s*-\s*\d+/', ' v ', $bfEventName);
 
-        $bfTeams = preg_split('/\s+(v|vs|@)\s+/i', $name);
+        $bfTeams = preg_split('/\s+(v|vs|@|-|\/)\s+/i', $name);
         if (count($bfTeams) < 2)
             return null;
 
@@ -555,8 +555,6 @@ class FootballDataService
             'u.n.a.m.',
             'universidad',
             'univ',
-            'catolica',
-            'nacional',
             'municipal',
             'al',
             'el',
@@ -577,6 +575,8 @@ class FootballDataService
             'rj',
             'mg',
             'rs',
+            'spor',
+            'gent',
             'deportivo',
             'cd',
             'ud',
@@ -584,15 +584,10 @@ class FootballDataService
             'red bull',
             'rb',
             'js',
-            'etoile',
             'sportive',
-            'sahel',
             'belediyespor',
             'hapoel',
             'maccabi',
-            'piedras',
-            'las piedras',
-            'juniors',
             'belediyesi',
             'bel.',
             'bel',
