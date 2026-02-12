@@ -857,7 +857,7 @@ class GiaNikController
 
             $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
-                if ($eventCounter >= 3)
+                if ($eventCounter >= 15)
                     break;
                 $mainEvent = $catalogues[0];
 
@@ -944,14 +944,13 @@ class GiaNikController
                         // Pass country code if available for more precise matching
                         $enrichedData = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook, $firstPriceTrend);
 
-                        // BLOCCO DI SICUREZZA: Se non ci sono dati live reali da API-Football, saltiamo l'analisi IA
-                        // Evitiamo allucinazioni basate solo su quote se l'agente deve essere "Big Brain"
-                        $hasValidLive = !empty($enrichedData['live']['live_score']) &&
-                                        isset($enrichedData['live']['live_status']['elapsed_minutes']) &&
-                                        $enrichedData['live']['live_status']['short'] !== 'NS';
+                        // BLOCCO DI SICUREZZA: Se non abbiamo ALMENO lo score, saltiamo.
+                        // Ma permettiamo il fallback Betfair se API-Football fallisce per aumentare la frequenza di gioco.
+                        $hasScore = isset($enrichedData['live']['live_score']['home']) && isset($enrichedData['live']['live_score']['away']);
+                        $isStarted = ($enrichedData['live']['live_status']['short'] ?? 'NS') !== 'NS';
 
-                        if (!$enrichedData || !$hasValidLive || (isset($enrichedData['note']) && strpos($enrichedData['note'], 'Betfair') !== false)) {
-                            $this->logSkippedMatch($event['event'], $event['markets'][0]['marketName'] ?? 'MATCH_ODDS', 'Dati Live Mancanti/NS', 'API-Football non ha restituito statistiche live valide o il match non è ancora iniziato.');
+                        if (!$enrichedData || !$hasScore || !$isStarted) {
+                            $this->logSkippedMatch($event['event'], $event['markets'][0]['marketName'] ?? 'MATCH_ODDS', 'Dati Live Mancanti/NS', 'Nessun dato sullo score disponibile o il match non è ancora iniziato.');
                             continue;
                         }
 

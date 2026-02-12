@@ -131,6 +131,11 @@ try {
         return;
     }
 
+    if ($path === '/api/gianik/skipped-matches') {
+        (new \App\GiaNik\Controllers\GiaNikController())->skippedMatches();
+        return;
+    }
+
     if (preg_match('#^/api/gianik/bet/(\d+)$#i', $path, $matches)) {
         (new \App\GiaNik\Controllers\GiaNikController())->betDetails($matches[1]);
         return;
