@@ -23,7 +23,8 @@ $event = $event ?? [];
                 </div>
                 <div>
                     <h3 class="text-3xl font-black tracking-tight text-white uppercase italic leading-none">Analisi
-                        <span class="text-accent">GiaNik</span></h3>
+                        <span class="text-accent">GiaNik</span>
+                    </h3>
                     <p class="text-slate-500 text-[9px] font-black uppercase tracking-widest mt-1">Intelligenza
                         Artificiale Betfair</p>
                 </div>
@@ -41,7 +42,8 @@ $event = $event ?? [];
                     <?php endif; ?>
                     <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">
                         <?php echo htmlspecialchars($event['sport'] ?? 'Sport'); ?> -
-                        <?php echo htmlspecialchars($event['competition'] ?? ''); ?></div>
+                        <?php echo htmlspecialchars($event['competition'] ?? ''); ?>
+                    </div>
                     <div class="text-xl font-black italic uppercase text-white">
                         <?php echo htmlspecialchars($event['event'] ?? 'Evento'); ?>
                     </div>
@@ -69,7 +71,8 @@ $event = $event ?? [];
                         <div class="text-right">
                             <div class="text-[8px] font-black text-slate-500 uppercase tracking-[.2em] mb-1">Market ID</div>
                             <div class="text-[10px] font-mono text-slate-400">
-                                <?php echo htmlspecialchars($analysis['marketId'] ?? 'N/A'); ?></div>
+                                <?php echo htmlspecialchars($analysis['marketId'] ?? 'N/A'); ?>
+                            </div>
                         </div>
                     </div>
 
@@ -109,8 +112,7 @@ $event = $event ?? [];
                     <div
                         class="text-sm italic text-slate-300 bg-black/20 p-5 rounded-2xl max-h-48 overflow-y-auto leading-relaxed">
                         <?php
-                        $motivation = $analysis['motivation'] ?? $reasoning;
-                        echo nl2br(htmlspecialchars($motivation));
+                        echo nl2br(htmlspecialchars($reasoning));
                         ?>
                     </div>
                 </div>
@@ -163,7 +165,7 @@ $event = $event ?? [];
                     odds: parseFloat(analysis.odds || 0),
                     stake: parseFloat(analysis.stake || 2.0),
                     type: window.gianikMode || 'virtual',
-                    motivation: <?php echo json_encode($motivation); ?>,
+                    motivation: <?php echo json_encode($reasoning); ?>,
                     runnerName: analysis.advice,
                     selectionId: null
                 };

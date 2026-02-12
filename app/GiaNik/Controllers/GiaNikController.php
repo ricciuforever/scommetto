@@ -604,7 +604,7 @@ class GiaNikController
                     }
                 }
             }
-            $reasoning = trim(preg_replace('/```json[\s\S]*?(?:```|$)/', '', $predictionRaw));
+            $reasoning = $this->extractMotivation($analysis, $predictionRaw, $event);
 
             require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
         } catch (\Throwable $e) {
@@ -879,7 +879,7 @@ class GiaNikController
                                     }
                                 }
 
-                                $motivation = $analysis['motivation'] ?? trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
+                                $motivation = $this->extractMotivation($analysis, $predictionRaw, $event);
                                 $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                                 $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation]);
                                 $results['new_bets']++;
@@ -1098,6 +1098,30 @@ class GiaNikController
             'IE' => 'Ireland',
         ];
         return $map[strtoupper($countryCode)] ?? null;
+    }
+
+    /**
+     * Extracts a robust motivation from Gemini output
+     */
+    private function extractMotivation($analysis, $predictionRaw, $event)
+    {
+        // 1. Priority: JSON motivation field
+        $motivation = $analysis['motivation'] ?? '';
+
+        // 2. Fallback: Narrative text after JSON
+        if (empty(trim($motivation))) {
+            $motivation = trim(preg_replace('/```json[\s\S]*?(?:```|$)/', '', $predictionRaw));
+        }
+
+        // 3. Final Fallback: Auto-generated summary
+        if (empty(trim($motivation))) {
+            $score = $event['api_football']['live_score'] ?? '0-0';
+            $sentiment = $analysis['sentiment'] ?? 'Neutral';
+            $confidence = $analysis['confidence'] ?? 0;
+            $motivation = "Analisi GiaNik: Il match si trova sul punteggio di $score. La confidenza nell'operazione è del $confidence% con un sentiment di mercato $sentiment. L'analisi dei volumi e dei dati live suggerisce questa operazione come la più bilanciata.";
+        }
+
+        return $motivation;
     }
 
     private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null, $countryCode = null, $startTime = null, $betfairEventId = null)
