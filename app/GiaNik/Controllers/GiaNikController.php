@@ -1733,7 +1733,7 @@ class GiaNikController
 
     private function getPortfolioStats($type = 'virtual')
     {
-        $stmt = $this->db->prepare("SELECT profit, stake, status, settled_at FROM bets WHERE status IN ('won', 'lost') AND type = ? ORDER BY settled_at ASC");
+        $stmt = $this->db->prepare("SELECT profit, stake, status, settled_at, created_at FROM bets WHERE status IN ('won', 'lost') AND type = ? ORDER BY COALESCE(settled_at, created_at) ASC");
         $stmt->execute([$type]);
         $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -1741,10 +1741,10 @@ class GiaNikController
         $netProfit = 0;
         $wins = 0;
         $losses = 0;
-        $history = [100.0];
+        $history = [0.0];
         $labels = ['START'];
 
-        $currentBalance = 100.0;
+        $currentBalance = 0.0;
         foreach ($bets as $b) {
             $totalStake += (float) ($b['stake'] ?? 0);
             $netProfit += (float) ($b['profit'] ?? 0);
@@ -1755,7 +1755,8 @@ class GiaNikController
 
             $currentBalance += (float) ($b['profit'] ?? 0);
             $history[] = round($currentBalance, 2);
-            $labels[] = date('d/m H:i', strtotime($b['settled_at']));
+            $dateSource = !empty($b['settled_at']) ? $b['settled_at'] : $b['created_at'];
+            $labels[] = date('d/m H:i', strtotime($dateSource));
         }
 
         $totalBets = $wins + $losses;
