@@ -263,7 +263,9 @@ class GiaNikController
                         }
 
                         $m['score'] = "$scoreHome-$scoreAway";
-                        $m['status_label'] = $statusShort . ($elapsed ? " $elapsed'" : "");
+                        if ($statusShort !== 'NS') {
+                            $m['status_label'] = $statusShort . ($elapsed ? " $elapsed'" : "");
+                        }
                         $m['elapsed'] = $elapsed;
                         $m['status_short'] = $statusShort;
                         $m['has_api_data'] = true;
