@@ -50,6 +50,15 @@ class GiaNikDatabase
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
+        $this->connection->exec("CREATE TABLE IF NOT EXISTS skipped_matches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_name TEXT,
+            market_name TEXT,
+            reason TEXT,
+            details TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+
         // 2. Ensure all columns exist (Self-Repair)
         $requiredColumns = [
             'profit' => 'REAL DEFAULT 0',
