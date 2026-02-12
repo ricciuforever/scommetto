@@ -32,8 +32,7 @@ class GiaNikController
             betfair_event_id TEXT PRIMARY KEY,
             fixture_id INTEGER NOT NULL,
             mapped_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )");
-        $this->db->exec("CREATE INDEX IF NOT EXISTS idx_match_mappings_fixture_id ON match_mappings(fixture_id)");
+        ); CREATE INDEX IF NOT EXISTS idx_match_mappings_fixture_id ON match_mappings(fixture_id);");
     }
 
     public function index()
@@ -104,9 +103,28 @@ class GiaNikController
             }
 
             // --- Pre-fetch Enrichment Data ---
+            $today = date('Y-m-d');
+            $tomorrow = date('Y-m-d', strtotime('+1 day'));
             // Fetch Live with short cache (15s) for high reactivity in GiaNik
             $apiLiveRes = $this->footballData->getLiveMatches([], 15);
-            $apiLiveMatches = $apiLiveRes['response'] ?? [];
+            $apiTodayRes = $this->footballData->getFixturesByDate($today);
+            $apiTomorrowRes = $this->footballData->getFixturesByDate($tomorrow);
+
+            // Merge order: Today/Tomorrow first, then Live.
+            // This ensures Live data (most fresh) overwrites any stale Today/Tomorrow cached records in the map.
+            $allApiFixtures = array_merge(
+                $apiTodayRes['response'] ?? [],
+                $apiTomorrowRes['response'] ?? [],
+                $apiLiveRes['response'] ?? []
+            );
+            // Deduplicate by fixture ID
+            $apiLiveMatchesMap = [];
+            foreach ($allApiFixtures as $f) {
+                if (isset($f['fixture']['id'])) {
+                    $apiLiveMatchesMap[$f['fixture']['id']] = $f;
+                }
+            }
+            $apiLiveMatches = array_values($apiLiveMatchesMap);
 
             // --- Truth Overlay from Local DB (for most up-to-date individual status) ---
             $fixtureModel = new \App\Models\Fixture();
@@ -197,7 +215,7 @@ class GiaNikController
 
                 // --- Enrichment ---
                 $foundApiData = false;
-                if ($sport === 'Soccer') {
+                if (true) { // Always soccer now
                     $countryCode = $m['country'];
                     $mappedCountry = $this->getCountryMapping($countryCode);
 
@@ -1494,8 +1512,6 @@ class GiaNikController
 
     private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null, $countryCode = null, $startTime = null, $betfairEventId = null)
     {
-        $allFixtures = $preFetchedLive ?: [];
-
         // 1. Check existing mapping if we have a betfairEventId
         if ($betfairEventId) {
             $stmt = $this->db->prepare("SELECT fixture_id FROM match_mappings WHERE betfair_event_id = ?");
@@ -1503,20 +1519,16 @@ class GiaNikController
             $existingId = $stmt->fetchColumn();
 
             if ($existingId) {
-                // First try in the provided list
-                foreach ($allFixtures as $f) {
-                    if (($f['fixture']['id'] ?? null) == $existingId) {
-                        return $f;
-                    }
+                // Find this specific fixture in the live/upcoming lists
+                $allFixtures = $preFetchedLive;
+                if (!$allFixtures) {
+                    $allFixtures = array_merge(
+                        $this->footballData->getFixturesByDate(date('Y-m-d'))['response'] ?? [],
+                        $this->footballData->getFixturesByDate(date('Y-m-d', strtotime('+1 day')))['response'] ?? [],
+                        $this->footballData->getLiveMatches()['response'] ?? []
+                    );
                 }
-
-                // If not found in provided list, try fetching fresh lists
-                $extraFixtures = array_merge(
-                    $this->footballData->getLiveMatches()['response'] ?? [],
-                    $this->footballData->getFixturesByDate(date('Y-m-d'))['response'] ?? [],
-                    $this->footballData->getFixturesByDate(date('Y-m-d', strtotime('+1 day')))['response'] ?? []
-                );
-                foreach ($extraFixtures as $f) {
+                foreach ($allFixtures as $f) {
                     if (($f['fixture']['id'] ?? null) == $existingId) {
                         return $f;
                     }
@@ -1525,19 +1537,17 @@ class GiaNikController
         }
 
         $mappedCountry = $this->getCountryMapping($countryCode);
-
-        // Try to find in the provided list first
-        $match = $this->footballData->searchInFixtureList($bfEventName, $allFixtures, $mappedCountry, $startTime);
-
-        // If not found, try in full lists (Live + Today + Tomorrow)
-        if (!$match) {
-            $fullFixtures = array_merge(
-                $this->footballData->getLiveMatches()['response'] ?? [],
-                $this->footballData->getFixturesByDate(date('Y-m-d'))['response'] ?? [],
-                $this->footballData->getFixturesByDate(date('Y-m-d', strtotime('+1 day')))['response'] ?? []
-            );
-            $match = $this->footballData->searchInFixtureList($bfEventName, $fullFixtures, $mappedCountry, $startTime);
+        $liveFixtures = $preFetchedLive;
+        if (!$liveFixtures) {
+            $liveFixtures = $this->footballData->getLiveMatches()['response'] ?? [];
+            $today = date('Y-m-d');
+            $tomorrow = date('Y-m-d', strtotime('+1 day'));
+            $todayFixtures = $this->footballData->getFixturesByDate($today)['response'] ?? [];
+            $tomorrowFixtures = $this->footballData->getFixturesByDate($tomorrow)['response'] ?? [];
+            $liveFixtures = array_merge($liveFixtures, $todayFixtures, $tomorrowFixtures);
         }
+
+        $match = $this->footballData->searchInFixtureList($bfEventName, $liveFixtures, $mappedCountry, $startTime);
 
         // 2. If found, save the mapping for future use
         if ($match && $betfairEventId && isset($match['fixture']['id'])) {
