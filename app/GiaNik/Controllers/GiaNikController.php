@@ -916,7 +916,15 @@ class GiaNikController
                         $firstPriceTrend = $newPricesForHistory[$firstMarketId] ?? null;
 
                         // Pass country code if available for more precise matching
-                        $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook, $firstPriceTrend);
+                        $enrichedData = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook, $firstPriceTrend);
+
+                        // BLOCCO DI SICUREZZA: Se non ci sono dati live reali da API-Football, saltiamo l'analisi IA
+                        // Evitiamo allucinazioni basate solo su quote se l'agente deve essere "Big Brain"
+                        if (!$enrichedData || empty($enrichedData['live']) || (isset($enrichedData['note']) && strpos($enrichedData['note'], 'Betfair') !== false)) {
+                            continue;
+                        }
+
+                        $event['api_football'] = $enrichedData;
                     }
 
                     // Update global price history
