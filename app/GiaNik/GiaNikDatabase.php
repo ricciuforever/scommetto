@@ -51,7 +51,9 @@ class GiaNikDatabase
             metric_key TEXT PRIMARY KEY,
             total_bets INTEGER DEFAULT 0,
             wins INTEGER DEFAULT 0,
-            net_profit REAL DEFAULT 0
+            losses INTEGER DEFAULT 0,
+            net_profit REAL DEFAULT 0,
+            total_stake REAL DEFAULT 0
         )");
 
         $this->connection->exec("CREATE TABLE IF NOT EXISTS ai_lessons (
@@ -91,6 +93,22 @@ class GiaNikDatabase
                     $this->connection->exec("ALTER TABLE bets ADD COLUMN $col $definition");
                 } catch (\Exception $e) {
                     // Ignore if already exists or other sqlite issues
+                }
+            }
+        }
+
+        // Repair performance_metrics
+        $requiredMetricsColumns = [
+            'losses' => 'INTEGER DEFAULT 0',
+            'total_stake' => 'REAL DEFAULT 0'
+        ];
+        $stmt = $this->connection->query("PRAGMA table_info(performance_metrics)");
+        $existingMetricsColumns = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
+        foreach ($requiredMetricsColumns as $col => $definition) {
+            if (!in_array($col, $existingMetricsColumns)) {
+                try {
+                    $this->connection->exec("ALTER TABLE performance_metrics ADD COLUMN $col $definition");
+                } catch (\Exception $e) {
                 }
             }
         }
