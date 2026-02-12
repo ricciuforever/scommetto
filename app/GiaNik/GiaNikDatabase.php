@@ -138,7 +138,9 @@ class GiaNikDatabase
             'home_possession' => 'INTEGER',
             'away_possession' => 'INTEGER',
             'dangerous_attacks_home' => 'INTEGER',
-            'dangerous_attacks_away' => 'INTEGER'
+            'dangerous_attacks_away' => 'INTEGER',
+            'stats_json' => 'TEXT',
+            'timestamp' => 'DATETIME DEFAULT CURRENT_TIMESTAMP'
         ];
         $stmt = $this->connection->query("PRAGMA table_info(match_snapshots)");
         $existingSnapshotColumns = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
