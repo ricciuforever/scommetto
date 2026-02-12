@@ -39,33 +39,6 @@ $bets = $bets ?? [];
     </div>
 
     <div class="flex-1 overflow-y-auto no-scrollbar py-2">
-        <?php if ($currentStatus === 'all' && !empty($skippedMatches)): ?>
-            <div class="px-4 py-2 bg-slate-900/50 border-y border-white/5 mb-2">
-                 <h4 class="text-[8px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
-                     <i data-lucide="eye-off" class="w-2.5 h-2.5"></i> Match Scartati (Ultimi)
-                 </h4>
-            </div>
-            <?php foreach ($skippedMatches as $sm): ?>
-                <div class="px-4 py-2 border-b border-white/5 opacity-50 hover:opacity-100 transition-opacity group relative">
-                    <div class="text-[9px] font-bold text-slate-300 truncate"><?php echo $sm['event_name']; ?></div>
-                    <div class="flex items-center justify-between mt-1">
-                        <span class="text-[7px] font-black px-1.5 py-0.5 rounded bg-danger/10 text-danger uppercase border border-danger/20"><?php echo $sm['reason']; ?></span>
-                        <span class="text-[7px] font-medium text-slate-600"><?php echo date('H:i', strtotime($sm['created_at'])); ?></span>
-                    </div>
-                    <!-- Tooltip con dettagli -->
-                    <div class="hidden group-hover:block absolute left-full top-0 ml-2 p-2 bg-slate-900 border border-white/10 rounded-lg shadow-2xl z-50 w-48 pointer-events-none">
-                        <div class="text-[8px] text-slate-400 uppercase font-black mb-1">Dettaglio Scarto</div>
-                        <div class="text-[9px] text-white leading-tight"><?php echo htmlspecialchars($sm['details']); ?></div>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-            <div class="px-4 py-2 bg-slate-900/50 border-y border-white/5 my-2">
-                 <h4 class="text-[8px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
-                     <i data-lucide="history" class="w-2.5 h-2.5"></i> Storico Giocate
-                 </h4>
-            </div>
-        <?php endif; ?>
-
         <?php if (empty($bets)): ?>
             <div class="p-10 text-center opacity-20 text-[10px] font-bold uppercase italic">In attesa di analisi...</div>
         <?php else: ?>

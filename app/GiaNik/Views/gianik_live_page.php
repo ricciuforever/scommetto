@@ -9,6 +9,9 @@ require __DIR__ . '/../../Views/layout/top.php';
     <!-- Hidden auto-processing trigger -->
     <div hx-get="/api/gianik/auto-process" hx-trigger="every 120s" class="hidden"></div>
 
+    <!-- Sidebar Left Extra Content Trigger (Matches Scartati) -->
+    <div id="skipped-matches-portal" hx-get="/api/gianik/skipped-matches" hx-trigger="load, every 120s" hx-target="#skipped-matches-container" class="hidden"></div>
+
     <div class="flex items-center justify-between">
         <div>
             <div class="flex items-center gap-2 mb-2">
@@ -164,5 +167,21 @@ require __DIR__ . '/../../Views/layout/top.php';
         });
     }
 </script>
+
+<!-- Script per iniettare i match scartati nella sidebar principale -->
+<script>
+    document.addEventListener('htmx:afterOnLoad', function(evt) {
+        if (evt.detail.target.id === 'skipped-matches-container') {
+            const portal = document.getElementById('skipped-matches-container');
+            const target = document.getElementById('left-sidebar-extra-content');
+            if (portal && target) {
+                target.innerHTML = portal.innerHTML;
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+    });
+</script>
+
+<div id="skipped-matches-container" class="hidden"></div>
 
 <?php require __DIR__ . '/../../Views/layout/bottom.php'; ?>
