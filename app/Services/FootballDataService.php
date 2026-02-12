@@ -468,7 +468,13 @@ class FootballDataService
             'kairouan' => 'kairouanaise',
             'etoile sportive sahel' => 'etoile sahel',
             'nacional medellin' => 'nacional',
-            'atletico nacional' => 'nacional'
+            'atletico nacional' => 'nacional',
+            'argentinos juniors' => 'argentinos',
+            'red bull bragantino' => 'bragantino',
+            'rb bragantino' => 'bragantino',
+            'istanbulspor' => 'istanbul',
+            'corum belediyespor' => 'corum',
+            'corum bel' => 'corum'
         ];
         foreach ($replacements as $search => $replace) {
             $name = preg_replace('/\b' . preg_quote($search, '/') . '\b/i', $replace, $name);
@@ -581,7 +587,18 @@ class FootballDataService
             'hapoel',
             'maccabi',
             'piedras',
-            'las piedras'
+            'las piedras',
+            'juniors',
+            'belediyesi',
+            'bel.',
+            'bel',
+            'a.p.r.',
+            'apr',
+            'de',
+            'del',
+            'da',
+            'es',
+            'js'
         ];
 
         $tempName = $name;
