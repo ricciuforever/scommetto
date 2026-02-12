@@ -857,7 +857,7 @@ class GiaNikController
 
             $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
-                if ($eventCounter >= 15)
+                if ($eventCounter >= 40)
                     break;
                 $mainEvent = $catalogues[0];
 
