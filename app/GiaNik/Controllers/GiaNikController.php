@@ -1741,10 +1741,10 @@ class GiaNikController
         $netProfit = 0;
         $wins = 0;
         $losses = 0;
-        $history = [0.0];
+        $history = [100.0];
         $labels = ['START'];
 
-        $currentBalance = 0.0;
+        $currentBalance = 100.0;
         foreach ($bets as $b) {
             $totalStake += (float) ($b['stake'] ?? 0);
             $netProfit += (float) ($b['profit'] ?? 0);

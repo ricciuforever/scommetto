@@ -96,7 +96,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
 <!-- Portfolio Trend Chart -->
 <div class="glass p-6 rounded-[32px] border-white/5 mb-6">
     <div class="flex items-center justify-between mb-4">
-        <h4 class="text-[10px] font-black uppercase text-slate-500 tracking-[.2em]">Andamento Profitto (Cumulativo)
+        <h4 class="text-[10px] font-black uppercase text-slate-500 tracking-[.2em]">Andamento Portafoglio (Start 100€)
         </h4>
         <div
             class="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white/5 px-3 py-1 rounded-full border border-white/5">
@@ -477,17 +477,21 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                 data: {
                     labels: <?php echo json_encode($portfolioStats['labels'] ?? []); ?>,
                     datasets: [{
-                        label: 'Profitto (€)',
-                        data: <?php echo json_encode($portfolioStats['history'] ?? [0]); ?>,
-                        borderColor: '#06b6d4', // Cyan accent
-                        backgroundColor: 'rgba(6, 182, 212, 0.1)',
-                        fill: true,
-                        tension: 0.4,
+                        label: 'Bilancio (€)',
+                        data: <?php echo json_encode($portfolioStats['history'] ?? [100]); ?>,
                         borderWidth: 3,
                         pointRadius: 3,
-                        pointBackgroundColor: '#06b6d4',
-                        pointBorderColor: '#0f172a',
-                        pointHoverRadius: 6
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: (ctx) => (ctx.parsed.y >= 100 ? '#22c55e' : '#ef4444'),
+                        fill: {
+                            target: { value: 100 },
+                            above: 'rgba(34, 197, 94, 0.05)',
+                            below: 'rgba(239, 68, 68, 0.05)'
+                        },
+                        tension: 0.4,
+                        segment: {
+                            borderColor: ctx => (ctx.p0.parsed.y < 100 || ctx.p1.parsed.y < 100) ? '#ef4444' : '#22c55e'
+                        }
                     }]
                 },
                 options: {
@@ -522,7 +526,23 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                             }
                         }
                     }
-                }
+                },
+                plugins: [{
+                    id: 'thresholdLine',
+                    afterDraw: chart => {
+                        const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+                        const yPos = y.getPixelForValue(100);
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.lineWidth = 1;
+                        ctx.setLineDash([5, 5]);
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.moveTo(left, yPos);
+                        ctx.lineTo(right, yPos);
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                }]
             });
         };
 
