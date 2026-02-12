@@ -615,8 +615,15 @@ class GiaNikController
                     $currentMin = (int)($apiData['live']['live_status']['elapsed_minutes'] ?? 0);
                     foreach ($apiData['events'] as $ev) {
                         $eventMin = (int)($ev['time']['elapsed'] ?? 0);
-                        if (($currentMin - $eventMin) <= 4 && in_array($ev['type'], ['Goal', 'Card'])) {
-                            $reasoning = "MERCATO INSTABILE: Evento critico ({$ev['type']}) avvenuto al minuto $eventMin (meno di 4 minuti fa). Analisi sospesa per assestamento mercato.";
+                        $type = $ev['type'] ?? '';
+                        $detail = strtolower($ev['detail'] ?? '');
+
+                        $isCritical = false;
+                        if ($type === 'Goal') $isCritical = true;
+                        if ($type === 'Card' && strpos($detail, 'red') !== false) $isCritical = true;
+
+                        if (($currentMin - $eventMin) <= 4 && $isCritical) {
+                            $reasoning = "MERCATO INSTABILE: Evento critico ($type " . ($type === 'Card' ? 'ROSSO' : '') . ") avvenuto al minuto $eventMin (meno di 4 minuti fa). Analisi sospesa per assestamento mercato.";
                             require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
                             return;
                         }
@@ -901,7 +908,14 @@ class GiaNikController
                             $isShock = false;
                             foreach ($apiData['events'] as $ev) {
                                 $eventMin = (int)($ev['time']['elapsed'] ?? 0);
-                                if (($currentMin - $eventMin) <= 4 && in_array($ev['type'], ['Goal', 'Card'])) {
+                                $type = $ev['type'] ?? '';
+                                $detail = strtolower($ev['detail'] ?? '');
+
+                                $isCritical = false;
+                                if ($type === 'Goal') $isCritical = true;
+                                if ($type === 'Card' && strpos($detail, 'red') !== false) $isCritical = true;
+
+                                if (($currentMin - $eventMin) <= 4 && $isCritical) {
                                     $isShock = true;
                                     break;
                                 }
