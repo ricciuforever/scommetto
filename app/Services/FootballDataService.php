@@ -380,6 +380,9 @@ class FootballDataService
         // 0a. Remove years (e.g., 2018, 1904)
         $name = preg_replace('/\b(19|20)\d{2}\b/', '', $name);
 
+        // 0b. Remove parentheses content (e.g., (KSA), (Ecu), (BR))
+        $name = preg_replace('/\s*\(.*?\)/', '', $name);
+
         // 0. Transliterate common accented characters
         $chars = [
             'ä' => 'a',
@@ -461,7 +464,11 @@ class FootballDataService
             'athletico pr' => 'athletico',
             'paranaense' => 'athletico',
             'gloria bistrita' => 'gloria',
-            'bistrita-nasaud' => 'bistrita'
+            'bistrita-nasaud' => 'bistrita',
+            'kairouan' => 'kairouanaise',
+            'etoile sportive sahel' => 'etoile sahel',
+            'nacional medellin' => 'nacional',
+            'atletico nacional' => 'nacional'
         ];
         foreach ($replacements as $search => $replace) {
             $name = preg_replace('/\b' . preg_quote($search, '/') . '\b/i', $replace, $name);
@@ -563,7 +570,18 @@ class FootballDataService
             'sp',
             'rj',
             'mg',
-            'rs'
+            'rs',
+            'red bull',
+            'rb',
+            'js',
+            'etoile',
+            'sportive',
+            'sahel',
+            'belediyespor',
+            'hapoel',
+            'maccabi',
+            'piedras',
+            'las piedras'
         ];
 
         $tempName = $name;
