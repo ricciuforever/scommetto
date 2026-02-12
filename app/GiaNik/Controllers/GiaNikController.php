@@ -860,8 +860,14 @@ class GiaNikController
                 if ($eventCounter >= 3)
                     break;
                 $mainEvent = $catalogues[0];
-                if (in_array($mainEvent['event']['name'], $pendingEventNames))
-                    continue;
+
+                    // BLOCCO ANTI-NULL: Scarta match con nomi corrotti
+                    if (stripos($mainEvent['event']['name'], 'null') !== false || empty($mainEvent['event']['name'])) {
+                        $this->logSkippedMatch($mainEvent['event']['name'] ?? 'Unknown', 'ALL', 'Dati Corrotti', 'Il nome dell\'evento contiene "null" o è vuoto.');
+                        continue;
+                    }
+
+                // Rimosso il blocco preventivo per match con scommesse pending per permettere il Multi-Entry (max 4 per match)
 
                 try {
                     $results['scanned']++;
@@ -940,8 +946,12 @@ class GiaNikController
 
                         // BLOCCO DI SICUREZZA: Se non ci sono dati live reali da API-Football, saltiamo l'analisi IA
                         // Evitiamo allucinazioni basate solo su quote se l'agente deve essere "Big Brain"
-                        if (!$enrichedData || empty($enrichedData['live']) || (isset($enrichedData['note']) && strpos($enrichedData['note'], 'Betfair') !== false)) {
-                            $this->logSkippedMatch($event['event'], $event['markets'][0]['marketName'] ?? 'MATCH_ODDS', 'Dati Live Mancanti', 'API-Football non ha restituito statistiche per questo match.');
+                        $hasValidLive = !empty($enrichedData['live']['live_score']) &&
+                                        isset($enrichedData['live']['live_status']['elapsed_minutes']) &&
+                                        $enrichedData['live']['live_status']['short'] !== 'NS';
+
+                        if (!$enrichedData || !$hasValidLive || (isset($enrichedData['note']) && strpos($enrichedData['note'], 'Betfair') !== false)) {
+                            $this->logSkippedMatch($event['event'], $event['markets'][0]['marketName'] ?? 'MATCH_ODDS', 'Dati Live Mancanti/NS', 'API-Football non ha restituito statistiche live valide o il match non è ancora iniziato.');
                             continue;
                         }
 
@@ -963,6 +973,26 @@ class GiaNikController
                         $analysis = json_decode($matches[1], true);
                         if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
 
+                            // Recuperiamo il mercato selezionato PRIMA dei filtri che lo usano
+                            $selectedMarket = null;
+                            foreach ($event['markets'] as $m) {
+                                if ($m['marketId'] === $analysis['marketId']) {
+                                    $selectedMarket = $m;
+                                    break;
+                                }
+                            }
+
+                            if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds)) {
+                                continue;
+                            }
+
+                            // FILTRO RIMONTA IMPOSSIBILE: Blocca quote > 5.0 su mercati esito finale se in modalità auto
+                            $isMatchOdds = strpos($selectedMarket['marketName'], 'Match Odds') !== false || strpos($selectedMarket['marketName'], 'Esito Finale') !== false;
+                            if ($isMatchOdds && (float)$analysis['odds'] > 5.0) {
+                                $this->logSkippedMatch($event['event'], $selectedMarket['marketName'], 'Quota Troppo Alta', 'Bloccata scommessa su esito finale con quota > 5.0 (Rischio allucinazione rimonta).');
+                                continue;
+                            }
+
                             // Determiniamo il periodo corrente del match (1H o 2H)
                             $currentPeriod = 'UNKNOWN';
                             if (isset($event['api_football']['live']['live_status']['short'])) {
@@ -983,15 +1013,6 @@ class GiaNikController
                                     continue;
                                 }
                             }
-                            $selectedMarket = null;
-                            foreach ($event['markets'] as $m) {
-                                if ($m['marketId'] === $analysis['marketId']) {
-                                    $selectedMarket = $m;
-                                    break;
-                                }
-                            }
-                            if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds))
-                                continue;
 
                             $stake = (float) ($analysis['stake'] ?? 2.0);
 
