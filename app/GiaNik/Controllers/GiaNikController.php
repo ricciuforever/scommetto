@@ -1056,7 +1056,7 @@ class GiaNikController
             'AR' => 'Argentina',
             'NL' => 'Netherlands',
             'BE' => 'Belgium',
-            'TR' => 'Turkey',
+            'TR' => ['Turkey', 'Turkiye'],
             'GR' => 'Greece',
             'RU' => 'Russia',
             'UA' => 'Ukraine',

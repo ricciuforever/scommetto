@@ -602,6 +602,12 @@ class FootballDataService
             'belediyesi',
             'bel.',
             'bel',
+            'acs',
+            'pitesti',
+            'ploiesti',
+            'ploiești',
+            'tel aviv',
+            'jerusalem',
             'a.p.r.',
             'apr',
             'de',
@@ -613,7 +619,8 @@ class FootballDataService
 
         $tempName = $name;
         foreach ($remove as $r) {
-            $tempName = preg_replace('/\b' . preg_quote($r, '/') . '\b/i', '', $tempName);
+            // Use suffix matching: allow matching even if it's part of a larger word at the end
+            $tempName = preg_replace('/' . preg_quote($r, '/') . '\b/i', '', $tempName);
         }
 
         $tempName = trim(preg_replace('/\s+/', ' ', $tempName));
