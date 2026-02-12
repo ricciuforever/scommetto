@@ -43,7 +43,7 @@ require __DIR__ . '/../../Views/layout/top.php';
             <!-- Sound Toggle -->
             <button onclick="toggleGiaNikSound()" id="sound-toggle"
                 class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/5 transition-all text-slate-400 hover:text-white">
-                <i data-lucide="volume-x" id="sound-icon" class="w-5 h-5 text-danger"></i>
+                <i data-lucide="volume-2" id="sound-icon" class="w-5 h-5 text-success"></i>
             </button>
 
             <button hx-get="/api/gianik/live" hx-target="#gianik-live-container"
@@ -219,7 +219,7 @@ require __DIR__ . '/../../Views/layout/top.php';
         }
     }
 
-    window.isGiaNikSoundEnabled = false;
+    window.isGiaNikSoundEnabled = true;
     function toggleGiaNikSound() {
         window.isGiaNikSoundEnabled = !window.isGiaNikSoundEnabled;
         const icon = document.getElementById('sound-icon');
