@@ -49,7 +49,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
             <div class="h-8 w-px bg-white/10 mx-2"></div>
 
             <div>
-                <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">Profitto Chiuso</span>
+                <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">P&L Netta (Settled)</span>
                 <div
                     class="text-lg font-black tabular-nums <?php echo $portfolioStats['net_profit'] >= 0 ? 'text-success' : 'text-danger'; ?> leading-none">
                     €<?php echo number_format($portfolioStats['net_profit'], 2); ?></div>

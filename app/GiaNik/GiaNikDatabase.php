@@ -50,6 +50,7 @@ class GiaNikDatabase
         // 2. Ensure all columns exist (Self-Repair)
         $requiredColumns = [
             'profit' => 'REAL DEFAULT 0',
+            'commission' => 'REAL DEFAULT 0',
             'settled_at' => 'DATETIME',
             'motivation' => 'TEXT',
             'type' => "TEXT DEFAULT 'virtual'",

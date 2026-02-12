@@ -931,9 +931,10 @@ class GiaNikController
                                     $isWin = ($winnerSelectionId == $bet['selection_id']);
                                     $status = $isWin ? 'won' : 'lost';
                                     $profit = $isWin ? ($bet['stake'] * ($bet['odds'] - 1)) : -$bet['stake'];
+                                    $commission = $isWin ? ($profit * 0.05) : 0; // Stima 5% su vincita lorda
 
-                                    $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?")
-                                        ->execute([$status, $profit, $bet['id']]);
+                                    $this->db->prepare("UPDATE bets SET status = ?, profit = ?, commission = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?")
+                                        ->execute([$status, $profit, $commission, $bet['id']]);
 
                                     if ($isWin) {
                                         $results['wins']++;
@@ -1247,7 +1248,7 @@ class GiaNikController
     {
         $vInit = 100.0;
         // Sum only VIRTUAL bets profit
-        $vProf = (float) $this->db->query("SELECT SUM(profit) FROM bets WHERE type = 'virtual' AND status IN ('won', 'lost') AND sport IN ('Soccer', 'Football')")->fetchColumn();
+        $vProf = (float) $this->db->query("SELECT SUM(profit - commission) FROM bets WHERE type = 'virtual' AND status IN ('won', 'lost') AND sport IN ('Soccer', 'Football')")->fetchColumn();
         // Sum only VIRTUAL bets exposure
         $vExp = (float) $this->db->query("SELECT SUM(stake) FROM bets WHERE type = 'virtual' AND status = 'pending' AND sport IN ('Soccer', 'Football')")->fetchColumn();
         return [
@@ -1581,6 +1582,7 @@ class GiaNikController
                     'stake' => $o['priceSize']['size'] ?? 0,
                     'status' => 'pending',
                     'profit' => 0,
+                    'commission' => 0, // Commission is 0 for pending bets
                     'side' => $o['side'] ?? 'BACK',
                     'placedDate' => $o['placedDate'] ?? null,
                     'marketName' => null,
@@ -1602,6 +1604,7 @@ class GiaNikController
                     'stake' => $o['sizeSettled'] ?? 0,
                     'status' => ($o['betOutcome'] === 'WIN' || $o['betOutcome'] === 'WON') ? 'won' : (($o['betOutcome'] === 'VOIDED' || $o['betOutcome'] === 'CANCELLED') ? 'cancelled' : 'lost'),
                     'profit' => (float) ($o['profit'] ?? 0),
+                    'commission' => (float) ($o['commission'] ?? 0),
                     'side' => $o['side'] ?? 'BACK',
                     'placedDate' => $o['placedDate'] ?? null,
                     'marketName' => $itemDesc['marketDesc'] ?? ($itemDesc['marketName'] ?? null),
@@ -1747,13 +1750,13 @@ class GiaNikController
         $currentBalance = 100.0;
         foreach ($bets as $b) {
             $totalStake += (float) ($b['stake'] ?? 0);
-            $netProfit += (float) ($b['profit'] ?? 0);
+            $netProfit += ((float) ($b['profit'] ?? 0) - (float) ($b['commission'] ?? 0));
             if ($b['status'] === 'won')
                 $wins++;
             else
                 $losses++;
 
-            $currentBalance += (float) ($b['profit'] ?? 0);
+            $currentBalance += ((float) ($b['profit'] ?? 0) - (float) ($b['commission'] ?? 0));
             $history[] = round($currentBalance, 2);
             $dateSource = !empty($b['settled_at']) ? $b['settled_at'] : $b['created_at'];
             $labels[] = date('d/m H:i', strtotime($dateSource));
