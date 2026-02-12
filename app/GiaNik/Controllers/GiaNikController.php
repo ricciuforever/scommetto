@@ -466,7 +466,7 @@ class GiaNikController
             $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
             $stmtMode->execute();
             $operationalMode = $stmtMode->fetchColumn() ?: 'virtual';
-            $portfolioStats = $this->getPortfolioStats($operationalMode);
+            $portfolioStats = $this->getPortfolioStats($operationalMode, ($operationalMode === 'real' ? ($account['available'] + $account['exposure']) : null));
             $virtualAccount = $this->getVirtualBalance();
             $settlementResults = $this->settleBets();
             require __DIR__ . '/../Views/partials/gianik_live.php';
@@ -1734,9 +1734,9 @@ class GiaNikController
         }
     }
 
-    private function getPortfolioStats($type = 'virtual')
+    private function getPortfolioStats($type = 'virtual', $actualTotal = null)
     {
-        $stmt = $this->db->prepare("SELECT profit, stake, status, settled_at, created_at FROM bets WHERE status IN ('won', 'lost') AND type = ? ORDER BY COALESCE(settled_at, created_at) ASC");
+        $stmt = $this->db->prepare("SELECT profit, commission, stake, status, settled_at, created_at FROM bets WHERE status IN ('won', 'lost') AND type = ? ORDER BY COALESCE(settled_at, created_at) ASC");
         $stmt->execute([$type]);
         $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -1762,6 +1762,36 @@ class GiaNikController
             $labels[] = date('d/m H:i', strtotime($dateSource));
         }
 
+        // Adjust stats for REAL mode to match actual balance growth from 100€
+        if ($type === 'real' && $actualTotal !== null) {
+            $trackedNetProfit = $netProfit;
+            $realNetProfit = (float)$actualTotal - 100.0;
+            $offset = $realNetProfit - $trackedNetProfit;
+
+            $netProfit = $realNetProfit;
+
+            // Adjust history to start at 100 and end at actual total, while keeping tracked changes
+            $newHistory = [100.0];
+            $newLabels = ['START'];
+
+            if (abs($offset) > 0.01) {
+                $newHistory[] = round(100.0 + $offset, 2);
+                $newLabels[] = 'ADJ';
+            }
+
+            // Re-apply tracked changes on top of the initial adjusted balance
+            $runningBalance = 100.0 + $offset;
+            foreach ($bets as $b) {
+                $runningBalance += ((float) ($b['profit'] ?? 0) - (float) ($b['commission'] ?? 0));
+                $newHistory[] = round($runningBalance, 2);
+                $dateSource = !empty($b['settled_at']) ? $b['settled_at'] : $b['created_at'];
+                $newLabels[] = date('d/m H:i', strtotime($dateSource));
+            }
+
+            $history = $newHistory;
+            $labels = $newLabels;
+        }
+
         $totalBets = $wins + $losses;
         return [
             'wins' => $wins,
@@ -1769,6 +1799,7 @@ class GiaNikController
             'total_bets' => $totalBets,
             'win_rate' => $totalBets > 0 ? round(($wins / $totalBets) * 100, 1) : 0,
             'net_profit' => $netProfit,
+            'total_stake' => $totalStake,
             'roi' => $totalStake > 0 ? round(($netProfit / $totalStake) * 100, 2) : 0,
             'history' => $history,
             'labels' => $labels
