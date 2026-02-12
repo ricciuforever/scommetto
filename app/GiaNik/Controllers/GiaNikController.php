@@ -1455,11 +1455,14 @@ class GiaNikController
                 $where[] = "status NOT IN ('cancelled', 'voided')";
             }
 
+            // Forza solo Calcio per GiaNik
+            $where[] = "sport IN ('Soccer', 'Football')";
+
             if (!empty($where)) {
                 $sql .= " WHERE " . implode(" AND ", $where);
             }
 
-            $sql .= " GROUP BY id"; // Garantisce univocità per record ID
+            $sql .= " GROUP BY market_id, selection_id, odds, stake, type, status, created_at"; // Raggruppamento più severo
             $sql .= " ORDER BY created_at DESC LIMIT 30";
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
@@ -1805,6 +1808,9 @@ class GiaNikController
     public function syncWithBetfair()
     {
         try {
+            // 0. Purge non-soccer records from GiaNik module
+            $this->db->exec("DELETE FROM bets WHERE sport NOT IN ('Soccer', 'Football')");
+
             // 1. Pulizia orfani immediati (record reali creati ma non ancora associati a un ID Betfair, scaduti)
             $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND created_at < datetime('now', '-2 minutes')");
 
