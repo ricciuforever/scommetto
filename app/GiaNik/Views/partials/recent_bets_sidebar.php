@@ -8,45 +8,23 @@ $bets = $bets ?? [];
         <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Ultime Giocate GiaNik</h3>
 
         <div class="flex flex-col gap-3">
-            <!-- Mode Filters -->
-            <div class="flex gap-2 mb-1">
-                <label class="cursor-pointer">
-                    <input type="radio" name="type" value="all" <?php echo ($currentType === 'all' ? 'checked' : ''); ?>
-                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked, [name='type']:checked" hx-target="#recent-bets-container"
-                        class="hidden peer">
-                    <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-white/10 bg-white/5 text-slate-500 peer-checked:bg-slate-500 peer-checked:text-white transition-all">Tutte</span>
-                </label>
-                <label class="cursor-pointer">
-                    <input type="radio" name="type" value="real" <?php echo ($currentType === 'real' ? 'checked' : ''); ?>
-                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked, [name='type']:checked" hx-target="#recent-bets-container"
-                        class="hidden peer">
-                    <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-accent/20 bg-accent/5 text-accent peer-checked:bg-accent peer-checked:text-white transition-all">Real</span>
-                </label>
-                <label class="cursor-pointer">
-                    <input type="radio" name="type" value="virtual" <?php echo ($currentType === 'virtual' ? 'checked' : ''); ?>
-                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked, [name='type']:checked" hx-target="#recent-bets-container"
-                        class="hidden peer">
-                    <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-white/10 bg-white/5 text-slate-300 peer-checked:bg-white/20 peer-checked:text-white transition-all">Virtual</span>
-                </label>
-            </div>
-
             <!-- Status Filters -->
             <div class="flex gap-2">
                 <label class="cursor-pointer">
-                    <input type="radio" name="status" value="all" <?php echo ($currentStatus === 'all' ? 'checked' : ''); ?>
-                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked, [name='type']:checked" hx-target="#recent-bets-container"
+                    <input type="radio" name="status" value="pending" <?php echo (in_array($currentStatus, ['all', 'pending']) ? 'checked' : ''); ?>
+                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked" hx-target="#recent-bets-container"
                         class="hidden peer">
-                    <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-white/10 bg-white/5 text-slate-500 peer-checked:bg-slate-500 peer-checked:text-white transition-all">Tutte</span>
+                    <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-accent/20 bg-accent/5 text-accent peer-checked:bg-accent peer-checked:text-white transition-all">In corso</span>
                 </label>
                 <label class="cursor-pointer">
                     <input type="radio" name="status" value="won" <?php echo ($currentStatus === 'won' ? 'checked' : ''); ?>
-                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked, [name='type']:checked" hx-target="#recent-bets-container"
+                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked" hx-target="#recent-bets-container"
                         class="hidden peer">
                     <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-success/20 bg-success/5 text-success peer-checked:bg-success peer-checked:text-white transition-all">Vinte</span>
                 </label>
                 <label class="cursor-pointer">
                     <input type="radio" name="status" value="lost" <?php echo ($currentStatus === 'lost' ? 'checked' : ''); ?>
-                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked, [name='type']:checked" hx-target="#recent-bets-container"
+                        hx-get="/api/gianik/recent-bets" hx-include="[name='status']:checked" hx-target="#recent-bets-container"
                         class="hidden peer">
                     <span class="px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-danger/20 bg-danger/5 text-danger peer-checked:bg-danger peer-checked:text-white transition-all">Perse</span>
                 </label>
@@ -112,9 +90,8 @@ $bets = $bets ?? [];
     (function() {
         const container = document.querySelector('#recent-bets-container');
         const status = "<?php echo $currentStatus; ?>";
-        const type = "<?php echo $currentType; ?>";
 
         // Ensure the container's own hx-get attribute includes the filters for the next 'every 30s' trigger
-        container.setAttribute('hx-get', '/api/gianik/recent-bets?status=' + status + '&type=' + type);
+        container.setAttribute('hx-get', '/api/gianik/recent-bets?status=' + status + '&type=real');
     })();
 </script>
