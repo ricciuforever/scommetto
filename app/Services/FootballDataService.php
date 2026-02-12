@@ -392,7 +392,11 @@ class FootballDataService
         // Replace '/' or '-' with space to handle split names or different conventions
         $name = str_replace(['/', '-', ' - '], ' ', $name);
 
-        $name = strtolower($name);
+        if (function_exists('mb_strtolower')) {
+            $name = mb_strtolower($name, 'UTF-8');
+        } else {
+            $name = strtolower($name);
+        }
 
         // 1. Transliterate common accented characters
         $chars = [
@@ -424,7 +428,21 @@ class FootballDataService
             'ñ' => 'n',
             'ç' => 'c',
             'ý' => 'y',
-            'ÿ' => 'y'
+            'ÿ' => 'y',
+            'ə' => 'a',
+            'ı' => 'i',
+            'ş' => 's',
+            'ğ' => 'g',
+            'ć' => 'c',
+            'č' => 'c',
+            'š' => 's',
+            'ž' => 'z',
+            'đ' => 'd',
+            'ł' => 'l',
+            'ń' => 'n',
+            'ś' => 's',
+            'ź' => 'z',
+            'ż' => 'z'
         ];
         $name = strtr($name, $chars);
 
