@@ -5,7 +5,6 @@ require_once __DIR__ . '/../../bootstrap.php';
 
 use App\GiaNik\GiaNikDatabase;
 use App\Config\Config;
-use PDO;
 
 // 1. Connessione al DB DESTINAZIONE (SQLite)
 $sqlite = GiaNikDatabase::getInstance()->getConnection();
@@ -14,8 +13,10 @@ $sqlite = GiaNikDatabase::getInstance()->getConnection();
 try {
     $mysql = Config::getDB();
     echo "✅ Connesso al Database Centrale (MySQL)\n";
-} catch (PDOException $e) {
-    die("❌ Errore connessione MySQL: " . $e->getMessage() . "\n");
+} catch (\Exception $e) {
+    echo "❌ Errore connessione MySQL: " . $e->getMessage() . "\n";
+    echo "⚠️ Assicurati che le credenziali nel file .env siano corrette (DB_HOST, DB_NAME, DB_USER, DB_PASS).\n";
+    exit(1);
 }
 
 echo "⏳ Inizio analisi storico scommesse dal Core...\n";
