@@ -104,9 +104,28 @@ class GiaNikController
             }
 
             // --- Pre-fetch Enrichment Data ---
+            $today = date('Y-m-d');
+            $tomorrow = date('Y-m-d', strtotime('+1 day'));
             // Fetch Live with short cache (15s) for high reactivity in GiaNik
             $apiLiveRes = $this->footballData->getLiveMatches([], 15);
-            $apiLiveMatches = $apiLiveRes['response'] ?? [];
+            $apiTodayRes = $this->footballData->getFixturesByDate($today);
+            $apiTomorrowRes = $this->footballData->getFixturesByDate($tomorrow);
+
+            // Merge order: Today/Tomorrow first, then Live.
+            // This ensures Live data (most fresh) overwrites any stale Today/Tomorrow cached records in the map.
+            $allApiFixtures = array_merge(
+                $apiTodayRes['response'] ?? [],
+                $apiTomorrowRes['response'] ?? [],
+                $apiLiveRes['response'] ?? []
+            );
+            // Deduplicate by fixture ID
+            $apiLiveMatchesMap = [];
+            foreach ($allApiFixtures as $f) {
+                if (isset($f['fixture']['id'])) {
+                    $apiLiveMatchesMap[$f['fixture']['id']] = $f;
+                }
+            }
+            $apiLiveMatches = array_values($apiLiveMatchesMap);
 
             // --- Truth Overlay from Local DB (for most up-to-date individual status) ---
             $fixtureModel = new \App\Models\Fixture();
@@ -1358,7 +1377,7 @@ class GiaNikController
 
         foreach ($currentStats as $index => $teamStats) {
             $prefix = ($index === 0) ? 'home_' : 'away_';
-            $stats = $teamStats['statistics'] ?? [];
+            $stats = $teamStats['stats_json'] ?? $teamStats['statistics'] ?? [];
             foreach ($stats as $s) {
                 $val = (int)str_replace(['%', ' '], '', (string)$s['value']);
                 if ($s['type'] === 'Total Shots') $data[$prefix . 'shots'] = $val;

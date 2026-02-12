@@ -7,9 +7,26 @@ $stats = $stats ?? [];
 $fixtureId = $details['fixture']['id'] ?? ($details['id'] ?? null);
 $homeId = $details['team_home_id'] ?? null;
 $awayId = $details['team_away_id'] ?? null;
+$venue = $details['fixture']['venue'] ?? null;
 ?>
 
 <div class="flex flex-col gap-6 py-2">
+    <!-- Predictions Graphic -->
+    <?php if ($predictions && isset($predictions['percent'])): ?>
+        <div class="flex flex-col gap-1.5 px-2">
+            <div class="flex justify-between text-[8px] font-black uppercase text-slate-600 tracking-widest">
+                <span>Home <?php echo $predictions['percent']['home']; ?></span>
+                <span>Draw <?php echo $predictions['percent']['draw']; ?></span>
+                <span>Away <?php echo $predictions['percent']['away']; ?></span>
+            </div>
+            <div class="flex h-1 w-full rounded-full overflow-hidden bg-white/5">
+                <div class="bg-accent h-full shadow-[0_0_8px_rgba(var(--accent-rgb),0.4)]" style="width: <?php echo $predictions['percent']['home']; ?>"></div>
+                <div class="bg-slate-700 h-full" style="width: <?php echo $predictions['percent']['draw']; ?>"></div>
+                <div class="bg-indigo-600 h-full shadow-[0_0_8px_rgba(79,70,229,0.4)]" style="width: <?php echo $predictions['percent']['away']; ?>"></div>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <!-- Match Timeline -->
     <div class="relative px-2">
         <div class="flex items-center justify-between text-[8px] font-black uppercase text-slate-600 tracking-widest mb-4 px-1">
@@ -70,6 +87,25 @@ $awayId = $details['team_away_id'] ?? null;
         </div>
     </div>
 
+    <!-- Stadium & Info -->
+    <div class="flex items-center justify-between px-2 text-[8px] font-black uppercase tracking-widest text-slate-600">
+        <div class="flex items-center gap-4">
+            <?php if ($venue && !empty($venue['name'])): ?>
+                <div class="flex items-center gap-1.5">
+                    <i data-lucide="map-pin" class="w-3 h-3 text-slate-700"></i>
+                    <span><?php echo $venue['name']; ?>, <?php echo $venue['city']; ?></span>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($details && !empty($details['fixture']['referee'])): ?>
+                <div class="flex items-center gap-1.5">
+                    <i data-lucide="user" class="w-3 h-3 text-slate-700"></i>
+                    <span>Ref: <?php echo $details['fixture']['referee']; ?></span>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
     <!-- Stats & Info -->
     <div class="flex items-center justify-between px-2 pt-2 border-t border-white/5">
         <div class="flex items-center gap-6">
@@ -79,7 +115,9 @@ $awayId = $details['team_away_id'] ?? null;
              $homeShots = 0; $awayShots = 0;
              foreach ($stats as $s) {
                  $isHomeStat = ($s['team_id'] ?? ($s['team']['id'] ?? null)) == $homeId;
-                 $statArr = $s['statistics'] ?? (isset($s['stats_json']) ? json_decode($s['stats_json'], true) : []);
+                 $statArr = $s['stats_json'] ?? $s['statistics'] ?? [];
+                 if (is_string($statArr)) $statArr = json_decode($statArr, true);
+
                  foreach ($statArr as $st) {
                      if ($st['type'] === 'Ball Possession') {
                          $val = (int)str_replace('%', '', $st['value']);
