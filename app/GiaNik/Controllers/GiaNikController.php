@@ -866,6 +866,7 @@ class GiaNikController
                 session_start();
             $prevPrices = $_SESSION['gianik_prices'] ?? [];
             $newPricesForHistory = [];
+            $processedMarketIdsInRun = [];
 
             $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
@@ -993,7 +994,7 @@ class GiaNikController
                                 }
                             }
 
-                            if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds)) {
+                            if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds) || in_array($analysis['marketId'], $processedMarketIdsInRun)) {
                                 continue;
                             }
 
@@ -1075,6 +1076,7 @@ class GiaNikController
                                 $stmtInsert = $this->db->prepare("INSERT INTO gianik_bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                                 $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation, $currentPeriod]);
                                 $results['new_bets']++;
+                                $processedMarketIdsInRun[] = $analysis['marketId'];
                             }
                         }
                     }
@@ -1472,8 +1474,8 @@ class GiaNikController
                 $sql .= " WHERE " . implode(" AND ", $where);
             }
 
-            $sql .= " GROUP BY market_id, selection_id, odds, stake, type, status, created_at"; // Raggruppamento più severo
-            $sql .= " ORDER BY created_at DESC LIMIT 30";
+            // Grouping removed to avoid hiding distinct bets or causing inconsistent results
+            $sql .= " ORDER BY created_at DESC, id DESC LIMIT 50";
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
             $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
