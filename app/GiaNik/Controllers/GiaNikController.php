@@ -1033,12 +1033,6 @@ class GiaNikController
                             if ($stake > Config::MAX_BETFAIR_STAKE)
                                 $stake = Config::MAX_BETFAIR_STAKE;
 
-                            // Controllo liquidità (totalMatched del mercato scelto)
-                            $minLiquidity = $stake * 50; // Almeno 50 volte lo stake come volume minimo
-                            if ($selectedMarket['totalMatched'] < $minLiquidity) {
-                                $this->logSkippedMatch($event['event'], $selectedMarket['marketName'], 'Bassa Liquidità', 'Volume matched (' . $selectedMarket['totalMatched'] . ') inferiore al minimo richiesto (' . $minLiquidity . ').');
-                                continue;
-                            }
 
                             if ($activeBalance['available'] < $stake)
                                 continue;
