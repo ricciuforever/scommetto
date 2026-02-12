@@ -511,8 +511,14 @@ class GiaNikController
                 'event' => $eventName,
                 'competition' => $competitionName,
                 'sport' => $sportName,
-                'markets' => []
+                'markets' => [],
+                'active_bets' => []
             ];
+
+            // Recupera eventuali scommesse già attive su questo evento
+            $stmtActive = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND event_name = ?");
+            $stmtActive->execute([$eventName]);
+            $event['active_bets'] = $stmtActive->fetchAll(PDO::FETCH_ASSOC);
 
             foreach ($catalogues as $mc) {
                 $mId = $mc['marketId'];
@@ -574,9 +580,17 @@ class GiaNikController
                 $perfData = $this->getRelevantMetrics($event);
                 $event['performance_metrics'] = $perfData['text'];
 
-                // --- Gatekeeper (Stop Loss) ---
-                if ($perfData['summary']['roi'] < -15 && $perfData['summary']['total_bets'] > 10) {
-                    $reasoning = "ANALISI ABORTITA: Stop Loss attivo. ROI storico su questa lega/sport è del " . round($perfData['summary']['roi'], 1) . "% su " . $perfData['summary']['total_bets'] . " bet. Evitiamo ulteriori perdite.";
+                // --- GATEKEEPER CHECK ---
+                // Verifica performance della Lega
+                $leagueId = $apiData['fixture']['league_id'] ?? 0;
+                $leagueKey = 'LEAGUE_' . $leagueId;
+                $stmtGK = $this->db->prepare("SELECT roi, total_bets FROM performance_metrics WHERE metric_key = ?");
+                $stmtGK->execute([$leagueKey]);
+                $metric = $stmtGK->fetch(PDO::FETCH_ASSOC);
+
+                // REGOLA: Se abbiamo fatto almeno 10 scommesse e il ROI è tragico (< -15%), STOP.
+                if ($metric && $metric['total_bets'] >= 10 && $metric['roi'] < -15.0) {
+                    $reasoning = "Analisi interrotta dal Gatekeeper: ROI storico su questa lega (ID: $leagueId) troppo basso (" . round($metric['roi'], 1) . "%) su " . $metric['total_bets'] . " bet.";
                     require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
                     return;
                 }
@@ -678,9 +692,10 @@ class GiaNikController
 
             $bucket = $this->getOddsBucket($odds);
             $leagueName = $input['competition'] ?? 'Unknown';
+            $leagueId = $input['leagueId'] ?? null;
 
-            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation, $bucket, $leagueName]);
+            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation, $bucket, $leagueName, $leagueId]);
 
             echo json_encode(['status' => 'success', 'message' => 'Scommessa piazzata (' . $type . ')']);
         } catch (\Throwable $e) {
@@ -958,9 +973,10 @@ class GiaNikController
 
                                 $bucket = $this->getOddsBucket($analysis['odds']);
                                 $leagueName = $event['competition'] ?? 'Unknown';
+                                $leagueId = $event['api_football']['fixture']['league_id'] ?? null;
                                 $motivation = $this->extractMotivation($analysis, $predictionRaw, $event);
 
-                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                                 $stmtInsert->execute([
                                     $analysis['marketId'],
                                     $selectedMarket['marketName'],
@@ -974,7 +990,8 @@ class GiaNikController
                                     $betfairId,
                                     $motivation,
                                     $bucket,
-                                    $leagueName
+                                    $leagueName,
+                                    $leagueId
                                 ]);
                                 $results['new_bets']++;
                             }
@@ -1038,30 +1055,43 @@ class GiaNikController
                                     // Update Performance Metrics
                                     $bucket = $bet['bucket'] ?? $this->getOddsBucket($bet['odds']);
                                     $league = $bet['league'] ?? 'Unknown';
+                                    $leagueId = $bet['league_id'] ?? null;
                                     $market = $bet['market_name'] ?? 'Unknown';
                                     // Sanitize market name for key (e.g. Over/Under 2.5 -> OVER25)
                                     $marketKey = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $market));
-                                    $metricKey = "{$bet['sport']}_{$league}_{$marketKey}_{$bucket}";
 
-                                    $this->db->prepare("INSERT INTO performance_metrics (metric_key, total_bets, wins, losses, net_profit, total_stake)
-                                        VALUES (?, 1, ?, ?, ?, ?)
-                                        ON CONFLICT(metric_key) DO UPDATE SET
-                                        total_bets = total_bets + 1,
-                                        wins = wins + ?,
-                                        losses = losses + ?,
-                                        net_profit = net_profit + ?,
-                                        total_stake = total_stake + ?")
-                                        ->execute([
-                                            $metricKey,
-                                            ($isWin ? 1 : 0),
-                                            ($isWin ? 0 : 1),
-                                            $netProfit,
-                                            $bet['stake'],
-                                            ($isWin ? 1 : 0),
-                                            ($isWin ? 0 : 1),
-                                            $netProfit,
-                                            $bet['stake']
-                                        ]);
+                                    $keysToUpdate = [
+                                        "{$bet['sport']}_{$league}_{$marketKey}_{$bucket}"
+                                    ];
+                                    if ($leagueId) {
+                                        $keysToUpdate[] = "LEAGUE_" . $leagueId;
+                                    }
+
+                                    foreach ($keysToUpdate as $mKey) {
+                                        $this->db->prepare("INSERT INTO performance_metrics (metric_key, total_bets, wins, losses, net_profit, total_stake, roi, last_updated)
+                                            VALUES (?, 1, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
+                                            ON CONFLICT(metric_key) DO UPDATE SET
+                                            total_bets = total_bets + 1,
+                                            wins = wins + ?,
+                                            losses = losses + ?,
+                                            net_profit = net_profit + ?,
+                                            total_stake = total_stake + ?,
+                                            roi = ((net_profit + ?) / (total_stake + ?)) * 100,
+                                            last_updated = CURRENT_TIMESTAMP")
+                                            ->execute([
+                                                $mKey,
+                                                ($isWin ? 1 : 0),
+                                                ($isWin ? 0 : 1),
+                                                $netProfit,
+                                                $bet['stake'],
+                                                ($isWin ? 1 : 0),
+                                                ($isWin ? 0 : 1),
+                                                $netProfit,
+                                                $bet['stake'],
+                                                $netProfit,
+                                                $bet['stake']
+                                            ]);
+                                    }
 
                                     if ($isWin) {
                                         $results['wins']++;
@@ -1157,7 +1187,7 @@ class GiaNikController
         ];
 
         // 🚀 MOMENTUM (Derivata prima delle statistiche)
-        $momentum = $this->handleMomentum($fid, $stats);
+        $momentum = $this->handleMomentum($fid, $stats, $details['elapsed'] ?? 0);
 
         return [
             'fixture' => $details,
@@ -1281,15 +1311,16 @@ class GiaNikController
     {
         $sport = $event['sport'] ?? 'Soccer';
         $league = $event['competition'] ?? 'Unknown';
+        $leagueId = $event['api_football']['fixture']['league_id'] ?? null;
 
-        // Recupera metriche per questa lega
-        $stmt = $this->db->prepare("SELECT * FROM performance_metrics WHERE metric_key LIKE ?");
-        $stmt->execute(["{$sport}_{$league}_%"]);
+        // Recupera metriche per questa lega (sia per nome che per ID LEAGUE_)
+        $stmt = $this->db->prepare("SELECT * FROM performance_metrics WHERE metric_key LIKE ? OR metric_key = ?");
+        $stmt->execute(["{$sport}_{$league}_%", "LEAGUE_" . ($leagueId ?? 0)]);
         $metrics = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         if (empty($metrics)) return ['text' => "Nessuna metrica storica disponibile per questa lega.", 'summary' => ['roi' => 0, 'total_bets' => 0]];
 
-        $text = "Performance storiche in {$league}:\n";
+        $text = "Performance storiche in {$league} (ID: {$leagueId}):\n";
         $totalBets = 0; $totalProfit = 0; $totalStake = 0;
         foreach ($metrics as $m) {
             $winRate = $m['total_bets'] > 0 ? round(($m['wins'] / $m['total_bets']) * 100, 1) : 0;
@@ -1312,74 +1343,80 @@ class GiaNikController
         ];
     }
 
-    private function handleMomentum($fixtureId, $currentStats)
+    private function handleMomentum($fixtureId, $currentStats, $elapsed = 0)
     {
         if (!$fixtureId || empty($currentStats)) return null;
+        $elapsed = max(1, (int)$elapsed);
 
-        // 1. Salva snapshot attuale
-        $this->db->prepare("INSERT INTO match_snapshots (fixture_id, stats_json) VALUES (?, ?)")
-            ->execute([$fixtureId, json_encode($currentStats)]);
+        // 1. Estrai dati chiave
+        $data = [
+            'home_shots' => 0, 'away_shots' => 0,
+            'home_corners' => 0, 'away_corners' => 0,
+            'home_possession' => 0, 'away_possession' => 0,
+            'dangerous_attacks_home' => 0, 'dangerous_attacks_away' => 0
+        ];
 
-        // 2. Recupera snapshot di circa 10-15 minuti fa
-        $stmt = $this->db->prepare("SELECT stats_json FROM match_snapshots WHERE fixture_id = ? AND timestamp < datetime('now', '-10 minutes') ORDER BY timestamp DESC LIMIT 1");
-        $stmt->execute([$fixtureId]);
-        $oldStatsJson = $stmt->fetchColumn();
-
-        if (!$oldStatsJson) return "Momentum: Calcolo in corso (raccolta dati)...";
-
-        $oldStats = json_decode($oldStatsJson, true);
-        $momentum = "MOMENTUM (Variazione ultimi 10-15 min):\n";
-
-        // Recupera il minuto corrente dal DB o passalo (assumiamo di poterlo dedurre o che non sia critico per PPM globale se usiamo elapsed)
-        $fixture = (new \App\Models\Fixture())->getById($fixtureId);
-        $elapsed = max(1, (int)($fixture['elapsed'] ?? 1));
-
-        foreach ([0, 1] as $index) {
-            $curr = $currentStats[$index]['statistics'] ?? [];
-            $old = $oldStats[$index]['statistics'] ?? [];
-            $sideName = ($index === 0) ? "Casa" : "Ospite";
-            $deltaStr = "- $sideName: ";
-            $hasData = false;
-
-            $metrics = [
-                'Shots on Goal' => 'Tiri Porta',
-                'Total Shots' => 'Tiri Totali',
-                'Corner Kicks' => 'Corner',
-                'Ball Possession' => 'Possesso'
-            ];
-
-            foreach ($metrics as $type => $label) {
-                $cVal = 0; $oVal = 0;
-                foreach ($curr as $s) if ($s['type'] == $type) $cVal = (int)$s['value'];
-                foreach ($old as $s) if ($s['type'] == $type) $oVal = (int)$s['value'];
-
-                $delta = $cVal - $oVal;
-
-                if ($type === 'Ball Possession') {
-                    if (abs($delta) > 2) {
-                        $deltaStr .= "$label " . ($delta > 0 ? "+" : "") . "$delta%, ";
-                        $hasData = true;
-                    }
-                } else {
-                    if ($delta > 0) {
-                        $deltaStr .= "$label +$delta, ";
-                        $hasData = true;
-                    }
-
-                    // Intensity Index for Shots
-                    if ($type === 'Total Shots') {
-                        $globalPPM = $cVal / $elapsed;
-                        $recentPPM = $delta / 10; // delta in ultimi 10 min
-                        if ($globalPPM > 0) {
-                            $ratio = $recentPPM / $globalPPM;
-                            if ($ratio >= 1.5) {
-                                $momentum .= "⚡ INTENSITY ({$sideName}): " . round($ratio, 1) . "x frequenza tiri media!\n";
-                            }
-                        }
-                    }
+        foreach ($currentStats as $index => $teamStats) {
+            $prefix = ($index === 0) ? 'home_' : 'away_';
+            $stats = $teamStats['statistics'] ?? [];
+            foreach ($stats as $s) {
+                $val = (int)str_replace(['%', ' '], '', (string)$s['value']);
+                if ($s['type'] === 'Total Shots') $data[$prefix . 'shots'] = $val;
+                if ($s['type'] === 'Corner Kicks') $data[$prefix . 'corners'] = $val;
+                if ($s['type'] === 'Ball Possession') $data[$prefix . 'possession'] = $val;
+                if ($s['type'] === 'Dangerous Attacks') {
+                    if ($index === 0) $data['dangerous_attacks_home'] = $val;
+                    else $data['dangerous_attacks_away'] = $val;
                 }
             }
-            $momentum .= ($hasData ? rtrim($deltaStr, ", ") : "- $sideName: Stabile") . "\n";
+        }
+
+        // Salva snapshot strutturato
+        $this->db->prepare("INSERT OR REPLACE INTO match_snapshots
+            (fixture_id, minute, home_shots, away_shots, home_corners, away_corners, home_possession, away_possession, dangerous_attacks_home, dangerous_attacks_away, stats_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            ->execute([
+                $fixtureId, $elapsed,
+                $data['home_shots'], $data['away_shots'],
+                $data['home_corners'], $data['away_corners'],
+                $data['home_possession'], $data['away_possession'],
+                $data['dangerous_attacks_home'], $data['dangerous_attacks_away'],
+                json_encode($currentStats)
+            ]);
+
+        // 2. Recupera snapshot di circa 10 minuti fa (finestra 8-15 min)
+        $stmt = $this->db->prepare("SELECT * FROM match_snapshots WHERE fixture_id = ? AND minute <= ? AND minute >= ? ORDER BY minute DESC LIMIT 1");
+        $stmt->execute([$fixtureId, $elapsed - 8, $elapsed - 15]);
+        $old = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$old) return "Momentum: Calcolo in corso (raccolta dati)...";
+
+        $deltaMin = max(1, $elapsed - $old['minute']);
+        $momentum = "INTENSITY INDEX (Ultimi $deltaMin min):\n";
+
+        foreach ([0, 1] as $index) {
+            $prefix = ($index === 0) ? 'home_' : 'away_';
+            $sideName = ($index === 0) ? "Casa" : "Ospite";
+
+            $currShots = $data[$prefix . 'shots'];
+            $oldShots = (int)$old[$prefix . 'shots'];
+            $currCorners = $data[$prefix . 'corners'];
+            $oldCorners = (int)$old[$prefix . 'corners'];
+
+            $shotsLast = $currShots - $oldShots;
+            $cornersLast = $currCorners - $oldCorners;
+
+            // Intensity Formula: Intensity = (ShotsLast + CornersLast * 0.5) / MatchAveragePerDelta
+            $matchAvgPer10 = (($currShots + $currCorners * 0.5) / $elapsed) * 10;
+            $matchAvgPerDelta = $matchAvgPer10 * ($deltaMin / 10);
+
+            $intensity = ($matchAvgPerDelta > 0) ? ($shotsLast + $cornersLast * 0.5) / $matchAvgPerDelta : 0;
+
+            $status = "Stabile";
+            if ($intensity > 1.5) $status = "⚡ ALTA (Pressione in aumento)";
+            elseif ($intensity < 0.5) $status = "❄️ BASSA (Fase di stanca)";
+
+            $momentum .= "- $sideName: " . round($intensity, 2) . "x media match ($status). [Shots: +$shotsLast, Corners: +$cornersLast]\n";
         }
 
         // Pulizia snapshot vecchi (> 24h)

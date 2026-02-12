@@ -161,6 +161,8 @@ $event = $event ?? [];
                     marketName: 'Unknown',
                     eventName: eventData.event,
                     sport: eventData.sport,
+                    leagueId: eventData.api_football?.fixture?.league_id || null,
+                    competition: eventData.competition,
                     advice: analysis.advice,
                     odds: parseFloat(analysis.odds || 0),
                     stake: parseFloat(analysis.stake || 2.0),

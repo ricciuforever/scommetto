@@ -52,8 +52,10 @@ class GiaNikDatabase
             total_bets INTEGER DEFAULT 0,
             wins INTEGER DEFAULT 0,
             losses INTEGER DEFAULT 0,
+            total_stake REAL DEFAULT 0,
             net_profit REAL DEFAULT 0,
-            total_stake REAL DEFAULT 0
+            roi REAL DEFAULT 0,
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
         $this->connection->exec("CREATE TABLE IF NOT EXISTS ai_lessons (
@@ -67,8 +69,18 @@ class GiaNikDatabase
 
         $this->connection->exec("CREATE TABLE IF NOT EXISTS match_snapshots (
             fixture_id INTEGER,
+            minute INTEGER,
+            home_shots INTEGER,
+            away_shots INTEGER,
+            home_corners INTEGER,
+            away_corners INTEGER,
+            home_possession INTEGER,
+            away_possession INTEGER,
+            dangerous_attacks_home INTEGER,
+            dangerous_attacks_away INTEGER,
             stats_json TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (fixture_id, minute)
         )");
 
         // 2. Ensure all columns exist (Self-Repair)
@@ -81,7 +93,8 @@ class GiaNikDatabase
             'market_name' => 'TEXT',
             'needs_analysis' => 'INTEGER DEFAULT 0',
             'bucket' => 'TEXT',
-            'league' => 'TEXT'
+            'league' => 'TEXT',
+            'league_id' => 'INTEGER'
         ];
 
         $stmt = $this->connection->query("PRAGMA table_info(bets)");
@@ -100,7 +113,9 @@ class GiaNikDatabase
         // Repair performance_metrics
         $requiredMetricsColumns = [
             'losses' => 'INTEGER DEFAULT 0',
-            'total_stake' => 'REAL DEFAULT 0'
+            'total_stake' => 'REAL DEFAULT 0',
+            'roi' => 'REAL DEFAULT 0',
+            'last_updated' => 'DATETIME DEFAULT CURRENT_TIMESTAMP'
         ];
         $stmt = $this->connection->query("PRAGMA table_info(performance_metrics)");
         $existingMetricsColumns = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
@@ -108,6 +123,29 @@ class GiaNikDatabase
             if (!in_array($col, $existingMetricsColumns)) {
                 try {
                     $this->connection->exec("ALTER TABLE performance_metrics ADD COLUMN $col $definition");
+                } catch (\Exception $e) {
+                }
+            }
+        }
+
+        // Repair match_snapshots
+        $requiredSnapshotColumns = [
+            'minute' => 'INTEGER',
+            'home_shots' => 'INTEGER',
+            'away_shots' => 'INTEGER',
+            'home_corners' => 'INTEGER',
+            'away_corners' => 'INTEGER',
+            'home_possession' => 'INTEGER',
+            'away_possession' => 'INTEGER',
+            'dangerous_attacks_home' => 'INTEGER',
+            'dangerous_attacks_away' => 'INTEGER'
+        ];
+        $stmt = $this->connection->query("PRAGMA table_info(match_snapshots)");
+        $existingSnapshotColumns = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
+        foreach ($requiredSnapshotColumns as $col => $definition) {
+            if (!in_array($col, $existingSnapshotColumns)) {
+                try {
+                    $this->connection->exec("ALTER TABLE match_snapshots ADD COLUMN $col $definition");
                 } catch (\Exception $e) {
                 }
             }
