@@ -327,9 +327,9 @@ class FootballDataService
     }
 
     /**
-     * Search a Betfair event in the fixture list using normalized names
+     * Search a Betfair event in the fixture list using normalized names and optional time window
      */
-    public function searchInFixtureList($bfEventName, $fixtures, $mappedCountry = null)
+    public function searchInFixtureList($bfEventName, $fixtures, $mappedCountry = null, $startTime = null)
     {
         // 1. Strip scores like "1-0", "0 - 0" if present in event name
         $name = preg_replace('/\d+\s*-\s*\d+/', ' v ', $bfEventName);
@@ -351,6 +351,15 @@ class FootballDataService
                 }
             }
 
+            // Optional: Strict Time Window Validation (30 minutes)
+            if ($startTime && isset($item['fixture']['date'])) {
+                $bfTime = is_numeric($startTime) ? $startTime : strtotime($startTime);
+                $apiTime = strtotime($item['fixture']['date']);
+                if (abs($bfTime - $apiTime) > 1800) { // 30 minutes
+                    continue;
+                }
+            }
+
             $apiHome = $this->normalizeTeamName($item['teams']['home']['name']);
             $apiAway = $this->normalizeTeamName($item['teams']['away']['name']);
 
@@ -362,9 +371,9 @@ class FootballDataService
             }
         }
 
-        // Fallback: if no match found with country filter, try WITHOUT country filter
+        // Fallback: if no match found with country filter, try WITHOUT country filter but KEEP time validation
         if ($mappedCountry) {
-            return $this->searchInFixtureList($bfEventName, $fixtures, null);
+            return $this->searchInFixtureList($bfEventName, $fixtures, null, $startTime);
         }
 
         return null;

@@ -23,6 +23,13 @@ class GiaNikController
         $this->bf = new BetfairService();
         $this->db = GiaNikDatabase::getInstance()->getConnection();
         $this->footballData = new FootballDataService();
+
+        // Ensure match_mappings table exists
+        $this->db->exec("CREATE TABLE IF NOT EXISTS match_mappings (
+            betfair_event_id TEXT PRIMARY KEY,
+            fixture_id INTEGER NOT NULL,
+            mapped_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        ); CREATE INDEX IF NOT EXISTS idx_match_mappings_fixture_id ON match_mappings(fixture_id);");
     }
 
     public function index()
@@ -952,7 +959,13 @@ class GiaNikController
         if ($bfMarketBook && isset($bfMarketBook['marketDefinition']['countryCode'])) {
             $countryCode = $bfMarketBook['marketDefinition']['countryCode'];
         }
-        $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive, $countryCode);
+
+        $startTime = null;
+        if ($bfMarketBook && isset($bfMarketBook['marketDefinition']['marketTime'])) {
+            $startTime = $bfMarketBook['marketDefinition']['marketTime'];
+        }
+
+        $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive, $countryCode, $startTime, $bfMarketBook['marketDefinition']['eventId'] ?? null);
 
         if (!$apiMatch) {
             // FALLBACK: If API-Football match not found, try to extract basic live data from Betfair
@@ -1085,21 +1098,57 @@ class GiaNikController
         return $map[strtoupper($countryCode)] ?? null;
     }
 
-    private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null, $countryCode = null)
+    private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null, $countryCode = null, $startTime = null, $betfairEventId = null)
     {
+        // 1. Check existing mapping if we have a betfairEventId
+        if ($betfairEventId) {
+            $stmt = $this->db->prepare("SELECT fixture_id FROM match_mappings WHERE betfair_event_id = ?");
+            $stmt->execute([$betfairEventId]);
+            $existingId = $stmt->fetchColumn();
+
+            if ($existingId) {
+                // Find this specific fixture in the live/upcoming lists
+                $allFixtures = $preFetchedLive;
+                if (!$allFixtures) {
+                    $allFixtures = array_merge(
+                        $this->footballData->getFixturesByDate(date('Y-m-d'))['response'] ?? [],
+                        $this->footballData->getFixturesByDate(date('Y-m-d', strtotime('+1 day')))['response'] ?? [],
+                        $this->footballData->getLiveMatches()['response'] ?? []
+                    );
+                }
+                foreach ($allFixtures as $f) {
+                    if (($f['fixture']['id'] ?? null) == $existingId) {
+                        return $f;
+                    }
+                }
+            }
+        }
+
         $mappedCountry = $this->getCountryMapping($countryCode);
         $liveFixtures = $preFetchedLive;
         if (!$liveFixtures) {
             $liveFixtures = $this->footballData->getLiveMatches()['response'] ?? [];
-            // Add today/tomorrow if not found or always?
-            // Better to always have a broader search for analysis even if not live
             $today = date('Y-m-d');
             $tomorrow = date('Y-m-d', strtotime('+1 day'));
             $todayFixtures = $this->footballData->getFixturesByDate($today)['response'] ?? [];
             $tomorrowFixtures = $this->footballData->getFixturesByDate($tomorrow)['response'] ?? [];
             $liveFixtures = array_merge($liveFixtures, $todayFixtures, $tomorrowFixtures);
         }
-        return $this->footballData->searchInFixtureList($bfEventName, $liveFixtures, $mappedCountry);
+
+        $match = $this->footballData->searchInFixtureList($bfEventName, $liveFixtures, $mappedCountry, $startTime);
+
+        // 2. If found, save the mapping for future use
+        if ($match && $betfairEventId && isset($match['fixture']['id'])) {
+            try {
+                $this->db->prepare("INSERT OR IGNORE INTO match_mappings (betfair_event_id, fixture_id) VALUES (?, ?)")
+                    ->execute([$betfairEventId, $match['fixture']['id']]);
+            } catch (\Exception $e) {
+                // Table might not exist yet, or other silent error
+                error_log("Mapping save failed: " . $e->getMessage());
+            }
+        }
+
+        return $match;
     }
 
     public function recentBets()
