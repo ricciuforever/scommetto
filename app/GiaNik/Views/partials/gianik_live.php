@@ -249,6 +249,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
             goal: 'https://assets.mixkit.co/active_storage/sfx/1430/1430-preview.mp3'
         },
         play(type) {
+            if (!window.isGiaNikSoundEnabled) return;
             const src = this.sounds[type] || this.sounds.event;
             const audio = new Audio(src);
             audio.play().catch(e => console.log('Audio blocked:', e));

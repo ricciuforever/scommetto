@@ -4,6 +4,7 @@ $pageTitle = "GiaNik Live - App within App";
 // We still use the main layout for now as it provides React/Tailwind/HTMX
 require __DIR__ . '/../../Views/layout/top.php';
 ?>
+<link rel="icon" href="https://cdn.jsdelivr.net/gh/GiaNik/assets/favicon.ico" type="image/x-icon">
 
 <div class="flex flex-col gap-6 mr-72"> <!-- Added margin for sidebar -->
     <!-- Hidden auto-processing trigger -->
@@ -38,6 +39,13 @@ require __DIR__ . '/../../Views/layout/top.php';
                     ATTIVO (60s)
                 </span>
             </div>
+
+            <!-- Sound Toggle -->
+            <button onclick="toggleGiaNikSound()" id="sound-toggle"
+                class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/5 transition-all text-slate-400 hover:text-white">
+                <i data-lucide="volume-x" id="sound-icon" class="w-5 h-5 text-danger"></i>
+            </button>
+
             <button hx-get="/api/gianik/live" hx-target="#gianik-live-container"
                 class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/5 transition-all text-slate-400 hover:text-white">
                 <i data-lucide="refresh-cw" class="w-5 h-5"></i>
@@ -209,6 +217,29 @@ require __DIR__ . '/../../Views/layout/top.php';
                 console.log('Operational mode updated:', data.mode);
             });
         }
+    }
+
+    window.isGiaNikSoundEnabled = false;
+    function toggleGiaNikSound() {
+        window.isGiaNikSoundEnabled = !window.isGiaNikSoundEnabled;
+        const icon = document.getElementById('sound-icon');
+        const btn = document.getElementById('sound-toggle');
+
+        if (window.isGiaNikSoundEnabled) {
+            // Prime the audio context
+            const silent = new Audio('https://cdn.jsdelivr.net/gh/GiaNik/assets/notification.mp3');
+            silent.volume = 0;
+            silent.play().catch(() => { });
+
+            icon.setAttribute('data-lucide', 'volume-2');
+            icon.classList.remove('text-danger');
+            icon.classList.add('text-success');
+        } else {
+            icon.setAttribute('data-lucide', 'volume-x');
+            icon.classList.remove('text-success');
+            icon.classList.add('text-danger');
+        }
+        if (window.lucide) lucide.createIcons();
     }
 </script>
 
