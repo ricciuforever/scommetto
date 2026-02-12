@@ -9,15 +9,15 @@ try {
 
     // Add settled_at if not exists
     try {
-        $db->exec("ALTER TABLE bets ADD COLUMN settled_at DATETIME");
+        $db->exec("ALTER TABLE gianik_bets ADD COLUMN settled_at DATETIME");
     } catch (Exception $e) {}
 
     // Add profit if not exists
     try {
-        $db->exec("ALTER TABLE bets ADD COLUMN profit REAL DEFAULT 0");
+        $db->exec("ALTER TABLE gianik_bets ADD COLUMN profit REAL DEFAULT 0");
     } catch (Exception $e) {}
 
-    echo "✅ SQLite migration successful\n";
+    echo "✅ Centralized GiaNik migration successful\n";
 } catch (Exception $e) {
     echo "❌ Migration error: " . $e->getMessage() . "\n";
 }

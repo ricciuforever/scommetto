@@ -5,6 +5,7 @@ namespace App\GiaNik;
 
 use PDO;
 use App\Config\Config;
+use App\Services\Database;
 
 class GiaNikDatabase
 {
@@ -13,73 +14,83 @@ class GiaNikDatabase
 
     private function __construct()
     {
-        $dbPath = Config::DATA_PATH . 'gianik.sqlite';
-        $this->connection = new PDO("sqlite:$dbPath");
+        // Usa la connessione al database centrale (MySQL con fallback SQLite)
+        $this->connection = Database::getInstance()->getConnection();
         $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->ensureSchema();
     }
 
     private function ensureSchema()
     {
-        // 1. Ensure table exists
-        $this->connection->exec("CREATE TABLE IF NOT EXISTS bets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            market_id TEXT,
-            market_name TEXT,
-            event_name TEXT,
-            sport TEXT,
-            selection_id TEXT,
-            runner_name TEXT,
+        $isSQLite = Database::getInstance()->isSQLite();
+        $autoInc = $isSQLite ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY";
+        $defaultTs = $isSQLite ? "DATETIME DEFAULT CURRENT_TIMESTAMP" : "TIMESTAMP DEFAULT CURRENT_TIMESTAMP";
+
+        // 1. Ensure tables exist with prefix 'gianik_'
+        $this->connection->exec("CREATE TABLE IF NOT EXISTS gianik_bets (
+            id $autoInc,
+            market_id VARCHAR(100),
+            market_name VARCHAR(255),
+            event_name VARCHAR(255),
+            sport VARCHAR(50),
+            selection_id VARCHAR(100),
+            runner_name VARCHAR(255),
             odds REAL,
             stake REAL,
-            status TEXT DEFAULT 'pending',
-            type TEXT DEFAULT 'virtual',
-            betfair_id TEXT,
+            status VARCHAR(50) DEFAULT 'pending',
+            type VARCHAR(20) DEFAULT 'virtual',
+            betfair_id VARCHAR(100),
             motivation TEXT,
             profit REAL DEFAULT 0,
             settled_at DATETIME,
-            period TEXT,
-            last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            period VARCHAR(20),
+            last_seen_at $defaultTs,
             missing_count INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at $defaultTs
         )");
 
-        $this->connection->exec("CREATE TABLE IF NOT EXISTS system_state (
-            key TEXT PRIMARY KEY,
-            value TEXT,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        $this->connection->exec("CREATE TABLE IF NOT EXISTS gianik_system_state (
+            `key` VARCHAR(100) PRIMARY KEY,
+            `value` TEXT,
+            updated_at $defaultTs
         )");
 
-        $this->connection->exec("CREATE TABLE IF NOT EXISTS skipped_matches (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_name TEXT,
-            market_name TEXT,
-            reason TEXT,
+        $this->connection->exec("CREATE TABLE IF NOT EXISTS gianik_skipped_matches (
+            id $autoInc,
+            event_name VARCHAR(255),
+            market_name VARCHAR(255),
+            reason VARCHAR(255),
             details TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at $defaultTs
         )");
 
-        // 2. Ensure all columns exist (Self-Repair)
+        // 2. Ensure all columns exist (Self-Repair for gianik_bets)
         $requiredColumns = [
             'profit' => 'REAL DEFAULT 0',
             'settled_at' => 'DATETIME',
             'motivation' => 'TEXT',
-            'type' => "TEXT DEFAULT 'virtual'",
-            'market_name' => 'TEXT',
-            'period' => 'TEXT',
-            'last_seen_at' => 'DATETIME DEFAULT CURRENT_TIMESTAMP',
+            'type' => "VARCHAR(20) DEFAULT 'virtual'",
+            'market_name' => 'VARCHAR(255)',
+            'period' => 'VARCHAR(20)',
+            'last_seen_at' => $defaultTs,
             'missing_count' => 'INTEGER DEFAULT 0'
         ];
 
-        $stmt = $this->connection->query("PRAGMA table_info(bets)");
-        $existingColumns = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
+        if ($isSQLite) {
+            $stmt = $this->connection->query("PRAGMA table_info(gianik_bets)");
+            $existingColumns = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
+        } else {
+            $stmt = $this->connection->prepare("DESCRIBE gianik_bets");
+            $stmt->execute();
+            $existingColumns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        }
 
         foreach ($requiredColumns as $col => $definition) {
             if (!in_array($col, $existingColumns)) {
                 try {
-                    $this->connection->exec("ALTER TABLE bets ADD COLUMN $col $definition");
+                    $this->connection->exec("ALTER TABLE gianik_bets ADD COLUMN $col $definition");
                 } catch (\Exception $e) {
-                    // Ignore if already exists or other sqlite issues
+                    // Ignore if already exists
                 }
             }
         }

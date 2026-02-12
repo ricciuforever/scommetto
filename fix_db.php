@@ -445,6 +445,43 @@ try {
           `key` VARCHAR(100) PRIMARY KEY,
           `value` TEXT,
           `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )",
+
+    "gianik_bets" => "CREATE TABLE IF NOT EXISTS `gianik_bets` (
+          `id` " . (\App\Services\Database::getInstance()->isSQLite() ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY") . ",
+          `market_id` VARCHAR(100),
+          `market_name` VARCHAR(255),
+          `event_name` VARCHAR(255),
+          `sport` VARCHAR(50),
+          `selection_id` VARCHAR(100),
+          `runner_name` VARCHAR(255),
+          `odds` REAL,
+          `stake` REAL,
+          `status` VARCHAR(50) DEFAULT 'pending',
+          `type` VARCHAR(20) DEFAULT 'virtual',
+          `betfair_id` VARCHAR(100),
+          `motivation` TEXT,
+          `profit` REAL DEFAULT 0,
+          `settled_at` DATETIME,
+          `period` VARCHAR(20),
+          `last_seen_at` " . (\App\Services\Database::getInstance()->isSQLite() ? "DATETIME" : "TIMESTAMP") . " DEFAULT CURRENT_TIMESTAMP,
+          `missing_count` INTEGER DEFAULT 0,
+          `created_at` " . (\App\Services\Database::getInstance()->isSQLite() ? "DATETIME" : "TIMESTAMP") . " DEFAULT CURRENT_TIMESTAMP
+      )",
+
+    "gianik_system_state" => "CREATE TABLE IF NOT EXISTS `gianik_system_state` (
+          `key` VARCHAR(100) PRIMARY KEY,
+          `value` TEXT,
+          `updated_at` " . (\App\Services\Database::getInstance()->isSQLite() ? "DATETIME" : "TIMESTAMP") . " DEFAULT CURRENT_TIMESTAMP
+      )",
+
+    "gianik_skipped_matches" => "CREATE TABLE IF NOT EXISTS `gianik_skipped_matches` (
+          `id` " . (\App\Services\Database::getInstance()->isSQLite() ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY") . ",
+          `event_name` VARCHAR(255),
+          `market_name` VARCHAR(255),
+          `reason` VARCHAR(255),
+          `details` TEXT,
+          `created_at` " . (\App\Services\Database::getInstance()->isSQLite() ? "DATETIME" : "TIMESTAMP") . " DEFAULT CURRENT_TIMESTAMP
       )"
   ];
 
