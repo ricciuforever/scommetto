@@ -38,6 +38,12 @@ class GeminiService
             $isUpcoming = $options['is_upcoming'] ?? false;
             $isGiaNik = $options['is_gianik'] ?? false;
 
+            $feedbackText = "";
+            if (!empty($options['recent_lost_bets'])) {
+                $feedbackText = "FEEDBACK ULTIME SCOMMESSE PERSE (Analizza perché hanno fallito per non ripetere l'errore):\n" .
+                    json_encode($options['recent_lost_bets']) . "\n\n";
+            }
+
             if ($isUpcoming) {
                 $prompt = "Sei un ANALISTA ELITE di Betfair. Il tuo compito è analizzare gli eventi FUTURI forniti e suggerire i migliori pronostici (max 10).\n\n" .
                     "LISTA EVENTI CANDIDATI:\n" . json_encode($candidates) . "\n\n" .
@@ -65,6 +71,7 @@ class GeminiService
             } elseif ($isGiaNik) {
                 $prompt = "Sei un ANALISTA ELITE e TRADER di Betfair. Il tuo compito è analizzare un EVENTO LIVE con i suoi molteplici mercati e decidere l'operazione migliore.\n\n" .
                     $balanceText .
+                    $feedbackText .
                     "DATI EVENTO E MERCATI:\n" . json_encode($candidates[0]) . "\n\n" .
                     "DATI STATISTICI AVANZATI (Se disponibili):\n" .
                     "Calcio: " . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili") . "\n" .
@@ -76,7 +83,8 @@ class GeminiService
                     "- match_info: {fixture_id, date, venue_id}\n\n" .
                     "📈 PRESSURE INDEX & MARKET TREND (FOCUS):\n" .
                     "- api_football.recent_events: Cronologia degli ultimi 15 minuti di gioco. USA QUESTI DATI per capire se una squadra sta premendo o se il match è bloccato.\n" .
-                    "- api_football.price_trend: {price, trend, prev}. Il trend indica la direzione delle quote Betfair (-1 giù, 1 su, 0 stabile). Un trend in discesa unito a pressione statistica indica alto valore!\n\n" .
+                    "- api_football.price_trend: {price, trend, prev}. Il trend indica la direzione delle quote Betfair (-1 giù, 1 su, 0 stabile). Un trend in discesa unito a pressione statistica indica alto valore!\n" .
+                    "- market_data.runners.wom: Weight of Money (0-100%). Rappresenta la percentuale di volume sul lato BACK. Se > 70%, c'è forte pressione per far scendere la quota (segnale rialzista per quel runner).\n\n" .
                     "USA QUESTI DATI per contestualizzare la tua analisi! Non dire mai che non conosci lo score o il minuto se questi dati sono presenti.\n\n" .
                     "📊 STATISTICS LIVE DEL MATCH:\n" .
                     "Se presenti in api_football.statistics, troverai array per home/away con:\n" .

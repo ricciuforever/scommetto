@@ -32,11 +32,29 @@ class Config
     const LEAGUE_EUROPA = 3;
 
     const PREMIUM_LEAGUES = [
-        135, // Serie A
-        39,  // Premier
-        140, // La Liga
-        78,  // Bundesliga
-        61   // Ligue 1
+        135, // Serie A (Italy)
+        39,  // Premier League (England)
+        140, // La Liga (Spain)
+        78,  // Bundesliga (Germany)
+        61,  // Ligue 1 (France)
+        2,   // Champions League
+        3,   // Europa League
+        848, // Conference League
+        136, // Serie B
+        40,  // Championship
+        141, // Segunda Division
+        79,  // 2. Bundesliga
+        62,  // Ligue 2
+        94,  // Primeira Liga (Portugal)
+        88,  // Eredivisie (Netherlands)
+        144, // Jupiler Pro League (Belgium)
+        203, // Süper Lig (Turkey)
+        71,  // Serie A (Brazil)
+        128, // Liga Profesional (Argentina)
+        253, // Major League Soccer (USA)
+        10,  // Friendlies (Clubs)
+        1,   // World Cup
+        4    // Euro Championship
     ];
 
     private static $env = [];

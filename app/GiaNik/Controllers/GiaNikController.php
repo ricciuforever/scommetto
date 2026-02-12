@@ -839,6 +839,11 @@ class GiaNikController
                 $matchBetCounts[$mName][$period] = $stat['cnt'];
             }
 
+            // Recupera le ultime 5 scommesse perse per il feedback all'IA
+            $stmtLost = $this->db->prepare("SELECT event_name, market_name, runner_name, odds, stake, motivation FROM bets WHERE status = 'lost' ORDER BY settled_at DESC LIMIT 5");
+            $stmtLost->execute();
+            $recentLostBets = $stmtLost->fetchAll(PDO::FETCH_ASSOC);
+
             // Fetch real balance from Betfair
             $fundsData = $this->bf->getFunds();
             $funds = $fundsData['result'] ?? $fundsData;
@@ -863,7 +868,7 @@ class GiaNikController
                     $eventCounter++;
 
                     $marketIds = array_map(fn($mc) => $mc['marketId'], $catalogues);
-                    $booksRes = $this->bf->getMarketBooks($marketIds);
+                    $booksRes = $this->bf->getMarketBooks($marketIds, true); // Richiede profondità per WOM
                     $booksMap = [];
                     foreach ($booksRes['result'] ?? [] as $b) {
                         $booksMap[$b['marketId']] = $b;
@@ -900,10 +905,25 @@ class GiaNikController
                         foreach ($book['runners'] as $r) {
                             $mR = array_filter($mc['runners'], fn($rm) => $rm['selectionId'] === $r['selectionId']);
                             $name = reset($mR)['runnerName'] ?? 'Unknown';
+
+                            // Calcolo WOM (Weight of Money)
+                            $backVol = 0;
+                            foreach ($r['ex']['availableToBack'] ?? [] as $atb)
+                                $backVol += $atb['size'];
+                            $layVol = 0;
+                            foreach ($r['ex']['availableToLay'] ?? [] as $atl)
+                                $layVol += $atl['size'];
+
+                            $wom = 0;
+                            if (($backVol + $layVol) > 0) {
+                                $wom = ($backVol / ($backVol + $layVol)) * 100;
+                            }
+
                             $m['runners'][] = [
                                 'selectionId' => $r['selectionId'],
                                 'name' => $name,
-                                'back' => $r['ex']['availableToBack'][0]['price'] ?? 0
+                                'back' => $r['ex']['availableToBack'][0]['price'] ?? 0,
+                                'wom' => round($wom, 2) // Percentuale di pressione Back
                             ];
                         }
                         $event['markets'][] = $m;
@@ -921,6 +941,7 @@ class GiaNikController
                         // BLOCCO DI SICUREZZA: Se non ci sono dati live reali da API-Football, saltiamo l'analisi IA
                         // Evitiamo allucinazioni basate solo su quote se l'agente deve essere "Big Brain"
                         if (!$enrichedData || empty($enrichedData['live']) || (isset($enrichedData['note']) && strpos($enrichedData['note'], 'Betfair') !== false)) {
+                            $this->logSkippedMatch($event['event'], $event['markets'][0]['marketName'] ?? 'MATCH_ODDS', 'Dati Live Mancanti', 'API-Football non ha restituito statistiche per questo match.');
                             continue;
                         }
 
@@ -934,7 +955,8 @@ class GiaNikController
                     $predictionRaw = $gemini->analyze([$event], [
                         'is_gianik' => true,
                         'available_balance' => $activeBalance['available'],
-                        'current_portfolio' => $activeBalance['total']
+                        'current_portfolio' => $activeBalance['total'],
+                        'recent_lost_bets' => $recentLostBets // Passiamo il feedback
                     ]);
 
                     if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
@@ -952,8 +974,14 @@ class GiaNikController
                             // Controllo limite 4 scommesse per match (Calcio) e 2 per tempo
                             $stats = $matchBetCounts[$event['event']] ?? ['total' => 0];
                             if (($event['sport'] === 'Soccer' || $event['sport'] === 'Football')) {
-                                if ($stats['total'] >= 4) continue;
-                                if ($currentPeriod !== 'UNKNOWN' && ($stats[$currentPeriod] ?? 0) >= 2) continue;
+                                if ($stats['total'] >= 4) {
+                                    $this->logSkippedMatch($event['event'], $selectedMarket['marketName'], 'Limite Match Raggiunto', 'Già presenti 4 scommesse per questo match.');
+                                    continue;
+                                }
+                                if ($currentPeriod !== 'UNKNOWN' && ($stats[$currentPeriod] ?? 0) >= 2) {
+                                    $this->logSkippedMatch($event['event'], $selectedMarket['marketName'], 'Limite Tempo Raggiunto', 'Già presenti 2 scommesse per questo tempo (' . $currentPeriod . ').');
+                                    continue;
+                                }
                             }
                             $selectedMarket = null;
                             foreach ($event['markets'] as $m) {
@@ -966,6 +994,18 @@ class GiaNikController
                                 continue;
 
                             $stake = (float) ($analysis['stake'] ?? 2.0);
+
+                            // Logica Stake Dinamico: Riduzione 50% per campionati non "Elite"
+                            $isElite = false;
+                            if (isset($event['api_football']['fixture']['league_id'])) {
+                                $isElite = in_array((int)$event['api_football']['fixture']['league_id'], Config::PREMIUM_LEAGUES);
+                            }
+
+                            if (!$isElite) {
+                                $stake = $stake * 0.5;
+                                $motivation .= " [STAKE RIDOTTO: Campionato Minore]";
+                            }
+
                             if ($stake < Config::MIN_BETFAIR_STAKE)
                                 $stake = Config::MIN_BETFAIR_STAKE;
                             if ($stake > Config::MAX_BETFAIR_STAKE)
@@ -974,6 +1014,7 @@ class GiaNikController
                             // Controllo liquidità (totalMatched del mercato scelto)
                             $minLiquidity = $stake * 50; // Almeno 50 volte lo stake come volume minimo
                             if ($selectedMarket['totalMatched'] < $minLiquidity) {
+                                $this->logSkippedMatch($event['event'], $selectedMarket['marketName'], 'Bassa Liquidità', 'Volume matched (' . $selectedMarket['totalMatched'] . ') inferiore al minimo richiesto (' . $minLiquidity . ').');
                                 continue;
                             }
 
@@ -1404,6 +1445,11 @@ class GiaNikController
             $currentStatus = $statusFilter;
             $currentType = 'all'; // Legacy support for view variables
 
+            // Recupera anche i match scartati
+            $stmtSkipped = $this->db->prepare("SELECT * FROM skipped_matches ORDER BY created_at DESC LIMIT 10");
+            $stmtSkipped->execute();
+            $skippedMatches = $stmtSkipped->fetchAll(PDO::FETCH_ASSOC);
+
             require __DIR__ . '/../Views/partials/recent_bets_sidebar.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-2 text-[10px]">' . $e->getMessage() . '</div>';
@@ -1720,6 +1766,19 @@ class GiaNikController
             echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
         }
     }
+    private function logSkippedMatch($event, $market, $reason, $details)
+    {
+        try {
+            // Mantieni solo gli ultimi 100 log per non ingolfare il DB
+            $this->db->exec("DELETE FROM skipped_matches WHERE id IN (SELECT id FROM skipped_matches ORDER BY created_at DESC LIMIT -1 OFFSET 100)");
+
+            $stmt = $this->db->prepare("INSERT INTO skipped_matches (event_name, market_name, reason, details) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$event, $market, $reason, $details]);
+        } catch (\Throwable $e) {
+            error_log("GiaNik Skip Log Error: " . $e->getMessage());
+        }
+    }
+
     public function syncWithBetfair()
     {
         try {

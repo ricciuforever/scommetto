@@ -675,14 +675,19 @@ class BetfairService
     }
 
     /**
-     * Get Prices for specific Market IDs
+     * Get Prices for specific Market IDs with Depth for WOM
      */
-    public function getMarketBooks(array $marketIds)
+    public function getMarketBooks(array $marketIds, bool $withDepth = false)
     {
+        $priceData = ['EX_BEST_OFFERS'];
+        if ($withDepth) {
+            $priceData[] = 'EX_ALL_OFFERS'; // Recupera profondità per WOM
+        }
+
         return $this->request('listMarketBook', [
             'marketIds' => $marketIds,
             'priceProjection' => [
-                'priceData' => ['EX_BEST_OFFERS'],
+                'priceData' => $priceData,
                 'virtualise' => true
             ],
             'includeMarketDefinition' => true
