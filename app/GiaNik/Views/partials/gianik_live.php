@@ -165,8 +165,8 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                                     <div class="w-1 h-1 rounded-full bg-success shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
                                 <?php endif; ?>
                                 <span class="match-status-label text-[9px] font-black uppercase text-slate-500 tracking-tighter"
-                                      data-elapsed="<?php echo $m['elapsed'] ?? 0; ?>"
-                                      data-status="<?php echo $m['status_short'] ?? ''; ?>">
+                                    data-elapsed="<?php echo $m['elapsed'] ?? 0; ?>"
+                                    data-status="<?php echo $m['status_short'] ?? ''; ?>">
                                     <?php echo $m['status_label']; ?>
                                 </span>
                             </div>
@@ -235,13 +235,28 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
 
 <?php endif; ?>
 
-<audio id="gianik-event-sound" src="https://cdn.jsdelivr.net/gh/GiaNik/assets/notification.mp3" preload="auto"></audio>
 
 <script>
     if (window.lucide) lucide.createIcons();
 
+    // GiaNik Audio Jukebox
+    const GiaNikAudio = {
+        ctx: null,
+        sounds: {
+            event: 'https://cdn.jsdelivr.net/gh/GiaNik/assets/notification.mp3',
+            win: 'https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3',
+            loss: 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
+            goal: 'https://assets.mixkit.co/active_storage/sfx/1430/1430-preview.mp3'
+        },
+        play(type) {
+            const src = this.sounds[type] || this.sounds.event;
+            const audio = new Audio(src);
+            audio.play().catch(e => console.log('Audio blocked:', e));
+        }
+    };
+
     // Client-side Match Timer Ticker
-    (function() {
+    (function () {
         if (window.gianikTimerInterval) clearInterval(window.gianikTimerInterval);
 
         window.gianikTimerInterval = setInterval(() => {
@@ -250,7 +265,6 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                 const status = label.getAttribute('data-status');
                 let elapsed = parseInt(label.getAttribute('data-elapsed'));
 
-                // Only increment if match is live (1H or 2H) and not stalled
                 const liveStatuses = ['1H', '2H', 'LIVE'];
                 if (liveStatuses.includes(status) && elapsed > 0 && elapsed < 120) {
                     elapsed++;
@@ -258,29 +272,53 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                     label.innerText = `${status} ${elapsed}'`;
                 }
             });
-        }, 60000); // Tick every 60 seconds
+        }, 60000);
     })();
 
-    // Event Highlighting & Sound
+    // Event Highlighting, Sound and Reordering
     (function () {
-        const justUpdated = <?php echo json_encode(array_values(array_filter(array_map(fn($m) => $m['just_updated'] ? $m['marketId'] : null, $allMatches)))); ?>;
-        if (justUpdated.length > 0) {
-            const sound = document.getElementById('gianik-event-sound');
-            if (sound) {
-                sound.play().catch(e => console.log('Audio playback blocked:', e));
-            }
+        const justUpdated = <?php echo json_encode(array_values(array_filter(array_map(fn($m) => $m['just_updated'] ? ['id' => $m['marketId'], 'is_goal' => ($m['is_goal'] ?? false)] : null, $allMatches)))); ?>;
+        const settlement = <?php echo json_encode($settlementResults ?? ['wins' => 0, 'losses' => 0]); ?>;
 
-            // Highlight removal timer (though HTMX refresh will handle it next time,
-            // we can do it client-side too if we want it to disappear exactly at 15s)
-            justUpdated.forEach(mId => {
-                const cardId = 'match-card-' + mId.replace('.', '-');
-                setTimeout(() => {
-                    const card = document.getElementById(cardId);
-                    if (card) {
-                        card.classList.remove('border-accent', 'shadow-[0_0_20px_rgba(var(--accent-rgb),0.3)]', 'animate-pulse');
-                        card.classList.add('border-white/5');
+        // Handle Settlements
+        if (settlement.wins > 0) GiaNikAudio.play('win');
+        else if (settlement.losses > 0) GiaNikAudio.play('loss');
+
+        if (justUpdated.length > 0) {
+            let playedGoal = false;
+
+            // Reorder and highlight
+            const container = document.querySelector('.animate-fade-in.space-y-3.px-2');
+
+            justUpdated.forEach(upd => {
+                const cardId = 'match-card-' + upd.id.replace('.', '-');
+                const card = document.getElementById(cardId);
+
+                if (card) {
+                    // Move to top if it's not already there
+                    if (container && container.firstChild !== card) {
+                        container.prepend(card);
                     }
-                }, 15000);
+
+                    if (upd.is_goal) {
+                        if (!playedGoal) {
+                            GiaNikAudio.play('goal');
+                            playedGoal = true;
+                        }
+                    } else if (settlement.wins === 0 && settlement.losses === 0) {
+                        // General event sound if no goal/settlement
+                        GiaNikAudio.play('event');
+                    }
+
+                    // Removal timer
+                    setTimeout(() => {
+                        const c = document.getElementById(cardId);
+                        if (c) {
+                            c.classList.remove('border-accent', 'shadow-[0_0_20px_rgba(var(--accent-rgb),0.3)]', 'animate-pulse');
+                            c.classList.add('border-white/5');
+                        }
+                    }, 15000);
+                }
             });
         }
     })();

@@ -390,6 +390,7 @@ class GiaNikController
                     $newScores[$scoreKey] = $currentScore;
                     if (isset($prevScores[$scoreKey]) && $prevScores[$scoreKey] !== $currentScore) {
                         $m['just_updated'] = time();
+                        $m['is_goal'] = true;
                     }
 
                     $allMatches[] = $m;
@@ -460,7 +461,7 @@ class GiaNikController
             // Virtual
             $virtualAccount = $this->getVirtualBalance();
 
-            $this->settleBets();
+            $settlementResults = $this->settleBets();
             require __DIR__ . '/../Views/partials/gianik_live.php';
         } catch (\Throwable $e) {
             echo '<div class="text-danger p-4">Errore GiaNik Live: ' . $e->getMessage() . '</div>';
@@ -889,14 +890,16 @@ class GiaNikController
 
     public function settleBets()
     {
+        $results = ['wins' => 0, 'losses' => 0];
         try {
             // Recupera tutte le scommesse pendenti (virtuali e reali)
-            $stmt = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND created_at < datetime('now', '-5 minutes')");
+            // Usiamo un intervallo più breve per GiaNik per maggiore reattività
+            $stmt = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND created_at < datetime('now', '-2 minutes')");
             $stmt->execute();
             $pending = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             if (empty($pending))
-                return;
+                return $results;
 
             $marketIds = array_values(array_unique(array_column($pending, 'market_id')));
             $chunks = array_chunk($marketIds, 50);
@@ -916,7 +919,6 @@ class GiaNikController
                         }
 
                         if ($winnerSelectionId !== null) {
-                            // Troviamo tutte le scommesse locali per questo mercato
                             foreach ($pending as $bet) {
                                 if ($bet['market_id'] === $mb['marketId']) {
                                     $isWin = ($winnerSelectionId == $bet['selection_id']);
@@ -925,6 +927,12 @@ class GiaNikController
 
                                     $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?")
                                         ->execute([$status, $profit, $bet['id']]);
+
+                                    if ($isWin) {
+                                        $results['wins']++;
+                                    } else {
+                                        $results['losses']++;
+                                    }
                                 }
                             }
                         }
@@ -934,6 +942,7 @@ class GiaNikController
         } catch (\Throwable $e) {
             error_log("GiaNik Settlement Error: " . $e->getMessage());
         }
+        return $results;
     }
 
     private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $competition = '', $bfMarketBook = null)
