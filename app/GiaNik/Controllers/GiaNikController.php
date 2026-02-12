@@ -9,7 +9,6 @@ use App\Services\GeminiService;
 use App\Services\FootballApiService;
 use App\Services\FootballDataService;
 use App\Services\BasketballApiService;
-use App\Services\IntelligenceService;
 use App\GiaNik\GiaNikDatabase;
 use PDO;
 
@@ -18,14 +17,12 @@ class GiaNikController
     private $bf;
     private $db;
     private $footballData;
-    private $intelligence;
 
     public function __construct()
     {
         $this->bf = new BetfairService();
         $this->db = GiaNikDatabase::getInstance()->getConnection();
         $this->footballData = new FootballDataService();
-        $this->intelligence = new IntelligenceService();
 
         // Ensure match_mappings table exists
         $this->db->exec("CREATE TABLE IF NOT EXISTS match_mappings (
@@ -578,21 +575,7 @@ class GiaNikController
             if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
                 // Pass the initial market book for fallback extraction
                 $mainBook = $booksMap[$marketId] ?? null;
-                $apiData = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition'], $mainBook);
-                $event['api_football'] = $apiData;
-
-                // --- Deep Context Integration ---
-                if (!empty($apiData['fixture'])) {
-                    $fix = $apiData['fixture'];
-                    $deepCtx = $this->intelligence->getDeepContext($fix['id'], $fix['team_home_id'], $fix['team_away_id'], $fix['league_id']);
-                    $event['deep_context'] = $this->summarizeDeepContext($deepCtx);
-                }
-
-                // --- Performance Metrics Integration ---
-                $event['performance_metrics'] = $this->getRelevantMetrics($event);
-
-                // --- AI Lessons (Post-Mortem) ---
-                $event['ai_lessons'] = $this->getRecentLessons($apiData);
+                $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition'], $mainBook);
             }
 
             $gemini = new GeminiService();
@@ -667,11 +650,8 @@ class GiaNikController
                 }
             }
 
-            $bucket = $this->getOddsBucket($odds);
-            $leagueName = $input['competition'] ?? 'Unknown';
-
-            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation, $bucket, $leagueName]);
+            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation]);
 
             echo json_encode(['status' => 'success', 'message' => 'Scommessa piazzata (' . $type . ')']);
         } catch (\Throwable $e) {
@@ -837,21 +817,7 @@ class GiaNikController
                         // Pass the first market book for fallback extraction
                         $firstMarketId = $event['markets'][0]['marketId'] ?? null;
                         $firstBook = $booksMap[$firstMarketId] ?? null;
-                        $apiData = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook);
-                        $event['api_football'] = $apiData;
-
-                        // --- Deep Context Integration ---
-                        if (!empty($apiData['fixture'])) {
-                            $fix = $apiData['fixture'];
-                            $deepCtx = $this->intelligence->getDeepContext($fix['id'], $fix['team_home_id'], $fix['team_away_id'], $fix['league_id']);
-                            $event['deep_context'] = $this->summarizeDeepContext($deepCtx);
-                        }
-
-                        // --- Performance Metrics Integration ---
-                        $event['performance_metrics'] = $this->getRelevantMetrics($event);
-
-                        // --- AI Lessons (Post-Mortem) ---
-                        $event['ai_lessons'] = $this->getRecentLessons($apiData);
+                        $event['api_football'] = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook);
                     }
 
                     $gemini = new GeminiService();
@@ -880,15 +846,12 @@ class GiaNikController
                             if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds))
                                 continue;
 
-                            // --- Dynamic Staking (Kelly Criterion) ---
-                            $bankroll = $activeBalance['available'];
-                            $isRealMode = ($globalMode === 'real');
-                            $stake = $this->calculateKellyStake($analysis['confidence'], $analysis['odds'], $bankroll, $isRealMode);
+                            $stake = (float) ($analysis['stake'] ?? 2.0);
+                            if ($stake < 2.0)
+                                $stake = 2.0;
 
-                            if ($stake < Config::MIN_BETFAIR_STAKE)
-                                continue;
-
-                            if ($activeBalance['available'] < $stake)
+                            $vBalance = $this->getVirtualBalance();
+                            if ($vBalance['available'] < $stake)
                                 continue;
 
                             $runners = array_map(fn($r) => ['runnerName' => $r['name'], 'selectionId' => $r['selectionId']], $selectedMarket['runners']);
@@ -908,31 +871,15 @@ class GiaNikController
                                     if (($res['status'] ?? '') === 'SUCCESS') {
                                         $betfairId = $res['instructionReports'][0]['betId'] ?? null;
                                     } else {
-                                        // If real bet fails, record as virtual for tracking
+                                        // If real bet fails, record as virtual for tracking? Or just skip?
+                                        // For now, let's keep it as virtual so we see the fail in logs
                                         $betType = 'virtual';
                                     }
                                 }
 
-                                $bucket = $this->getOddsBucket($analysis['odds']);
-                                $leagueName = $event['competition'] ?? 'Unknown';
                                 $motivation = $this->extractMotivation($analysis, $predictionRaw, $event);
-
-                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                                $stmtInsert->execute([
-                                    $analysis['marketId'],
-                                    $selectedMarket['marketName'],
-                                    $event['event'],
-                                    $event['sport'],
-                                    $selectionId,
-                                    $analysis['advice'],
-                                    $analysis['odds'],
-                                    $stake,
-                                    $betType,
-                                    $betfairId,
-                                    $motivation,
-                                    $bucket,
-                                    $leagueName
-                                ]);
+                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation]);
                                 $results['new_bets']++;
                             }
                         }
@@ -985,28 +932,9 @@ class GiaNikController
                                     $status = $isWin ? 'won' : 'lost';
                                     $profit = $isWin ? ($bet['stake'] * ($bet['odds'] - 1)) : -$bet['stake'];
                                     $commission = $isWin ? ($profit * 0.05) : 0; // Stima 5% su vincita lorda
-                                    $netProfit = $profit - $commission;
 
-                                    $needsAnalysis = (!$isWin) ? 1 : 0;
-
-                                    $this->db->prepare("UPDATE bets SET status = ?, profit = ?, commission = ?, settled_at = CURRENT_TIMESTAMP, needs_analysis = ? WHERE id = ?")
-                                        ->execute([$status, $profit, $commission, $needsAnalysis, $bet['id']]);
-
-                                    // Update Performance Metrics
-                                    $bucket = $bet['bucket'] ?? $this->getOddsBucket($bet['odds']);
-                                    $league = $bet['league'] ?? 'Unknown';
-                                    $market = $bet['market_name'] ?? 'Unknown';
-                                    // Sanitize market name for key (e.g. Over/Under 2.5 -> OVER25)
-                                    $marketKey = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $market));
-                                    $metricKey = "{$bet['sport']}_{$league}_{$marketKey}_{$bucket}";
-
-                                    $this->db->prepare("INSERT INTO performance_metrics (metric_key, total_bets, wins, net_profit)
-                                        VALUES (?, 1, ?, ?)
-                                        ON CONFLICT(metric_key) DO UPDATE SET
-                                        total_bets = total_bets + 1,
-                                        wins = wins + ?,
-                                        net_profit = net_profit + ?")
-                                        ->execute([$metricKey, ($isWin ? 1 : 0), $netProfit, ($isWin ? 1 : 0), $netProfit]);
+                                    $this->db->prepare("UPDATE bets SET status = ?, profit = ?, commission = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?")
+                                        ->execute([$status, $profit, $commission, $bet['id']]);
 
                                     if ($isWin) {
                                         $results['wins']++;
@@ -1101,14 +1029,10 @@ class GiaNikController
             ]
         ];
 
-        // 🚀 MOMENTUM (Derivata prima delle statistiche)
-        $momentum = $this->handleMomentum($fid, $stats);
-
         return [
             'fixture' => $details,
             'live' => $liveData,  // ← DATI LIVE ESPLICITI
             'statistics' => $stats,  // ← STATISTICS LIVE (shots, possession, corners, ecc.)
-            'momentum' => $momentum, // ← MOMENTUM (Variazione ultimi 10 min)
             'events' => $events,  // ← EVENTS LIVE (gol, cards, subs, VAR)
             'h2h' => $h2h['h2h_json'] ?? [],
             'standings' => $standings,
@@ -1197,213 +1121,6 @@ class GiaNikController
         }
 
         return $motivation;
-    }
-
-    private function calculateKellyStake($confidence, $odds, $bankroll, $isReal = false)
-    {
-        $p = (float)$confidence / 100.0;
-        $b = (float)$odds - 1.0;
-        if ($b <= 0) return Config::MIN_BETFAIR_STAKE;
-
-        // Kelly Formula: f = (p*b - q) / b
-        $f = ($p * $b - (1.0 - $p)) / $b;
-        if ($f <= 0) return 0; // Nessun vantaggio statistico stimato
-
-        // Quarter Kelly (0.25) per estrema prudenza
-        $stake = $bankroll * ($f * 0.25);
-
-        // Limiti minimi
-        if ($stake < Config::MIN_BETFAIR_STAKE) $stake = Config::MIN_BETFAIR_STAKE;
-
-        // Limiti massimi
-        $maxStake = $isReal ? Config::MAX_STAKE_REAL : 50.0;
-        if ($stake > $maxStake) $stake = $maxStake;
-
-        return round($stake, 2);
-    }
-
-    private function getRelevantMetrics($event)
-    {
-        $sport = $event['sport'] ?? 'Soccer';
-        $league = $event['competition'] ?? 'Unknown';
-
-        // Recupera metriche per questa lega
-        $stmt = $this->db->prepare("SELECT * FROM performance_metrics WHERE metric_key LIKE ?");
-        $stmt->execute(["{$sport}_{$league}_%"]);
-        $metrics = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if (empty($metrics)) return "Nessuna metrica storica disponibile per questa lega.";
-
-        $text = "Performance storiche in {$league}:\n";
-        foreach ($metrics as $m) {
-            $winRate = $m['total_bets'] > 0 ? round(($m['wins'] / $m['total_bets']) * 100, 1) : 0;
-            $text .= "- {$m['metric_key']}: WR {$winRate}%, Profit: {$m['net_profit']}€\n";
-        }
-        return $text;
-    }
-
-    private function handleMomentum($fixtureId, $currentStats)
-    {
-        if (!$fixtureId || empty($currentStats)) return null;
-
-        // 1. Salva snapshot attuale
-        $this->db->prepare("INSERT INTO match_snapshots (fixture_id, stats_json) VALUES (?, ?)")
-            ->execute([$fixtureId, json_encode($currentStats)]);
-
-        // 2. Recupera snapshot di circa 10-15 minuti fa
-        $stmt = $this->db->prepare("SELECT stats_json FROM match_snapshots WHERE fixture_id = ? AND timestamp < datetime('now', '-10 minutes') ORDER BY timestamp DESC LIMIT 1");
-        $stmt->execute([$fixtureId]);
-        $oldStatsJson = $stmt->fetchColumn();
-
-        if (!$oldStatsJson) return "Momentum: Calcolo in corso (raccolta dati)...";
-
-        $oldStats = json_decode($oldStatsJson, true);
-        $momentum = "MOMENTUM (Variazione ultimi 10-15 min):\n";
-
-        foreach ([0, 1] as $index) {
-            $curr = $currentStats[$index]['statistics'] ?? [];
-            $old = $oldStats[$index]['statistics'] ?? [];
-            $sideName = ($index === 0) ? "Casa" : "Ospite";
-            $deltaStr = "- $sideName: ";
-            $hasData = false;
-
-            $metrics = [
-                'Shots on Goal' => 'Tiri Porta',
-                'Total Shots' => 'Tiri Totali',
-                'Corner Kicks' => 'Corner',
-                'Ball Possession' => 'Possesso'
-            ];
-
-            foreach ($metrics as $type => $label) {
-                $cVal = 0; $oVal = 0;
-                foreach ($curr as $s) if ($s['type'] == $type) $cVal = (int)$s['value'];
-                foreach ($old as $s) if ($s['type'] == $type) $oVal = (int)$s['value'];
-
-                if ($type === 'Ball Possession') {
-                    $delta = $cVal - $oVal;
-                    if (abs($delta) > 2) {
-                        $deltaStr .= "$label " . ($delta > 0 ? "+" : "") . "$delta%, ";
-                        $hasData = true;
-                    }
-                } else {
-                    $delta = $cVal - $oVal;
-                    if ($delta > 0) {
-                        $deltaStr .= "$label +$delta, ";
-                        $hasData = true;
-                    }
-                }
-            }
-            $momentum .= ($hasData ? rtrim($deltaStr, ", ") : "- $sideName: Stabile") . "\n";
-        }
-
-        // Pulizia snapshot vecchi (> 24h)
-        $this->db->exec("DELETE FROM match_snapshots WHERE timestamp < datetime('now', '-24 hours')");
-
-        return $momentum;
-    }
-
-    private function getRecentLessons($apiData)
-    {
-        if (empty($apiData['fixture'])) return "";
-
-        $homeId = $apiData['fixture']['team_home_id'] ?? null;
-        $awayId = $apiData['fixture']['team_away_id'] ?? null;
-        $leagueId = $apiData['fixture']['league_id'] ?? null;
-
-        $stmt = $this->db->prepare("SELECT lesson_text FROM ai_lessons WHERE (entity_type = 'team' AND entity_id IN (?, ?)) OR (entity_type = 'league' AND entity_id = ?) ORDER BY created_at DESC LIMIT 5");
-        $stmt->execute([$homeId, $awayId, $leagueId]);
-        $lessons = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-        if (empty($lessons)) return "";
-
-        $text = "📚 LEZIONI DAI MATCH PASSATI:\n";
-        foreach ($lessons as $l) {
-            $text .= "- $l\n";
-        }
-        return $text;
-    }
-
-    private function getOddsBucket($odds)
-    {
-        if ($odds <= 1.50) return 'FAV';
-        if ($odds <= 2.20) return 'VAL';
-        return 'RISK';
-    }
-
-    private function summarizeDeepContext($context)
-    {
-        if (!$context) return "Nessun dato storico profondo disponibile.";
-
-        $summary = "";
-
-        // Home summary
-        $h = $context['home'] ?? [];
-        $homeName = $h['standing']['team_name'] ?? 'Casa';
-        $summary .= "CASA ({$homeName}): ";
-        if (!empty($h['standing'])) {
-            $summary .= "Pos: {$h['standing']['rank']} ({$h['standing']['points']} pt). ";
-        }
-        if (!empty($h['recent_matches'])) {
-            $form = "";
-            $goalsFor = 0; $goalsAgainst = 0;
-            foreach ($h['recent_matches'] as $m) {
-                $isHome = $m['team_home_id'] == ($h['standing']['team_id'] ?? null);
-                $myScore = $isHome ? $m['score_home'] : $m['score_away'];
-                $oppScore = $isHome ? $m['score_away'] : $m['score_home'];
-                if ($myScore > $oppScore) $form .= "W";
-                elseif ($myScore < $oppScore) $form .= "L";
-                else $form .= "D";
-                $goalsFor += $myScore;
-                $goalsAgainst += $oppScore;
-            }
-            $avgF = round($goalsFor / count($h['recent_matches']), 1);
-            $avgA = round($goalsAgainst / count($h['recent_matches']), 1);
-            $summary .= "Forma: $form (Avg GF: $avgF, GA: $avgA). ";
-        }
-
-        // Away summary
-        $a = $context['away'] ?? [];
-        $awayName = $a['standing']['team_name'] ?? 'Trasferta';
-        $summary .= "\nOSPITE ({$awayName}): ";
-        if (!empty($a['standing'])) {
-            $summary .= "Pos: {$a['standing']['rank']} ({$a['standing']['points']} pt). ";
-        }
-        if (!empty($a['recent_matches'])) {
-            $form = "";
-            $goalsFor = 0; $goalsAgainst = 0;
-            foreach ($a['recent_matches'] as $m) {
-                $isHome = $m['team_home_id'] == ($a['standing']['team_id'] ?? null);
-                $myScore = $isHome ? $m['score_home'] : $m['score_away'];
-                $oppScore = $isHome ? $m['score_away'] : $m['score_home'];
-                if ($myScore > $oppScore) $form .= "W";
-                elseif ($myScore < $oppScore) $form .= "L";
-                else $form .= "D";
-                $goalsFor += $myScore;
-                $goalsAgainst += $oppScore;
-            }
-            $avgF = round($goalsFor / count($a['recent_matches']), 1);
-            $avgA = round($goalsAgainst / count($a['recent_matches']), 1);
-            $summary .= "Forma: $form (Avg GF: $avgF, GA: $avgA). ";
-        }
-
-        // H2H summary
-        if (!empty($context['h2h']) && !empty($context['h2h']['h2h_json'])) {
-            $h2h = $context['h2h']['h2h_json'];
-            $hWins = 0; $aWins = 0; $draws = 0;
-            $hId = $h['standing']['team_id'] ?? null;
-            foreach (array_slice($h2h, 0, 5) as $m) {
-                $gh = $m['goals']['home'];
-                $ga = $m['goals']['away'];
-                if ($m['teams']['home']['id'] == $hId) {
-                    if ($gh > $ga) $hWins++; elseif ($gh < $ga) $aWins++; else $draws++;
-                } else {
-                    if ($ga > $gh) $hWins++; elseif ($ga < $gh) $aWins++; else $draws++;
-                }
-            }
-            $summary .= "\nH2H (ultimi 5): $hWins Casa, $aWins Ospite, $draws Pareggi.";
-        }
-
-        return $summary;
     }
 
     private function findMatchingFixture($bfEventName, $sport, $preFetchedLive = null, $countryCode = null, $startTime = null, $betfairEventId = null)
@@ -1539,68 +1256,6 @@ class GiaNikController
             'exposure' => $vExp,
             'total' => $vInit + $vProf
         ];
-    }
-
-    public function learn()
-    {
-        header('Content-Type: application/json');
-        try {
-            // Analisi post-mortem delle scommesse perse
-            $stmt = $this->db->prepare("SELECT * FROM bets WHERE status = 'lost' AND needs_analysis = 1 LIMIT 3");
-            $stmt->execute();
-            $lostBets = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            if (empty($lostBets)) {
-                echo json_encode(['status' => 'success', 'message' => 'Nessuna scommessa da analizzare.']);
-                return;
-            }
-
-            $gemini = new GeminiService();
-            $results = [];
-
-            foreach ($lostBets as $bet) {
-                $prompt = "Hai perso questa scommessa. Analizza il fallimento e trai una lezione tecnica per il futuro.\n\n" .
-                    "SCOMMESSA:\n" .
-                    "- Match: {$bet['event_name']}\n" .
-                    "- Mercato: {$bet['market_name']}\n" .
-                    "- Scelta: {$bet['runner_name']} @ {$bet['odds']}\n" .
-                    "- Motivazione originale: {$bet['motivation']}\n\n" .
-                    "COMPITO:\n" .
-                    "1. Identifica perché hai sbagliato (es: momentum ignorato, bias sulla favorita, ecc).\n" .
-                    "2. Scrivi una lezione breve (max 25 parole).\n" .
-                    "3. Decidi se la lezione si applica al TEAM (es. 'Liverpool'), alla LEGA (es. 'Premier League') o è una STRATEGIA generale.\n\n" .
-                    "RISPONDI SOLO IN JSON:\n" .
-                    "{\n" .
-                    "  \"lesson\": \"...\",\n" .
-                    "  \"type\": \"team|league|strategy\",\n" .
-                    "  \"entity_name\": \"Nome del Team o della Lega se applicabile\"\n" .
-                    "}";
-
-                $predictionRaw = $gemini->analyzeCustom($prompt);
-                $lessonData = null;
-                if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
-                    $lessonData = json_decode($matches[1], true);
-                } elseif (strpos($predictionRaw, '{') !== false) {
-                    $lessonData = json_decode($predictionRaw, true);
-                }
-
-                if ($lessonData) {
-                    $entityId = $lessonData['entity_name'] ?? null;
-                    if ($lessonData['type'] === 'strategy') $entityId = 'GLOBAL';
-
-                    $this->db->prepare("INSERT INTO ai_lessons (entity_type, entity_id, lesson_text) VALUES (?, ?, ?)")
-                        ->execute([$lessonData['type'], $entityId, $lessonData['lesson']]);
-                }
-
-                $this->db->prepare("UPDATE bets SET needs_analysis = 0 WHERE id = ?")
-                    ->execute([$bet['id']]);
-                $results[] = $bet['id'];
-            }
-
-            echo json_encode(['status' => 'success', 'analyzed' => $results]);
-        } catch (\Throwable $e) {
-            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
-        }
     }
 
     public function betDetails($id)
