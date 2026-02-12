@@ -120,15 +120,6 @@
                         class="text-xs font-black text-white transition-colors uppercase italic tracking-tighter leading-none">Gianik
                         Live</span>
                 </a>
-                <a href="/tennis-bet/index.php"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="trophy"
-                        class="w-4 h-4 text-slate-500 group-hover:text-tennis-green transition-colors"></i>
-                    <span
-                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors uppercase italic tracking-tighter leading-none">Tennis
-                        AI Better</span>
-                </a>
-
             </nav>
 
             <!-- Extra Sidebar Content (e.g. Skipped Matches) -->
