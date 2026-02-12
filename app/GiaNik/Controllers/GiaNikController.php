@@ -1465,7 +1465,7 @@ class GiaNikController
                 $sql .= " WHERE " . implode(" AND ", $where);
             }
 
-            $sql .= " GROUP BY market_id, selection_id, odds, stake, type, status";
+            $sql .= " GROUP BY id"; // Garantisce univocità per record ID
             $sql .= " ORDER BY created_at DESC LIMIT 30";
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
