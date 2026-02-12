@@ -480,17 +480,20 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                         label: 'Bilancio (€)',
                         data: <?php echo json_encode($portfolioStats['history'] ?? [100]); ?>,
                         borderWidth: 3,
-                        pointRadius: 3,
-                        pointHoverRadius: 6,
-                        pointBackgroundColor: (ctx) => (ctx.parsed.y >= 100 ? '#22c55e' : '#ef4444'),
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
                         fill: {
                             target: { value: 100 },
-                            above: 'rgba(34, 197, 94, 0.05)',
-                            below: 'rgba(239, 68, 68, 0.05)'
+                            above: 'rgba(34, 197, 94, 0.15)',
+                            below: 'rgba(239, 68, 68, 0.15)'
                         },
                         tension: 0.4,
                         segment: {
-                            borderColor: ctx => (ctx.p0.parsed.y < 100 || ctx.p1.parsed.y < 100) ? '#ef4444' : '#22c55e'
+                            borderColor: ctx => {
+                                if (ctx.p1.parsed.y > 100) return '#22c55e';
+                                if (ctx.p1.parsed.y < 100) return '#ef4444';
+                                return '#64748b';
+                            }
                         }
                     }]
                 },
@@ -540,30 +543,6 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                         ctx.lineTo(right, yPos);
                         ctx.stroke();
                         ctx.restore();
-                    }
-                }],
-                datasets: [{
-                    label: 'Bilancio (€)',
-                    data: <?php echo json_encode($portfolioStats['history'] ?? [100]); ?>,
-                    borderWidth: 3,
-                    pointRadius: 0,
-                    pointHoverRadius: 0,
-                    pointBackgroundColor: (ctx) => {
-                        const val = ctx.raw;
-                        return val >= 100 ? '#22c55e' : '#ef4444';
-                    },
-                    fill: {
-                        target: { value: 100 },
-                        above: 'rgba(34, 197, 94, 0.15)', // Più marcato sopra
-                        below: 'rgba(239, 68, 68, 0.15)'  // Più marcato sotto
-                    },
-                    tension: 0.4,
-                    segment: {
-                        borderColor: ctx => {
-                            if (ctx.p1.parsed.y > 100) return '#22c55e';
-                            if (ctx.p1.parsed.y < 100) return '#ef4444';
-                            return '#64748b';
-                        }
                     }
                 }]
             });
