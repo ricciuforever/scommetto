@@ -606,8 +606,6 @@ class FootballDataService
             'pitesti',
             'ploiesti',
             'ploiești',
-            'tel aviv',
-            'jerusalem',
             'a.p.r.',
             'apr',
             'de',
