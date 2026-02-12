@@ -355,7 +355,7 @@ class FootballDataService
             if ($startTime && isset($item['fixture']['date'])) {
                 $bfTime = is_numeric($startTime) ? $startTime : strtotime($startTime);
                 $apiTime = strtotime($item['fixture']['date']);
-                if (abs($bfTime - $apiTime) > 1800) { // 30 minutes
+                if (abs($bfTime - $apiTime) > 7200) { // 2 hours
                     continue;
                 }
             }
@@ -385,6 +385,8 @@ class FootballDataService
     public function normalizeTeamName($name)
     {
         $name = strtolower($name);
+        // Replace hyphens and slashes with spaces to handle "Tel-Aviv" or "X / Y"
+        $name = str_replace(['-', '/'], ' ', $name);
 
         // 0a. Remove years (e.g., 2018, 1904)
         $name = preg_replace('/\b(19|20)\d{2}\b/', '', $name);
@@ -442,6 +444,8 @@ class FootballDataService
             'at.' => 'atletico',
             'ind' => 'independiente',
             'ind.' => 'independiente',
+            'hap.' => 'hapoel',
+            'mac.' => 'maccabi',
             'dep' => 'deportivo',
             'dep.' => 'deportivo',
             'sg' => 'saint germain',
