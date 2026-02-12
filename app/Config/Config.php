@@ -109,13 +109,16 @@ class Config
     {
         static $pdo = null;
         if ($pdo === null) {
-            // MySQL Configuration
-            $dsn = "mysql:host=localhost;dbname=scommetto;charset=utf8mb4";
-            $username = "root";
-            $password = "";
+            // MySQL Configuration from Environment or Defaults
+            $host = self::get('DB_HOST', 'localhost');
+            $db   = self::get('DB_NAME', 'scommetto');
+            $user = self::get('DB_USER', 'root');
+            $pass = self::get('DB_PASS', '');
+
+            $dsn = "mysql:host=$host;dbname=$db;charset=utf8mb4";
 
             try {
-                $pdo = new \PDO($dsn, $username, $password);
+                $pdo = new \PDO($dsn, $user, $pass);
                 $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
                 $pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
             } catch (\PDOException $e) {
