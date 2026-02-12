@@ -65,12 +65,6 @@ class GeminiService
                 "DATI STATISTICI AVANZATI (Se disponibili):\n" .
                 "Calcio: " . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili") . "\n" .
                 "Basket: " . (isset($candidates[0]['api_basketball']) ? json_encode($candidates[0]['api_basketball']) : "Non disponibili") . "\n\n" .
-                "📚 CONTESTO STORICO E PRE-MATCH (Intelligence):\n" .
-                (isset($candidates[0]['deep_context']) ? $candidates[0]['deep_context'] : "Non disponibile") . "\n\n" .
-                "📈 PERFORMANCE STORICHE AI (Metriche):\n" .
-                (isset($candidates[0]['performance_metrics']) ? $candidates[0]['performance_metrics'] : "Nessuna metrica disponibile") . "\n\n" .
-                "📚 LEZIONI IMPARATE (Post-Mortem):\n" .
-                (isset($candidates[0]['ai_lessons']) ? $candidates[0]['ai_lessons'] : "Nessuna lezione pertinente") . "\n\n" .
                 "🚨 DATI LIVE DEL MATCH:\n" .
                 "Se presenti in api_football.live, troverai:\n" .
                 "- live_score: {home, away, halftime_home, halftime_away} = SCORE ATTUALE E HALFTIME\n" .
@@ -86,8 +80,6 @@ class GeminiService
                 "- Total passes, Passes accurate, Passes %\n" .
                 "- Goalkeeper Saves\n" .
                 "USA QUESTE STATISTICHE per valutare il dominio del match, pericolosità, e probabilità di gol!\n\n" .
-                "⚡ MOMENTUM (Variazione ultimi 10-15 minuti):\n" .
-                (isset($candidates[0]['api_football']['momentum']) ? $candidates[0]['api_football']['momentum'] : "Dati momentum non ancora disponibili.") . "\n\n" .
                 "⚽ EVENTS LIVE DEL MATCH:\n" .
                 "Se presenti in api_football.events, troverai cronologia eventi con:\n" .
                 "- Goal (Normal Goal, Own Goal, Penalty, Missed Penalty) + giocatore + assist + minuto\n" .
@@ -187,28 +179,5 @@ class GeminiService
         file_put_contents(Config::LOGS_PATH . 'gemini_last_response.log', $text);
 
         return $text ?: "Error: Nessuna risposta valida dall'AI.";
-    }
-
-    public function analyzeCustom($prompt)
-    {
-        if (!$this->apiKey) return "Error: Missing Gemini API Key";
-
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=" . $this->apiKey;
-
-        $data = [
-            "contents" => [["parts" => [["text" => $prompt]]]]
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-
-        $response = curl_exec($ch);
-        curl_close($ch);
-
-        $result = json_decode($response, true);
-        return $result['candidates'][0]['content']['parts'][0]['text'] ?? "Error";
     }
 }

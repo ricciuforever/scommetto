@@ -126,11 +126,6 @@ try {
         return;
     }
 
-    if ($path === '/api/gianik/learn') {
-        (new \App\GiaNik\Controllers\GiaNikController())->learn();
-        return;
-    }
-
     if ($path === '/api/gianik/recent-bets') {
         (new \App\GiaNik\Controllers\GiaNikController())->recentBets();
         return;
