@@ -239,22 +239,23 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
 <script>
     if (window.lucide) lucide.createIcons();
 
-    // GiaNik Audio Jukebox
-    const GiaNikAudio = {
-        ctx: null,
-        sounds: {
-            event: 'https://cdn.jsdelivr.net/gh/GiaNik/assets/notification.mp3',
-            win: 'https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3',
-            loss: 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
-            goal: 'https://assets.mixkit.co/active_storage/sfx/1430/1430-preview.mp3'
-        },
-        play(type) {
-            if (!window.isGiaNikSoundEnabled) return;
-            const src = this.sounds[type] || this.sounds.event;
-            const audio = new Audio(src);
-            audio.play().catch(e => console.log('Audio blocked:', e));
-        }
-    };
+    // GiaNik Audio Jukebox - Idempotent declaration for HTMX
+    if (!window.GiaNikAudio) {
+        window.GiaNikAudio = {
+            sounds: {
+                event: 'https://cdn.jsdelivr.net/gh/GiaNik/assets/notification.mp3',
+                win: 'https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3',
+                loss: 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
+                goal: 'https://assets.mixkit.co/active_storage/sfx/1430/1430-preview.mp3'
+            },
+            play(type) {
+                if (!window.isGiaNikSoundEnabled) return;
+                const src = this.sounds[type] || this.sounds.event;
+                const audio = new Audio(src);
+                audio.play().catch(e => console.log('Audio blocked:', e));
+            }
+        };
+    }
 
     // Client-side Match Timer Ticker
     (function () {
@@ -282,8 +283,8 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
         const settlement = <?php echo json_encode($settlementResults ?? ['wins' => 0, 'losses' => 0]); ?>;
 
         // Handle Settlements
-        if (settlement.wins > 0) GiaNikAudio.play('win');
-        else if (settlement.losses > 0) GiaNikAudio.play('loss');
+        if (settlement.wins > 0) window.GiaNikAudio.play('win');
+        else if (settlement.losses > 0) window.GiaNikAudio.play('loss');
 
         if (justUpdated.length > 0) {
             let playedGoal = false;
@@ -303,12 +304,12 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
 
                     if (upd.is_goal) {
                         if (!playedGoal) {
-                            GiaNikAudio.play('goal');
+                            window.GiaNikAudio.play('goal');
                             playedGoal = true;
                         }
                     } else if (settlement.wins === 0 && settlement.losses === 0) {
                         // General event sound if no goal/settlement
-                        GiaNikAudio.play('event');
+                        window.GiaNikAudio.play('event');
                     }
 
                     // Removal timer
