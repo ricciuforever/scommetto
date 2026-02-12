@@ -595,8 +595,6 @@ class FootballDataService
             'js',
             'sportive',
             'belediyespor',
-            'hapoel',
-            'maccabi',
             'belediyesi',
             'bel.',
             'bel',
