@@ -771,6 +771,7 @@ class GiaNikController
             // Sincronizza lo stato reale prima di procedere
             $this->syncWithBetfair();
             $this->processActiveBets(); // ← TRADE/CASHOUT LOGIC
+            $this->settleBets();        // ← SETTLEMENT FALLBACK
 
             // Force real mode
             $globalMode = 'real';
@@ -949,21 +950,33 @@ class GiaNikController
                     }
 
                     if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
-                        // Pass the first market book for fallback extraction
-                        $firstMarketId = $event['markets'][0]['marketId'] ?? null;
-                        $firstBook = $booksMap[$firstMarketId] ?? null;
-                        $firstPriceTrend = $newPricesForHistory[$firstMarketId] ?? null;
+                        // Pass a market book for fallback extraction (find the best one with score/inPlay)
+                        $bestBook = null;
+                        foreach ($event['markets'] as $mkt) {
+                            $b = $booksMap[$mkt['marketId']] ?? null;
+                            if ($b && isset($b['marketDefinition'])) {
+                                if (isset($b['marketDefinition']['score']) || ($b['marketDefinition']['inPlay'] ?? false)) {
+                                    $bestBook = $b;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!$bestBook) $bestBook = $booksMap[$event['markets'][0]['marketId'] ?? ''] ?? null;
+
+                        $bestPriceTrend = ($bestBook && isset($bestBook['marketId'])) ? ($newPricesForHistory[$bestBook['marketId']] ?? null) : null;
 
                         // Pass country code if available for more precise matching
-                        $enrichedData = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook, $firstPriceTrend);
+                        $enrichedData = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $bestBook, $bestPriceTrend);
 
                         // BLOCCO DI SICUREZZA: Se non abbiamo ALMENO lo score, saltiamo.
                         // Ma permettiamo il fallback Betfair se API-Football fallisce per aumentare la frequenza di gioco.
                         $hasScore = isset($enrichedData['live']['live_score']['home']) && isset($enrichedData['live']['live_score']['away']);
-                        $isStarted = ($enrichedData['live']['live_status']['short'] ?? 'NS') !== 'NS';
+                        $statusShort = $enrichedData['live']['live_status']['short'] ?? 'NS';
+                        $isStarted = !in_array($statusShort, ['NS', 'TBD', 'PST', 'CANC', 'ABD']);
 
                         if (!$enrichedData || !$hasScore || !$isStarted) {
-                            $this->logSkippedMatch($event['event'], $event['markets'][0]['marketName'] ?? 'MATCH_ODDS', 'Dati Live Mancanti/NS', 'Nessun dato sullo score disponibile o il match non è ancora iniziato.');
+                            $reason = (!$enrichedData) ? 'No Data' : ((!$hasScore) ? 'No Score' : 'Status: ' . $statusShort);
+                            $this->logSkippedMatch($event['event'], $event['markets'][0]['marketName'] ?? 'MATCH_ODDS', 'Dati Live Mancanti/NS', 'Dettagli: ' . $reason);
                             continue;
                         }
 
@@ -1084,7 +1097,6 @@ class GiaNikController
                     $results['errors'][] = $ex->getMessage();
                 }
             }
-            $this->settleBets();
 
             // --- UNLOCK ---
             $this->db->prepare("DELETE FROM gianik_system_state WHERE `key` = 'gianik_processing_lock'")->execute();
@@ -1273,9 +1285,10 @@ class GiaNikController
         // Calculate "Pressure Index" (Recent events in last 15 mins)
         $elapsed = (int) ($details['elapsed'] ?? 0);
         $recentEvents = [];
-        if ($elapsed > 5) {
+        if ($elapsed > 5 && is_array($events)) {
             foreach ($events as $ev) {
-                if ($ev['time_elapsed'] >= ($elapsed - 15)) {
+                $evElapsed = $ev['time']['elapsed'] ?? ($ev['time_elapsed'] ?? 0);
+                if ($evElapsed >= ($elapsed - 15)) {
                     $recentEvents[] = $ev;
                 }
             }
@@ -1826,6 +1839,15 @@ class GiaNikController
     public function syncWithBetfair()
     {
         try {
+            // Prevent too frequent syncs (throttle: 30s) to avoid DB load and deadlocks
+            $stmtSync = $this->db->prepare("SELECT updated_at FROM gianik_system_state WHERE `key` = 'gianik_last_sync'");
+            $stmtSync->execute();
+            $lastSync = $stmtSync->fetchColumn();
+            if ($lastSync && (time() - strtotime($lastSync)) < 30) {
+                return;
+            }
+            $this->db->prepare("REPLACE INTO gianik_system_state (`key`, `value`, updated_at) VALUES ('gianik_last_sync', '1', CURRENT_TIMESTAMP)")->execute();
+
             // 0. Purge non-soccer records from GiaNik module
             $this->db->exec("DELETE FROM gianik_bets WHERE sport NOT IN ('Soccer', 'Football')");
 
@@ -1948,14 +1970,20 @@ class GiaNikController
                 $placedDate = isset($o['placedDate']) ? date('Y-m-d H:i:s', strtotime($o['placedDate'])) : date('Y-m-d H:i:s');
 
                 // Verifica esistenza nel DB locale
-                $stmt = $this->db->prepare("SELECT id FROM gianik_bets WHERE betfair_id = ?");
+                $stmt = $this->db->prepare("SELECT id, status FROM gianik_bets WHERE betfair_id = ?");
                 $stmt->execute([$betId]);
-                $dbId = $stmt->fetchColumn();
+                $existing = $stmt->fetch();
 
-                if ($dbId) {
+                if ($existing) {
+                    // Se la scommessa passa da pending a uno stato terminale, impostiamo settled_at
+                    $sqlExtra = "";
+                    if ($existing['status'] === 'pending' && $o['status'] !== 'pending') {
+                        $sqlExtra = ", settled_at = CURRENT_TIMESTAMP";
+                    }
+
                     // Update: aggiorna sempre per avere l'ultimo stato (profitto, status) e resetta missing_count
-                    $stmtUpdate = $this->db->prepare("UPDATE gianik_bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, created_at = ?, last_seen_at = CURRENT_TIMESTAMP, missing_count = 0 WHERE id = ?");
-                    $stmtUpdate->execute([$o['status'], $o['profit'], $o['marketId'], $marketName, $eventName, $runnerName, $placedDate, $dbId]);
+                    $stmtUpdate = $this->db->prepare("UPDATE gianik_bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, created_at = ?, last_seen_at = CURRENT_TIMESTAMP, missing_count = 0 $sqlExtra WHERE id = ?");
+                    $stmtUpdate->execute([$o['status'], $o['profit'], $o['marketId'], $marketName, $eventName, $runnerName, $placedDate, $existing["id"]]);
                 } else {
                     // Import Automatico (se non esisteva)
                     $stmtInsert = $this->db->prepare("INSERT INTO gianik_bets

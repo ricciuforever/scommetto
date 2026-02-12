@@ -94,6 +94,30 @@ class GiaNikDatabase
                 }
             }
         }
+
+        // 3. Ensure indexes exist for performance and deadlock prevention
+        $indexes = [
+            'idx_betfair_id' => ['betfair_id'],
+            'idx_status_type' => ['status', 'type'],
+            'idx_last_seen' => ['last_seen_at'],
+            'idx_created_at' => ['created_at']
+        ];
+
+        foreach ($indexes as $name => $cols) {
+            try {
+                if ($isSQLite) {
+                    $this->connection->exec("CREATE INDEX IF NOT EXISTS $name ON gianik_bets (" . implode(',', $cols) . ")");
+                } else {
+                    $stmt = $this->connection->prepare("SHOW INDEX FROM gianik_bets WHERE Key_name = ?");
+                    $stmt->execute([$name]);
+                    if (!$stmt->fetch()) {
+                        $this->connection->exec("CREATE INDEX $name ON gianik_bets (" . implode(',', $cols) . ")");
+                    }
+                }
+            } catch (\Exception $e) {
+                // Ignore errors (e.g. index already exists)
+            }
+        }
     }
 
     public static function getInstance()

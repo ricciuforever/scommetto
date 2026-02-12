@@ -170,14 +170,15 @@ $displayMax = $maxMinutes > 90 ? $maxMinutes + 5 : 95;
         <div class="flex items-center gap-8">
             <?php
             foreach ($stats as $s) {
-                $teamName = $s['team']['name'] ?? '';
+                $teamName = $s['team_name'] ?? ($s['team']['name'] ?? '');
                 $possession = null;
-                foreach ($s['statistics'] as $stat) {
+                $statItems = $s['stats_json'] ?? ($s['statistics'] ?? []);
+                foreach ($statItems as $stat) {
                     if ($stat['type'] === 'Ball Possession')
                         $possession = $stat['value'];
                 }
                 if ($possession !== null) {
-                    $isHomeStat = ($s['team']['id'] == $homeId);
+                    $isHomeStat = (($s['team_id'] ?? ($s['team']['id'] ?? 0)) == $homeId);
                     $colorClass = $isHomeStat ? 'text-accent' : 'text-indigo-400';
                     $bgClass = $isHomeStat ? 'bg-accent/5 border-accent/10' : 'bg-indigo-400/5 border-indigo-400/10';
                     echo "<div class='flex items-center gap-3 px-3 py-1.5 rounded-xl $bgClass border'>
