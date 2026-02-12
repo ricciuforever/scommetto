@@ -439,7 +439,14 @@ class FootballDataService
             'forest' => 'nottingham',
             'wednesday' => 'wed',
             'mk' => 'milton keynes',
-            'alder' => 'aldershot'
+            'alder' => 'aldershot',
+            'damac' => 'dhamk',
+            'al-ettifaq' => 'ettifaq',
+            'al-ahli' => 'ahli',
+            'al-hilal' => 'hilal',
+            'al-nassr' => 'nassr',
+            'al-shabab' => 'shabab',
+            'al-ittihad' => 'ittihad'
         ];
         foreach ($replacements as $search => $replace) {
             $name = preg_replace('/\b' . preg_quote($search, '/') . '\b/i', $replace, $name);
@@ -522,7 +529,17 @@ class FootballDataService
             'univ',
             'catolica',
             'nacional',
-            'municipal'
+            'municipal',
+            'al',
+            'el',
+            'al-',
+            'el-',
+            'buraidah',
+            'riyadh',
+            'jeddah',
+            'dammam',
+            'makkah',
+            'medina'
         ];
 
         $tempName = $name;
