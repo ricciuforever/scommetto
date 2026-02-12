@@ -103,6 +103,15 @@ class Standing
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    public function getByTeamAndLeague($teamId, $leagueId, $season = null)
+    {
+        if (!$season) $season = \App\Config\Config::getCurrentSeason();
+        $sql = "SELECT * FROM standings WHERE team_id = ? AND league_id = ? AND season = ?";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$teamId, $leagueId, $season]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
     public function find($filters = [])
     {
         $sql = "SELECT s.*, t.name as team_name, t.logo as team_logo, l.name as league_name

@@ -47,6 +47,28 @@ class GiaNikDatabase
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
+        $this->connection->exec("CREATE TABLE IF NOT EXISTS performance_metrics (
+            metric_key TEXT PRIMARY KEY,
+            total_bets INTEGER DEFAULT 0,
+            wins INTEGER DEFAULT 0,
+            net_profit REAL DEFAULT 0
+        )");
+
+        $this->connection->exec("CREATE TABLE IF NOT EXISTS ai_lessons (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type TEXT, -- 'team', 'league', 'strategy'
+            entity_id TEXT,
+            lesson_text TEXT,
+            context_snapshot TEXT, -- JSON
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+
+        $this->connection->exec("CREATE TABLE IF NOT EXISTS match_snapshots (
+            fixture_id INTEGER,
+            stats_json TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+
         // 2. Ensure all columns exist (Self-Repair)
         $requiredColumns = [
             'profit' => 'REAL DEFAULT 0',
@@ -54,7 +76,10 @@ class GiaNikDatabase
             'settled_at' => 'DATETIME',
             'motivation' => 'TEXT',
             'type' => "TEXT DEFAULT 'virtual'",
-            'market_name' => 'TEXT'
+            'market_name' => 'TEXT',
+            'needs_analysis' => 'INTEGER DEFAULT 0',
+            'bucket' => 'TEXT',
+            'league' => 'TEXT'
         ];
 
         $stmt = $this->connection->query("PRAGMA table_info(bets)");
