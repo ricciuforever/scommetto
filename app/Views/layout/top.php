@@ -104,9 +104,9 @@
         </div>
 
         <div class="px-4 py-2 flex-1 overflow-y-auto no-scrollbar">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-4 px-4">Menu
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-4 px-4 border-b border-white/5 pb-2">Menu
                 Principale</span>
-            <nav class="space-y-1">
+            <nav class="space-y-1 mb-8">
                 <a href="/"
                     class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
                     <i data-lucide="home" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
@@ -121,6 +121,9 @@
                 </a>
 
             </nav>
+
+            <!-- Extra Sidebar Content (e.g. Skipped Matches) -->
+            <div id="left-sidebar-extra-content" class="mt-4"></div>
         </div>
 
 

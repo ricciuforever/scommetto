@@ -1022,9 +1022,10 @@ class GiaNikController
                                 $isElite = in_array((int)$event['api_football']['fixture']['league_id'], Config::PREMIUM_LEAGUES);
                             }
 
+                            $stakeReductionReason = "";
                             if (!$isElite) {
                                 $stake = $stake * 0.5;
-                                $motivation .= " [STAKE RIDOTTO: Campionato Minore]";
+                                $stakeReductionReason = " [STAKE RIDOTTO: Campionato Minore]";
                             }
 
                             if ($stake < Config::MIN_BETFAIR_STAKE)
@@ -1065,7 +1066,7 @@ class GiaNikController
                                     }
                                 }
 
-                                $motivation = $analysis['motivation'] ?? trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw));
+                                $motivation = ($analysis['motivation'] ?? trim(preg_replace('/```json[\s\S]*?```/', '', $predictionRaw))) . $stakeReductionReason;
                                 $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                                 $stmtInsert->execute([$analysis['marketId'], $selectedMarket['marketName'], $event['event'], $event['sport'], $selectionId, $analysis['advice'], $analysis['odds'], $stake, $betType, $betfairId, $motivation, $currentPeriod]);
                                 $results['new_bets']++;
@@ -1411,6 +1412,18 @@ class GiaNikController
         return $this->footballData->searchInFixtureList($bfEventName, $liveFixtures, $mappedCountry);
     }
 
+    public function skippedMatches()
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM skipped_matches ORDER BY created_at DESC LIMIT 15");
+            $stmt->execute();
+            $skippedMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            require __DIR__ . '/../Views/partials/skipped_matches_sidebar.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-2 text-[10px]">' . $e->getMessage() . '</div>';
+        }
+    }
+
     public function recentBets()
     {
         if (session_status() === PHP_SESSION_NONE)
@@ -1465,11 +1478,6 @@ class GiaNikController
 
             $currentStatus = $statusFilter;
             $currentType = 'all'; // Legacy support for view variables
-
-            // Recupera anche i match scartati
-            $stmtSkipped = $this->db->prepare("SELECT * FROM skipped_matches ORDER BY created_at DESC LIMIT 10");
-            $stmtSkipped->execute();
-            $skippedMatches = $stmtSkipped->fetchAll(PDO::FETCH_ASSOC);
 
             require __DIR__ . '/../Views/partials/recent_bets_sidebar.php';
         } catch (\Throwable $e) {
