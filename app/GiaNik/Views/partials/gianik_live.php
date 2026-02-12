@@ -196,15 +196,26 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                                     <?php echo $m['score'] ?: '0-0'; ?>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-1.5 mt-1">
-                                <?php if ($m['has_api_data']): ?>
-                                    <div class="w-1 h-1 rounded-full bg-success shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
+                            <div class="flex items-center gap-2 mt-1">
+                                <div class="flex items-center gap-1">
+                                    <?php if ($m['has_api_data']): ?>
+                                        <div class="w-1 h-1 rounded-full bg-success shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
+                                    <?php endif; ?>
+                                    <span class="match-status-label text-[9px] font-black uppercase text-slate-500 tracking-tighter"
+                                        data-elapsed="<?php echo $m['elapsed'] ?? 0; ?>"
+                                        data-status="<?php echo $m['status_short'] ?? ''; ?>">
+                                        <?php echo $m['status_label']; ?>
+                                    </span>
+                                </div>
+
+                                <?php if (isset($m['intensity'])): ?>
+                                    <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
+                                        <i data-lucide="zap" class="w-2 h-2 <?php echo $m['intensity']['color']; ?>"></i>
+                                        <span class="text-[7px] font-black <?php echo $m['intensity']['color']; ?> uppercase">
+                                            <?php echo $m['intensity']['label']; ?> (<?php echo $m['intensity']['val']; ?>x)
+                                        </span>
+                                    </div>
                                 <?php endif; ?>
-                                <span class="match-status-label text-[9px] font-black uppercase text-slate-500 tracking-tighter"
-                                    data-elapsed="<?php echo $m['elapsed'] ?? 0; ?>"
-                                    data-status="<?php echo $m['status_short'] ?? ''; ?>">
-                                    <?php echo $m['status_label']; ?>
-                                </span>
                             </div>
                         </div>
 

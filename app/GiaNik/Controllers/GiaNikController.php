@@ -273,6 +273,7 @@ class GiaNikController
                         $m['elapsed'] = $elapsed;
                         $m['status_short'] = $statusShort;
                         $m['has_api_data'] = true;
+                        $m['intensity'] = $this->getLastIntensityBadge($fid);
                         $m['home_logo'] = $match['teams']['home']['logo'] ?? null;
                         $m['away_logo'] = $match['teams']['away']['logo'] ?? null;
                         $m['home_name'] = $match['teams']['home']['name'] ?? null;
@@ -602,14 +603,9 @@ class GiaNikController
                 // --- GATEKEEPER CHECK ---
                 // Verifica performance della Lega
                 $leagueId = $apiData['fixture']['league_id'] ?? 0;
-                $leagueKey = 'LEAGUE_' . $leagueId;
-                $stmtGK = $this->db->prepare("SELECT roi, total_bets FROM performance_metrics WHERE metric_key = ?");
-                $stmtGK->execute([$leagueKey]);
-                $metric = $stmtGK->fetch(PDO::FETCH_ASSOC);
-
-                // REGOLA: Se abbiamo fatto almeno 10 scommesse e il ROI è tragico (< -15%), STOP.
-                if ($metric && $metric['total_bets'] >= 10 && $metric['roi'] < -15.0) {
-                    $reasoning = "Analisi interrotta dal Gatekeeper: ROI storico su questa lega (ID: $leagueId) troppo basso (" . round($metric['roi'], 1) . "%) su " . $metric['total_bets'] . " bet.";
+                $blockReason = $this->checkGatekeeper($leagueId);
+                if ($blockReason) {
+                    $reasoning = "⛔ " . $blockReason;
                     require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
                     return;
                 }
@@ -1470,6 +1466,71 @@ class GiaNikController
         if ($odds <= 1.50) return 'FAV';
         if ($odds <= 2.20) return 'VAL';
         return 'RISK';
+    }
+
+    private function checkGatekeeper($leagueId)
+    {
+        if (!$leagueId) return null;
+
+        $leagueKey = 'LEAGUE_' . $leagueId;
+        $stmt = $this->db->prepare("SELECT roi, total_bets FROM performance_metrics WHERE metric_key = ?");
+        $stmt->execute([$leagueKey]);
+        $metric = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // STOP LOSS RIGIDO: Se ROI < -15% su almeno 10 bet -> BLOCCO
+        if ($metric && $metric['total_bets'] >= 10 && $metric['roi'] < -15.0) {
+            return "BLOCCO GATEKEEPER: La lega $leagueId ha un ROI storico pessimo (" . round($metric['roi'], 1) . "%) su {$metric['total_bets']} scommesse.";
+        }
+
+        return null;
+    }
+
+    private function getLastIntensityBadge($fixtureId)
+    {
+        if (!$fixtureId) return null;
+
+        // Recupera l'ultimo snapshot per estrarre la stringa di momentum se salvata o ricalcolarla
+        // Per semplicità, cerchiamo se c'è un record recente negli snapshot
+        $stmt = $this->db->prepare("SELECT stats_json FROM match_snapshots WHERE fixture_id = ? ORDER BY minute DESC LIMIT 1");
+        $stmt->execute([$fixtureId]);
+        $row = $stmt->fetch();
+        if (!$row) return null;
+
+        // Se vogliamo mostrarlo sempre, dovremmo ricalcolare l'index.
+        // Ma handleMomentum() restituisce una stringa complessa.
+        // Facciamo una versione "light" per la UI.
+
+        $stmt2 = $this->db->prepare("SELECT * FROM match_snapshots WHERE fixture_id = ? ORDER BY minute DESC LIMIT 2");
+        $stmt2->execute([$fixtureId]);
+        $rows = $stmt2->fetchAll();
+
+        if (count($rows) < 2) return null;
+
+        $curr = $rows[0];
+        $old = $rows[1];
+        $deltaMin = $curr['minute'] - $old['minute'];
+        if ($deltaMin <= 0) return null;
+
+        $homeIntensity = 0;
+        $awayIntensity = 0;
+
+        // Calcolo rapido Intensità Casa
+        $currH = $curr['home_shots'] + $curr['home_corners'] * 0.5;
+        $oldH = $old['home_shots'] + $old['home_corners'] * 0.5;
+        $avgH = ($currH / max(1, $curr['minute'])) * $deltaMin;
+        if ($avgH > 0) $homeIntensity = ($currH - $oldH) / $avgH;
+
+        // Calcolo rapido Intensità Ospite
+        $currA = $curr['away_shots'] + $curr['away_corners'] * 0.5;
+        $oldA = $old['away_shots'] + $old['away_corners'] * 0.5;
+        $avgA = ($currA / max(1, $curr['minute'])) * $deltaMin;
+        if ($avgA > 0) $awayIntensity = ($currA - $oldA) / $avgA;
+
+        $maxInt = max($homeIntensity, $awayIntensity);
+
+        if ($maxInt > 1.5) return ['label' => 'HIGH', 'val' => round($maxInt, 1), 'color' => 'text-accent'];
+        if ($maxInt > 1.1) return ['label' => 'MID', 'val' => round($maxInt, 1), 'color' => 'text-indigo-400'];
+        return ['label' => 'STABLE', 'val' => round($maxInt, 1), 'color' => 'text-slate-500'];
     }
 
     private function summarizeDeepContext($context)
