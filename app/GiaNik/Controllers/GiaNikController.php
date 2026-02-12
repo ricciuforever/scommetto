@@ -589,7 +589,28 @@ class GiaNikController
                 }
 
                 // --- Performance Metrics Integration ---
-                $event['performance_metrics'] = $this->getRelevantMetrics($event);
+                $perfData = $this->getRelevantMetrics($event);
+                $event['performance_metrics'] = $perfData['text'];
+
+                // --- Gatekeeper (Stop Loss) ---
+                if ($perfData['summary']['roi'] < -15 && $perfData['summary']['total_bets'] > 10) {
+                    $reasoning = "ANALISI ABORTITA: Stop Loss attivo. ROI storico su questa lega/sport è del " . round($perfData['summary']['roi'], 1) . "% su " . $perfData['summary']['total_bets'] . " bet. Evitiamo ulteriori perdite.";
+                    require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
+                    return;
+                }
+
+                // --- Circuit Breaker (Recent Trauma) ---
+                if (!empty($apiData['events'])) {
+                    $currentMin = (int)($apiData['live']['live_status']['elapsed_minutes'] ?? 0);
+                    foreach ($apiData['events'] as $ev) {
+                        $eventMin = (int)($ev['time']['elapsed'] ?? 0);
+                        if (($currentMin - $eventMin) <= 4 && in_array($ev['type'], ['Goal', 'Card'])) {
+                            $reasoning = "MERCATO INSTABILE: Evento critico ({$ev['type']}) avvenuto al minuto $eventMin (meno di 4 minuti fa). Analisi sospesa per assestamento mercato.";
+                            require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
+                            return;
+                        }
+                    }
+                }
 
                 // --- AI Lessons (Post-Mortem) ---
                 $event['ai_lessons'] = $this->getRecentLessons($apiData);
@@ -619,7 +640,13 @@ class GiaNikController
                     }
                 }
             }
-            $reasoning = $this->extractMotivation($analysis, $predictionRaw, $event);
+
+            // --- AI Output Validation ---
+            if (!empty($analysis['marketId']) && $analysis['marketId'] !== ($event['requestedMarketId'] ?? '')) {
+                $reasoning = "ERRORE VALIDAZIONE: L'AI ha suggerito un'operazione su un mercato diverso ({$analysis['marketId']}) da quello richiesto. Analisi scartata per sicurezza.";
+            } else {
+                $reasoning = $this->extractMotivation($analysis, $predictionRaw, $event);
+            }
 
             require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
         } catch (\Throwable $e) {
@@ -848,7 +875,27 @@ class GiaNikController
                         }
 
                         // --- Performance Metrics Integration ---
-                        $event['performance_metrics'] = $this->getRelevantMetrics($event);
+                        $perfData = $this->getRelevantMetrics($event);
+                        $event['performance_metrics'] = $perfData['text'];
+
+                        // --- Gatekeeper (Stop Loss) ---
+                        if ($perfData['summary']['roi'] < -15 && $perfData['summary']['total_bets'] > 10) {
+                            continue; // Salta questo evento se in perdita cronica
+                        }
+
+                        // --- Circuit Breaker (Recent Trauma) ---
+                        if (!empty($apiData['events'])) {
+                            $currentMin = (int)($apiData['live']['live_status']['elapsed_minutes'] ?? 0);
+                            $isShock = false;
+                            foreach ($apiData['events'] as $ev) {
+                                $eventMin = (int)($ev['time']['elapsed'] ?? 0);
+                                if (($currentMin - $eventMin) <= 4 && in_array($ev['type'], ['Goal', 'Card'])) {
+                                    $isShock = true;
+                                    break;
+                                }
+                            }
+                            if ($isShock) continue;
+                        }
 
                         // --- AI Lessons (Post-Mortem) ---
                         $event['ai_lessons'] = $this->getRecentLessons($apiData);
@@ -863,7 +910,19 @@ class GiaNikController
 
                     if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
                         $analysis = json_decode($matches[1], true);
+
+                        // Strict validation
                         if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
+
+                            // Validazione ID Mercato
+                            $marketInEvent = false;
+                            foreach ($event['markets'] as $m) {
+                                if ($m['marketId'] === $analysis['marketId']) {
+                                    $marketInEvent = true;
+                                    break;
+                                }
+                            }
+                            if (!$marketInEvent) continue;
 
                             // Controllo limite 4 scommesse per match (Calcio)
                             $currentCount = $matchBetCounts[$event['event']] ?? 0;
@@ -892,6 +951,8 @@ class GiaNikController
                                 continue;
 
                             $runners = array_map(fn($r) => ['runnerName' => $r['name'], 'selectionId' => $r['selectionId']], $selectedMarket['runners']);
+
+                            // Validazione Rigida Runner
                             $selectionId = $this->bf->mapAdviceToSelection($analysis['advice'], $runners);
 
                             if ($selectionId) {
@@ -908,8 +969,8 @@ class GiaNikController
                                     if (($res['status'] ?? '') === 'SUCCESS') {
                                         $betfairId = $res['instructionReports'][0]['betId'] ?? null;
                                     } else {
-                                        // If real bet fails, record as virtual for tracking
-                                        $betType = 'virtual';
+                                        // If real bet fails, skip insertion to avoid confusion
+                                        continue;
                                     }
                                 }
 
@@ -1000,13 +1061,25 @@ class GiaNikController
                                     $marketKey = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $market));
                                     $metricKey = "{$bet['sport']}_{$league}_{$marketKey}_{$bucket}";
 
-                                    $this->db->prepare("INSERT INTO performance_metrics (metric_key, total_bets, wins, net_profit)
-                                        VALUES (?, 1, ?, ?)
+                                    $this->db->prepare("INSERT INTO performance_metrics (metric_key, total_bets, wins, losses, net_profit, total_stake)
+                                        VALUES (?, 1, ?, ?, ?, ?)
                                         ON CONFLICT(metric_key) DO UPDATE SET
                                         total_bets = total_bets + 1,
                                         wins = wins + ?,
-                                        net_profit = net_profit + ?")
-                                        ->execute([$metricKey, ($isWin ? 1 : 0), $netProfit, ($isWin ? 1 : 0), $netProfit]);
+                                        losses = losses + ?,
+                                        net_profit = net_profit + ?,
+                                        total_stake = total_stake + ?")
+                                        ->execute([
+                                            $metricKey,
+                                            ($isWin ? 1 : 0),
+                                            ($isWin ? 0 : 1),
+                                            $netProfit,
+                                            $bet['stake'],
+                                            ($isWin ? 1 : 0),
+                                            ($isWin ? 0 : 1),
+                                            $netProfit,
+                                            $bet['stake']
+                                        ]);
 
                                     if ($isWin) {
                                         $results['wins']++;
@@ -1232,14 +1305,29 @@ class GiaNikController
         $stmt->execute(["{$sport}_{$league}_%"]);
         $metrics = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        if (empty($metrics)) return "Nessuna metrica storica disponibile per questa lega.";
+        if (empty($metrics)) return ['text' => "Nessuna metrica storica disponibile per questa lega.", 'summary' => ['roi' => 0, 'total_bets' => 0]];
 
         $text = "Performance storiche in {$league}:\n";
+        $totalBets = 0; $totalProfit = 0; $totalStake = 0;
         foreach ($metrics as $m) {
             $winRate = $m['total_bets'] > 0 ? round(($m['wins'] / $m['total_bets']) * 100, 1) : 0;
             $text .= "- {$m['metric_key']}: WR {$winRate}%, Profit: {$m['net_profit']}€\n";
+            $totalBets += $m['total_bets'];
+            $totalProfit += $m['net_profit'];
+            $totalStake += $m['total_stake'];
         }
-        return $text;
+
+        $roi = ($totalStake > 0) ? ($totalProfit / $totalStake) * 100 : 0;
+
+        return [
+            'text' => $text,
+            'summary' => [
+                'roi' => $roi,
+                'total_bets' => $totalBets,
+                'total_profit' => $totalProfit,
+                'total_stake' => $totalStake
+            ]
+        ];
     }
 
     private function handleMomentum($fixtureId, $currentStats)
@@ -1260,6 +1348,10 @@ class GiaNikController
         $oldStats = json_decode($oldStatsJson, true);
         $momentum = "MOMENTUM (Variazione ultimi 10-15 min):\n";
 
+        // Recupera il minuto corrente dal DB o passalo (assumiamo di poterlo dedurre o che non sia critico per PPM globale se usiamo elapsed)
+        $fixture = (new \App\Models\Fixture())->getById($fixtureId);
+        $elapsed = max(1, (int)($fixture['elapsed'] ?? 1));
+
         foreach ([0, 1] as $index) {
             $curr = $currentStats[$index]['statistics'] ?? [];
             $old = $oldStats[$index]['statistics'] ?? [];
@@ -1279,17 +1371,29 @@ class GiaNikController
                 foreach ($curr as $s) if ($s['type'] == $type) $cVal = (int)$s['value'];
                 foreach ($old as $s) if ($s['type'] == $type) $oVal = (int)$s['value'];
 
+                $delta = $cVal - $oVal;
+
                 if ($type === 'Ball Possession') {
-                    $delta = $cVal - $oVal;
                     if (abs($delta) > 2) {
                         $deltaStr .= "$label " . ($delta > 0 ? "+" : "") . "$delta%, ";
                         $hasData = true;
                     }
                 } else {
-                    $delta = $cVal - $oVal;
                     if ($delta > 0) {
                         $deltaStr .= "$label +$delta, ";
                         $hasData = true;
+                    }
+
+                    // Intensity Index for Shots
+                    if ($type === 'Total Shots') {
+                        $globalPPM = $cVal / $elapsed;
+                        $recentPPM = $delta / 10; // delta in ultimi 10 min
+                        if ($globalPPM > 0) {
+                            $ratio = $recentPPM / $globalPPM;
+                            if ($ratio >= 1.5) {
+                                $momentum .= "⚡ INTENSITY ({$sideName}): " . round($ratio, 1) . "x frequenza tiri media!\n";
+                            }
+                        }
                     }
                 }
             }
