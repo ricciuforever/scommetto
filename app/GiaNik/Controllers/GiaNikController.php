@@ -753,10 +753,9 @@ class GiaNikController
         header('Content-Type: application/json');
         $results = ['scanned' => 0, 'new_bets' => 0, 'errors' => []];
         try {
-            // --- ATOMIC LOCKING ---
+            // --- ATOMIC LOCKING (Uses GiaNik DB) ---
             // Impedisce esecuzioni concorrenti che causano scommesse duplicate
-            $db = \App\Services\Database::getInstance()->getConnection();
-            $stmtLock = $db->prepare("SELECT updated_at FROM system_state WHERE `key` = 'gianik_processing_lock'");
+            $stmtLock = $this->db->prepare("SELECT updated_at FROM system_state WHERE `key` = 'gianik_processing_lock'");
             $stmtLock->execute();
             $lockTime = $stmtLock->fetchColumn();
 
@@ -766,7 +765,7 @@ class GiaNikController
             }
 
             // Imposta il Lock
-            $db->prepare("INSERT INTO system_state (`key`, `value`, updated_at) VALUES ('gianik_processing_lock', '1', CURRENT_TIMESTAMP) 
+            $this->db->prepare("INSERT INTO system_state (`key`, `value`, updated_at) VALUES ('gianik_processing_lock', '1', CURRENT_TIMESTAMP)
                           ON CONFLICT(`key`) DO UPDATE SET updated_at = CURRENT_TIMESTAMP")->execute();
 
             // Sincronizza lo stato reale prima di procedere
@@ -809,7 +808,7 @@ class GiaNikController
             $marketCatalogues = [];
             $chunks = array_chunk($eventIds, 40);
             foreach ($chunks as $chunk) {
-                $res = $this->bf->getMarketCatalogues($chunk, 200, $marketTypes);
+                $res = $this->bf->getMarketCatalogues($chunk, 1000, $marketTypes);
                 if (isset($res['result']))
                     $marketCatalogues = array_merge($marketCatalogues, $res['result']);
             }
@@ -857,7 +856,7 @@ class GiaNikController
 
             $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
-                if ($eventCounter >= 40)
+                if ($eventCounter >= 60)
                     break;
                 $mainEvent = $catalogues[0];
 
@@ -1073,14 +1072,12 @@ class GiaNikController
             $this->settleBets();
 
             // --- UNLOCK ---
-            $db->prepare("DELETE FROM system_state WHERE `key` = 'gianik_processing_lock'")->execute();
+            $this->db->prepare("DELETE FROM system_state WHERE `key` = 'gianik_processing_lock'")->execute();
 
             echo json_encode(['status' => 'success', 'results' => $results]);
         } catch (\Throwable $e) {
             // Unlock on error too
-            if (isset($db)) {
-                $db->prepare("DELETE FROM system_state WHERE `key` = 'gianik_processing_lock'")->execute();
-            }
+            $this->db->prepare("DELETE FROM system_state WHERE `key` = 'gianik_processing_lock'")->execute();
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
     }
