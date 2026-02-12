@@ -400,32 +400,40 @@ class GiaNikController
             // Sort logic: 1. Real Bets (P&L DESC), 2. Virtual Bets, 3. Live (Elapsed DESC), 4. Upcoming (Start ASC)
             usort($allMatches, function ($a, $b) {
                 // Priority 1: Active Real Bets
-                if ($a['has_active_real_bet'] && !$b['has_active_real_bet']) return -1;
-                if (!$a['has_active_real_bet'] && $b['has_active_real_bet']) return 1;
+                if ($a['has_active_real_bet'] && !$b['has_active_real_bet'])
+                    return -1;
+                if (!$a['has_active_real_bet'] && $b['has_active_real_bet'])
+                    return 1;
                 if ($a['has_active_real_bet'] && $b['has_active_real_bet']) {
                     // Sort by absolute P&L value to put the most "active" positions first
                     return abs($b['current_pl']) <=> abs($a['current_pl']);
                 }
 
                 // Priority 2: Active Virtual Bets
-                if (($a['has_active_virtual_bet'] ?? false) && !($b['has_active_virtual_bet'] ?? false)) return -1;
-                if (!($a['has_active_virtual_bet'] ?? false) && ($b['has_active_virtual_bet'] ?? false)) return 1;
+                if (($a['has_active_virtual_bet'] ?? false) && !($b['has_active_virtual_bet'] ?? false))
+                    return -1;
+                if (!($a['has_active_virtual_bet'] ?? false) && ($b['has_active_virtual_bet'] ?? false))
+                    return 1;
 
                 // Priority 3: Is Live (In Play)
-                if ($a['is_in_play'] && !$b['is_in_play']) return -1;
-                if (!$a['is_in_play'] && $b['is_in_play']) return 1;
+                if ($a['is_in_play'] && !$b['is_in_play'])
+                    return -1;
+                if (!$a['is_in_play'] && $b['is_in_play'])
+                    return 1;
                 if ($a['is_in_play'] && $b['is_in_play']) {
                     // Among live matches, sort by elapsed time descending (ending soonest first)
                     $aElapsed = $a['elapsed'] ?? 0;
                     $bElapsed = $b['elapsed'] ?? 0;
-                    if ($aElapsed !== $bElapsed) return $bElapsed <=> $aElapsed;
+                    if ($aElapsed !== $bElapsed)
+                        return $bElapsed <=> $aElapsed;
                 }
 
                 // Priority 4: Upcoming Matches (Start Time)
                 if (!$a['is_in_play'] && !$b['is_in_play']) {
                     $aStart = $a['start_time'] ?? '9999-99-99';
                     $bStart = $b['start_time'] ?? '9999-99-99';
-                    if ($aStart !== $bStart) return $aStart <=> $bStart;
+                    if ($aStart !== $bStart)
+                        return $aStart <=> $bStart;
                 }
 
                 // Priority 5: Matched Volume
@@ -887,7 +895,8 @@ class GiaNikController
             $stmt->execute();
             $pending = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            if (empty($pending)) return;
+            if (empty($pending))
+                return;
 
             $marketIds = array_values(array_unique(array_column($pending, 'market_id')));
             $chunks = array_chunk($marketIds, 50);
@@ -915,7 +924,7 @@ class GiaNikController
                                     $profit = $isWin ? ($bet['stake'] * ($bet['odds'] - 1)) : -$bet['stake'];
 
                                     $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?")
-                                             ->execute([$status, $profit, $bet['id']]);
+                                        ->execute([$status, $profit, $bet['id']]);
                                 }
                             }
                         }
@@ -1097,37 +1106,32 @@ class GiaNikController
             if (isset($_GET['type']))
                 $_SESSION['recent_bets_type'] = $_GET['type'];
 
-            $statusFilter = $_SESSION['recent_bets_status'] ?? 'all';
-            $typeFilter = $_SESSION['recent_bets_type'] ?? 'all';
+            $statusFilter = $_SESSION['recent_bets_status'] ?? 'pending';
+            $typeFilter = 'real';
 
-            // 1. Sport mapping (only soccer needed now but kept for consistency)
+            // 1. Sport mapping
             $sportMapping = [
                 'Soccer' => 'Calcio',
                 'Football' => 'Calcio'
             ];
 
-            // 2. Main query for bets - use GROUP BY to collapse accidental duplicates
+            // 2. Main query for bets
             $sql = "SELECT * FROM bets";
             $where = [];
             $params = [];
 
-            // Restricted to Soccer/Football
+            // Restricted to Soccer/Football and Real bets only
             $where[] = "sport IN ('Soccer', 'Football')";
+            $where[] = "type = 'real'";
 
             if ($statusFilter === 'won') {
                 $where[] = "status = 'won'";
             } elseif ($statusFilter === 'lost') {
                 $where[] = "status = 'lost'";
             } else {
-                // Se non stiamo filtrando esplicitamente, escludiamo le scommesse cancellate/voided con profitto zero
-                // per mantenere la lista pulita e solo con scommesse "live" o chiuse con esito.
-                $where[] = "status NOT IN ('cancelled', 'voided')";
-            }
-
-            if ($typeFilter === 'real') {
-                $where[] = "type = 'real'";
-            } elseif ($typeFilter === 'virtual') {
-                $where[] = "type = 'virtual'";
+                // Default or 'pending' filter: strictly pending
+                $where[] = "status = 'pending'";
+                $statusFilter = 'pending';
             }
 
             if (!empty($where)) {
@@ -1523,7 +1527,8 @@ class GiaNikController
                     'eventName' => $itemDesc['eventDesc'] ?? null
                 ];
 
-                if (isset($o['eventId'])) $eventIdsToFetch[] = $o['eventId'];
+                if (isset($o['eventId']))
+                    $eventIdsToFetch[] = $o['eventId'];
 
                 // Se non abbiamo nomi per mercati chiusi, aggiungiamo ai marketId da recuperare come fallback
                 if (empty($allBfOrders[$o['betId']]['marketName'])) {
