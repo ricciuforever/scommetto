@@ -152,117 +152,113 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                     </div>
                 <?php endif; ?>
 
-                <div class="flex items-center gap-6">
-                    <!-- Match Info Section -->
-                    <div class="flex-1 flex items-center justify-between">
+                <div class="grid grid-cols-[1fr_40px_180px_40px_1fr_100px_240px] items-center gap-4">
+                    <!-- Home Team -->
+                    <div class="flex items-center justify-end cursor-pointer hover:opacity-80 transition-opacity"
+                        <?php if ($homeId): ?>
+                            hx-get="/api/gianik/team-details?teamId=<?php echo $homeId; ?>&leagueId=<?php echo $m['league_id'] ?? ''; ?>&season=<?php echo $m['season'] ?? ''; ?>"
+                            hx-target="#global-modal-container" <?php endif; ?>>
+                        <span class="text-xs font-black uppercase text-white truncate text-right mr-4">
+                            <?php echo $m['home_name']; ?>
+                        </span>
+                    </div>
 
-                        <!-- Home Team -->
-                        <div class="flex items-center gap-4 flex-1 justify-end cursor-pointer hover:opacity-80 transition-opacity"
-                            <?php if ($homeId): ?>
-                                hx-get="/api/gianik/team-details?teamId=<?php echo $homeId; ?>&leagueId=<?php echo $m['league_id'] ?? ''; ?>&season=<?php echo $m['season'] ?? ''; ?>"
-                                hx-target="#global-modal-container" <?php endif; ?>>
-                            <span class="text-xs font-black uppercase text-white truncate text-right max-w-[200px]">
-                                <?php echo $m['home_name']; ?>
-                            </span>
-                            <?php if ($m['home_logo']): ?>
-                                <div
-                                    class="w-10 h-10 rounded-full bg-white/5 p-2 border border-white/5 flex items-center justify-center overflow-hidden shrink-0">
-                                    <img src="<?php echo $m['home_logo']; ?>" class="w-full h-full object-contain" alt="">
-                                </div>
-                            <?php else: ?>
-                                <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center shrink-0">
-                                    <i data-lucide="shield" class="w-5 h-5 text-slate-600"></i>
-                                </div>
+                    <!-- Home Logo -->
+                    <div class="flex justify-center">
+                        <?php if ($m['home_logo']): ?>
+                            <div class="w-10 h-10 rounded-full bg-white/5 p-2 border border-white/5 flex items-center justify-center overflow-hidden shrink-0">
+                                <img src="<?php echo $m['home_logo']; ?>" class="w-full h-full object-contain" alt="">
+                            </div>
+                        <?php else: ?>
+                            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center shrink-0">
+                                <i data-lucide="shield" class="w-5 h-5 text-slate-600"></i>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Center: Score & Competition -->
+                    <div class="flex flex-col items-center px-4">
+                        <div class="flex items-center gap-1.5 mb-1">
+                            <?php if ($m['flag']): ?>
+                                <img src="<?php echo $m['flag']; ?>" class="w-3 h-2 object-cover rounded-sm opacity-80" alt="">
                             <?php endif; ?>
+                            <span class="text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                                <?php echo $m['country'] ?? ''; ?>
+                            </span>
                         </div>
-
-                        <!-- Center: Score & Competition -->
-                        <div class="flex flex-col items-center min-w-[180px] px-4">
-                            <div class="flex items-center gap-1.5 mb-1">
-                                <?php if ($m['flag']): ?>
-                                    <img src="<?php echo $m['flag']; ?>" class="w-3 h-2 object-cover rounded-sm opacity-80" alt="">
+                        <div class="text-[9px] font-black text-accent uppercase tracking-widest mb-1 text-center leading-tight truncate w-full">
+                            <?php echo $m['competition']; ?>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="bg-white/10 px-4 py-1 rounded-xl border border-white/5 font-black text-xl tabular-nums text-white">
+                                <?php echo $m['score'] ?: '0-0'; ?>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <div class="flex items-center gap-1">
+                                <?php if ($m['has_api_data']): ?>
+                                    <div class="w-1 h-1 rounded-full bg-success shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
                                 <?php endif; ?>
-                                <span class="text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                                    <?php echo $m['country'] ?? ''; ?>
+                                <span class="match-status-label text-[9px] font-black uppercase text-slate-500 tracking-tighter"
+                                    data-elapsed="<?php echo $m['elapsed'] ?? 0; ?>"
+                                    data-status="<?php echo $m['status_short'] ?? ''; ?>">
+                                    <?php echo $m['status_label']; ?>
                                 </span>
                             </div>
-                            <div
-                                class="text-[9px] font-black text-accent uppercase tracking-widest mb-1 text-center leading-tight">
-                                <?php echo $m['competition']; ?>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <div
-                                    class="bg-white/10 px-4 py-1 rounded-xl border border-white/5 font-black text-xl tabular-nums text-white">
-                                    <?php echo $m['score'] ?: '0-0'; ?>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2 mt-1">
-                                <div class="flex items-center gap-1">
-                                    <?php if ($m['has_api_data']): ?>
-                                        <div class="w-1 h-1 rounded-full bg-success shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
-                                    <?php endif; ?>
-                                    <span class="match-status-label text-[9px] font-black uppercase text-slate-500 tracking-tighter"
-                                        data-elapsed="<?php echo $m['elapsed'] ?? 0; ?>"
-                                        data-status="<?php echo $m['status_short'] ?? ''; ?>">
-                                        <?php echo $m['status_label']; ?>
+
+                            <?php if (isset($m['intensity'])): ?>
+                                <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
+                                    <i data-lucide="zap" class="w-2 h-2 <?php echo $m['intensity']['color']; ?>"></i>
+                                    <span class="text-[7px] font-black <?php echo $m['intensity']['color']; ?> uppercase">
+                                        <?php echo $m['intensity']['label']; ?>
                                     </span>
                                 </div>
-
-                                <?php if (isset($m['intensity'])): ?>
-                                    <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
-                                        <i data-lucide="zap" class="w-2 h-2 <?php echo $m['intensity']['color']; ?>"></i>
-                                        <span class="text-[7px] font-black <?php echo $m['intensity']['color']; ?> uppercase">
-                                            <?php echo $m['intensity']['label']; ?> (<?php echo $m['intensity']['val']; ?>x)
-                                        </span>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-
-
-                        <!-- Away Team -->
-                        <div class="flex items-center gap-4 flex-1 justify-start cursor-pointer hover:opacity-80 transition-opacity"
-                            <?php if ($awayId): ?>
-                                hx-get="/api/gianik/team-details?teamId=<?php echo $awayId; ?>&leagueId=<?php echo $m['league_id'] ?? ''; ?>&season=<?php echo $m['season'] ?? ''; ?>"
-                                hx-target="#global-modal-container" <?php endif; ?>>
-                            <?php if ($m['away_logo']): ?>
-                                <div
-                                    class="w-10 h-10 rounded-full bg-white/5 p-2 border border-white/5 flex items-center justify-center overflow-hidden shrink-0">
-                                    <img src="<?php echo $m['away_logo']; ?>" class="w-full h-full object-contain" alt="">
-                                </div>
-                            <?php else: ?>
-                                <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center shrink-0">
-                                    <i data-lucide="shield" class="w-5 h-5 text-slate-600"></i>
-                                </div>
                             <?php endif; ?>
-                            <span class="text-xs font-black uppercase text-white truncate max-w-[200px]">
-                                <?php echo $m['away_name']; ?>
-                            </span>
                         </div>
                     </div>
 
+                    <!-- Away Logo -->
+                    <div class="flex justify-center">
+                        <?php if ($m['away_logo']): ?>
+                            <div class="w-10 h-10 rounded-full bg-white/5 p-2 border border-white/5 flex items-center justify-center overflow-hidden shrink-0">
+                                <img src="<?php echo $m['away_logo']; ?>" class="w-full h-full object-contain" alt="">
+                            </div>
+                        <?php else: ?>
+                            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center shrink-0">
+                                <i data-lucide="shield" class="w-5 h-5 text-slate-600"></i>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Away Team -->
+                    <div class="flex items-center justify-start cursor-pointer hover:opacity-80 transition-opacity"
+                        <?php if ($awayId): ?>
+                            hx-get="/api/gianik/team-details?teamId=<?php echo $awayId; ?>&leagueId=<?php echo $m['league_id'] ?? ''; ?>&season=<?php echo $m['season'] ?? ''; ?>"
+                            hx-target="#global-modal-container" <?php endif; ?>>
+                        <span class="text-xs font-black uppercase text-white truncate ml-4">
+                            <?php echo $m['away_name']; ?>
+                        </span>
+                    </div>
+
+                    <!-- Matched -->
+                    <div class="flex flex-col border-l border-white/5 pl-4">
+                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter italic">Matched</span>
+                        <span class="text-sm font-black text-white leading-none">€<?php echo number_format($m['totalMatched'], 0, ',', '.'); ?></span>
+                    </div>
+
                     <!-- Action Section -->
-                    <div class="flex items-center gap-4 min-w-[320px] border-l border-white/5 pl-6">
-                        <div class="flex flex-col mr-2">
-                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter italic">Matched</span>
-                            <span
-                                class="text-sm font-black text-white leading-none">€<?php echo number_format($m['totalMatched'], 0, ',', '.'); ?></span>
-                        </div>
+                    <div class="flex items-center gap-2 justify-end">
+                        <button hx-get="/api/gianik/match-bets?marketId=<?php echo $marketId; ?>"
+                            hx-target="#global-modal-container"
+                            class="px-3 py-2.5 bg-accent/10 hover:bg-accent/20 text-accent rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border border-accent/10">
+                            <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i> SCOMMESSE
+                        </button>
 
-                        <div class="flex items-center gap-2">
-                            <button hx-get="/api/gianik/analyze?marketId=<?php echo $marketId; ?>"
-                                hx-target="#global-modal-container"
-                                hx-indicator="#indicator-<?php echo str_replace('.', '-', $marketId); ?>"
-                                class="px-4 py-3 bg-accent/10 hover:bg-accent/20 text-accent rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 relative border border-accent/10">
-                                <div id="indicator-<?php echo str_replace('.', '-', $marketId); ?>"
-                                    class="htmx-indicator absolute inset-0 flex items-center justify-center bg-accent/10 rounded-xl">
-                                    <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
-                                </div>
-                                <i data-lucide="brain-circuit" class="w-4 h-4"></i> Analisi IA
-                            </button>
-
-
-                        </div>
+                        <button hx-get="/api/gianik/match-trend?marketId=<?php echo $marketId; ?>"
+                            hx-target="#global-modal-container"
+                            class="px-3 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border border-indigo-500/10">
+                            <i data-lucide="line-chart" class="w-3.5 h-3.5"></i> ANDAMENTO
+                        </button>
                     </div>
                 </div>
 
