@@ -2,8 +2,10 @@
 // app/GiaNik/learn_from_history.php
 require_once __DIR__ . '/../../bootstrap.php';
 use App\GiaNik\GiaNikDatabase;
+use App\Services\IntelligenceService;
 
 $db = GiaNikDatabase::getInstance()->getConnection();
+$intelligence = new IntelligenceService();
 
 echo "🧠 Inizio apprendimento dallo storico locale (SQLite)...\n";
 
@@ -29,7 +31,7 @@ foreach ($bets as $bet) {
     $keys = [];
 
     // A. Performance per Mercato
-    $mName = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $bet['market_name'] ?? 'UNKNOWN'));
+    $mName = $intelligence->normalizeMarketName($bet['market_name'] ?? 'UNKNOWN');
     $keys[] = "MARKET_{$mName}";
 
     // B. Performance per Lega
@@ -43,9 +45,7 @@ foreach ($bets as $bet) {
 
     // D. Bucket
     $odds = (float)($bet['odds'] ?? 0);
-    $bucket = 'RISK';
-    if ($odds <= 1.50) $bucket = 'FAV';
-    elseif ($odds <= 2.20) $bucket = 'VAL';
+    $bucket = $intelligence->getOddsBucket($odds);
     $keys[] = "BUCKET_{$bucket}";
 
     foreach ($keys as $k) {

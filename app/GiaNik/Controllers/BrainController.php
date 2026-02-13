@@ -105,8 +105,39 @@ class BrainController
             // Tabella non esiste ancora o errore, ignoriamo
         }
 
+        // 7. Last Learning Date
+        $lastUpdate = $this->db->query("SELECT MAX(last_updated) FROM performance_metrics")->fetchColumn();
+
         // Load View
         require __DIR__ . '/../Views/brain.php';
+    }
+
+    public function rebuild()
+    {
+        set_time_limit(300);
+        // 1. Svuota performance_metrics
+        $this->db->exec("DELETE FROM performance_metrics");
+        // 2. Resetta is_learned su tutte le scommesse
+        $this->db->exec("UPDATE bets SET is_learned = 0");
+
+        // 3. Recupera tutte le scommesse settled
+        $stmt = $this->db->query("SELECT * FROM bets WHERE status IN ('won', 'lost')");
+        $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $intelligence = new \App\Services\IntelligenceService();
+        $count = 0;
+        foreach ($bets as $bet) {
+            $intelligence->learnFromBet($bet);
+            $count++;
+        }
+
+        if (PHP_SAPI !== 'cli') {
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'success', 'rebuilt_bets' => $count]);
+            exit;
+        } else {
+            echo "✅ Brain rebuilt with $count bets.\n";
+        }
     }
 
     private function getTeamLogo($teamName)

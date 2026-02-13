@@ -2214,6 +2214,16 @@ class GiaNikController
                     // Update: aggiorna sempre per avere l'ultimo stato (profitto, status)
                     $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, created_at = ? WHERE id = ?");
                     $stmtUpdate->execute([$o['status'], $o['profit'], $o['marketId'], $marketName, $eventName, $runnerName, $placedDate, $dbId]);
+
+                    // Apprendimento automatico se la scommessa è conclusa e non ancora appresa
+                    if (in_array($o['status'], ['won', 'lost'])) {
+                        $stmtFull = $this->db->prepare("SELECT * FROM bets WHERE id = ?");
+                        $stmtFull->execute([$dbId]);
+                        $fullBet = $stmtFull->fetch(PDO::FETCH_ASSOC);
+                        if ($fullBet && !$fullBet['is_learned']) {
+                            $this->intelligence->learnFromBet($fullBet);
+                        }
+                    }
                 } else {
                     // Import Automatico (se non esisteva)
                     $stmtInsert = $this->db->prepare("INSERT INTO bets 
@@ -2232,6 +2242,17 @@ class GiaNikController
                         $o['profit'],
                         $placedDate
                     ]);
+
+                    // Apprendimento immediato se importata già conclusa
+                    if (in_array($o['status'], ['won', 'lost'])) {
+                        $newId = $this->db->lastInsertId();
+                        $stmtFull = $this->db->prepare("SELECT * FROM bets WHERE id = ?");
+                        $stmtFull->execute([$newId]);
+                        $fullBet = $stmtFull->fetch(PDO::FETCH_ASSOC);
+                        if ($fullBet) {
+                            $this->intelligence->learnFromBet($fullBet);
+                        }
+                    }
                 }
             }
 

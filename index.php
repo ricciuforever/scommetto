@@ -136,6 +136,11 @@ try {
         return;
     }
 
+    if ($path === '/api/gianik/brain-rebuild') {
+        (new \App\GiaNik\Controllers\BrainController())->rebuild();
+        return;
+    }
+
     if ($path === '/api/gianik/recent-bets') {
         (new \App\GiaNik\Controllers\GiaNikController())->recentBets();
         return;
