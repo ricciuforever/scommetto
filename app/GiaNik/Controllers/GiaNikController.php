@@ -993,10 +993,14 @@ class GiaNikController
                             if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds))
                                 continue;
 
-                            // --- Dynamic Staking (Kelly Criterion) ---
-                            $bankroll = $activeBalance['available'];
-                            $isRealMode = ($globalMode === 'real');
-                            $stake = $this->calculateKellyStake($analysis['confidence'], $analysis['odds'], $bankroll, $isRealMode);
+                            // --- Dynamic Staking (No Kelly, Max 5% Total Budget) ---
+                            $bankroll = $activeBalance['total'];
+                            $stake = $this->calculateDynamicStake($analysis['confidence'], $bankroll);
+
+                            // Protezione: non scommettere più del liquido disponibile
+                            if ($stake > $activeBalance['available']) {
+                                $stake = $activeBalance['available'];
+                            }
 
                             if ($stake < Config::MIN_BETFAIR_STAKE)
                                 continue;
@@ -1308,25 +1312,25 @@ class GiaNikController
         return $motivation;
     }
 
-    private function calculateKellyStake($confidence, $odds, $bankroll, $isReal = false)
+    private function calculateDynamicStake($confidence, $bankroll)
     {
+        // Rimosso Kelly Criterion come richiesto.
+        // Nuova logica: 5% del bankroll totale, pesato sulla fiducia.
+        // Se fiducia = 100%, stake = 5% del bankroll.
+        // Se fiducia = 80%, stake = 4% del bankroll.
         $p = (float)$confidence / 100.0;
-        $b = (float)$odds - 1.0;
-        if ($b <= 0) return Config::MIN_BETFAIR_STAKE;
+        $stake = $bankroll * 0.05 * $p;
 
-        // Kelly Formula: f = (p*b - q) / b
-        $f = ($p * $b - (1.0 - $p)) / $b;
-        if ($f <= 0) return 0; // Nessun vantaggio statistico stimato
+        // Minimo 2€ (Regola Betfair)
+        if ($stake < Config::MIN_BETFAIR_STAKE) {
+            $stake = Config::MIN_BETFAIR_STAKE;
+        }
 
-        // Quarter Kelly (0.25) per estrema prudenza
-        $stake = $bankroll * ($f * 0.25);
-
-        // Limiti minimi
-        if ($stake < Config::MIN_BETFAIR_STAKE) $stake = Config::MIN_BETFAIR_STAKE;
-
-        // Limiti massimi
-        $maxStake = $isReal ? Config::MAX_STAKE_REAL : 50.0;
-        if ($stake > $maxStake) $stake = $maxStake;
+        // Massimale del 5% (già garantito se p <= 1.0, ma lo forziamo per sicurezza)
+        $maxStake = $bankroll * 0.05;
+        if ($stake > $maxStake && $maxStake >= Config::MIN_BETFAIR_STAKE) {
+            $stake = $maxStake;
+        }
 
         return round($stake, 2);
     }
