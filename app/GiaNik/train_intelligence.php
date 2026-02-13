@@ -16,10 +16,13 @@ $db->exec("DELETE FROM performance_metrics");
 echo "Memoria resettata. Inizio analisi storico...\n";
 
 // 2. Recupera scommesse settled (vinte o perse)
+$countTotal = $db->query("SELECT COUNT(*) FROM bets")->fetchColumn();
+echo "Totale scommesse nella tabella 'bets': $countTotal\n";
+
 $stmt = $db->query("SELECT * FROM bets WHERE status IN ('won', 'lost', 'settled') OR profit != 0");
 $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-echo "Trovate " . count($bets) . " scommesse da analizzare.\n";
+echo "Trovate " . count($bets) . " scommesse 'settled' da analizzare.\n";
 
 foreach ($bets as $bet) {
     // Usiamo direttamente il metodo dell'IntelligenceService per consistenza

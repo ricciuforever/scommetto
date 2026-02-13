@@ -2228,19 +2228,20 @@ class GiaNikController
             $isValidResponse = isset($clearedRes['clearedOrders']) || isset($currentRes['currentOrders']);
 
             if ($isValidResponse) {
-                $sqlDelete = "DELETE FROM bets WHERE type = 'real' AND created_at < datetime('now', '-2 minutes')";
+                // Mirroring selettivo: non cancelliamo mai scommesse 'settled' (Source of Truth storica)
+                $sqlDelete = "DELETE FROM bets WHERE type = 'real' AND status = 'pending' AND created_at < datetime('now', '-2 minutes')";
                 if (!empty($bfIdsList)) {
                     $placeholders = implode(',', array_fill(0, count($bfIdsList), '?'));
                     $sqlDelete .= " AND betfair_id NOT IN ($placeholders)";
                     $stmtDelete = $this->db->prepare($sqlDelete);
                     $stmtDelete->execute($bfIdsList);
                 } else {
-                    // Se Betfair conferma che non ci sono ordini, svuotiamo la lista 'real' locale (vecchia)
+                    // Se Betfair conferma che non ci sono ordini pendenti, svuotiamo solo i pendenti locali
                     $this->db->exec($sqlDelete);
                 }
 
-                // Pulizia record manuali senza ID Betfair (residui orfani oramai vecchi)
-                $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND created_at < datetime('now', '-2 minutes')");
+                // Pulizia record manuali senza ID Betfair solo se ancora pendenti e vecchi
+                $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND status = 'pending' AND created_at < datetime('now', '-2 minutes')");
             }
 
         } catch (\Throwable $e) {
