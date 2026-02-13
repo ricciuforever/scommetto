@@ -103,6 +103,11 @@ class IntelligenceService
      */
     public function learnFromBet($bet)
     {
+        // Evita doppi conteggi
+        if (!empty($bet['is_learned'])) {
+            return;
+        }
+
         // Soccer-only restriction for GiaNik memory
         $sport = strtoupper($bet['sport'] ?? '');
         if ($sport !== 'SOCCER' && $sport !== 'FOOTBALL' && !empty($sport)) {
@@ -111,15 +116,21 @@ class IntelligenceService
 
         $db = \App\GiaNik\GiaNikDatabase::getInstance()->getConnection();
 
-        $isWin = (float)$bet['profit'] > 0 || (isset($bet['status']) && $bet['status'] === 'won');
-        $netProfit = (float)$bet['profit'] - (float)($bet['commission'] ?? 0);
+        $isWin = (float)($bet['profit'] ?? 0) > 0 || (isset($bet['status']) && $bet['status'] === 'won');
+        $netProfit = (float)($bet['profit'] ?? 0) - (float)($bet['commission'] ?? 0);
+
+        // Se persa, il profitto deve essere negativo pari allo stake se non già impostato correttamente
+        if (isset($bet['status']) && $bet['status'] === 'lost' && $netProfit >= 0) {
+            $netProfit = -(float)$bet['stake'];
+        }
+
         $stake = (float)$bet['stake'];
 
-        $marketType = $this->parseMarketType($bet['market_name'] ?? '');
+        $marketNameNormalized = $this->normalizeMarketName($bet['market_name'] ?? '');
         $teams = $this->parseTeams($bet['event_name'] ?? '');
 
         $metricsToUpdate = [
-            ['type' => 'MARKET', 'id' => $marketType],
+            ['type' => 'MARKET', 'id' => $marketNameNormalized],
         ];
 
         if ($teams['home']) $metricsToUpdate[] = ['type' => 'TEAM', 'id' => $teams['home']];
@@ -141,6 +152,11 @@ class IntelligenceService
         foreach ($metricsToUpdate as $m) {
             $contextId = strtoupper(trim($m['id']));
             $this->updateMetric($db, $m['type'], $contextId, $isWin, $netProfit, $stake);
+        }
+
+        // Segna come appresa nel DB locale
+        if (!empty($bet['id'])) {
+            $db->prepare("UPDATE bets SET is_learned = 1 WHERE id = ?")->execute([$bet['id']]);
         }
     }
 
@@ -169,14 +185,48 @@ class IntelligenceService
         ]);
     }
 
+    public function normalizeMarketName($marketName)
+    {
+        $m = strtoupper($marketName);
+
+        if (strpos($m, 'MATCH ODDS') !== false || strpos($m, 'ESITO FINALE') !== false || strpos($m, '1X2') !== false)
+            return 'MATCH ODDS';
+
+        if (strpos($m, 'OVER/UNDER') !== false || strpos($m, 'GOL') !== false || strpos($m, 'GOAL') !== false) {
+            if (preg_match('/(?:OVER|UNDER|GOL|GOAL)\s*(\d+\.?\d*)/', $m, $matches)) {
+                $line = $matches[1];
+                if (strlen($line) == 2 && $line[0] != '0') $line = $line[0] . "." . $line[1];
+                elseif (strlen($line) == 2 && $line[0] == '0') $line = "0." . $line[1];
+                return "OVER/UNDER " . $line . " GOALS";
+            }
+            return 'OVER/UNDER GOALS';
+        }
+
+        if (strpos($m, 'BOTH TEAMS TO SCORE') !== false || strpos($m, 'GOAL/NO GOAL') !== false || strpos($m, 'BTTS') !== false)
+            return 'BOTH TEAMS TO SCORE';
+
+        if (strpos($m, 'CORRECT SCORE') !== false || strpos($m, 'RISULTATO ESATTO') !== false)
+            return 'CORRECT SCORE';
+
+        if (strpos($m, 'DOUBLE CHANCE') !== false || strpos($m, 'DOPPIA CHANCE') !== false)
+            return 'DOUBLE CHANCE';
+
+        if (strpos($m, 'DRAW NO BET') !== false)
+            return 'DRAW NO BET';
+
+        if (strpos($m, 'HALF TIME') !== false || strpos($m, 'PRIMO TEMPO') !== false)
+            return 'HALF TIME';
+
+        // Fallback per nomi sporchi CSV
+        if (strpos($m, 'ESITOFINALE') !== false)
+            return 'MATCH ODDS';
+
+        return preg_replace('/[^A-Z0-9 ]/', '', $m);
+    }
+
     public function parseMarketType($marketName)
     {
-        $m = strtolower($marketName);
-        if (strpos($m, 'over') !== false || strpos($m, 'under') !== false) return 'UO';
-        if (strpos($m, 'match odds') !== false || strpos($m, 'esito') !== false) return '1X2';
-        if (strpos($m, 'btts') !== false || strpos($m, 'goal') !== false) return 'BTTS';
-        if (strpos($m, 'score') !== false) return 'CS';
-        return 'OTHER';
+        return $this->normalizeMarketName($marketName);
     }
 
     public function parseTeams($eventName)

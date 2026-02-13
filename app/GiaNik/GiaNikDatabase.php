@@ -104,6 +104,7 @@ class GiaNikDatabase
             'type' => "TEXT DEFAULT 'virtual'",
             'market_name' => 'TEXT',
             'needs_analysis' => 'INTEGER DEFAULT 0',
+            'is_learned' => 'INTEGER DEFAULT 0',
             'bucket' => 'TEXT',
             'league' => 'TEXT',
             'league_id' => 'INTEGER'

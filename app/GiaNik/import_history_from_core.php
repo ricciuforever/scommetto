@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../bootstrap.php';
 
 use App\GiaNik\GiaNikDatabase;
 use App\Config\Config;
+use App\Services\IntelligenceService;
 
 // 1. Connessione al DB DESTINAZIONE (SQLite)
 $sqlite = GiaNikDatabase::getInstance()->getConnection();
@@ -20,6 +21,8 @@ try {
 }
 
 echo "⏳ Inizio analisi storico scommesse dal Core...\n";
+
+$intelligence = new IntelligenceService();
 
 // 3. Recupero Scommesse Storiche con JOIN per League ID
 // Nota: Nella tabella 'bets' core il profitto non è memorizzato, va calcolato da stake e odds.
@@ -72,7 +75,7 @@ foreach ($bets as $bet) {
 
     // A. Metrica per Mercato (usiamo 'market' della core DB)
     $marketName = $bet['market'] ?? 'UNKNOWN';
-    $mName = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $marketName));
+    $mName = $intelligence->normalizeMarketName($marketName);
     $keys[] = "MARKET_{$mName}";
 
     // B. Metrica per Lega
@@ -81,9 +84,7 @@ foreach ($bets as $bet) {
     }
 
     // C. Bucket
-    $bucket = 'RISK';
-    if ($odds <= 1.50) $bucket = 'FAV';
-    elseif ($odds <= 2.20) $bucket = 'VAL';
+    $bucket = $intelligence->getOddsBucket($odds);
     $keys[] = "BUCKET_{$bucket}";
 
     foreach ($keys as $k) {

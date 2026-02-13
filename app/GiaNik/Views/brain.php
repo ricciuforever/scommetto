@@ -27,10 +27,43 @@
                 <p class="text-slate-400 text-sm">Neural Performance Monitoring & Optimization</p>
             </div>
         </div>
-        <a href="/gianik" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition">
-            <i class="fa-solid fa-arrow-left mr-2"></i> Torna al Terminale
-        </a>
+        <div class="flex gap-2">
+            <button onclick="rebuildBrain()" class="px-4 py-2 bg-purple-900/50 hover:bg-purple-800 text-purple-200 border border-purple-500/30 rounded-lg text-sm transition flex items-center gap-2">
+                <i class="fa-solid fa-sync" id="rebuild-icon"></i> <span id="rebuild-text">Ricostruisci Memoria</span>
+            </button>
+            <a href="/gianik" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition flex items-center">
+                <i class="fa-solid fa-arrow-left mr-2"></i> Torna al Terminale
+            </a>
+        </div>
     </div>
+
+    <script>
+        function rebuildBrain() {
+            if(!confirm('Vuoi ricostruire interamente la memoria del Brain? Questa operazione ricalcolerà tutte le statistiche partendo dallo storico scommesse.')) return;
+
+            const btn = document.getElementById('rebuild-icon');
+            const text = document.getElementById('rebuild-text');
+            btn.classList.add('fa-spin');
+            text.innerText = 'Ricostruzione in corso...';
+
+            fetch('/api/gianik/brain-rebuild')
+                .then(r => r.json())
+                .then(data => {
+                    if(data.status === 'success') {
+                        location.reload();
+                    } else {
+                        alert('Errore durante la ricostruzione: ' + data.message);
+                        btn.classList.remove('fa-spin');
+                        text.innerText = 'Ricostruisci Memoria';
+                    }
+                })
+                .catch(err => {
+                    alert('Errore di connessione');
+                    btn.classList.remove('fa-spin');
+                    text.innerText = 'Ricostruisci Memoria';
+                });
+        }
+    </script>
 
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div class="glass-panel p-6 rounded-xl relative overflow-hidden">
@@ -63,7 +96,7 @@
         <div class="glass-panel p-6 rounded-xl border-purple-500/30 border">
             <h3 class="text-purple-400 text-sm uppercase font-semibold">Cortex Status</h3>
             <p class="text-xl font-bold mt-2 text-white">
-                <i class="fa-solid fa-check-circle text-green-500 mr-2"></i> Active
+                <i class="fa-solid fa-microchip text-purple-500 mr-2"></i> AI ACTIVE
             </p>
             <p class="text-xs text-slate-400 mt-2">Gatekeeper: <strong>ON</strong> (-15% threshold)</p>
         </div>
@@ -273,8 +306,11 @@
                     indica una fase di <?php echo $global['roi'] >= 0 ? 'profitto' : 'assestamento'; ?>.
                 </p>
                 <div class="mt-4 pt-4 border-t border-slate-700 flex justify-between">
-                    <span class="text-[10px] text-slate-500">Ultimo apprendimento: <?php echo date('d/m/Y H:i'); ?></span>
-                    <span class="text-[10px] text-purple-400 font-bold">MODE: INTELLIGENT</span>
+                    <span class="text-[10px] text-slate-500">
+                        Ultimo apprendimento:
+                        <strong><?php echo $lastUpdate ? date('d/m/Y H:i', strtotime($lastUpdate)) : 'Mai'; ?></strong>
+                    </span>
+                    <span class="text-[10px] text-purple-400 font-bold">STATE: REAL-TIME EVOLUTION</span>
                 </div>
             </div>
         </div>
