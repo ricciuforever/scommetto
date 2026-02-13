@@ -85,47 +85,6 @@ require __DIR__ . '/../../Views/layout/top.php';
 <script src="/js/modals.js"></script>
 <script>
     // Modal helpers
-    async function openMatchStatsModal(fixtureId) {
-        try {
-            const response = await fetch(`/gianik/stats-modal/${fixtureId}`);
-            const html = await response.text();
-            const container = document.createElement('div');
-            container.innerHTML = html;
-            document.body.appendChild(container.firstElementChild);
-            if (window.lucide) lucide.createIcons();
-        } catch (error) {
-            console.error('Error opening stats modal:', error);
-        }
-    }
-
-    async function openMatchLineupsModal(fixtureId) {
-        try {
-            const response = await fetch(`/gianik/lineups-modal/${fixtureId}`);
-            const html = await response.text();
-            const container = document.createElement('div');
-            container.innerHTML = html;
-            document.body.appendChild(container.firstElementChild);
-            if (window.lucide) lucide.createIcons();
-        } catch (error) {
-            console.error('Error opening lineups modal:', error);
-        }
-    }
-
-    async function openMatchH2HModal(fixtureId) {
-        try {
-            const response = await fetch(`/gianik/h2h-modal/${fixtureId}`);
-            const html = await response.text();
-            const container = document.createElement('div');
-            container.innerHTML = html;
-            document.body.appendChild(container.firstElementChild);
-            if (window.lucide) lucide.createIcons();
-        } catch (error) {
-            console.error('Error opening H2H modal:', error);
-        }
-    }
-
-
-
     async function openPlayerModal(playerId, fixtureId = null) {
         closeAllModals(); // Close other modals first if needed
         try {
