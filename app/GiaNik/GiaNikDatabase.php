@@ -48,19 +48,15 @@ class GiaNikDatabase
         )");
 
         $this->connection->exec("CREATE TABLE IF NOT EXISTS performance_metrics (
-            context_type TEXT NOT NULL,
-            context_id TEXT NOT NULL,
+            metric_key TEXT PRIMARY KEY,
             total_bets INTEGER DEFAULT 0,
             wins INTEGER DEFAULT 0,
             losses INTEGER DEFAULT 0,
-            total_stake REAL DEFAULT 0.0,
-            total_profit REAL DEFAULT 0.0,
-            roi REAL DEFAULT 0.0,
-            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (context_type, context_id)
+            total_stake REAL DEFAULT 0,
+            net_profit REAL DEFAULT 0,
+            roi REAL DEFAULT 0,
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
-
-        $this->connection->exec("CREATE INDEX IF NOT EXISTS idx_perf_metrics ON performance_metrics(context_type, context_id)");
 
         $this->connection->exec("CREATE TABLE IF NOT EXISTS ai_lessons (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,14 +110,22 @@ class GiaNikDatabase
             }
         }
 
-        // Repair performance_metrics (Handle migration to composite key if needed)
+        // Repair performance_metrics
+        $requiredMetricsColumns = [
+            'losses' => 'INTEGER DEFAULT 0',
+            'total_stake' => 'REAL DEFAULT 0',
+            'roi' => 'REAL DEFAULT 0',
+            'last_updated' => 'DATETIME DEFAULT CURRENT_TIMESTAMP'
+        ];
         $stmt = $this->connection->query("PRAGMA table_info(performance_metrics)");
-        $cols = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
-        if (in_array('metric_key', $cols)) {
-            // Old schema detected, we need to migrate or just reset (as per Lead Dev's "reset metrics" idea)
-            $this->connection->exec("DROP TABLE performance_metrics");
-            $this->ensureSchema(); // Re-run to create new table
-            return;
+        $existingMetricsColumns = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
+        foreach ($requiredMetricsColumns as $col => $definition) {
+            if (!in_array($col, $existingMetricsColumns)) {
+                try {
+                    $this->connection->exec("ALTER TABLE performance_metrics ADD COLUMN $col $definition");
+                } catch (\Exception $e) {
+                }
+            }
         }
 
         // Repair match_snapshots
