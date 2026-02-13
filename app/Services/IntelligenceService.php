@@ -139,6 +139,15 @@ class IntelligenceService
         $leagueId = !empty($bet['league_id']) ? $bet['league_id'] : null;
         $leagueName = $bet['league'] ?? $bet['competition'] ?? 'UNKNOWN';
 
+        // Tenta di recuperare la lega dal market name o event name se sconosciuta
+        if ($leagueName === 'UNKNOWN' && !empty($bet['market_name'])) {
+            // Regex più robusta: cerca parole prima di parole chiave come UNDER, OVER, ESITO, BTTS, MATCH, 1X2, DRAW
+            // gestisce anche casi attaccati come INTERU20UNDER
+            if (preg_match('/^([A-Z0-9 ]+?)(?:UNDER|OVER|ESITO|BTTS|MATCH|1X2|DRAW)/i', $bet['market_name'], $m)) {
+                $leagueName = trim($m[1]);
+            }
+        }
+
         if ($leagueId) {
             $metricsToUpdate[] = ['type' => 'LEAGUE', 'id' => $leagueId];
         } elseif ($leagueName !== 'UNKNOWN') {
@@ -192,9 +201,10 @@ class IntelligenceService
         if (strpos($m, 'MATCH ODDS') !== false || strpos($m, 'ESITO FINALE') !== false || strpos($m, '1X2') !== false)
             return 'MATCH ODDS';
 
-        if (strpos($m, 'OVER/UNDER') !== false || strpos($m, 'GOL') !== false || strpos($m, 'GOAL') !== false) {
+        if (strpos($m, 'OVER/UNDER') !== false || strpos($m, 'GOL') !== false || strpos($m, 'GOAL') !== false || strpos($m, 'OVER') !== false || strpos($m, 'UNDER') !== false) {
             if (preg_match('/(?:OVER|UNDER|GOL|GOAL)\s*(\d+\.?\d*)/', $m, $matches)) {
                 $line = $matches[1];
+                // Gestione formati come "25" -> "2.5"
                 if (strlen($line) == 2 && $line[0] != '0') $line = $line[0] . "." . $line[1];
                 elseif (strlen($line) == 2 && $line[0] == '0') $line = "0." . $line[1];
                 return "OVER/UNDER " . $line . " GOALS";
@@ -202,7 +212,7 @@ class IntelligenceService
             return 'OVER/UNDER GOALS';
         }
 
-        if (strpos($m, 'BOTH TEAMS TO SCORE') !== false || strpos($m, 'GOAL/NO GOAL') !== false || strpos($m, 'BTTS') !== false)
+        if (strpos($m, 'BOTH TEAMS TO SCORE') !== false || strpos($m, 'GOAL/NO GOAL') !== false || strpos($m, 'BTTS') !== false || strpos($m, 'ENTRAMBE LE SQUADRE A SEGNO') !== false)
             return 'BOTH TEAMS TO SCORE';
 
         if (strpos($m, 'CORRECT SCORE') !== false || strpos($m, 'RISULTATO ESATTO') !== false)
@@ -211,15 +221,18 @@ class IntelligenceService
         if (strpos($m, 'DOUBLE CHANCE') !== false || strpos($m, 'DOPPIA CHANCE') !== false)
             return 'DOUBLE CHANCE';
 
-        if (strpos($m, 'DRAW NO BET') !== false)
+        if (strpos($m, 'DRAW NO BET') !== false || strpos($m, 'RIMBORSO IN CASO DI PAREGGIO') !== false)
             return 'DRAW NO BET';
 
         if (strpos($m, 'HALF TIME') !== false || strpos($m, 'PRIMO TEMPO') !== false)
             return 'HALF TIME';
 
-        // Fallback per nomi sporchi CSV
+        // Fallback per nomi sporchi CSV e altri sport
         if (strpos($m, 'ESITOFINALE') !== false)
             return 'MATCH ODDS';
+
+        if (strpos($m, 'VINCENTE INCONTRO') !== false || strpos($m, 'MONEYLINE') !== false)
+            return 'MONEYLINE';
 
         return preg_replace('/[^A-Z0-9 ]/', '', $m);
     }
