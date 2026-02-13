@@ -266,16 +266,6 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                     </div>
                 </div>
 
-                <!-- Detailed Match Info (Events, Stadium, etc) -->
-                <?php if ($fixtureId): ?>
-                    <div class="border-t border-white/5 pt-4" hx-get="/api/gianik/match-details?fixtureId=<?php echo $fixtureId; ?>"
-                        hx-trigger="load" hx-swap="innerHTML">
-                        <div class="flex items-center justify-center py-2 opacity-20">
-                            <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
             </div>
         <?php endforeach; ?>
     </div>

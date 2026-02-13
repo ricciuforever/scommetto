@@ -161,26 +161,10 @@ try {
         return;
     }
 
-    if ($path === '/api/gianik/match-details') {
-        $fId = $_GET['fixtureId'] ?? null;
-        if ($fId) {
-            (new \App\GiaNik\Controllers\GiaNikController())->matchDetails($fId);
-            return;
-        }
-    }
-
     if ($path === '/api/gianik/team-details') {
         $tId = $_GET['teamId'] ?? null;
         if ($tId) {
             (new \App\GiaNik\Controllers\GiaNikController())->teamDetails($tId);
-            return;
-        }
-    }
-
-    if ($path === '/api/gianik/predictions') {
-        $fId = $_GET['fixtureId'] ?? null;
-        if ($fId) {
-            (new \App\GiaNik\Controllers\GiaNikController())->predictions($fId);
             return;
         }
     }
@@ -192,24 +176,6 @@ try {
             (new \App\GiaNik\Controllers\GiaNikController())->playerDetails($pId, $fId);
             return;
         }
-    }
-
-    // NEW: Stats Modal (HTML)
-    if (preg_match('#^/gianik/stats-modal/(\d+)$#i', $path, $matches)) {
-        (new \App\GiaNik\Controllers\GiaNikController())->matchStats($matches[1]);
-        return;
-    }
-
-    // NEW: Lineups Modal (HTML)
-    if (preg_match('#^/gianik/lineups-modal/(\d+)$#i', $path, $matches)) {
-        (new \App\GiaNik\Controllers\GiaNikController())->matchLineups($matches[1]);
-        return;
-    }
-
-    // NEW: H2H Modal (HTML)
-    if (preg_match('#^/gianik/h2h-modal/(\d+)$#i', $path, $matches)) {
-        (new \App\GiaNik\Controllers\GiaNikController())->matchH2H($matches[1]);
-        return;
     }
 
     // NEW: Player Modal (HTML)
