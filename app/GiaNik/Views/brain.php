@@ -69,6 +69,37 @@
         </div>
     </div>
 
+    <!-- Odds Buckets Performance -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <?php foreach ($buckets as $b):
+            $icon = 'fa-star';
+            $label = 'High Confidence';
+            $color = 'text-green-400';
+            if ($b['context_id'] === 'VAL') { $icon = 'fa-scale-balanced'; $label = 'Value Range'; $color = 'text-blue-400'; }
+            if ($b['context_id'] === 'RISK') { $icon = 'fa-triangle-exclamation'; $label = 'High Risk'; $color = 'text-yellow-400'; }
+        ?>
+        <div class="glass-panel p-4 rounded-xl border-l-2 <?php echo str_replace('text', 'border', $color); ?>">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h4 class="text-xs font-bold text-slate-500 uppercase"><?php echo $label; ?> (<?php echo $b['context_id']; ?>)</h4>
+                    <p class="text-lg font-bold <?php echo $color; ?>"><?php echo $b['context_id'] === 'FAV' ? 'Odds < 1.50' : ($b['context_id'] === 'VAL' ? '1.50 - 2.20' : 'Odds > 2.20'); ?></p>
+                </div>
+                <i class="fa-solid <?php echo $icon; ?> <?php echo $color; ?> opacity-50"></i>
+            </div>
+            <div class="mt-4 flex justify-between items-end">
+                <div>
+                    <span class="text-2xl font-black <?php echo $b['roi'] >= 0 ? 'text-green-400' : 'text-red-400'; ?>">
+                        <?php echo ($b['roi'] > 0 ? '+' : '') . number_format($b['roi'], 1); ?>% <small class="text-[10px] text-slate-500">ROI</small>
+                    </span>
+                </div>
+                <div class="text-right text-[10px] text-slate-500">
+                    <?php echo $b['wins']; ?>W / <?php echo $b['losses']; ?>L (<?php echo $b['total_bets']; ?> bets)
+                </div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         <div class="lg:col-span-1">
@@ -188,6 +219,66 @@
         </div>
     </div>
     <?php endif; ?>
+
+    <!-- Strategic Insights -->
+    <div class="glass-panel rounded-xl p-5 mt-6 border-l-4 border-blue-500 bg-blue-900/10">
+        <h2 class="text-xl font-bold mb-4 flex items-center text-blue-400">
+            <i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Strategic Insights
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="space-y-4">
+                <?php
+                $bestBucket = null; $worstBucket = null;
+                foreach($buckets as $b) {
+                    if(!$bestBucket || $b['roi'] > $bestBucket['roi']) $bestBucket = $b;
+                    if(!$worstBucket || $b['roi'] < $worstBucket['roi']) $worstBucket = $b;
+                }
+                ?>
+                <div class="flex gap-4">
+                    <div class="p-2 bg-green-500/20 rounded-lg h-fit"><i class="fa-solid fa-arrow-up text-green-500"></i></div>
+                    <div>
+                        <p class="font-bold text-slate-200">Sweet Spot Rilevato</p>
+                        <p class="text-sm text-slate-400">
+                            Stai performando meglio nel range <strong><?php echo $bestBucket['context_id'] ?? 'N/D'; ?></strong>
+                            (ROI <?php echo number_format($bestBucket['roi'] ?? 0, 1); ?>%).
+                            Considera di ottimizzare i volumi in questa fascia.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="p-2 bg-red-500/20 rounded-lg h-fit"><i class="fa-solid fa-shield-halved text-red-500"></i></div>
+                    <div>
+                        <p class="font-bold text-slate-200">Suggerimento Gatekeeper</p>
+                        <p class="text-sm text-slate-400">
+                            Il range <strong><?php echo $worstBucket['context_id'] ?? 'N/D'; ?></strong> è attualmente il meno profittevole.
+                            GiaNik dovrebbe essere più selettivo su quote
+                            <?php echo ($worstBucket['context_id'] ?? '') === 'RISK' ? '> 2.20' : (($worstBucket['context_id'] ?? '') === 'FAV' ? '< 1.50' : 'intermedie'); ?>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                <p class="text-xs uppercase font-bold text-slate-500 mb-2">Cervello in sintesi</p>
+                <p class="text-sm text-slate-300 leading-relaxed">
+                    Basandosi su <strong><?php echo $global['total_bets']; ?></strong> operazioni analizzate,
+                    il bot mostra una propensione per scommesse di tipo
+                    <?php
+                        $maxBetsBucket = null;
+                        foreach($buckets as $b) if(!$maxBetsBucket || $b['total_bets'] > $maxBetsBucket['total_bets']) $maxBetsBucket = $b;
+                        echo "<strong>" . ($maxBetsBucket['context_id'] ?? 'N/D') . "</strong>";
+                    ?>.
+                    Il ROI globale di <strong><?php echo number_format($global['roi'], 2); ?>%</strong>
+                    indica una fase di <?php echo $global['roi'] >= 0 ? 'profitto' : 'assestamento'; ?>.
+                </p>
+                <div class="mt-4 pt-4 border-t border-slate-700 flex justify-between">
+                    <span class="text-[10px] text-slate-500">Ultimo apprendimento: <?php echo date('d/m/Y H:i'); ?></span>
+                    <span class="text-[10px] text-purple-400 font-bold">MODE: INTELLIGENT</span>
+                </div>
+            </div>
+        </div>
+    </div>
 
 </div>
 

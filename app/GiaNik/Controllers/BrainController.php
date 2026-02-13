@@ -81,12 +81,23 @@ class BrainController
             ORDER BY profit_loss DESC LIMIT 10
         ")->fetchAll(PDO::FETCH_ASSOC);
 
+        // 5. Metriche per Odds Bucket
+        $buckets = $this->db->query("
+            SELECT * FROM performance_metrics
+            WHERE context_type = 'BUCKET'
+            ORDER BY CASE context_id
+                WHEN 'FAV' THEN 1
+                WHEN 'VAL' THEN 2
+                WHEN 'RISK' THEN 3
+                ELSE 4 END
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
         // Arricchimento Loghi (solo per Teams)
         foreach ($topTeams as &$team) {
             $team['logo'] = $this->getTeamLogo($team['context_id']);
         }
 
-        // 5. AI Lessons
+        // 6. AI Lessons
         $lessons = [];
         try {
             $lessons = $this->db->query("SELECT * FROM ai_lessons ORDER BY created_at DESC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);

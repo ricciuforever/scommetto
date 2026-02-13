@@ -134,6 +134,10 @@ class IntelligenceService
             $metricsToUpdate[] = ['type' => 'LEAGUE', 'id' => $leagueName];
         }
 
+        // Performance by Odds Bucket
+        $bucket = $this->getOddsBucket($bet['odds'] ?? 0);
+        $metricsToUpdate[] = ['type' => 'BUCKET', 'id' => $bucket];
+
         foreach ($metricsToUpdate as $m) {
             $contextId = strtoupper(trim($m['id']));
             $this->updateMetric($db, $m['type'], $contextId, $isWin, $netProfit, $stake);
@@ -184,5 +188,12 @@ class IntelligenceService
             $res['away'] = trim($parts[1]);
         }
         return $res;
+    }
+
+    public function getOddsBucket($odds)
+    {
+        if ($odds <= 1.50) return 'FAV';
+        if ($odds <= 2.20) return 'VAL';
+        return 'RISK';
     }
 }
