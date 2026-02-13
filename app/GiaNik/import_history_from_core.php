@@ -97,15 +97,17 @@ foreach ($bets as $bet) {
 echo "💾 Scrittura metriche su GiaNik...\n";
 
 $stmtInsert = $sqlite->prepare("INSERT OR REPLACE INTO performance_metrics
-    (metric_key, total_bets, wins, losses, total_stake, net_profit, roi, last_updated)
-    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
+    (context_type, context_id, total_bets, wins, losses, total_stake, total_profit, roi, last_updated)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
 
 foreach ($metrics as $key => $data) {
+    list($type, $id) = explode('_', $key, 2);
     $losses = $data['bets'] - $data['wins'];
     $roi = ($data['stake'] > 0) ? ($data['profit'] / $data['stake']) * 100 : 0;
 
     $stmtInsert->execute([
-        $key,
+        $type,
+        $id,
         $data['bets'],
         $data['wins'],
         $losses,

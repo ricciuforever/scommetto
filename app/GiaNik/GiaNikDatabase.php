@@ -47,6 +47,13 @@ class GiaNikDatabase
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
+        // Check for old performance_metrics schema
+        $stmtCheck = $this->connection->query("PRAGMA table_info(performance_metrics)");
+        $checkCols = $stmtCheck->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (in_array('metric_key', $checkCols)) {
+            $this->connection->exec("DROP TABLE performance_metrics");
+        }
+
         $this->connection->exec("CREATE TABLE IF NOT EXISTS performance_metrics (
             context_type TEXT NOT NULL,
             context_id TEXT NOT NULL,
@@ -114,15 +121,6 @@ class GiaNikDatabase
             }
         }
 
-        // Repair performance_metrics (Handle migration to composite key if needed)
-        $stmt = $this->connection->query("PRAGMA table_info(performance_metrics)");
-        $cols = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
-        if (in_array('metric_key', $cols)) {
-            // Old schema detected, we need to migrate or just reset (as per Lead Dev's "reset metrics" idea)
-            $this->connection->exec("DROP TABLE performance_metrics");
-            $this->ensureSchema(); // Re-run to create new table
-            return;
-        }
 
         // Repair match_snapshots
         $requiredSnapshotColumns = [
