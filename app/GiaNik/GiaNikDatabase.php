@@ -55,19 +55,15 @@ class GiaNikDatabase
         }
 
         $this->connection->exec("CREATE TABLE IF NOT EXISTS performance_metrics (
-            context_type TEXT NOT NULL,
-            context_id TEXT NOT NULL,
+            metric_key TEXT PRIMARY KEY,
             total_bets INTEGER DEFAULT 0,
             wins INTEGER DEFAULT 0,
             losses INTEGER DEFAULT 0,
-            total_stake REAL DEFAULT 0.0,
-            total_profit REAL DEFAULT 0.0,
-            roi REAL DEFAULT 0.0,
-            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (context_type, context_id)
+            total_stake REAL DEFAULT 0,
+            net_profit REAL DEFAULT 0,
+            roi REAL DEFAULT 0,
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
-
-        $this->connection->exec("CREATE INDEX IF NOT EXISTS idx_perf_metrics ON performance_metrics(context_type, context_id)");
 
         $this->connection->exec("CREATE TABLE IF NOT EXISTS ai_lessons (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
