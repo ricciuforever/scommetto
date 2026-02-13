@@ -65,7 +65,7 @@ class IntelligenceService
     {
         $db = \App\GiaNik\GiaNikDatabase::getInstance()->getConnection();
 
-        $sql = "SELECT * FROM performance_metrics 
+        $sql = "SELECT * FROM performance_metrics
                 WHERE (context_type = 'MARKET' AND context_id = ?)
                    OR (context_type = 'TEAM' AND context_id IN (?, ?))";
 
@@ -76,7 +76,7 @@ class IntelligenceService
             $leagueParams = [];
             if ($leagueName) $leagueParams[] = strtoupper((string)$leagueName);
             if ($leagueId) $leagueParams[] = strtoupper((string)$leagueId);
-            
+
             $sql .= implode(',', array_fill(0, count($leagueParams), '?')) . "))";
             $execParams = array_merge($execParams, $leagueParams);
         }
@@ -138,8 +138,8 @@ class IntelligenceService
     {
         $roi = ($stake > 0) ? round(($profit / $stake) * 100, 2) : 0;
 
-        $sql = "INSERT INTO performance_metrics 
-                (context_type, context_id, total_bets, wins, losses, total_stake, total_profit, roi, last_updated) 
+        $sql = "INSERT INTO performance_metrics
+                (context_type, context_id, total_bets, wins, losses, total_stake, total_profit, roi, last_updated)
                 VALUES (?, ?, 1, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(context_type, context_id) DO UPDATE SET
                 total_bets = total_bets + 1,
