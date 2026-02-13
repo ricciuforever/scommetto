@@ -4,7 +4,6 @@
 namespace App\GiaNik\Controllers;
 
 use App\GiaNik\GiaNikDatabase;
-use App\Config\Config;
 use PDO;
 
 class BrainController

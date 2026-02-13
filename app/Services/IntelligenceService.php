@@ -103,6 +103,12 @@ class IntelligenceService
      */
     public function learnFromBet($bet)
     {
+        // Soccer-only restriction for GiaNik memory
+        $sport = strtoupper($bet['sport'] ?? '');
+        if ($sport !== 'SOCCER' && $sport !== 'FOOTBALL' && !empty($sport)) {
+            return;
+        }
+
         $db = \App\GiaNik\GiaNikDatabase::getInstance()->getConnection();
 
         $isWin = (float)$bet['profit'] > 0 || (isset($bet['status']) && $bet['status'] === 'won');

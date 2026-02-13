@@ -2258,7 +2258,19 @@ class GiaNikController
 
     private function getPortfolioStats($type = 'virtual', $actualTotal = null)
     {
-        $stmt = $this->db->prepare("SELECT profit, commission, stake, status, settled_at, created_at FROM bets WHERE status IN ('won', 'lost') AND type = ? ORDER BY COALESCE(settled_at, created_at) ASC");
+        $sql = "SELECT profit, commission, stake, status, settled_at, created_at
+                FROM bets
+                WHERE status IN ('won', 'lost')
+                AND type = ?
+                AND sport IN ('Soccer', 'Football')";
+
+        if ($type === 'real') {
+            $sql .= " AND betfair_id IS NOT NULL";
+        }
+
+        $sql .= " ORDER BY COALESCE(settled_at, created_at) ASC";
+
+        $stmt = $this->db->prepare($sql);
         $stmt->execute([$type]);
         $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
