@@ -41,12 +41,13 @@ $details = $details ?? null;
                     </div>
                     <div id="home-stats-container" class="flex flex-col gap-4">
                         <?php
-                        $homeStats = array_filter($stats, fn($s) => $s['team']['id'] == $details['teams']['home']['id']);
-                        $homeStats = reset($homeStats)['statistics'] ?? [];
-                        foreach ($homeStats as $s): ?>
+                        $homeStats = array_filter($stats, fn($s) => ($s['team_id'] ?? ($s['team']['id'] ?? null)) == $details['teams']['home']['id']);
+                        $homeStats = reset($homeStats);
+                        $homeStatsArr = $homeStats['stats_json'] ?? $homeStats['statistics'] ?? [];
+                        foreach ($homeStatsArr as $s): ?>
                             <div class="flex justify-between items-center py-2 border-b border-white/5">
                                 <span class="text-[10px] text-slate-500 font-bold uppercase">
-                                    <?php echo $s['type']; ?>
+                                    <?php echo $s['type'] ?? 'N/A'; ?>
                                 </span>
                                 <span class="text-sm font-black text-white">
                                     <?php echo $s['value'] ?: '0'; ?>
@@ -66,15 +67,16 @@ $details = $details ?? null;
                     </div>
                     <div id="away-stats-container" class="flex flex-col gap-4 text-right">
                         <?php
-                        $awayStats = array_filter($stats, fn($s) => $s['team']['id'] == $details['teams']['away']['id']);
-                        $awayStats = reset($awayStats)['statistics'] ?? [];
-                        foreach ($awayStats as $s): ?>
+                        $awayStats = array_filter($stats, fn($s) => ($s['team_id'] ?? ($s['team']['id'] ?? null)) == $details['teams']['away']['id']);
+                        $awayStats = reset($awayStats);
+                        $awayStatsArr = $awayStats['stats_json'] ?? $awayStats['statistics'] ?? [];
+                        foreach ($awayStatsArr as $s): ?>
                             <div class="flex justify-between items-center py-2 border-b border-white/5">
                                 <span class="text-sm font-black text-white">
                                     <?php echo $s['value'] ?: '0'; ?>
                                 </span>
                                 <span class="text-[10px] text-slate-500 font-bold uppercase">
-                                    <?php echo $s['type']; ?>
+                                    <?php echo $s['type'] ?? 'N/A'; ?>
                                 </span>
                             </div>
                         <?php endforeach; ?>

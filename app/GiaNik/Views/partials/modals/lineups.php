@@ -42,10 +42,10 @@ $details = $details ?? null;
                         <div>
                             <div class="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
                                 <div class="flex items-center gap-3">
-                                    <img src="<?php echo $l['team']['logo']; ?>" class="w-10 h-10 object-contain">
+                                    <img src="<?php echo $l['team_logo']; ?>" class="w-10 h-10 object-contain">
                                     <div class="flex flex-col">
                                         <span class="text-sm font-black text-white uppercase italic">
-                                            <?php echo $l['team']['name']; ?>
+                                            <?php echo $l['team_name']; ?>
                                         </span>
                                         <span class="text-[10px] font-bold text-accent uppercase">
                                             <?php echo $l['formation']; ?>
@@ -55,7 +55,7 @@ $details = $details ?? null;
                                 <div class="text-right">
                                     <span class="text-[8px] font-black text-slate-500 uppercase block">Allenatore</span>
                                     <span class="text-xs font-bold text-white">
-                                        <?php echo $l['coach']['name'] ?? 'N/A'; ?>
+                                        <?php echo $l['coach_name'] ?? 'N/A'; ?>
                                     </span>
                                 </div>
                             </div>
@@ -65,7 +65,9 @@ $details = $details ?? null;
                                     <h4 class="text-[9px] font-black text-slate-500 uppercase tracking-[.2em] mb-4">Titolari
                                     </h4>
                                     <div class="grid grid-cols-1 gap-2">
-                                        <?php foreach ($l['start_xi'] ?? $l['startXI'] ?? [] as $pxi):
+                                        <?php
+                                        $starters = $l['start_xi_json'] ?? $l['start_xi'] ?? $l['startXI'] ?? [];
+                                        foreach ($starters as $pxi):
                                             $p = $pxi['player'];
                                             ?>
                                             <div class="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-all cursor-pointer"
@@ -90,7 +92,9 @@ $details = $details ?? null;
                                     <h4 class="text-[9px] font-black text-slate-500 uppercase tracking-[.2em] mb-4">Sostituzioni
                                     </h4>
                                     <div class="grid grid-cols-1 gap-2 opacity-60">
-                                        <?php foreach ($l['substitutes'] as $ps):
+                                        <?php
+                                        $subs = $l['substitutes_json'] ?? $l['substitutes'] ?? [];
+                                        foreach ($subs as $ps):
                                             $p = $ps['player'];
                                             ?>
                                             <div class="flex items-center justify-between p-2 bg-white/5 rounded-xl border border-white/5"
