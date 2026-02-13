@@ -14,6 +14,11 @@ if (!file_exists($csvFile)) {
 echo "📂 Inizio importazione sicura dal CSV...\n";
 
 $db = GiaNikDatabase::getInstance()->getConnection();
+
+// Svuota lo storico reale attuale per evitare duplicati o residui sporchi
+echo "🧹 Svuoto lo storico reale attuale...\n";
+$db->exec("DELETE FROM bets WHERE type = 'real'");
+
 $handle = fopen($csvFile, "r");
 
 // Salta l'intestazione
