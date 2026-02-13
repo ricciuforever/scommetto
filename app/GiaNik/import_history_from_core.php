@@ -22,12 +22,14 @@ try {
 echo "⏳ Inizio analisi storico scommesse dal Core...\n";
 
 // 3. Recupero Scommesse Storiche con JOIN per League ID
+// Nota: Nella tabella 'bets' core il profitto non è memorizzato, va calcolato da stake e odds.
+// Inoltre la colonna mercato si chiama 'market', non 'market_name'.
 $sql = "
     SELECT
         b.status,
-        b.profit,
         b.stake,
-        b.market_name,
+        b.odds,
+        b.market,
         f.league_id
     FROM bets b
     LEFT JOIN fixtures f ON b.fixture_id = f.id
@@ -38,10 +40,10 @@ try {
     $stmt = $mysql->query($sql);
     $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
-    // Prova senza league_id se fallisce (magari fixture_id non c'è in bets)
-    echo "⚠️ Query con JOIN fallita, provo recupero base...\n";
+    // Prova senza league_id se fallisce
+    echo "⚠️ Query con JOIN fallita (" . $e->getMessage() . "), provo recupero base...\n";
     try {
-        $stmt = $mysql->query("SELECT status, profit, stake, market_name FROM bets WHERE status IN ('won', 'lost')");
+        $stmt = $mysql->query("SELECT status, stake, odds, market FROM bets WHERE status IN ('won', 'lost')");
         $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Exception $ex) {
         die("❌ Errore query MySQL: " . $ex->getMessage() . "\n");
@@ -55,18 +57,22 @@ $metrics = [];
 // 4. Aggregazione Dati in Memoria
 foreach ($bets as $bet) {
     $status = strtolower($bet['status']);
-    $profit = (float)$bet['profit'];
     $stake = (float)$bet['stake'];
+    $odds = (float)$bet['odds'];
     $leagueId = $bet['league_id'] ?? null;
 
-    if ($status === 'lost' && $profit >= 0) {
+    // Calcolo Profitto (nella core DB non c'è la colonna profit)
+    if ($status === 'won') {
+        $profit = $stake * ($odds - 1);
+    } else {
         $profit = -$stake;
     }
 
     $keys = [];
 
-    // A. Metrica per Mercato
-    $mName = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $bet['market_name'] ?? 'UNKNOWN'));
+    // A. Metrica per Mercato (usiamo 'market' della core DB)
+    $marketName = $bet['market'] ?? 'UNKNOWN';
+    $mName = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $marketName));
     $keys[] = "MARKET_{$mName}";
 
     // B. Metrica per Lega
