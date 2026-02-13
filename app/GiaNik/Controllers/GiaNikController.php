@@ -591,8 +591,28 @@ class GiaNikController
                 $event['markets'][] = $m;
             }
 
-            $vBalance = $this->getVirtualBalance();
-            $balance = ['available_balance' => $vBalance['available'], 'current_portfolio' => $vBalance['total']];
+            // Fetch operational mode
+            $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
+            $stmtMode->execute();
+            $operationalMode = $stmtMode->fetchColumn() ?: 'virtual';
+
+            if ($operationalMode === 'real') {
+                $fundsData = $this->bf->getFunds();
+                $funds = $fundsData['result'] ?? $fundsData;
+                $total = (float) ($funds['availableToBetBalance'] ?? 0) + abs((float) ($funds['exposure'] ?? 0));
+                $balance = [
+                    'available_balance' => (float) ($funds['availableToBetBalance'] ?? 0),
+                    'current_portfolio' => $total,
+                    'net_pnl' => round($total - Config::DEFAULT_INITIAL_BANKROLL, 2)
+                ];
+            } else {
+                $vBalance = $this->getVirtualBalance();
+                $balance = [
+                    'available_balance' => $vBalance['available'],
+                    'current_portfolio' => $vBalance['total'],
+                    'net_pnl' => round($vBalance['total'] - Config::DEFAULT_INITIAL_BANKROLL, 2)
+                ];
+            }
 
             // Aggiungiamo il marketId di partenza come suggerimento per l'AI
             $event['requestedMarketId'] = $marketId;
@@ -1722,7 +1742,7 @@ class GiaNikController
 
     private function getVirtualBalance()
     {
-        $vInit = 100.0;
+        $vInit = Config::DEFAULT_INITIAL_BANKROLL;
         // Sum only VIRTUAL bets profit
         $vProf = (float) $this->db->query("SELECT SUM(profit - commission) FROM bets WHERE type = 'virtual' AND status IN ('won', 'lost') AND sport IN ('Soccer', 'Football')")->fetchColumn();
         // Sum only VIRTUAL bets exposure
@@ -2221,9 +2241,9 @@ class GiaNikController
                 $dbId = $stmt->fetchColumn();
 
                 if ($dbId) {
-                    // Update: aggiorna sempre per avere l'ultimo stato (profitto, status)
-                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, league = ?, created_at = ? WHERE id = ?");
-                    $stmtUpdate->execute([$o['status'], $o['profit'], $o['marketId'], $marketName, $eventName, $runnerName, $leagueName, $placedDate, $dbId]);
+                    // Update: aggiorna sempre per avere l'ultimo stato (profitto, commissioni, status)
+                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, commission = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, league = ?, created_at = ? WHERE id = ?");
+                    $stmtUpdate->execute([$o['status'], $o['profit'], $o['commission'], $o['marketId'], $marketName, $eventName, $runnerName, $leagueName, $placedDate, $dbId]);
 
                     // Apprendimento automatico se la scommessa è conclusa e non ancora appresa
                     if (in_array($o['status'], ['won', 'lost'])) {
@@ -2237,8 +2257,8 @@ class GiaNikController
                 } else {
                     // Import Automatico (se non esisteva)
                     $stmtInsert = $this->db->prepare("INSERT INTO bets 
-                        (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, status, type, profit, league, created_at)
-                        VALUES (?, ?, ?, ?, 'Soccer', ?, ?, ?, ?, ?, 'real', ?, ?, ?)");
+                        (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, status, type, profit, commission, league, created_at)
+                        VALUES (?, ?, ?, ?, 'Soccer', ?, ?, ?, ?, ?, 'real', ?, ?, ?, ?)");
                     $stmtInsert->execute([
                         $betId,
                         $o['marketId'],
@@ -2250,6 +2270,7 @@ class GiaNikController
                         $o['stake'],
                         $o['status'],
                         $o['profit'],
+                        $o['commission'],
                         $leagueName,
                         $placedDate
                     ]);
@@ -2292,6 +2313,14 @@ class GiaNikController
                 $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND status = 'pending' AND created_at < datetime('now', '-2 minutes')");
             }
 
+            // 6. Sincronizza Aggiustamento di Sistema (per allineamento Brain)
+            $fundsData = $this->bf->getFunds();
+            $funds = $fundsData['result'] ?? $fundsData;
+            if (isset($funds['availableToBetBalance'])) {
+                $actualTotal = (float)($funds['availableToBetBalance']) + abs((float)($funds['exposure'] ?? 0));
+                $this->intelligence->syncSystemAdjustment($actualTotal);
+            }
+
         } catch (\Throwable $e) {
             file_put_contents(\App\Config\Config::LOGS_PATH . 'gianik_sync_error.log', date('[Y-m-d H:i:s] ') . "Sync Error: " . $e->getMessage() . PHP_EOL, FILE_APPEND);
         }
@@ -2319,10 +2348,10 @@ class GiaNikController
         $netProfit = 0;
         $wins = 0;
         $losses = 0;
-        $history = [100.0];
+        $history = [Config::DEFAULT_INITIAL_BANKROLL];
         $labels = ['START'];
 
-        $currentBalance = 100.0;
+        $currentBalance = Config::DEFAULT_INITIAL_BANKROLL;
         foreach ($bets as $b) {
             $totalStake += (float) ($b['stake'] ?? 0);
             $netProfit += ((float) ($b['profit'] ?? 0) - (float) ($b['commission'] ?? 0));
@@ -2337,25 +2366,25 @@ class GiaNikController
             $labels[] = date('d/m H:i', strtotime($dateSource));
         }
 
-        // Adjust stats for REAL mode to match actual balance growth from 100€
+        // Adjust stats for REAL mode to match actual balance growth from initial bankroll
         if ($type === 'real' && $actualTotal !== null) {
             $trackedNetProfit = $netProfit;
-            $realNetProfit = (float)$actualTotal - 100.0;
+            $realNetProfit = (float)$actualTotal - Config::DEFAULT_INITIAL_BANKROLL;
             $offset = $realNetProfit - $trackedNetProfit;
 
             $netProfit = $realNetProfit;
 
-            // Adjust history to start at 100 and end at actual total, while keeping tracked changes
-            $newHistory = [100.0];
+            // Adjust history to start at initial and end at actual total, while keeping tracked changes
+            $newHistory = [Config::DEFAULT_INITIAL_BANKROLL];
             $newLabels = ['START'];
 
             if (abs($offset) > 0.01) {
-                $newHistory[] = round(100.0 + $offset, 2);
+                $newHistory[] = round(Config::DEFAULT_INITIAL_BANKROLL + $offset, 2);
                 $newLabels[] = 'ADJ';
             }
 
             // Re-apply tracked changes on top of the initial adjusted balance
-            $runningBalance = 100.0 + $offset;
+            $runningBalance = Config::DEFAULT_INITIAL_BANKROLL + $offset;
             foreach ($bets as $b) {
                 $runningBalance += ((float) ($b['profit'] ?? 0) - (float) ($b['commission'] ?? 0));
                 $newHistory[] = round($runningBalance, 2);
