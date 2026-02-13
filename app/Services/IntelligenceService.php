@@ -259,4 +259,32 @@ class IntelligenceService
         if ($odds <= 2.20) return 'VAL';
         return 'RISK';
     }
+
+    /**
+     * Sincronizza l'aggiustamento di sistema per allineare il Brain con il portafoglio reale
+     */
+    public function syncSystemAdjustment($actualTotal)
+    {
+        $db = \App\GiaNik\GiaNikDatabase::getInstance()->getConnection();
+        $initialBankroll = \App\Config\Config::DEFAULT_INITIAL_BANKROLL;
+
+        // 1. Somma profitto netto di tutte le scommesse tracciate (reali)
+        $trackedProfit = (float) $db->query("SELECT SUM(profit - commission) FROM bets WHERE type = 'real' AND status IN ('won', 'lost') AND sport IN ('Soccer', 'Football')")->fetchColumn();
+
+        // 2. Calcola lo scarto (Adjustment)
+        // Profitto Reale Totale = actualTotal - initialBankroll
+        // Adjustment = Profitto Reale Totale - Tracked Profit
+        $realTotalProfit = (float)$actualTotal - $initialBankroll;
+        $adjustment = $realTotalProfit - $trackedProfit;
+
+        // 3. Salva nella tabella performance_metrics
+        $sql = "INSERT INTO performance_metrics
+                (context_type, context_id, total_bets, wins, losses, total_stake, profit_loss, roi, last_updated)
+                VALUES ('SYSTEM', 'ADJUSTMENT', 0, 0, 0, 0, ?, 0, CURRENT_TIMESTAMP)
+                ON CONFLICT(context_type, context_id) DO UPDATE SET
+                profit_loss = excluded.profit_loss,
+                last_updated = CURRENT_TIMESTAMP";
+
+        $db->prepare($sql)->execute([$adjustment]);
+    }
 }

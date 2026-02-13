@@ -4,6 +4,7 @@
 namespace App\GiaNik\Controllers;
 
 use App\GiaNik\GiaNikDatabase;
+use App\Services\BetfairService;
 use PDO;
 
 class BrainController
@@ -33,7 +34,13 @@ class BrainController
 
     public function index()
     {
-        // 1. Metriche Globali (Filtrate per MARKET per evitare double-counting)
+        // Fetch operational mode
+        $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
+        $stmtMode->execute();
+        $operationalMode = $stmtMode->fetchColumn() ?: 'virtual';
+
+        // 1. Metriche Globali (Filtrate per MARKET e SYSTEM per allineamento totale)
+        // Usiamo MARKET per le scommesse tracciate e SYSTEM per eventuali scarti/manuali
         $global = $this->db->query("
             SELECT
                 SUM(total_bets) as total_bets,
@@ -42,7 +49,7 @@ class BrainController
                 SUM(profit_loss) as total_profit,
                 SUM(total_stake) as total_stake
             FROM performance_metrics
-            WHERE context_type = 'MARKET'
+            WHERE context_type IN ('MARKET', 'SYSTEM')
         ")->fetch(PDO::FETCH_ASSOC);
 
         // Se non ci sono dati, inizializza a zero
