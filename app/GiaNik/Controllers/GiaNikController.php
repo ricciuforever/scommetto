@@ -597,8 +597,15 @@ class GiaNikController
                 }
 
                 // --- Performance Metrics Integration ---
-                $perfData = $this->getRelevantMetrics($event);
-                $event['performance_metrics'] = $perfData['text'];
+                $marketType = $this->intelligence->parseMarketType($initialMc['marketName'] ?? '');
+                $teams = $this->intelligence->parseTeams($event['event']);
+                $event['performance_metrics'] = $this->intelligence->getPerformanceContext(
+                    $teams['home'] ?? '',
+                    $teams['away'] ?? '',
+                    $marketType,
+                    $event['competition'],
+                    $apiData['fixture']['league_id'] ?? null
+                );
 
                 // --- GATEKEEPER CHECK ---
                 // Verifica performance della Lega
@@ -894,11 +901,18 @@ class GiaNikController
                         }
 
                         // --- Performance Metrics Integration ---
-                        $perfData = $this->getRelevantMetrics($event);
-                        $event['performance_metrics'] = $perfData['text'];
+                        $teams = $this->intelligence->parseTeams($event['event']);
+                        $event['performance_metrics'] = $this->intelligence->getPerformanceContext(
+                            $teams['home'] ?? '',
+                            $teams['away'] ?? '',
+                            '1X2', // Default context, it will also pull teams and league
+                            $event['competition'],
+                            $event['api_football']['fixture']['league_id'] ?? null
+                        );
 
                         // --- Gatekeeper (Stop Loss) ---
-                        if ($perfData['summary']['roi'] < -15 && $perfData['summary']['total_bets'] > 10) {
+                        $leagueId = $event['api_football']['fixture']['league_id'] ?? null;
+                        if ($leagueId && $this->checkGatekeeper($leagueId)) {
                             continue; // Salta questo evento se in perdita cronica
                         }
 
@@ -1081,46 +1095,13 @@ class GiaNikController
                                     $this->db->prepare("UPDATE bets SET status = ?, profit = ?, commission = ?, settled_at = CURRENT_TIMESTAMP, needs_analysis = ? WHERE id = ?")
                                         ->execute([$status, $profit, $commission, $needsAnalysis, $bet['id']]);
 
-                                    // Update Performance Metrics
-                                    $bucket = $bet['bucket'] ?? $this->getOddsBucket($bet['odds']);
-                                    $league = $bet['league'] ?? 'Unknown';
-                                    $leagueId = $bet['league_id'] ?? null;
-                                    $market = $bet['market_name'] ?? 'Unknown';
-                                    // Sanitize market name for key (e.g. Over/Under 2.5 -> OVER25)
-                                    $marketKey = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', $market));
-
-                                    $keysToUpdate = [
-                                        "{$bet['sport']}_{$league}_{$marketKey}_{$bucket}"
-                                    ];
-                                    if ($leagueId) {
-                                        $keysToUpdate[] = "LEAGUE_" . $leagueId;
-                                    }
-
-                                    foreach ($keysToUpdate as $mKey) {
-                                        $this->db->prepare("INSERT INTO performance_metrics (metric_key, total_bets, wins, losses, net_profit, total_stake, roi, last_updated)
-                                            VALUES (?, 1, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
-                                            ON CONFLICT(metric_key) DO UPDATE SET
-                                            total_bets = total_bets + 1,
-                                            wins = wins + ?,
-                                            losses = losses + ?,
-                                            net_profit = net_profit + ?,
-                                            total_stake = total_stake + ?,
-                                            roi = ((net_profit + ?) / (total_stake + ?)) * 100,
-                                            last_updated = CURRENT_TIMESTAMP")
-                                            ->execute([
-                                                $mKey,
-                                                ($isWin ? 1 : 0),
-                                                ($isWin ? 0 : 1),
-                                                $netProfit,
-                                                $bet['stake'],
-                                                ($isWin ? 1 : 0),
-                                                ($isWin ? 0 : 1),
-                                                $netProfit,
-                                                $bet['stake'],
-                                                $netProfit,
-                                                $bet['stake']
-                                            ]);
-                                    }
+                                    // Update Performance Metrics (Learning)
+                                    $fullBet = array_merge($bet, [
+                                        'status' => $status,
+                                        'profit' => $profit,
+                                        'commission' => $commission
+                                    ]);
+                                    $this->intelligence->learnFromBet($fullBet);
 
                                     if ($isWin) {
                                         $results['wins']++;
@@ -1336,42 +1317,6 @@ class GiaNikController
         return round($stake, 2);
     }
 
-    private function getRelevantMetrics($event)
-    {
-        $sport = $event['sport'] ?? 'Soccer';
-        $league = $event['competition'] ?? 'Unknown';
-        $leagueId = $event['api_football']['fixture']['league_id'] ?? null;
-
-        // Recupera metriche per questa lega (sia per nome che per ID LEAGUE_)
-        $stmt = $this->db->prepare("SELECT * FROM performance_metrics WHERE metric_key LIKE ? OR metric_key = ?");
-        $stmt->execute(["{$sport}_{$league}_%", "LEAGUE_" . ($leagueId ?? 0)]);
-        $metrics = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if (empty($metrics)) return ['text' => "Nessuna metrica storica disponibile per questa lega.", 'summary' => ['roi' => 0, 'total_bets' => 0]];
-
-        $text = "Performance storiche in {$league} (ID: {$leagueId}):\n";
-        $totalBets = 0; $totalProfit = 0; $totalStake = 0;
-        foreach ($metrics as $m) {
-            $winRate = $m['total_bets'] > 0 ? round(($m['wins'] / $m['total_bets']) * 100, 1) : 0;
-            $text .= "- {$m['metric_key']}: WR {$winRate}%, Profit: {$m['net_profit']}€\n";
-            $totalBets += $m['total_bets'];
-            $totalProfit += $m['net_profit'];
-            $totalStake += $m['total_stake'];
-        }
-
-        $roi = ($totalStake > 0) ? ($totalProfit / $totalStake) * 100 : 0;
-
-        return [
-            'text' => $text,
-            'summary' => [
-                'roi' => $roi,
-                'total_bets' => $totalBets,
-                'total_profit' => $totalProfit,
-                'total_stake' => $totalStake
-            ]
-        ];
-    }
-
     private function handleMomentum($fixtureId, $currentStats, $elapsed = 0)
     {
         if (!$fixtureId || empty($currentStats)) return null;
@@ -1486,9 +1431,8 @@ class GiaNikController
     {
         if (!$leagueId) return null;
 
-        $leagueKey = 'LEAGUE_' . $leagueId;
-        $stmt = $this->db->prepare("SELECT roi, total_bets FROM performance_metrics WHERE metric_key = ?");
-        $stmt->execute([$leagueKey]);
+        $stmt = $this->db->prepare("SELECT roi, total_bets FROM performance_metrics WHERE context_type = 'LEAGUE' AND context_id = ?");
+        $stmt->execute([strtoupper((string)$leagueId)]);
         $metric = $stmt->fetch(PDO::FETCH_ASSOC);
 
         // STOP LOSS RIGIDO: Se ROI < -15% su almeno 10 bet -> BLOCCO
