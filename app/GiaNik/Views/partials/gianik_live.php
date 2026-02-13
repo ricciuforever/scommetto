@@ -128,36 +128,9 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
             <div id="match-card-<?php echo str_replace('.', '-', $marketId); ?>"
                 class="glass p-4 rounded-[32px] border <?php echo $isJustUpdated ? 'border-accent shadow-[0_0_20px_rgba(var(--accent-rgb),0.3)] animate-pulse' : 'border-white/5'; ?> hover:border-accent/20 transition-all group flex flex-col gap-4 relative">
 
-                <?php if ($m['has_active_real_bet']): ?>
-                    <div class="absolute -top-2 -right-2 z-10 flex items-center gap-2">
-                        <div
-                            class="bg-accent px-3 py-1 rounded-full shadow-lg border border-white/20 flex items-center gap-1.5 animate-bounce-slow">
-                            <i data-lucide="zap" class="w-3 h-3 text-white"></i>
-                            <span class="text-[9px] font-black uppercase text-white tracking-widest">Active Bet</span>
-                        </div>
-                        <?php if (isset($m['current_pl'])): ?>
-                            <div
-                                class="px-3 py-1 rounded-full shadow-lg border border-white/20 font-black text-[10px] <?php echo $m['current_pl'] > 0 ? 'bg-success text-white' : ($m['current_pl'] < 0 ? 'bg-danger text-white' : 'bg-white/10 text-slate-400'); ?>">
-                                <?php echo ($m['current_pl'] > 0 ? '+' : '') . number_format($m['current_pl'], 2); ?>€
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                <?php elseif ($m['has_active_virtual_bet'] ?? false): ?>
-                    <div class="absolute -top-2 -right-2 z-10 flex items-center gap-2">
-                        <div
-                            class="bg-indigo-600 px-3 py-1 rounded-full shadow-lg border border-white/20 flex items-center gap-1.5 opacity-90 backdrop-blur-md">
-                            <i data-lucide="ghost" class="w-3 h-3 text-white"></i>
-                            <span class="text-[9px] font-black uppercase text-white tracking-widest">Virtual Bet</span>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-                <div class="grid grid-cols-[1fr_40px_180px_40px_1fr_100px_240px] items-center gap-4">
+                <div class="grid grid-cols-[1fr_40px_180px_40px_1fr_100px_340px] items-center gap-4">
                     <!-- Home Team -->
-                    <div class="flex items-center justify-end cursor-pointer hover:opacity-80 transition-opacity"
-                        <?php if ($homeId): ?>
-                            hx-get="/api/gianik/team-details?teamId=<?php echo $homeId; ?>&leagueId=<?php echo $m['league_id'] ?? ''; ?>&season=<?php echo $m['season'] ?? ''; ?>"
-                            hx-target="#global-modal-container" <?php endif; ?>>
+                    <div class="flex items-center justify-end">
                         <span class="text-xs font-black uppercase text-white truncate text-right mr-4">
                             <?php echo $m['home_name']; ?>
                         </span>
@@ -205,15 +178,6 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                                     <?php echo $m['status_label']; ?>
                                 </span>
                             </div>
-
-                            <?php if (isset($m['intensity'])): ?>
-                                <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
-                                    <i data-lucide="zap" class="w-2 h-2 <?php echo $m['intensity']['color']; ?>"></i>
-                                    <span class="text-[7px] font-black <?php echo $m['intensity']['color']; ?> uppercase">
-                                        <?php echo $m['intensity']['label']; ?>
-                                    </span>
-                                </div>
-                            <?php endif; ?>
                         </div>
                     </div>
 
@@ -231,10 +195,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                     </div>
 
                     <!-- Away Team -->
-                    <div class="flex items-center justify-start cursor-pointer hover:opacity-80 transition-opacity"
-                        <?php if ($awayId): ?>
-                            hx-get="/api/gianik/team-details?teamId=<?php echo $awayId; ?>&leagueId=<?php echo $m['league_id'] ?? ''; ?>&season=<?php echo $m['season'] ?? ''; ?>"
-                            hx-target="#global-modal-container" <?php endif; ?>>
+                    <div class="flex items-center justify-start">
                         <span class="text-xs font-black uppercase text-white truncate ml-4">
                             <?php echo $m['away_name']; ?>
                         </span>
@@ -246,19 +207,57 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                         <span class="text-sm font-black text-white leading-none">€<?php echo number_format($m['totalMatched'], 0, ',', '.'); ?></span>
                     </div>
 
-                    <!-- Action Section -->
-                    <div class="flex items-center gap-2 justify-end">
-                        <button hx-get="/api/gianik/match-bets?marketId=<?php echo $marketId; ?>"
-                            hx-target="#global-modal-container"
-                            class="px-3 py-2.5 bg-accent/10 hover:bg-accent/20 text-accent rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border border-accent/10">
-                            <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i> SCOMMESSE
-                        </button>
+                    <!-- Scommesse & Andamento Section -->
+                    <div class="grid grid-cols-2 gap-3 border-l border-white/5 pl-4">
+                        <!-- Scommesse Detail -->
+                        <div class="flex flex-col gap-1 min-h-[44px] justify-center">
+                            <?php if (!empty($m['my_bets'])): ?>
+                                <?php foreach ($m['my_bets'] as $bet): ?>
+                                    <div class="flex items-center justify-between gap-2 px-2 py-1 rounded-lg <?php echo $bet['type'] === 'real' ? 'bg-accent/10 border-accent/20' : 'bg-indigo-500/10 border-indigo-500/20'; ?> border">
+                                        <div class="flex flex-col leading-none">
+                                            <span class="text-[7px] font-black uppercase text-white/70 truncate max-w-[80px]"><?php echo $bet['runner']; ?></span>
+                                            <span class="text-[8px] font-black text-white">@<?php echo number_format($bet['odds'], 2); ?></span>
+                                        </div>
+                                        <div class="text-right leading-none">
+                                            <div class="text-[9px] font-black <?php echo $bet['pl'] >= 0 ? 'text-success' : 'text-danger'; ?>">
+                                                <?php echo ($bet['pl'] >= 0 ? '+' : '') . number_format($bet['pl'], 2); ?>€
+                                            </div>
+                                            <span class="text-[6px] font-bold text-white/30 uppercase"><?php echo $bet['type']; ?></span>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <span class="text-[8px] font-black text-slate-600 uppercase italic tracking-tighter">Nessuna scommessa</span>
+                            <?php endif; ?>
+                        </div>
 
-                        <button hx-get="/api/gianik/match-trend?marketId=<?php echo $marketId; ?>"
-                            hx-target="#global-modal-container"
-                            class="px-3 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border border-indigo-500/10">
-                            <i data-lucide="line-chart" class="w-3.5 h-3.5"></i> ANDAMENTO
-                        </button>
+                        <!-- Andamento Detail -->
+                        <div class="flex flex-col justify-center border-l border-white/5 pl-3 min-h-[44px]">
+                            <?php if (isset($m['intensity'])): ?>
+                                <div class="flex flex-col gap-1">
+                                    <div class="flex items-center gap-1.5">
+                                        <i data-lucide="zap" class="w-3 h-3 <?php echo $m['intensity']['color']; ?>"></i>
+                                        <span class="text-[9px] font-black <?php echo $m['intensity']['color']; ?> uppercase tracking-widest"><?php echo $m['intensity']['label']; ?></span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[7px] font-bold text-slate-500 uppercase">Index</span>
+                                        <span class="text-[8px] font-black text-white"><?php echo $m['intensity']['val']; ?>x</span>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <div class="flex-1 bg-white/5 rounded px-1 py-0.5 flex justify-between items-center">
+                                            <span class="text-[6px] font-bold text-slate-500">H</span>
+                                            <span class="text-[7px] font-black text-white"><?php echo $m['intensity']['home']; ?></span>
+                                        </div>
+                                        <div class="flex-1 bg-white/5 rounded px-1 py-0.5 flex justify-between items-center">
+                                            <span class="text-[6px] font-bold text-slate-500">A</span>
+                                            <span class="text-[7px] font-black text-white"><?php echo $m['intensity']['away']; ?></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <span class="text-[8px] font-black text-slate-600 uppercase italic tracking-tighter">Dati non disp.</span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
 

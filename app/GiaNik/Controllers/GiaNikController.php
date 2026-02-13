@@ -142,10 +142,10 @@ class GiaNikController
                 $dbFixturesMap[$f['id']] = $f;
             }
 
-            // --- P&L Tracking for Real Bets ---
-            $stmtBets = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending' AND type = 'real'");
+            // --- Active Bets Tracking (Real & Virtual) ---
+            $stmtBets = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending'");
             $stmtBets->execute();
-            $activeRealBets = $stmtBets->fetchAll(PDO::FETCH_ASSOC);
+            $allActiveBets = $stmtBets->fetchAll(PDO::FETCH_ASSOC);
 
             // --- Score Tracking for Highlighting ---
             if (session_status() === PHP_SESSION_NONE)
@@ -374,15 +374,17 @@ class GiaNikController
             foreach ($groupedMatches as $sportMatches) {
                 foreach ($sportMatches as $m) {
                     $m['has_active_real_bet'] = false;
+                    $m['has_active_virtual_bet'] = false;
                     $m['current_pl'] = 0;
                     $m['just_updated'] = false;
+                    $m['my_bets'] = [];
 
-                    $m['has_active_virtual_bet'] = false;
-
-                    // Calculate P&L for real bets
-                    foreach ($activeRealBets as $bet) {
+                    // Track active bets for this match
+                    foreach ($allActiveBets as $bet) {
                         if ($bet['market_id'] === $m['marketId']) {
-                            $m['has_active_real_bet'] = true;
+                            if ($bet['type'] === 'real') $m['has_active_real_bet'] = true;
+                            if ($bet['type'] === 'virtual') $m['has_active_virtual_bet'] = true;
+
                             // Find current Back odds for this runner
                             $currentOdds = 0;
                             foreach ($m['runners'] as $r) {
@@ -391,18 +393,25 @@ class GiaNikController
                                     break;
                                 }
                             }
+
+                            $pl = 0;
                             if ($currentOdds > 1.0) {
                                 // Estimated Cashout: (Placed Odds / Current Odds) * Stake - Stake
-                                $m['current_pl'] += (($bet['odds'] / $currentOdds) * $bet['stake']) - $bet['stake'];
+                                $pl = (($bet['odds'] / $currentOdds) * $bet['stake']) - $bet['stake'];
+                            }
+
+                            $m['my_bets'][] = [
+                                'type' => $bet['type'],
+                                'runner' => $bet['runner_name'],
+                                'odds' => $bet['odds'],
+                                'stake' => $bet['stake'],
+                                'pl' => $pl
+                            ];
+
+                            if ($bet['type'] === 'real') {
+                                $m['current_pl'] += $pl;
                             }
                         }
-                    }
-
-                    // Check for virtual bets
-                    $stmtV = $this->db->prepare("SELECT id FROM bets WHERE market_id = ? AND type = 'virtual' AND status = 'pending'");
-                    $stmtV->execute([$m['marketId']]);
-                    if ($stmtV->fetch()) {
-                        $m['has_active_virtual_bet'] = true;
                     }
 
                     // Detect Score Changes
@@ -494,127 +503,6 @@ class GiaNikController
         }
     }
 
-    public function matchBets($marketId)
-    {
-        try {
-            $resCat = $this->bf->request('listMarketCatalogue', [
-                'filter' => ['marketIds' => [$marketId]],
-                'maxResults' => 1,
-                'marketProjection' => ['EVENT', 'COMPETITION', 'EVENT_TYPE', 'RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION']
-            ]);
-            $initialMc = $resCat['result'][0] ?? null;
-
-            if (!$initialMc) {
-                echo '<div class="p-10 text-center text-danger font-black">Evento non trovato.</div>';
-                return;
-            }
-
-            $eventId = $initialMc['event']['id'];
-            $eventName = $initialMc['event']['name'];
-            $competitionName = $initialMc['competition']['name'] ?? '';
-            $sportName = $initialMc['eventType']['name'] ?? '';
-
-            $marketTypes = [
-                'MATCH_ODDS',
-                'OVER_UNDER_05',
-                'OVER_UNDER_15',
-                'OVER_UNDER_25',
-                'OVER_UNDER_35',
-                'OVER_UNDER_45',
-                'BOTH_TEAMS_TO_SCORE',
-                'DOUBLE_CHANCE',
-                'DRAW_NO_BET',
-                'HALF_TIME'
-            ];
-
-            $allMcRes = $this->bf->getMarketCatalogues([$eventId], 20, $marketTypes);
-            $catalogues = $allMcRes['result'] ?? [$initialMc];
-
-            $marketIds = array_map(fn($mc) => $mc['marketId'], $catalogues);
-            $booksRes = $this->bf->getMarketBooks($marketIds);
-            $booksMap = [];
-            foreach ($booksRes['result'] ?? [] as $b)
-                $booksMap[$b['marketId']] = $b;
-
-            $event = [
-                'event' => $eventName,
-                'competition' => $competitionName,
-                'sport' => $sportName,
-                'markets' => []
-            ];
-
-            foreach ($catalogues as $mc) {
-                $mId = $mc['marketId'];
-                if (!isset($booksMap[$mId]))
-                    continue;
-                $book = $booksMap[$mId];
-                if (($book['status'] ?? '') !== 'OPEN')
-                    continue;
-
-                $m = [
-                    'marketId' => $mId,
-                    'marketName' => $mc['marketName'] ?? 'Unknown',
-                    'totalMatched' => (float) ($book['totalMatched'] ?? 0),
-                    'runners' => []
-                ];
-                foreach ($book['runners'] as $r) {
-                    $mR = array_filter($mc['runners'], fn($rm) => $rm['selectionId'] === $r['selectionId']);
-                    $name = reset($mR)['runnerName'] ?? 'Unknown';
-
-                    $backPrice = $r['ex']['availableToBack'][0]['price'] ?? 0;
-                    if ($backPrice == 0 && isset($r['lastPriceTraded']))
-                        $backPrice = $r['lastPriceTraded'];
-
-                    $m['runners'][] = [
-                        'selectionId' => $r['selectionId'],
-                        'name' => $name,
-                        'back' => (float) $backPrice
-                    ];
-                }
-                $event['markets'][] = $m;
-            }
-
-            require __DIR__ . '/../Views/partials/modals/match_bets.php';
-        } catch (\Throwable $e) {
-            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
-        }
-    }
-
-    public function matchTrend($marketId)
-    {
-        try {
-            $resCat = $this->bf->request('listMarketCatalogue', [
-                'filter' => ['marketIds' => [$marketId]],
-                'maxResults' => 1,
-                'marketProjection' => ['EVENT', 'EVENT_TYPE', 'MARKET_DESCRIPTION']
-            ]);
-            $mc = $resCat['result'][0] ?? null;
-
-            if (!$mc) {
-                echo '<div class="p-10 text-center text-danger font-black">Evento non trovato.</div>';
-                return;
-            }
-
-            $booksRes = $this->bf->getMarketBooks([$marketId]);
-            $book = $booksRes['result'][0] ?? null;
-
-            $apiData = $this->enrichWithApiData($mc['event']['name'], $mc['eventType']['name'], null, '', $book);
-
-            if (!$apiData || empty($apiData['fixture'])) {
-                echo '<div class="p-10 text-center text-slate-500 font-black uppercase italic">Dati andamento non disponibili per questo match.</div>';
-                return;
-            }
-
-            $fixture = $apiData['fixture'];
-            $statistics = $apiData['statistics'] ?? [];
-            $events = $apiData['events'] ?? [];
-            $momentum = $apiData['momentum'] ?? '';
-
-            require __DIR__ . '/../Views/partials/modals/match_trend.php';
-        } catch (\Throwable $e) {
-            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
-        }
-    }
 
     public function analyze($marketId)
     {
@@ -1613,17 +1501,6 @@ class GiaNikController
     {
         if (!$fixtureId) return null;
 
-        // Recupera l'ultimo snapshot per estrarre la stringa di momentum se salvata o ricalcolarla
-        // Per semplicità, cerchiamo se c'è un record recente negli snapshot
-        $stmt = $this->db->prepare("SELECT stats_json FROM match_snapshots WHERE fixture_id = ? ORDER BY minute DESC LIMIT 1");
-        $stmt->execute([$fixtureId]);
-        $row = $stmt->fetch();
-        if (!$row) return null;
-
-        // Se vogliamo mostrarlo sempre, dovremmo ricalcolare l'index.
-        // Ma handleMomentum() restituisce una stringa complessa.
-        // Facciamo una versione "light" per la UI.
-
         $stmt2 = $this->db->prepare("SELECT * FROM match_snapshots WHERE fixture_id = ? ORDER BY minute DESC LIMIT 2");
         $stmt2->execute([$fixtureId]);
         $rows = $stmt2->fetchAll();
@@ -1652,9 +1529,24 @@ class GiaNikController
 
         $maxInt = max($homeIntensity, $awayIntensity);
 
-        if ($maxInt > 1.5) return ['label' => 'HIGH', 'val' => round($maxInt, 1), 'color' => 'text-accent'];
-        if ($maxInt > 1.1) return ['label' => 'MID', 'val' => round($maxInt, 1), 'color' => 'text-indigo-400'];
-        return ['label' => 'STABLE', 'val' => round($maxInt, 1), 'color' => 'text-slate-500'];
+        $data = [
+            'val' => round($maxInt, 1),
+            'home' => round($homeIntensity, 1),
+            'away' => round($awayIntensity, 1)
+        ];
+
+        if ($maxInt > 1.5) {
+            $data['label'] = 'HIGH';
+            $data['color'] = 'text-accent';
+        } elseif ($maxInt > 1.1) {
+            $data['label'] = 'MID';
+            $data['color'] = 'text-indigo-400';
+        } else {
+            $data['label'] = 'STABLE';
+            $data['color'] = 'text-slate-500';
+        }
+
+        return $data;
     }
 
     private function summarizeDeepContext($context)
