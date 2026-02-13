@@ -185,7 +185,7 @@
                                 $winRate = ($league['total_bets'] > 0) ? ($league['wins'] / $league['total_bets']) * 100 : 0;
                             ?>
                             <tr class="border-b border-slate-700 hover:bg-slate-800/50 transition">
-                                <td class="px-4 py-3 font-medium text-white"><?php echo $league['context_id']; ?></td>
+                                <td class="px-4 py-3 font-medium text-white"><?php echo $league['display_name'] ?? $league['context_id']; ?></td>
                                 <td class="px-4 py-3 text-center"><?php echo $league['total_bets']; ?></td>
                                 <td class="px-4 py-3 text-center">
                                     <div class="w-16 bg-slate-700 h-1.5 rounded-full inline-block align-middle mr-2">
@@ -193,8 +193,12 @@
                                     </div>
                                     <span class="text-[10px] text-slate-500"><?php echo round($winRate, 0); ?>%</span>
                                 </td>
-                                <td class="px-4 py-3 text-right text-green-400">+<?php echo number_format($league['profit_loss'], 2); ?>€</td>
-                                <td class="px-4 py-3 text-right font-bold text-green-300">+<?php echo number_format($league['roi'], 1); ?>%</td>
+                                <td class="px-4 py-3 text-right <?php echo $league['profit_loss'] >= 0 ? 'text-green-400' : 'text-red-400'; ?>">
+                                    <?php echo ($league['profit_loss'] > 0 ? '+' : '') . number_format($league['profit_loss'], 2); ?>€
+                                </td>
+                                <td class="px-4 py-3 text-right font-bold <?php echo $league['roi'] >= 0 ? 'text-green-300' : 'text-red-300'; ?>">
+                                    <?php echo ($league['roi'] > 0 ? '+' : '') . number_format($league['roi'], 1); ?>%
+                                </td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
@@ -219,11 +223,13 @@
 
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-bold truncate text-white" title="<?php echo $team['context_id']; ?>"><?php echo $team['context_id']; ?></p>
-                            <p class="text-xs text-green-400">+<?php echo number_format($team['profit_loss'], 2); ?>€</p>
+                            <p class="text-xs <?php echo $team['profit_loss'] >= 0 ? 'text-green-400' : 'text-red-400'; ?>">
+                                <?php echo ($team['profit_loss'] > 0 ? '+' : '') . number_format($team['profit_loss'], 2); ?>€
+                            </p>
                         </div>
                         <div class="text-right">
-                            <span class="text-xs font-bold bg-blue-900 text-blue-300 px-1.5 py-0.5 rounded">
-                                <?php echo number_format($team['roi'], 0); ?>%
+                            <span class="text-xs font-bold <?php echo $team['roi'] >= 0 ? 'bg-blue-900 text-blue-300' : 'bg-red-900 text-red-300'; ?> px-1.5 py-0.5 rounded">
+                                <?php echo ($team['roi'] > 0 ? '+' : '') . number_format($team['roi'], 0); ?>%
                             </span>
                         </div>
                     </div>

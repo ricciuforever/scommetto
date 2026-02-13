@@ -2178,7 +2178,7 @@ class GiaNikController
                             'marketStatus' => ['OPEN', 'CLOSED', 'INACTIVE', 'COMPLETED']
                         ],
                         'maxResults' => 1000,
-                        'marketProjection' => ['EVENT', 'MARKET_DESCRIPTION', 'RUNNER_DESCRIPTION']
+                        'marketProjection' => ['EVENT', 'COMPETITION', 'MARKET_DESCRIPTION', 'RUNNER_DESCRIPTION']
                     ]);
                     foreach ($catRes['result'] ?? [] as $cat) {
                         $runners = [];
@@ -2188,6 +2188,7 @@ class GiaNikController
                         $marketInfoMap[$cat['marketId']] = [
                             'event' => $cat['event']['name'] ?? null,
                             'market' => $cat['marketName'] ?? null,
+                            'competition' => $cat['competition']['name'] ?? null,
                             'runners' => $runners
                         ];
                     }
@@ -2202,6 +2203,7 @@ class GiaNikController
                 $eventName = $info['event'] ?? ($o['eventName'] ?? ($eventNameMap[$o['eventId'] ?? ''] ?? 'Unknown Event'));
                 $marketName = $info['market'] ?? ($o['marketName'] ?? 'Unknown Market');
                 $runnerName = $info['runners'][$o['selectionId']] ?? ($o['runnerName'] ?? 'Selection ' . $o['selectionId']);
+                $leagueName = $info['competition'] ?? null;
 
                 $placedDate = isset($o['placedDate']) ? date('Y-m-d H:i:s', strtotime($o['placedDate'])) : date('Y-m-d H:i:s');
 
@@ -2212,8 +2214,8 @@ class GiaNikController
 
                 if ($dbId) {
                     // Update: aggiorna sempre per avere l'ultimo stato (profitto, status)
-                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, created_at = ? WHERE id = ?");
-                    $stmtUpdate->execute([$o['status'], $o['profit'], $o['marketId'], $marketName, $eventName, $runnerName, $placedDate, $dbId]);
+                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, league = ?, created_at = ? WHERE id = ?");
+                    $stmtUpdate->execute([$o['status'], $o['profit'], $o['marketId'], $marketName, $eventName, $runnerName, $leagueName, $placedDate, $dbId]);
 
                     // Apprendimento automatico se la scommessa è conclusa e non ancora appresa
                     if (in_array($o['status'], ['won', 'lost'])) {
@@ -2227,8 +2229,8 @@ class GiaNikController
                 } else {
                     // Import Automatico (se non esisteva)
                     $stmtInsert = $this->db->prepare("INSERT INTO bets 
-                        (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, status, type, profit, created_at) 
-                        VALUES (?, ?, ?, ?, 'Soccer', ?, ?, ?, ?, ?, 'real', ?, ?)");
+                        (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, status, type, profit, league, created_at)
+                        VALUES (?, ?, ?, ?, 'Soccer', ?, ?, ?, ?, ?, 'real', ?, ?, ?)");
                     $stmtInsert->execute([
                         $betId,
                         $o['marketId'],
@@ -2240,6 +2242,7 @@ class GiaNikController
                         $o['stake'],
                         $o['status'],
                         $o['profit'],
+                        $leagueName,
                         $placedDate
                     ]);
 

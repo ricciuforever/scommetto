@@ -82,8 +82,8 @@ while (($data = fgetcsv($handle)) !== false) {
     $dateSettled = date('Y-m-d H:i:s', strtotime(str_replace('-', ' ', $chiusa)));
 
     $stmtInsert = $db->prepare("INSERT INTO bets
-        (betfair_id, event_name, runner_name, market_name, odds, stake, profit, status, type, sport, created_at, settled_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'real', 'Soccer', ?, ?)");
+        (betfair_id, event_name, runner_name, market_name, odds, stake, profit, status, type, sport, league, created_at, settled_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'real', 'Soccer', ?, ?, ?)");
 
     $stmtInsert->execute([
         $betfairId,
@@ -94,6 +94,7 @@ while (($data = fgetcsv($handle)) !== false) {
         $puntata,
         $profitto,
         $status,
+        'Imported CSV',
         $dateCreated,
         $dateSettled
     ]);

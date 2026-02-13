@@ -67,18 +67,18 @@ class BrainController
             ORDER BY roi ASC
         ")->fetchAll(PDO::FETCH_ASSOC);
 
-        // 3. Top Leghe (ROI > 0, ordinate per profitto)
+        // 3. Top Leghe (Ordinate per profitto)
         $topLeagues = $this->db->query("
             SELECT * FROM performance_metrics
-            WHERE context_type = 'LEAGUE' AND profit_loss > 0
+            WHERE context_type = 'LEAGUE'
             ORDER BY profit_loss DESC LIMIT 10
         ")->fetchAll(PDO::FETCH_ASSOC);
 
-        // 4. Top Squadre (ROI > 0, ordinate per profitto)
+        // 4. Top Squadre (Ordinate per profitto)
         $topTeams = $this->db->query("
             SELECT * FROM performance_metrics
-            WHERE context_type = 'TEAM' AND profit_loss > 0
-            ORDER BY profit_loss DESC LIMIT 10
+            WHERE context_type = 'TEAM'
+            ORDER BY profit_loss DESC LIMIT 12
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         // 5. Metriche per Odds Bucket
@@ -91,6 +91,15 @@ class BrainController
                 WHEN 'RISK' THEN 3
                 ELSE 4 END
         ")->fetchAll(PDO::FETCH_ASSOC);
+
+        // Arricchimento Nomi (per Leghe)
+        foreach ($topLeagues as &$league) {
+            if (is_numeric($league['context_id'])) {
+                $league['display_name'] = $this->getLeagueName($league['context_id']);
+            } else {
+                $league['display_name'] = $league['context_id'];
+            }
+        }
 
         // Arricchimento Loghi (solo per Teams)
         foreach ($topTeams as &$team) {
@@ -115,6 +124,10 @@ class BrainController
     public function rebuild()
     {
         set_time_limit(300);
+
+        // 0. Recupero Dati mancanti (Retro-compatibilità)
+        $this->repairMissingLeagues();
+
         // 1. Svuota performance_metrics
         $this->db->exec("DELETE FROM performance_metrics");
         // 2. Resetta is_learned su tutte le scommesse
@@ -137,6 +150,68 @@ class BrainController
             exit;
         } else {
             echo "✅ Brain rebuilt with $count bets.\n";
+        }
+    }
+
+    private function repairMissingLeagues()
+    {
+        if (!$this->coreDb) return;
+
+        // Recupera tutte le scommesse reali con league_id mancante o league 'UNKNOWN' / 'IMPORTED CSV'
+        $stmt = $this->db->query("SELECT id, betfair_id, event_name, market_name, league FROM bets WHERE (league_id IS NULL OR league IN ('UNKNOWN', 'IMPORTED CSV')) AND betfair_id IS NOT NULL");
+        $bets = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($bets as $bet) {
+            $lid = null;
+            $lname = null;
+
+            // 1. Tenta estrazione da Market Name (se sporco)
+            if (!empty($bet['market_name'])) {
+                if (preg_match('/^([A-Z0-9 ]+?)(?:UNDER|OVER|ESITO|BTTS|MATCH|1X2|DRAW)/i', $bet['market_name'], $m)) {
+                    $lname = trim($m[1]);
+                }
+            }
+
+            // 2. Tenta Match Name in Fixtures Core
+            try {
+                $teams = preg_split('/\s+(v|vs|-)\s+/i', $bet['event_name']);
+                if (count($teams) >= 1) {
+                    $home = trim($teams[0]);
+                    $away = $teams[1] ?? null;
+
+                    $stmtLeague = $this->coreDb->prepare("
+                        SELECT f.league_id FROM fixtures f
+                        WHERE (f.team_home_name LIKE ? OR f.team_away_name LIKE ? OR f.team_home_name LIKE ? OR f.team_away_name LIKE ?)
+                        ORDER BY f.date DESC LIMIT 1
+                    ");
+                    $searchHome = '%' . $home . '%';
+                    $searchAway = $away ? '%' . $away . '%' : $searchHome;
+
+                    $stmtLeague->execute([$searchHome, $searchHome, $searchAway, $searchAway]);
+                    $lid = $stmtLeague->fetchColumn();
+
+                    if ($lid) {
+                        $lname = $this->getLeagueName($lid);
+                    }
+                }
+            } catch (\Exception $e) {}
+
+            if ($lid || $lname) {
+                $this->db->prepare("UPDATE bets SET league_id = ?, league = ? WHERE id = ?")
+                         ->execute([$lid, $lname, $bet['id']]);
+            }
+        }
+    }
+
+    private function getLeagueName($leagueId)
+    {
+        if (!$this->coreDb) return "Lega $leagueId";
+        try {
+            $stmt = $this->coreDb->prepare("SELECT name FROM leagues WHERE id = ? LIMIT 1");
+            $stmt->execute([$leagueId]);
+            return $stmt->fetchColumn() ?: "Lega $leagueId";
+        } catch (\Exception $e) {
+            return "Lega $leagueId";
         }
     }
 
