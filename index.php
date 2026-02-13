@@ -116,6 +116,22 @@ try {
         }
     }
 
+    if ($path === '/api/gianik/match-bets') {
+        $mId = $_GET['marketId'] ?? null;
+        if ($mId) {
+            (new \App\GiaNik\Controllers\GiaNikController())->matchBets($mId);
+            return;
+        }
+    }
+
+    if ($path === '/api/gianik/match-trend') {
+        $mId = $_GET['marketId'] ?? null;
+        if ($mId) {
+            (new \App\GiaNik\Controllers\GiaNikController())->matchTrend($mId);
+            return;
+        }
+    }
+
     if (preg_match('#^/api/gianik/analyze/([\d\.]+)$#i', $path, $matches)) {
         (new \App\GiaNik\Controllers\GiaNikController())->analyze($matches[1]);
         return;

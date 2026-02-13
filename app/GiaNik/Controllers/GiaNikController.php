@@ -494,6 +494,128 @@ class GiaNikController
         }
     }
 
+    public function matchBets($marketId)
+    {
+        try {
+            $resCat = $this->bf->request('listMarketCatalogue', [
+                'filter' => ['marketIds' => [$marketId]],
+                'maxResults' => 1,
+                'marketProjection' => ['EVENT', 'COMPETITION', 'EVENT_TYPE', 'RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION']
+            ]);
+            $initialMc = $resCat['result'][0] ?? null;
+
+            if (!$initialMc) {
+                echo '<div class="p-10 text-center text-danger font-black">Evento non trovato.</div>';
+                return;
+            }
+
+            $eventId = $initialMc['event']['id'];
+            $eventName = $initialMc['event']['name'];
+            $competitionName = $initialMc['competition']['name'] ?? '';
+            $sportName = $initialMc['eventType']['name'] ?? '';
+
+            $marketTypes = [
+                'MATCH_ODDS',
+                'OVER_UNDER_05',
+                'OVER_UNDER_15',
+                'OVER_UNDER_25',
+                'OVER_UNDER_35',
+                'OVER_UNDER_45',
+                'BOTH_TEAMS_TO_SCORE',
+                'DOUBLE_CHANCE',
+                'DRAW_NO_BET',
+                'HALF_TIME'
+            ];
+
+            $allMcRes = $this->bf->getMarketCatalogues([$eventId], 20, $marketTypes);
+            $catalogues = $allMcRes['result'] ?? [$initialMc];
+
+            $marketIds = array_map(fn($mc) => $mc['marketId'], $catalogues);
+            $booksRes = $this->bf->getMarketBooks($marketIds);
+            $booksMap = [];
+            foreach ($booksRes['result'] ?? [] as $b)
+                $booksMap[$b['marketId']] = $b;
+
+            $event = [
+                'event' => $eventName,
+                'competition' => $competitionName,
+                'sport' => $sportName,
+                'markets' => []
+            ];
+
+            foreach ($catalogues as $mc) {
+                $mId = $mc['marketId'];
+                if (!isset($booksMap[$mId]))
+                    continue;
+                $book = $booksMap[$mId];
+                if (($book['status'] ?? '') !== 'OPEN')
+                    continue;
+
+                $m = [
+                    'marketId' => $mId,
+                    'marketName' => $mc['marketName'] ?? 'Unknown',
+                    'totalMatched' => (float) ($book['totalMatched'] ?? 0),
+                    'runners' => []
+                ];
+                foreach ($book['runners'] as $r) {
+                    $mR = array_filter($mc['runners'], fn($rm) => $rm['selectionId'] === $r['selectionId']);
+                    $name = reset($mR)['runnerName'] ?? 'Unknown';
+
+                    $backPrice = $r['ex']['availableToBack'][0]['price'] ?? 0;
+                    if ($backPrice == 0 && isset($r['lastPriceTraded']))
+                        $backPrice = $r['lastPriceTraded'];
+
+                    $m['runners'][] = [
+                        'selectionId' => $r['selectionId'],
+                        'name' => $name,
+                        'back' => (float) $backPrice
+                    ];
+                }
+                $event['markets'][] = $m;
+            }
+
+            require __DIR__ . '/../Views/partials/modals/match_bets.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
+    public function matchTrend($marketId)
+    {
+        try {
+            $resCat = $this->bf->request('listMarketCatalogue', [
+                'filter' => ['marketIds' => [$marketId]],
+                'maxResults' => 1,
+                'marketProjection' => ['EVENT', 'EVENT_TYPE', 'MARKET_DESCRIPTION']
+            ]);
+            $mc = $resCat['result'][0] ?? null;
+
+            if (!$mc) {
+                echo '<div class="p-10 text-center text-danger font-black">Evento non trovato.</div>';
+                return;
+            }
+
+            $booksRes = $this->bf->getMarketBooks([$marketId]);
+            $book = $booksRes['result'][0] ?? null;
+
+            $apiData = $this->enrichWithApiData($mc['event']['name'], $mc['eventType']['name'], null, '', $book);
+
+            if (!$apiData || empty($apiData['fixture'])) {
+                echo '<div class="p-10 text-center text-slate-500 font-black uppercase italic">Dati andamento non disponibili per questo match.</div>';
+                return;
+            }
+
+            $fixture = $apiData['fixture'];
+            $statistics = $apiData['statistics'] ?? [];
+            $events = $apiData['events'] ?? [];
+            $momentum = $apiData['momentum'] ?? '';
+
+            require __DIR__ . '/../Views/partials/modals/match_trend.php';
+        } catch (\Throwable $e) {
+            echo '<div class="text-danger p-4">Errore: ' . $e->getMessage() . '</div>';
+        }
+    }
+
     public function analyze($marketId)
     {
         set_time_limit(60); // Aumenta timeout per l'AI
