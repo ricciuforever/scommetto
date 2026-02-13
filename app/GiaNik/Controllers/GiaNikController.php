@@ -1717,7 +1717,10 @@ class GiaNikController
                 $sql .= " WHERE " . implode(" AND ", $where);
             }
 
-            $sql .= " GROUP BY CASE WHEN betfair_id LIKE '1:%' THEN SUBSTR(betfair_id, 3) ELSE COALESCE(betfair_id, id) END";
+            $sql .= " GROUP BY CASE
+                WHEN betfair_id IS NOT NULL THEN (CASE WHEN betfair_id LIKE '1:%' THEN SUBSTR(betfair_id, 3) ELSE betfair_id END)
+                ELSE (market_id || selection_id || CAST(stake AS TEXT) || status)
+            END";
             $sql .= " ORDER BY created_at DESC LIMIT 20";
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
@@ -2299,38 +2302,40 @@ class GiaNikController
                 }
             }
 
-            // 5. MIRRORING TOTALE: Rimuovi record locali REAL non presenti su Betfair
-            // Pulizia Preventiva Duplicati locali per BetID (salvaguardia contro record orfani duplicati, flessibile su prefisso 1:)
-            $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NOT NULL AND id NOT IN (
-                SELECT MIN(id) FROM bets GROUP BY CASE WHEN betfair_id LIKE '1:%' THEN SUBSTR(betfair_id, 3) ELSE betfair_id END
+            // 5. MIRRORING & DEDUPLICAZIONE
+            // Pulizia Preventiva Duplicati locali per BetID (flessibile su prefisso 1:)
+            $this->db->exec("DELETE FROM bets WHERE type = 'real' AND id NOT IN (
+                SELECT MIN(id) FROM bets
+                WHERE type = 'real'
+                GROUP BY CASE
+                    WHEN betfair_id IS NOT NULL THEN (CASE WHEN betfair_id LIKE '1:%' THEN SUBSTR(betfair_id, 3) ELSE betfair_id END)
+                    ELSE (market_id || selection_id || CAST(stake AS TEXT))
+                END
             )");
 
-            $bfIdsList = [];
-            foreach (array_keys($allBfOrders) as $id) {
-                $bfIdsList[] = $id;
-                $bfIdsList[] = (strpos($id, '1:') === 0) ? substr($id, 2) : '1:' . $id;
-            }
-            $bfIdsList = array_values(array_unique($bfIdsList));
-
-            // Verifica se abbiamo avuto risposte valide (anche se vuote) da Betfair per procedere alla pulizia
-            $isValidResponse = isset($clearedRes['clearedOrders']) || isset($currentRes['currentOrders']);
-
-            if ($isValidResponse) {
-                // Mirroring selettivo: non cancelliamo mai scommesse 'settled' (Source of Truth storica)
-                $sqlDelete = "DELETE FROM bets WHERE type = 'real' AND status = 'pending' AND created_at < datetime('now', '-2 minutes')";
-                if (!empty($bfIdsList)) {
-                    $placeholders = implode(',', array_fill(0, count($bfIdsList), '?'));
-                    $sqlDelete .= " AND betfair_id NOT IN ($placeholders)";
-                    $stmtDelete = $this->db->prepare($sqlDelete);
-                    $stmtDelete->execute($bfIdsList);
-                } else {
-                    // Se Betfair conferma che non ci sono ordini pendenti, svuotiamo solo i pendenti locali
-                    $this->db->exec($sqlDelete);
+            // Mirroring selettivo: cancelliamo i pendenti locali solo se abbiamo una risposta valida da listCurrentOrders
+            if (isset($currentRes['currentOrders'])) {
+                $currentBfIds = [];
+                foreach ($currentOrders as $o) {
+                    $currentBfIds[] = $o['betId'];
+                    $currentBfIds[] = (strpos($o['betId'], '1:') === 0) ? substr($o['betId'], 2) : '1:' . $o['betId'];
                 }
+                $currentBfIds = array_values(array_unique($currentBfIds));
 
-                // Pulizia record manuali senza ID Betfair solo se ancora pendenti e vecchi
-                $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND status = 'pending' AND created_at < datetime('now', '-2 minutes')");
+                $sqlDelete = "DELETE FROM bets WHERE type = 'real' AND status = 'pending' AND created_at < datetime('now', '-2 minutes')";
+                if (!empty($currentBfIds)) {
+                    $placeholders = implode(',', array_fill(0, count($currentBfIds), '?'));
+                    $sqlDelete .= " AND betfair_id NOT IN ($placeholders) AND betfair_id IS NOT NULL";
+                    $stmtDelete = $this->db->prepare($sqlDelete);
+                    $stmtDelete->execute($currentBfIds);
+                } else {
+                    // Se Betfair conferma che non ci sono ordini pendenti, svuotiamo i pendenti locali con ID
+                    $this->db->exec($sqlDelete . " AND betfair_id IS NOT NULL");
+                }
             }
+
+            // Pulizia record manuali orfani senza ID Betfair (solo se vecchi)
+            $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NULL AND status = 'pending' AND created_at < datetime('now', '-5 minutes')");
 
             // 6. Sincronizza Aggiustamento di Sistema (per allineamento Brain)
             $fundsData = $this->bf->getFunds();
