@@ -54,15 +54,17 @@ foreach ($bets as $bet) {
 
 // 2. Salva nel cervello (performance_metrics)
 $stmtInsert = $db->prepare("INSERT OR REPLACE INTO performance_metrics
-    (metric_key, total_bets, wins, losses, total_stake, net_profit, roi, last_updated)
-    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
+    (context_type, context_id, total_bets, wins, losses, total_stake, total_profit, roi, last_updated)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
 
 foreach ($metrics as $key => $data) {
+    list($type, $id) = explode('_', $key, 2);
     $losses = $data['bets'] - $data['wins'];
     $roi = ($data['stake'] > 0) ? ($data['profit'] / $data['stake']) * 100 : 0;
 
     $stmtInsert->execute([
-        $key,
+        $type,
+        $id,
         $data['bets'],
         $data['wins'],
         $losses,
@@ -70,7 +72,7 @@ foreach ($metrics as $key => $data) {
         $data['profit'],
         round($roi, 2)
     ]);
-    echo "  -> Aggiornato $key: Bets: {$data['bets']} | ROI: " . round($roi, 2) . "%\n";
+    echo "  -> Aggiornato $type|$id: Bets: {$data['bets']} | ROI: " . round($roi, 2) . "%\n";
 }
 
 echo "✅ Apprendimento locale completato.\n";

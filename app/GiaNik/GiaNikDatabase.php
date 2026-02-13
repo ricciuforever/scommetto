@@ -47,6 +47,13 @@ class GiaNikDatabase
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
+        // Check for old performance_metrics schema
+        $stmtCheck = $this->connection->query("PRAGMA table_info(performance_metrics)");
+        $checkCols = $stmtCheck->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (in_array('metric_key', $checkCols)) {
+            $this->connection->exec("DROP TABLE performance_metrics");
+        }
+
         $this->connection->exec("CREATE TABLE IF NOT EXISTS performance_metrics (
             metric_key TEXT PRIMARY KEY,
             total_bets INTEGER DEFAULT 0,
@@ -110,23 +117,6 @@ class GiaNikDatabase
             }
         }
 
-        // Repair performance_metrics
-        $requiredMetricsColumns = [
-            'losses' => 'INTEGER DEFAULT 0',
-            'total_stake' => 'REAL DEFAULT 0',
-            'roi' => 'REAL DEFAULT 0',
-            'last_updated' => 'DATETIME DEFAULT CURRENT_TIMESTAMP'
-        ];
-        $stmt = $this->connection->query("PRAGMA table_info(performance_metrics)");
-        $existingMetricsColumns = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
-        foreach ($requiredMetricsColumns as $col => $definition) {
-            if (!in_array($col, $existingMetricsColumns)) {
-                try {
-                    $this->connection->exec("ALTER TABLE performance_metrics ADD COLUMN $col $definition");
-                } catch (\Exception $e) {
-                }
-            }
-        }
 
         // Repair match_snapshots
         $requiredSnapshotColumns = [
