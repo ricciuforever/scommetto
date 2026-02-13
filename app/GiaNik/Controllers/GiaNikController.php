@@ -382,6 +382,11 @@ class GiaNikController
                     // Track active bets for this match
                     foreach ($allActiveBets as $bet) {
                         if ($bet['market_id'] === $m['marketId']) {
+                            // Filter for matched bets only if real
+                            if ($bet['type'] === 'real' && ($bet['size_matched'] ?? 0) <= 0) {
+                                continue;
+                            }
+
                             if ($bet['type'] === 'real') $m['has_active_real_bet'] = true;
                             if ($bet['type'] === 'virtual') $m['has_active_virtual_bet'] = true;
 
@@ -395,16 +400,17 @@ class GiaNikController
                             }
 
                             $pl = 0;
-                            if ($currentOdds > 1.0) {
+                            $effectiveStake = ($bet['type'] === 'real') ? ($bet['size_matched'] ?? 0) : $bet['stake'];
+                            if ($currentOdds > 1.0 && $effectiveStake > 0) {
                                 // Estimated Cashout: (Placed Odds / Current Odds) * Stake - Stake
-                                $pl = (($bet['odds'] / $currentOdds) * $bet['stake']) - $bet['stake'];
+                                $pl = (($bet['odds'] / $currentOdds) * $effectiveStake) - $effectiveStake;
                             }
 
                             $m['my_bets'][] = [
                                 'type' => $bet['type'],
                                 'runner' => $bet['runner_name'],
                                 'odds' => $bet['odds'],
-                                'stake' => $bet['stake'],
+                                'stake' => $bet['type'] === 'real' ? $bet['size_matched'] : $bet['stake'],
                                 'pl' => $pl
                             ];
 
@@ -1722,8 +1728,9 @@ class GiaNikController
             } elseif ($statusFilter === 'lost') {
                 $where[] = "status = 'lost'";
             } else {
-                // Default or 'pending' filter: strictly pending
+                // Default or 'pending' filter: strictly pending and MATCHED
                 $where[] = "status = 'pending'";
+                $where[] = "(type = 'virtual' OR size_matched > 0)";
                 $statusFilter = 'pending';
             }
 
@@ -2023,6 +2030,7 @@ class GiaNikController
 
             // Elabora scommesse APERTE
             foreach ($currentOrders as $o) {
+                $sizeMatched = (float)($o['sizeMatched'] ?? 0);
                 $allBfOrders[$o['betId']] = [
                     'id' => $o['betId'],
                     'marketId' => $o['marketId'],
@@ -2030,6 +2038,7 @@ class GiaNikController
                     'selectionId' => $o['selectionId'],
                     'odds' => $o['priceSize']['price'] ?? 0,
                     'stake' => $o['priceSize']['size'] ?? 0,
+                    'sizeMatched' => $sizeMatched,
                     'status' => 'pending',
                     'profit' => 0,
                     'commission' => 0, // Commission is 0 for pending bets
@@ -2045,13 +2054,15 @@ class GiaNikController
             // Elabora scommesse CHIUSE
             foreach ($clearedOrders as $o) {
                 $itemDesc = $o['itemDescription'] ?? [];
+                $stakeSettled = (float)($o['sizeSettled'] ?? 0);
                 $allBfOrders[$o['betId']] = [
                     'id' => $o['betId'],
                     'marketId' => $o['marketId'],
                     'eventId' => $o['eventId'] ?? null,
                     'selectionId' => $o['selectionId'],
                     'odds' => $o['priceRequested'] ?? 0,
-                    'stake' => $o['sizeSettled'] ?? 0,
+                    'stake' => $stakeSettled,
+                    'sizeMatched' => $stakeSettled, // Settled implies fully matched (or what was available)
                     'status' => ($o['betOutcome'] === 'WIN' || $o['betOutcome'] === 'WON') ? 'won' : (($o['betOutcome'] === 'VOIDED' || $o['betOutcome'] === 'CANCELLED') ? 'cancelled' : 'lost'),
                     'profit' => (float) ($o['profit'] ?? 0),
                     'commission' => (float) ($o['commission'] ?? 0),
@@ -2144,9 +2155,22 @@ class GiaNikController
                     $finalRunnerName = $runnerName ?: ($existing['runner_name'] ?? 'Unknown Runner');
                     $finalLeagueName = $leagueName ?: ($existing['league'] ?? null);
 
-                    // Update: aggiorna sempre per avere l'ultimo stato (profitto, commissioni, status)
-                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, commission = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, league = ?, created_at = ?, betfair_id = ? WHERE id = ?");
-                    $stmtUpdate->execute([$o['status'], $o['profit'], $o['commission'], $o['marketId'], $finalMarketName, $finalEventName, $finalRunnerName, $finalLeagueName, $placedDate, $betId, $dbId]);
+                    // Update: aggiorna sempre per avere l'ultimo stato (profitto, commissioni, status, sizeMatched)
+                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = :status, profit = :profit, commission = :commission, market_id = :market_id, market_name = :market_name, event_name = :event_name, runner_name = :runner_name, league = :league, created_at = :created_at, betfair_id = :betfair_id, size_matched = :size_matched WHERE id = :id");
+                    $stmtUpdate->execute([
+                        ':status' => $o['status'],
+                        ':profit' => $o['profit'],
+                        ':commission' => $o['commission'],
+                        ':market_id' => $o['marketId'],
+                        ':market_name' => $finalMarketName,
+                        ':event_name' => $finalEventName,
+                        ':runner_name' => $finalRunnerName,
+                        ':league' => $finalLeagueName,
+                        ':created_at' => $placedDate,
+                        ':betfair_id' => $betId,
+                        ':size_matched' => $o['sizeMatched'] ?? 0,
+                        ':id' => $dbId
+                    ]);
 
                     // Apprendimento automatico se la scommessa è conclusa e non ancora appresa
                     if (in_array($o['status'], ['won', 'lost'])) {
@@ -2160,22 +2184,23 @@ class GiaNikController
                 } else {
                     // Import Automatico (se non esisteva)
                     $stmtInsert = $this->db->prepare("INSERT INTO bets 
-                        (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, status, type, profit, commission, league, created_at)
-                        VALUES (?, ?, ?, ?, 'Soccer', ?, ?, ?, ?, ?, 'real', ?, ?, ?, ?)");
+                        (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, size_matched, status, type, profit, commission, league, created_at)
+                        VALUES (:betfair_id, :market_id, :market_name, :event_name, 'Soccer', :selection_id, :runner_name, :odds, :stake, :size_matched, :status, 'real', :profit, :commission, :league, :created_at)");
                     $stmtInsert->execute([
-                        $betId,
-                        $o['marketId'],
-                        $marketName ?: 'Unknown Market',
-                        $eventName ?: 'Unknown Event',
-                        $o['selectionId'],
-                        $runnerName ?: 'Unknown Runner',
-                        $o['odds'],
-                        $o['stake'],
-                        $o['status'],
-                        $o['profit'],
-                        $o['commission'],
-                        $leagueName,
-                        $placedDate
+                        ':betfair_id' => $betId,
+                        ':market_id' => $o['marketId'],
+                        ':market_name' => $marketName ?: 'Unknown Market',
+                        ':event_name' => $eventName ?: 'Unknown Event',
+                        ':selection_id' => $o['selectionId'],
+                        ':runner_name' => $runnerName ?: 'Unknown Runner',
+                        ':odds' => $o['odds'],
+                        ':stake' => $o['stake'],
+                        ':size_matched' => $o['sizeMatched'] ?? 0,
+                        ':status' => $o['status'],
+                        ':profit' => $o['profit'],
+                        ':commission' => $o['commission'],
+                        ':league' => $leagueName,
+                        ':created_at' => $placedDate
                     ]);
 
                     // Apprendimento immediato se importata già conclusa
