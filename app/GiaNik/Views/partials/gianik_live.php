@@ -51,19 +51,19 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
             <div>
                 <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">P&L Netta (Settled)</span>
                 <div
-                    class="text-lg font-black tabular-nums <?php echo $portfolioStats['net_profit'] >= 0 ? 'text-success' : 'text-danger'; ?> leading-none">
-                    €<?php echo number_format($portfolioStats['net_profit'], 2); ?></div>
+                    class="text-lg font-black tabular-nums <?php echo $realPortfolioStats['net_profit'] >= 0 ? 'text-success' : 'text-danger'; ?> leading-none">
+                    €<?php echo number_format($realPortfolioStats['net_profit'], 2); ?></div>
             </div>
             <div>
                 <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">Win Rate</span>
                 <div class="text-lg font-black tabular-nums text-indigo-400 leading-none">
-                    <?php echo $portfolioStats['win_rate']; ?>%
+                    <?php echo $realPortfolioStats['win_rate']; ?>%
                 </div>
             </div>
             <div>
                 <span class="text-[9px] font-black uppercase text-slate-500 tracking-wider">ROI</span>
                 <div class="text-lg font-black tabular-nums text-accent leading-none">
-                    <?php echo $portfolioStats['roi']; ?>%
+                    <?php echo $realPortfolioStats['roi']; ?>%
                 </div>
             </div>
         </div>
@@ -96,7 +96,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
 <!-- Portfolio Trend Chart -->
 <div class="glass p-6 rounded-[32px] border-white/5 mb-6">
     <div class="flex items-center justify-between mb-4">
-        <h4 class="text-[10px] font-black uppercase text-slate-500 tracking-[.2em]">Andamento Portafoglio (Start 100€)
+        <h4 class="text-[10px] font-black uppercase text-slate-500 tracking-[.2em]">Andamento Portafoglio <?php echo $operationalMode === 'real' ? 'REALE' : 'VIRTUALE'; ?> (Start 100€)
         </h4>
         <div
             class="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white/5 px-3 py-1 rounded-full border border-white/5">

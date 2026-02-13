@@ -478,7 +478,14 @@ class GiaNikController
             $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
             $stmtMode->execute();
             $operationalMode = $stmtMode->fetchColumn() ?: 'virtual';
-            $portfolioStats = $this->getPortfolioStats($operationalMode, ($operationalMode === 'real' ? ($account['available'] + $account['exposure']) : null));
+
+            // Calculate Portfolio Stats
+            $realPortfolioStats = $this->getPortfolioStats('real', $account['available'] + $account['exposure']);
+            $virtualPortfolioStats = $this->getPortfolioStats('virtual');
+
+            // Default portfolioStats for the main chart follows operational mode
+            $portfolioStats = ($operationalMode === 'real') ? $realPortfolioStats : $virtualPortfolioStats;
+
             $virtualAccount = $this->getVirtualBalance();
             $settlementResults = $this->settleBets();
             require __DIR__ . '/../Views/partials/gianik_live.php';
