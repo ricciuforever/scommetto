@@ -1717,7 +1717,6 @@ class GiaNikController
                 $sql .= " WHERE " . implode(" AND ", $where);
             }
 
-            $sql .= " GROUP BY market_id, selection_id, odds, stake, type, status";
             $sql .= " ORDER BY created_at DESC LIMIT 20";
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
@@ -2228,22 +2227,33 @@ class GiaNikController
                 $info = $marketInfoMap[$o['marketId']] ?? null;
 
                 // Priorità Nome Evento: 1. Catalogo, 2. ItemDesc (eventDesc), 3. EventMap
-                $eventName = $info['event'] ?? ($o['eventName'] ?? ($eventNameMap[$o['eventId'] ?? ''] ?? 'Unknown Event'));
-                $marketName = $info['market'] ?? ($o['marketName'] ?? 'Unknown Market');
-                $runnerName = $info['runners'][$o['selectionId']] ?? ($o['runnerName'] ?? 'Selection ' . $o['selectionId']);
+                $eventName = $info['event'] ?? ($o['eventName'] ?? ($eventNameMap[$o['eventId'] ?? ''] ?? null));
+                $marketName = $info['market'] ?? ($o['marketName'] ?? null);
+                $runnerName = $info['runners'][$o['selectionId']] ?? ($o['runnerName'] ?? null);
                 $leagueName = $info['competition'] ?? null;
 
                 $placedDate = isset($o['placedDate']) ? date('Y-m-d H:i:s', strtotime($o['placedDate'])) : date('Y-m-d H:i:s');
 
-                // Verifica esistenza nel DB locale
-                $stmt = $this->db->prepare("SELECT id FROM bets WHERE betfair_id = ?");
-                $stmt->execute([$betId]);
+                // Verifica esistenza nel DB locale (Flessibile su prefisso 1:)
+                $altBetId = (strpos($betId, '1:') === 0) ? substr($betId, 2) : '1:' . $betId;
+                $stmt = $this->db->prepare("SELECT id FROM bets WHERE betfair_id = ? OR betfair_id = ?");
+                $stmt->execute([$betId, $altBetId]);
                 $dbId = $stmt->fetchColumn();
 
                 if ($dbId) {
+                    // Recupera dati esistenti per evitare di sovrascrivere con NULL o Unknown
+                    $stmtExisting = $this->db->prepare("SELECT event_name, market_name, runner_name, league FROM bets WHERE id = ?");
+                    $stmtExisting->execute([$dbId]);
+                    $existing = $stmtExisting->fetch(PDO::FETCH_ASSOC);
+
+                    $finalEventName = $eventName ?: ($existing['event_name'] ?? 'Unknown Event');
+                    $finalMarketName = $marketName ?: ($existing['market_name'] ?? 'Unknown Market');
+                    $finalRunnerName = $runnerName ?: ($existing['runner_name'] ?? 'Unknown Runner');
+                    $finalLeagueName = $leagueName ?: ($existing['league'] ?? null);
+
                     // Update: aggiorna sempre per avere l'ultimo stato (profitto, commissioni, status)
-                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, commission = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, league = ?, created_at = ? WHERE id = ?");
-                    $stmtUpdate->execute([$o['status'], $o['profit'], $o['commission'], $o['marketId'], $marketName, $eventName, $runnerName, $leagueName, $placedDate, $dbId]);
+                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, commission = ?, market_id = ?, market_name = ?, event_name = ?, runner_name = ?, league = ?, created_at = ?, betfair_id = ? WHERE id = ?");
+                    $stmtUpdate->execute([$o['status'], $o['profit'], $o['commission'], $o['marketId'], $finalMarketName, $finalEventName, $finalRunnerName, $finalLeagueName, $placedDate, $betId, $dbId]);
 
                     // Apprendimento automatico se la scommessa è conclusa e non ancora appresa
                     if (in_array($o['status'], ['won', 'lost'])) {
@@ -2262,10 +2272,10 @@ class GiaNikController
                     $stmtInsert->execute([
                         $betId,
                         $o['marketId'],
-                        $marketName,
-                        $eventName,
+                        $marketName ?: 'Unknown Market',
+                        $eventName ?: 'Unknown Event',
                         $o['selectionId'],
-                        $runnerName,
+                        $runnerName ?: 'Unknown Runner',
                         $o['odds'],
                         $o['stake'],
                         $o['status'],
@@ -2289,10 +2299,18 @@ class GiaNikController
             }
 
             // 5. MIRRORING TOTALE: Rimuovi record locali REAL non presenti su Betfair
-            // Pulizia Preventiva Duplicati locali per BetID (salvaguardia contro record orfani duplicati)
-            $this->db->exec("DELETE FROM bets WHERE id NOT IN (SELECT MIN(id) FROM bets WHERE betfair_id IS NOT NULL GROUP BY betfair_id) AND betfair_id IS NOT NULL AND type = 'real'");
+            // Pulizia Preventiva Duplicati locali per BetID (salvaguardia contro record orfani duplicati, flessibile su prefisso 1:)
+            $this->db->exec("DELETE FROM bets WHERE type = 'real' AND betfair_id IS NOT NULL AND id NOT IN (
+                SELECT MIN(id) FROM bets GROUP BY CASE WHEN betfair_id LIKE '1:%' THEN SUBSTR(betfair_id, 3) ELSE betfair_id END
+            )");
 
-            $bfIdsList = array_keys($allBfOrders);
+            $bfIdsList = [];
+            foreach (array_keys($allBfOrders) as $id) {
+                $bfIdsList[] = $id;
+                $bfIdsList[] = (strpos($id, '1:') === 0) ? substr($id, 2) : '1:' . $id;
+            }
+            $bfIdsList = array_values(array_unique($bfIdsList));
+
             // Verifica se abbiamo avuto risposte valide (anche se vuote) da Betfair per procedere alla pulizia
             $isValidResponse = isset($clearedRes['clearedOrders']) || isset($currentRes['currentOrders']);
 
