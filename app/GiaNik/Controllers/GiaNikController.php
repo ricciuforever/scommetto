@@ -1717,6 +1717,7 @@ class GiaNikController
                 $sql .= " WHERE " . implode(" AND ", $where);
             }
 
+            $sql .= " GROUP BY CASE WHEN betfair_id LIKE '1:%' THEN SUBSTR(betfair_id, 3) ELSE COALESCE(betfair_id, id) END";
             $sql .= " ORDER BY created_at DESC LIMIT 20";
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
