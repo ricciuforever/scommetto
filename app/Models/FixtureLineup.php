@@ -56,9 +56,10 @@ class FixtureLineup
 
     public function getByFixture($fixture_id)
     {
-        $sql = "SELECT fl.*, t.name as team_name, t.logo as team_logo
+        $sql = "SELECT fl.*, t.name as team_name, t.logo as team_logo, c.name as coach_name
                 FROM fixture_lineups fl
                 LEFT JOIN teams t ON fl.team_id = t.id
+                LEFT JOIN coaches c ON fl.coach_id = c.id
                 WHERE fl.fixture_id = ?";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$fixture_id]);
