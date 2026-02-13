@@ -40,6 +40,12 @@ require __DIR__ . '/../../Views/layout/top.php';
                 </span>
             </div>
 
+            <!-- Brain Dashboard Link -->
+            <a href="/gianik/brain" title="GiaNik Brain"
+                class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/5 transition-all text-slate-400 hover:text-white">
+                <i data-lucide="brain" class="w-5 h-5 text-purple-400"></i>
+            </a>
+
             <!-- Sound Toggle -->
             <button onclick="toggleGiaNikSound()" id="sound-toggle"
                 class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/5 transition-all text-slate-400 hover:text-white">

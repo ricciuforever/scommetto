@@ -93,8 +93,13 @@ try {
     ];
 
     // --- GIANIK ROUTES ---
-    if ($path === '/gianik-live') {
+    if ($path === '/gianik-live' || $path === '/gianik') {
         (new \App\GiaNik\Controllers\GiaNikController())->index();
+        return;
+    }
+
+    if ($path === '/gianik/brain') {
+        (new \App\GiaNik\Controllers\GiaNikController())->brain();
         return;
     }
 
