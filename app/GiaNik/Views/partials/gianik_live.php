@@ -128,22 +128,22 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
             <div id="match-card-<?php echo str_replace('.', '-', $marketId); ?>"
                 class="glass p-4 rounded-[32px] border <?php echo $isJustUpdated ? 'border-accent shadow-[0_0_20px_rgba(var(--accent-rgb),0.3)] animate-pulse' : 'border-white/5'; ?> hover:border-accent/20 transition-all group flex flex-col gap-4 relative">
 
-                <div class="grid grid-cols-[1fr_40px_180px_40px_1fr_100px_340px] items-center gap-4">
+                <div class="grid grid-cols-[minmax(120px,1fr)_48px_180px_48px_minmax(120px,1fr)_80px_360px] items-center gap-4 px-6">
                     <!-- Home Team -->
-                    <div class="flex items-center justify-end">
+                    <div class="flex items-center justify-end overflow-hidden">
                         <span class="text-xs font-black uppercase text-white truncate text-right mr-4">
                             <?php echo $m['home_name']; ?>
                         </span>
                     </div>
 
                     <!-- Home Logo -->
-                    <div class="flex justify-center">
+                    <div class="flex justify-center shrink-0">
                         <?php if ($m['home_logo']): ?>
-                            <div class="w-10 h-10 rounded-full bg-white/5 p-2 border border-white/5 flex items-center justify-center overflow-hidden shrink-0">
+                            <div class="w-10 h-10 rounded-full bg-white/5 p-2 border border-white/5 flex items-center justify-center overflow-hidden">
                                 <img src="<?php echo $m['home_logo']; ?>" class="w-full h-full object-contain" alt="">
                             </div>
                         <?php else: ?>
-                            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center shrink-0">
+                            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
                                 <i data-lucide="shield" class="w-5 h-5 text-slate-600"></i>
                             </div>
                         <?php endif; ?>
@@ -182,20 +182,20 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                     </div>
 
                     <!-- Away Logo -->
-                    <div class="flex justify-center">
+                    <div class="flex justify-center shrink-0">
                         <?php if ($m['away_logo']): ?>
-                            <div class="w-10 h-10 rounded-full bg-white/5 p-2 border border-white/5 flex items-center justify-center overflow-hidden shrink-0">
+                            <div class="w-10 h-10 rounded-full bg-white/5 p-2 border border-white/5 flex items-center justify-center overflow-hidden">
                                 <img src="<?php echo $m['away_logo']; ?>" class="w-full h-full object-contain" alt="">
                             </div>
                         <?php else: ?>
-                            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center shrink-0">
+                            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
                                 <i data-lucide="shield" class="w-5 h-5 text-slate-600"></i>
                             </div>
                         <?php endif; ?>
                     </div>
 
                     <!-- Away Team -->
-                    <div class="flex items-center justify-start">
+                    <div class="flex items-center justify-start overflow-hidden">
                         <span class="text-xs font-black uppercase text-white truncate ml-4">
                             <?php echo $m['away_name']; ?>
                         </span>
@@ -208,7 +208,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                     </div>
 
                     <!-- Scommesse & Andamento Section -->
-                    <div class="grid grid-cols-2 gap-3 border-l border-white/5 pl-4">
+                    <div class="grid grid-cols-2 gap-4 border-l border-white/5 pl-6">
                         <!-- Scommesse Detail -->
                         <div class="flex flex-col gap-1 min-h-[44px] justify-center">
                             <?php if (!empty($m['my_bets'])): ?>

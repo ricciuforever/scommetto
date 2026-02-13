@@ -6,6 +6,14 @@ require __DIR__ . '/../../Views/layout/top.php';
 ?>
 <link rel="icon" href="https://cdn.jsdelivr.net/gh/GiaNik/assets/favicon.ico" type="image/x-icon">
 
+<style>
+    main#main-content {
+        max-width: 95% !important;
+        padding-left: 2rem;
+        padding-right: 2rem;
+    }
+</style>
+
 <div class="flex flex-col gap-6 mr-72"> <!-- Added margin for sidebar -->
     <!-- Hidden auto-processing trigger -->
     <div hx-get="/api/gianik/auto-process" hx-trigger="every 120s" class="hidden"></div>
