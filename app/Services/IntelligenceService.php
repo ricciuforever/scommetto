@@ -139,15 +139,15 @@ class IntelligenceService
         $roi = ($stake > 0) ? round(($profit / $stake) * 100, 2) : 0;
 
         $sql = "INSERT INTO performance_metrics
-                (context_type, context_id, total_bets, wins, losses, total_stake, total_profit, roi, last_updated)
+                (context_type, context_id, total_bets, wins, losses, total_stake, profit_loss, roi, last_updated)
                 VALUES (?, ?, 1, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(context_type, context_id) DO UPDATE SET
                 total_bets = total_bets + 1,
                 wins = wins + ?,
                 losses = losses + ?,
                 total_stake = total_stake + ?,
-                total_profit = total_profit + ?,
-                roi = ROUND(((total_profit + ?) / (total_stake + ?)) * 100, 2),
+                profit_loss = profit_loss + ?,
+                roi = ROUND(((profit_loss + ?) / (total_stake + ?)) * 100, 2),
                 last_updated = CURRENT_TIMESTAMP";
 
         $wins = $isWin ? 1 : 0;

@@ -41,6 +41,13 @@ class GiaNikController
         require __DIR__ . '/../Views/gianik_live_page.php';
     }
 
+    public function brain()
+    {
+        require_once __DIR__ . '/BrainController.php';
+        $controller = new BrainController();
+        $controller->index();
+    }
+
     public function live()
     {
         try {
@@ -1757,8 +1764,8 @@ class GiaNikController
                     $entityId = $lessonData['entity_name'] ?? null;
                     if ($lessonData['type'] === 'strategy') $entityId = 'GLOBAL';
 
-                    $this->db->prepare("INSERT INTO ai_lessons (entity_type, entity_id, lesson_text) VALUES (?, ?, ?)")
-                        ->execute([$lessonData['type'], $entityId, $lessonData['lesson']]);
+                    $this->db->prepare("INSERT INTO ai_lessons (entity_type, entity_id, lesson_text, match_context) VALUES (?, ?, ?, ?)")
+                        ->execute([$lessonData['type'], $entityId, $lessonData['lesson'], $bet['event_name']]);
                 }
 
                 $this->db->prepare("UPDATE bets SET needs_analysis = 0 WHERE id = ?")

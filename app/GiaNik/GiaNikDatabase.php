@@ -61,7 +61,7 @@ class GiaNikDatabase
             wins INTEGER DEFAULT 0,
             losses INTEGER DEFAULT 0,
             total_stake REAL DEFAULT 0.0,
-            total_profit REAL DEFAULT 0.0,
+            profit_loss REAL DEFAULT 0.0,
             roi REAL DEFAULT 0.0,
             last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (context_type, context_id)
@@ -74,6 +74,7 @@ class GiaNikDatabase
             entity_type TEXT, -- 'team', 'league', 'strategy'
             entity_id TEXT,
             lesson_text TEXT,
+            match_context TEXT,
             context_snapshot TEXT, -- JSON
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
@@ -122,6 +123,20 @@ class GiaNikDatabase
         }
 
 
+        // Repair performance_metrics
+        $stmtPerf = $this->connection->query("PRAGMA table_info(performance_metrics)");
+        $existingPerfCols = $stmtPerf->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (!in_array('profit_loss', $existingPerfCols) && in_array('total_profit', $existingPerfCols)) {
+            try {
+                $this->connection->exec("ALTER TABLE performance_metrics RENAME COLUMN total_profit TO profit_loss");
+            } catch (\Exception $e) {
+                $this->connection->exec("ALTER TABLE performance_metrics ADD COLUMN profit_loss REAL DEFAULT 0.0");
+                $this->connection->exec("UPDATE performance_metrics SET profit_loss = total_profit");
+            }
+        } elseif (!in_array('profit_loss', $existingPerfCols)) {
+            $this->connection->exec("ALTER TABLE performance_metrics ADD COLUMN profit_loss REAL DEFAULT 0.0");
+        }
+
         // Repair match_snapshots
         $requiredSnapshotColumns = [
             'minute' => 'INTEGER',
@@ -142,6 +157,21 @@ class GiaNikDatabase
             if (!in_array($col, $existingSnapshotColumns)) {
                 try {
                     $this->connection->exec("ALTER TABLE match_snapshots ADD COLUMN $col $definition");
+                } catch (\Exception $e) {
+                }
+            }
+        }
+
+        // Repair ai_lessons
+        $requiredLessonColumns = [
+            'match_context' => 'TEXT'
+        ];
+        $stmt = $this->connection->query("PRAGMA table_info(ai_lessons)");
+        $existingLessonColumns = $stmt->fetchAll(PDO::FETCH_COLUMN, 1);
+        foreach ($requiredLessonColumns as $col => $definition) {
+            if (!in_array($col, $existingLessonColumns)) {
+                try {
+                    $this->connection->exec("ALTER TABLE ai_lessons ADD COLUMN $col $definition");
                 } catch (\Exception $e) {
                 }
             }
