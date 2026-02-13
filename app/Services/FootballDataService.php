@@ -332,7 +332,7 @@ class FootballDataService
     public function searchInFixtureList($bfEventName, $fixtures, $mappedCountry = null, $startTime = null)
     {
         // 1. Strip scores like "1-0", "0 - 0" if present in event name
-        $name = preg_replace('/\d+\s*-\s*\d+/', ' v ', $bfEventName);
+        $name = preg_replace('/\d+\s*[-:]\s*\d+/', ' v ', $bfEventName);
 
         $bfTeams = preg_split('/\s+(v|vs|@|-|\/)\s+/i', $name);
         if (count($bfTeams) < 2)
@@ -496,6 +496,20 @@ class FootballDataService
         // 2. Remove common prefixes/suffixes (word boundaries)
         // If the name would become empty, DON'T remove it (e.g. "Inter")
         $remove = [
+            'crb',
+            'usm',
+            'jsm',
+            'aso',
+            'msp',
+            'asm',
+            'js',
+            'ca',
+            'mo',
+            'nc',
+            'gc',
+            'wa',
+            'ib',
+            'dz',
             'fc',
             'f.c.',
             'united',
@@ -596,7 +610,6 @@ class FootballDataService
             'sd',
             'red bull',
             'rb',
-            'js',
             'sportive',
             'belediyespor',
             'belediyesi',
@@ -611,8 +624,7 @@ class FootballDataService
             'de',
             'del',
             'da',
-            'es',
-            'js'
+            'es'
         ];
 
         $tempName = $name;

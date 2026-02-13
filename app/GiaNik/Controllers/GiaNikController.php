@@ -1284,6 +1284,14 @@ class GiaNikController
             'AE' => 'UAE',
             'QA' => 'Qatar',
             'IE' => 'Ireland',
+            'DZ' => 'Algeria',
+            'MA' => 'Morocco',
+            'TN' => 'Tunisia',
+            'EG' => 'Egypt',
+            'IN' => 'India',
+            'AZ' => 'Azerbaijan',
+            'MT' => 'Malta',
+            'IS' => 'Iceland',
         ];
         return $map[strtoupper($countryCode)] ?? null;
     }
