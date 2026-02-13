@@ -80,6 +80,12 @@ foreach ($bets as $bet) {
         $keys[] = "LEAGUE_{$leagueId}";
     }
 
+    // C. Bucket
+    $bucket = 'RISK';
+    if ($odds <= 1.50) $bucket = 'FAV';
+    elseif ($odds <= 2.20) $bucket = 'VAL';
+    $keys[] = "BUCKET_{$bucket}";
+
     foreach ($keys as $k) {
         if (!isset($metrics[$k])) {
             $metrics[$k] = ['bets' => 0, 'wins' => 0, 'stake' => 0, 'profit' => 0];
@@ -97,7 +103,7 @@ foreach ($bets as $bet) {
 echo "💾 Scrittura metriche su GiaNik...\n";
 
 $stmtInsert = $sqlite->prepare("INSERT OR REPLACE INTO performance_metrics
-    (context_type, context_id, total_bets, wins, losses, total_stake, total_profit, roi, last_updated)
+    (context_type, context_id, total_bets, wins, losses, total_stake, profit_loss, roi, last_updated)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)");
 
 foreach ($metrics as $key => $data) {

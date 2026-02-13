@@ -1429,9 +1429,7 @@ class GiaNikController
 
     private function getOddsBucket($odds)
     {
-        if ($odds <= 1.50) return 'FAV';
-        if ($odds <= 2.20) return 'VAL';
-        return 'RISK';
+        return $this->intelligence->getOddsBucket($odds);
     }
 
     private function checkGatekeeper($leagueId)
