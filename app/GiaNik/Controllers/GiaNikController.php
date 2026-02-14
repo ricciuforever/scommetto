@@ -773,6 +773,31 @@ class GiaNikController
                 $odds = Config::MIN_BETFAIR_ODDS;
             }
 
+            // --- Staking Guardrail: Max 5% of Total Balance ---
+            if ($type === 'real') {
+                $fundsData = $this->bf->getFunds();
+                $funds = $fundsData['result'] ?? $fundsData;
+                $totalBal = (float)($funds['availableToBetBalance'] ?? 0) + abs((float)($funds['exposure'] ?? 0));
+                $availableBal = (float)($funds['availableToBetBalance'] ?? 0);
+            } else {
+                $vBal = $this->getVirtualBalance();
+                $totalBal = $vBal['total'];
+                $availableBal = $vBal['available'];
+            }
+
+            $maxAllowed = $totalBal * 0.05;
+            if ($stake > $maxAllowed) {
+                $stake = $maxAllowed;
+            }
+            if ($stake > $availableBal) {
+                $stake = $availableBal;
+            }
+
+            // Enforce minimum IT stake
+            if ($stake < Config::MIN_BETFAIR_STAKE) {
+                $stake = Config::MIN_BETFAIR_STAKE;
+            }
+
             $betfairId = null;
             if ($type === 'real') {
                 $res = $this->bf->placeBet($marketId, $selectionId, $odds, $stake);
@@ -1122,8 +1147,8 @@ class GiaNikController
                             if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds))
                                 continue;
 
-                            // --- Dynamic Staking (No Kelly, Max 5% of Available Balance) ---
-                            $bankroll = $activeBalance['available'];
+                            // --- Dynamic Staking (No Kelly, Max 5% of Total Balance) ---
+                            $bankroll = $activeBalance['total'];
                             $stake = $this->calculateDynamicStake($analysis['confidence'], $bankroll);
 
                             // Protezione: non scommettere più del liquido disponibile
@@ -1484,12 +1509,17 @@ class GiaNikController
         return $motivation;
     }
 
+    /**
+     * Calcola lo stake dinamico basato sulla fiducia dell'AI e sul bankroll totale.
+     * @param int $confidence Fiducia dell'AI (0-100)
+     * @param float $bankroll Bankroll TOTALE (Disponibile + Esposizione)
+     */
     private function calculateDynamicStake($confidence, $bankroll)
     {
         // Rimosso Kelly Criterion come richiesto.
-        // Nuova logica: 5% del bankroll totale, pesato sulla fiducia.
-        // Se fiducia = 100%, stake = 5% del bankroll.
-        // Se fiducia = 80%, stake = 4% del bankroll.
+        // Nuova logica: 5% del bankroll TOTALE, pesato sulla fiducia.
+        // Se fiducia = 100%, stake = 5% del bankroll totale.
+        // Se fiducia = 80%, stake = 4% del bankroll totale.
         $p = (float)$confidence / 100.0;
         $stake = $bankroll * 0.05 * $p;
 
