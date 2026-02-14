@@ -1778,6 +1778,13 @@ class GiaNikController
         return null;
     }
 
+    /**
+     * Recupera l'ultimo badge di intensità per un match.
+     * L'intensità viene calcolata pesando tiri (1.0) e corner (0.5) dell'ultimo intervallo (8-15 min)
+     * rispetto alla media della partita.
+     * Nota: Può restituire null se mancano i dati statistici (comune in campionati minori)
+     * o se il match è appena iniziato (meno di 2 snapshot disponibili).
+     */
     private function getLastIntensityBadge($fixtureId)
     {
         if (!$fixtureId) return null;
