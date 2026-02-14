@@ -95,7 +95,7 @@ class Standing
     {
         $sql = "SELECT s.*, t.name as team_name, t.logo as team_logo
                 FROM standings s
-                JOIN teams t ON s.team_id = t.id
+                LEFT JOIN teams t ON s.team_id = t.id
                 WHERE s.league_id = ? AND s.season = ?
                 ORDER BY s.group_name ASC, s.rank ASC";
         $stmt = $this->db->prepare($sql);
@@ -116,8 +116,8 @@ class Standing
     {
         $sql = "SELECT s.*, t.name as team_name, t.logo as team_logo, l.name as league_name
                 FROM standings s
-                JOIN teams t ON s.team_id = t.id
-                JOIN leagues l ON s.league_id = l.id
+                LEFT JOIN teams t ON s.team_id = t.id
+                LEFT JOIN leagues l ON s.league_id = l.id
                 WHERE 1=1";
 
         $params = [];

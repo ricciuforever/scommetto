@@ -1113,6 +1113,10 @@ class GiaNikController
                     }
 
                     $gemini = new GeminiService();
+
+                    // Debug: Log complete event data before AI analysis
+                    file_put_contents(Config::LOGS_PATH . 'gianik_ai_input.log', date('[Y-m-d H:i:s] ') . "Analyzing Event: {$event['event']}\n" . json_encode($event, JSON_PRETTY_PRINT) . PHP_EOL, FILE_APPEND);
+
                     $predictionRaw = $gemini->analyze([$event], [
                         'is_gianik' => true,
                         'available_balance' => $activeBalance['available'],
@@ -1344,8 +1348,15 @@ class GiaNikController
         }
 
         $fid = $apiMatch['fixture']['id'];
+        $statusFromApi = $apiMatch['fixture']['status']['short'] ?? 'NS';
+
         $details = $this->footballData->getFixtureDetails($fid);
-        $status = $details['status_short'] ?? 'NS';
+
+        // Use the most "live" status available
+        $status = $statusFromApi;
+        if ($details && in_array($details['status_short'], ['1H', 'HT', '2H', 'ET', 'P', 'BT', 'FT'])) {
+            $status = $details['status_short'];
+        }
 
         $h2h = $this->footballData->getH2H($apiMatch['teams']['home']['id'], $apiMatch['teams']['away']['id']);
         $standings = (isset($apiMatch['league']['id'], $apiMatch['league']['season'])) ? $this->footballData->getStandings($apiMatch['league']['id'], $apiMatch['league']['season']) : null;

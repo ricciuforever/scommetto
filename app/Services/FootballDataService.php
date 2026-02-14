@@ -11,6 +11,7 @@ use App\Models\FixturePrediction;
 use App\Models\FixtureLineup;
 use App\Models\FixturePlayerStatistics;
 use App\Models\Team;
+use App\Models\League;
 use App\Models\Venue;
 use App\Models\Standing;
 use App\Models\H2H;
@@ -255,10 +256,26 @@ class FootballDataService
         if ($needsSync) {
             $res = $this->api->fetchLiveMatches($params);
             if (isset($res['response'])) {
-                // Update DB Fixtures
+                // Update DB Fixtures & Metadata
                 $fixtureModel = new Fixture();
+                $teamModel = new Team();
+                $leagueModel = new League();
+
                 foreach ($res['response'] as $item) {
                     $fixtureModel->save($item);
+
+                    // Save Teams
+                    if (isset($item['teams']['home'])) $teamModel->save($item['teams']['home']);
+                    if (isset($item['teams']['away'])) $teamModel->save($item['teams']['away']);
+
+                    // Save League (partial data usually enough for basic display)
+                    if (isset($item['league']['id'])) {
+                        $leagueData = [
+                            'league' => $item['league'],
+                            'country' => ['name' => $item['league']['country'] ?? null]
+                        ];
+                        $leagueModel->save($leagueData);
+                    }
                 }
 
                 // Update system_state
@@ -303,8 +320,24 @@ class FootballDataService
         $res = $this->api->request("/fixtures?date=$date&timezone=Europe/Rome");
         if (isset($res['response'])) {
             $fixtureModel = new Fixture();
+            $teamModel = new Team();
+            $leagueModel = new League();
+
             foreach ($res['response'] as $item) {
                 $fixtureModel->save($item);
+
+                // Save Teams
+                if (isset($item['teams']['home'])) $teamModel->save($item['teams']['home']);
+                if (isset($item['teams']['away'])) $teamModel->save($item['teams']['away']);
+
+                // Save League
+                if (isset($item['league']['id'])) {
+                    $leagueData = [
+                        'league' => $item['league'],
+                        'country' => ['name' => $item['league']['country'] ?? null]
+                    ];
+                    $leagueModel->save($leagueData);
+                }
             }
 
             $sql = "INSERT INTO system_state (`key`, `value`, `updated_at`) VALUES (?, 'ok', CURRENT_TIMESTAMP) ";
