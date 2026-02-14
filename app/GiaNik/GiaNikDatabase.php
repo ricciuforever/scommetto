@@ -108,6 +108,7 @@ class GiaNikDatabase
             'bucket' => 'TEXT',
             'league' => 'TEXT',
             'league_id' => 'INTEGER',
+            'fixture_id' => 'INTEGER',
             'size_matched' => 'REAL DEFAULT 0',
             'placed_at_minute' => 'INTEGER',
             'placed_at_period' => 'TEXT'

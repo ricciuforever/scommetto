@@ -793,6 +793,13 @@ class GiaNikController
                 return;
             }
 
+            // --- Robust Check for Pending Bets on Same Match ---
+            $fixtureId = $input['fixtureId'] ?? null;
+            if ($this->isBetAlreadyPendingForMatch($fixtureId, $eventName)) {
+                echo json_encode(['status' => 'error', 'message' => 'Esiste già una scommessa aperta per questo match.']);
+                return;
+            }
+
             // Enforce minimum odds as per system rule
             if ($odds < Config::MIN_BETFAIR_ODDS) {
                 $odds = Config::MIN_BETFAIR_ODDS;
@@ -854,8 +861,8 @@ class GiaNikController
                 }
             }
 
-            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id, placed_at_minute, placed_at_period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation, $bucket, $leagueName, $leagueId, $pMinute, $pPeriod]);
+            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id, fixture_id, placed_at_minute, placed_at_period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation, $bucket, $leagueName, $leagueId, $fixtureId, $pMinute, $pPeriod]);
 
             echo json_encode(['status' => 'success', 'message' => 'Scommessa piazzata (' . $type . ')']);
         } catch (\Throwable $e) {
@@ -973,13 +980,22 @@ class GiaNikController
                 $eventMarketsMap[$eid][] = $mc;
             }
 
-            $stmtPending = $this->db->prepare("SELECT DISTINCT event_name FROM bets WHERE status = 'pending'");
+            $stmtPending = $this->db->prepare("SELECT event_name, fixture_id FROM bets WHERE status = 'pending'");
             $stmtPending->execute();
-            $pendingEventNames = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
+            $pendingBets = $stmtPending->fetchAll(PDO::FETCH_ASSOC);
+            $pendingEventNames = array_column($pendingBets, 'event_name');
+            $pendingFixtureIds = array_filter(array_column($pendingBets, 'fixture_id'));
+
+            // Pre-normalize pending names for faster lookup
+            $normPendingNames = array_map([$this, 'normalizeEventName'], $pendingEventNames);
 
             $stmtPendingMarkets = $this->db->prepare("SELECT DISTINCT market_id FROM bets WHERE status = 'pending'");
             $stmtPendingMarkets->execute();
             $pendingMarketIds = $stmtPendingMarkets->fetchAll(PDO::FETCH_COLUMN);
+
+            // Per evitare doppie giocate nello stesso ciclo di scansione
+            $justBetFixtureIds = [];
+            $justBetNormNames = [];
 
             // Recuperiamo il conteggio delle scommesse per oggi per ogni match (per limitare ingressi multipli)
             $stmtCount = $this->db->prepare("SELECT event_name, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name");
@@ -1023,7 +1039,9 @@ class GiaNikController
 
                 // Hard Limits:
                 // 1. Single Concurrent Bet: One bet at a time per match.
-                if (in_array($eventName, $pendingEventNames)) {
+                // Primo controllo rapido (Nome esatto o normalizzato)
+                $normCurrent = $this->normalizeEventName($eventName);
+                if (in_array($eventName, $pendingEventNames) || in_array($normCurrent, $normPendingNames) || in_array($normCurrent, $justBetNormNames)) {
                     $results['skipped_already_bet']++;
                     continue;
                 }
@@ -1105,6 +1123,14 @@ class GiaNikController
 
                         // --- Gatekeeper (Stop Loss) ---
                         $leagueId = $event['api_football']['fixture']['league_id'] ?? null;
+                        $fixtureId = $event['api_football']['fixture']['id'] ?? null;
+
+                        // SECONDO CONTROLLO ROBUSTO (fixture_id)
+                        if ($fixtureId && (in_array($fixtureId, $pendingFixtureIds) || in_array($fixtureId, $justBetFixtureIds))) {
+                            $results['skipped_already_bet']++;
+                            continue;
+                        }
+
                         if ($leagueId && $this->checkGatekeeper($leagueId)) {
                             continue; // Salta questo evento se in perdita cronica
                         }
@@ -1224,7 +1250,8 @@ class GiaNikController
                                 $leagueId = $event['api_football']['fixture']['league_id'] ?? null;
                                 $motivation = $this->extractMotivation($analysis, $predictionRaw, $event);
 
-                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id, placed_at_minute, placed_at_period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $fixtureId = $event['api_football']['fixture']['id'] ?? null;
+                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id, fixture_id, placed_at_minute, placed_at_period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                                 $stmtInsert->execute([
                                     $analysis['marketId'],
                                     $selectedMarket['marketName'],
@@ -1240,9 +1267,14 @@ class GiaNikController
                                     $bucket,
                                     $leagueName,
                                     $leagueId,
+                                    $fixtureId,
                                     $currentMinute,
                                     $currentPeriod
                                 ]);
+
+                                if ($fixtureId) $justBetFixtureIds[] = $fixtureId;
+                                $justBetNormNames[] = $this->normalizeEventName($event['event']);
+
                                 $results['new_bets']++;
                             }
                         }
@@ -1256,6 +1288,46 @@ class GiaNikController
         } catch (\Throwable $e) {
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
+    }
+
+    private function normalizeEventName($name)
+    {
+        if (!$name) return '';
+        $name = strtolower($name);
+        // Remove common scores like "1-0", "2 - 1"
+        $name = preg_replace('/\d+\s*[-:]\s*\d+/', ' ', $name);
+        // Remove connectors
+        $name = preg_replace('/\b(v|vs|@|-|\/)\b/', ' ', $name);
+        // Remove non-alphanumeric and collapse spaces
+        $name = preg_replace('/[^a-z0-9 ]/', '', $name);
+        $name = preg_replace('/\s+/', ' ', trim($name));
+        return $name;
+    }
+
+    private function isBetAlreadyPendingForMatch($fixtureId, $eventName)
+    {
+        // 1. Check by fixture_id if available (High Precision)
+        if ($fixtureId) {
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM bets WHERE status = 'pending' AND fixture_id = ?");
+            $stmt->execute([$fixtureId]);
+            if ((int)$stmt->fetchColumn() > 0) return true;
+        }
+
+        // 2. Fallback to Normalized Event Name (High Recall)
+        $normCurrent = $this->normalizeEventName($eventName);
+        if (empty($normCurrent)) return false;
+
+        $stmt = $this->db->prepare("SELECT event_name FROM bets WHERE status = 'pending'");
+        $stmt->execute();
+        $pendingNames = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        foreach ($pendingNames as $pName) {
+            if ($this->normalizeEventName($pName) === $normCurrent) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function settleBets()
@@ -2314,6 +2386,12 @@ class GiaNikController
                 $runnerName = $info['runners'][$o['selectionId']] ?? ($o['runnerName'] ?? null);
                 $leagueName = $info['competition'] ?? null;
 
+                $fixtureId = null;
+                if ($eventName) {
+                    $match = $this->findMatchingFixture($eventName, 'Soccer', null, null, null, $o['eventId'] ?? null);
+                    if ($match) $fixtureId = $match['fixture']['id'] ?? null;
+                }
+
                 $placedDate = isset($o['placedDate']) ? date('Y-m-d H:i:s', strtotime($o['placedDate'])) : date('Y-m-d H:i:s');
 
                 // Verifica esistenza nel DB locale (Flessibile su prefisso 1:)
@@ -2334,7 +2412,7 @@ class GiaNikController
                     $finalLeagueName = $leagueName ?: ($existing['league'] ?? null);
 
                     // Update: aggiorna sempre per avere l'ultimo stato (profitto, commissioni, status, sizeMatched)
-                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = :status, profit = :profit, commission = :commission, market_id = :market_id, market_name = :market_name, event_name = :event_name, runner_name = :runner_name, league = :league, created_at = :created_at, betfair_id = :betfair_id, size_matched = :size_matched WHERE id = :id");
+                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = :status, profit = :profit, commission = :commission, market_id = :market_id, market_name = :market_name, event_name = :event_name, runner_name = :runner_name, league = :league, league_id = COALESCE(league_id, :league_id), fixture_id = COALESCE(fixture_id, :fixture_id), created_at = :created_at, betfair_id = :betfair_id, size_matched = :size_matched WHERE id = :id");
                     $stmtUpdate->execute([
                         ':status' => $o['status'],
                         ':profit' => $o['profit'],
@@ -2344,6 +2422,8 @@ class GiaNikController
                         ':event_name' => $finalEventName,
                         ':runner_name' => $finalRunnerName,
                         ':league' => $finalLeagueName,
+                        ':league_id' => $o['league_id'] ?? null,
+                        ':fixture_id' => $fixtureId,
                         ':created_at' => $placedDate,
                         ':betfair_id' => $betId,
                         ':size_matched' => $o['sizeMatched'] ?? 0,
@@ -2362,8 +2442,8 @@ class GiaNikController
                 } else {
                     // Import Automatico (se non esisteva)
                     $stmtInsert = $this->db->prepare("INSERT INTO bets 
-                        (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, size_matched, status, type, profit, commission, league, created_at, motivation)
-                        VALUES (:betfair_id, :market_id, :market_name, :event_name, 'Soccer', :selection_id, :runner_name, :odds, :stake, :size_matched, :status, 'real', :profit, :commission, :league, :created_at, 'Scommessa importata da Betfair Exchange')");
+                        (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, size_matched, status, type, profit, commission, league, fixture_id, created_at, motivation)
+                        VALUES (:betfair_id, :market_id, :market_name, :event_name, 'Soccer', :selection_id, :runner_name, :odds, :stake, :size_matched, :status, 'real', :profit, :commission, :league, :fixture_id, :created_at, 'Scommessa importata da Betfair Exchange')");
                     $stmtInsert->execute([
                         ':betfair_id' => $betId,
                         ':market_id' => $o['marketId'],
@@ -2378,6 +2458,7 @@ class GiaNikController
                         ':profit' => $o['profit'],
                         ':commission' => $o['commission'],
                         ':league' => $leagueName,
+                        ':fixture_id' => $fixtureId,
                         ':created_at' => $placedDate
                     ]);
 
