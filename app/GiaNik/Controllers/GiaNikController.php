@@ -1540,10 +1540,12 @@ class GiaNikController
 
         // 3. Final Fallback: Auto-generated summary
         if (empty(trim($motivation))) {
-            $score = $event['api_football']['live_score'] ?? '0-0';
+            $sData = $event['api_football']['live']['live_score'] ?? null;
+            $score = is_array($sData) ? ($sData['home'] . '-' . $sData['away']) : '0-0';
             $sentiment = $analysis['sentiment'] ?? 'Neutral';
             $confidence = $analysis['confidence'] ?? 0;
-            $motivation = "Analisi GiaNik: Il match si trova sul punteggio di $score. La confidenza nell'operazione è del $confidence% con un sentiment di mercato $sentiment. L'analisi dei volumi e dei dati live suggerisce questa operazione come la più bilanciata.";
+            $advice = $analysis['advice'] ?? 'N/A';
+            $motivation = "Analisi GiaNik: Operazione suggerita su $advice con confidenza del $confidence%. Il match si trova sul punteggio di $score. Sentiment di mercato: $sentiment. L'analisi dei volumi e dei dati live suggerisce questa operazione come la più bilanciata.";
         }
 
         return $motivation;
@@ -2360,8 +2362,8 @@ class GiaNikController
                 } else {
                     // Import Automatico (se non esisteva)
                     $stmtInsert = $this->db->prepare("INSERT INTO bets 
-                        (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, size_matched, status, type, profit, commission, league, created_at)
-                        VALUES (:betfair_id, :market_id, :market_name, :event_name, 'Soccer', :selection_id, :runner_name, :odds, :stake, :size_matched, :status, 'real', :profit, :commission, :league, :created_at)");
+                        (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, size_matched, status, type, profit, commission, league, created_at, motivation)
+                        VALUES (:betfair_id, :market_id, :market_name, :event_name, 'Soccer', :selection_id, :runner_name, :odds, :stake, :size_matched, :status, 'real', :profit, :commission, :league, :created_at, 'Scommessa importata da Betfair Exchange')");
                     $stmtInsert->execute([
                         ':betfair_id' => $betId,
                         ':market_id' => $o['marketId'],
@@ -2394,13 +2396,23 @@ class GiaNikController
 
             // 5. MIRRORING & DEDUPLICAZIONE
             // Pulizia Preventiva Duplicati locali per BetID (flessibile su prefisso 1:)
+            // Utilizziamo una sottoquery ordinata per preservare il record con la motivazione tecnica più completa (Analisi GiaNik)
             $this->db->exec("DELETE FROM bets WHERE type = 'real' AND id NOT IN (
-                SELECT MIN(id) FROM bets
-                WHERE type = 'real'
-                GROUP BY CASE
-                    WHEN betfair_id IS NOT NULL THEN (CASE WHEN betfair_id LIKE '1:%' THEN SUBSTR(betfair_id, 3) ELSE betfair_id END)
-                    ELSE (market_id || selection_id || CAST(stake AS TEXT))
-                END
+                SELECT id FROM (
+                    SELECT id,
+                           CASE
+                               WHEN betfair_id IS NOT NULL THEN (CASE WHEN betfair_id LIKE '1:%' THEN SUBSTR(betfair_id, 3) ELSE betfair_id END)
+                               ELSE (market_id || selection_id || CAST(stake AS TEXT))
+                           END as group_id
+                    FROM bets
+                    WHERE type = 'real'
+                    ORDER BY (CASE
+                        WHEN motivation LIKE 'Analisi GiaNik%' THEN 0
+                        WHEN (motivation IS NOT NULL AND motivation != '' AND motivation != 'Scommessa importata da Betfair Exchange') THEN 1
+                        WHEN (motivation = 'Scommessa importata da Betfair Exchange') THEN 2
+                        ELSE 3 END) ASC, id ASC
+                ) as sorted
+                GROUP BY group_id
             )");
 
             // Mirroring selettivo: cancelliamo i pendenti locali solo se abbiamo una risposta valida da listCurrentOrders
