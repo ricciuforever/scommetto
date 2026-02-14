@@ -41,8 +41,7 @@ class GeminiService
                 "1. Analizza sport, competizione e volumi.\n" .
                 "2. Suggerisci fino a 10 pronostici interessanti.\n" .
                 "3. Per ogni pronostico specifica l'advice, la motivazione tecnica (motivation) e il sentiment globale del mercato.\n\n" .
-                "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
-                "```json\n" .
+                "RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI):\n" .
                 "[\n" .
                 "  {\n" .
                 "    \"marketId\": \"1.XXXXX\",\n" .
@@ -56,8 +55,7 @@ class GeminiService
                 "    \"sentiment\": \"Bullish/Bearish/Neutral\",\n" .
                 "    \"motivation\": \"Spiegazione tecnica del perché questo pronostico è di valore.\"\n" .
                 "  }\n" .
-                "]\n" .
-                "```";
+                "]";
         } elseif ($isGiaNik) {
             $prompt = "Sei un ANALISTA ELITE e TRADER di Betfair. Il tuo compito è analizzare un EVENTO LIVE con i suoi molteplici mercati e decidere l'operazione migliore.\n\n" .
                 $balanceText .
@@ -105,10 +103,9 @@ class GeminiService
                 "7. SOGLIA DI CONFIDENZA: Suggerisci l'operazione SOLO se la tua 'confidence' è pari o superiore all'80%. Se è inferiore, non scommettere sul mercato.\n" .
                 "8. REGOLE CALCIO (MULTI-ENTRY): Se le condizioni cambiano durante il match, puoi rientrare con nuove scommesse. Massimo 4 puntate totali per match: 2 nel Primo Tempo e 2 nel Secondo Tempo. Ogni ingresso deve avere confidence >= 80%.\n" .
                 "9. ⚠️ QUOTA MINIMA E VALORE (REGOLA FERREA): 1.25 è la tua quota MINIMA assoluta di ingresso. Non suggerire MAI quote inferiori a 1.25 nel campo 'odds'. Se la quota attuale del mercato è superiore a 1.25, usala. Se invece la quota attuale è inferiore (es. 1.01 - 1.24) ma la tua 'confidence' è >= 80%, devi OBBLIGATORIAMENTE impostare il campo 'odds' a 1.25 nel JSON. Questo creerà un ordine 'unmatched' che attenderà che il mercato salga a 1.25. Suggerire quote come 1.03 o 1.15 è VIETATO e considerato un errore grave.\n" .
-                "10. Restituisci SEMPRE un blocco JSON con i dettagli come PRIMA COSA nella tua risposta.\n" .
+                "10. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON.\n" .
                 "11. STILE RISPOSTA: La 'motivation' deve essere sintetica (max 80 parole). Evita di ripetere dati già chiari.\n\n" .
-                "FORMATO RISPOSTA (JSON OBBLIGATORIO ALL'INIZIO):\n" .
-                "```json\n" .
+                "RISPONDI ESCLUSIVAMENTE CON QUESTO SCHEMA JSON:\n" .
                 "{\n" .
                 "  \"marketId\": \"1.XXXXX\",\n" .
                 "  \"advice\": \"Runner Name\",\n" .
@@ -117,9 +114,7 @@ class GeminiService
                 "  \"confidence\": 90,\n" .
                 "  \"sentiment\": \"Bullish/Bearish/Neutral\",\n" .
                 "  \"motivation\": \"Sintesi tecnica qui.\"\n" .
-                "}\n" .
-                "```\n\n" .
-                "Dopo il JSON, puoi aggiungere un'analisi narrativa più libera se necessario, ma mantienila breve.";
+                "}";
         } else {
             $prompt = "Sei un TRADER ELITE di Betfair. Il tuo compito è analizzare il mercato live multi-sport e scovare la scommessa migliore tra quelle fornite.\n\n" .
                 $balanceText .
@@ -131,9 +126,8 @@ class GeminiService
                 "4. NON INVENTARE QUOTE: usa solo quelle presenti nel JSON per il runner scelto.\n" .
                 "5. Stake: 1-5% del portfolio.\n" .
                 "6. QUOTA MINIMA: 1.25 è la quota minima di ingresso. Se la quota attuale è superiore, usala. Se è inferiore ma l'evento è eccezionale, scrivi '1.25' nel campo 'odds' per piazzare un ordine limite.\n" .
-                "7. Se per uno sport non hai dati statistici (ma solo quote), sii più prudente e cerca solo 'Value Bets' evidenti.\n\n" .
-                "FORMATO RISPOSTA (JSON OBBLIGATORIO):\n" .
-                "```json\n" .
+                "7. Se per uno sport non hai dati statistici (but only quotes), be more prudent and look for obvious 'Value Bets'.\n\n" .
+                "RISPONDI ESCLUSIVAMENTE IN FORMATO JSON:\n" .
                 "{\n" .
                 "  \"marketId\": \"1.XXXXX\",\n" .
                 "  \"advice\": \"Runner Name\",\n" .
@@ -142,8 +136,7 @@ class GeminiService
                 "  \"confidence\": 90,\n" .
                 "  \"sentiment\": \"Testo breve sul sentiment del mercato\",\n" .
                 "  \"motivation\": \"Spiegazione tecnica dettagliata (perché questo evento e questo runner?)\"\n" .
-                "}\n" .
-                "```";
+                "}";
         }
 
         $data = [
@@ -156,7 +149,7 @@ class GeminiService
             ],
             "generationConfig" => [
                 "temperature" => 0.1, // Più basso per maggiore precisione
-                "maxOutputTokens" => 800
+                "response_mime_type" => "application/json"
             ]
         ];
 
