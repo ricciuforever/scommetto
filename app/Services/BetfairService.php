@@ -311,7 +311,7 @@ class BetfairService
         $now = microtime(true);
         $elapsed = $now - $this->lastRequestTime;
         if ($elapsed < 0.2) {
-            usleep((0.2 - $elapsed) * 1000000);
+            usleep((int) ((0.2 - $elapsed) * 1000000));
         }
         $this->lastRequestTime = microtime(true);
 
