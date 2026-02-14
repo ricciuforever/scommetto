@@ -111,10 +111,9 @@ class DioQuantumController
                 $books = $booksRes['result'] ?? [];
 
                 foreach ($books as $book) {
-                    // Filter for high liquidity (> 5000€ matched total)
-                    // This ensures we only trade on serious markets regardless of type
-                    if (($book['totalMatched'] ?? 0) < 5000)
-                        continue;
+                    // Filter for high liquidity (> 5000€ matched total) - REMOVED PER USER REQUEST
+                    // if (($book['totalMatched'] ?? 0) < 5000)
+                    //    continue;
 
                     // Find the matching catalogue for metadata
                     $mc = array_filter($catalogues, fn($c) => $c['marketId'] === $book['marketId']);
