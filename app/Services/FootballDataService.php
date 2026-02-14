@@ -427,7 +427,19 @@ class FootballDataService
             'ñ' => 'n',
             'ç' => 'c',
             'ý' => 'y',
-            'ÿ' => 'y'
+            'ÿ' => 'y',
+            'ş' => 's',
+            'ș' => 's',
+            'ţ' => 't',
+            'ț' => 't',
+            'ă' => 'a',
+            'î' => 'i',
+            'â' => 'a',
+            'ć' => 'c',
+            'č' => 'c',
+            'đ' => 'd',
+            'š' => 's',
+            'ž' => 'z'
         ];
         $name = strtr($name, $chars);
 
@@ -490,7 +502,10 @@ class FootballDataService
             'rb bragantino' => 'bragantino',
             'istanbulspor' => 'istanbul',
             'corum belediyespor' => 'corum',
-            'corum bel' => 'corum'
+            'corum bel' => 'corum',
+            'mohun bagan super giants' => 'mohun bagan',
+            'mohun bagan sg' => 'mohun bagan',
+            'atk mohun bagan' => 'mohun bagan'
         ];
         foreach ($replacements as $search => $replace) {
             $name = preg_replace('/\b' . preg_quote($search, '/') . '\b/i', $replace, $name);
@@ -524,6 +539,11 @@ class FootballDataService
             'as',
             'cd',
             'cs',
+            'udg',
+            'bucuresti',
+            'galati',
+            'odzaci',
+            'smederevo',
             'united',
             'city',
             'town',
@@ -543,6 +563,7 @@ class FootballDataService
             'women\'s',
             'womens',
             'ladies',
+            'w',
             'girl',
             'girls',
             'boy',
@@ -641,8 +662,11 @@ class FootballDataService
 
         $tempName = $name;
         foreach ($remove as $r) {
-            // Use suffix matching: allow matching even if it's part of a larger word at the end
-            $tempName = preg_replace('/' . preg_quote($r, '/') . '\b/i', '', $tempName);
+            // Use word boundary matching to avoid partial word removal
+            $pattern = (strpos($r, '-') !== false || strpos($r, '.') !== false)
+                ? '/' . preg_quote($r, '/') . '/i'
+                : '/\b' . preg_quote($r, '/') . '\b/i';
+            $tempName = preg_replace($pattern, '', $tempName);
         }
 
         $tempName = trim(preg_replace('/\s+/', ' ', $tempName));
@@ -663,15 +687,31 @@ class FootballDataService
         if (empty($n1) || empty($n2))
             return false;
 
-        // Exact match or substring
+        $n1 = trim($n1);
+        $n2 = trim($n2);
+
+        // 1. Exact match or substring
         if ($n1 === $n2 || strpos($n1, $n2) !== false || strpos($n2, $n1) !== false) {
             return true;
         }
 
+        // 2. Word-based matching (overlap)
+        $w1 = explode(' ', $n1);
+        $w2 = explode(' ', $n2);
+
+        $intersect = array_intersect($w1, $w2);
+        if (count($intersect) >= 1) {
+            // If they share a significant word (not just a common suffix/prefix already removed)
+            // AND the lengths aren't too different
+            $minLen = min(count($w1), count($w2));
+            if (count($intersect) >= $minLen || count($intersect) >= 2) {
+                return true;
+            }
+        }
+
+        // 3. Adaptive Levenshtein threshold
         $len1 = strlen($n1);
         $len2 = strlen($n2);
-
-        // Adaptive Levenshtein threshold
         $threshold = ($len1 > 10 && $len2 > 10) ? 4 : 3;
 
         if (levenshtein($n1, $n2) < $threshold) {
