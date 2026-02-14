@@ -4,7 +4,8 @@ require_once __DIR__ . '/bootstrap.php';
 use App\Controllers\SyncController;
 use App\GiaNik\Controllers\GiaNikController;
 
-// 1. Standard Live Sync
+// 1. Standard Live Sync (DISABLED - Focused on GiaNik)
+/*
 $sync = new SyncController();
 try {
     echo "[" . date('Y-m-d H:i:s') . "] Starting Standard Live Sync...\n";
@@ -13,6 +14,7 @@ try {
 } catch (\Throwable $e) {
     echo "Standard Live Sync Error: " . $e->getMessage() . "\n";
 }
+*/
 
 // 2. GiaNik Auto-Process
 $gianik = new GiaNikController();

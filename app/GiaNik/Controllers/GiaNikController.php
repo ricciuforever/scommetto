@@ -910,7 +910,7 @@ class GiaNikController
 
             $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
-                if ($eventCounter >= 3)
+                if ($eventCounter >= 10)
                     break;
                 $mainEvent = $catalogues[0];
                 if (in_array($mainEvent['event']['name'], $pendingEventNames))
