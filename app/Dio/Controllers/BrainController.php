@@ -23,7 +23,7 @@ class BrainController
      */
     public function learn()
     {
-        header('Content-Type: application/json');
+        $this->sendJsonHeader();
 
         // Find settled bets without an experience entry
         $stmt = $this->db->prepare("
@@ -56,6 +56,13 @@ class BrainController
         }
 
         echo json_encode(['status' => 'success', 'lessons_learned' => $learned]);
+    }
+
+    private function sendJsonHeader()
+    {
+        if (PHP_SAPI !== 'cli' && !headers_sent()) {
+            header('Content-Type: application/json');
+        }
     }
 
     private function extractLesson($bet)
