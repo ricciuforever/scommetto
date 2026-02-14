@@ -108,7 +108,9 @@ class GiaNikDatabase
             'bucket' => 'TEXT',
             'league' => 'TEXT',
             'league_id' => 'INTEGER',
-            'size_matched' => 'REAL DEFAULT 0'
+            'size_matched' => 'REAL DEFAULT 0',
+            'placed_at_minute' => 'INTEGER',
+            'placed_at_period' => 'TEXT'
         ];
 
         $stmt = $this->connection->query("PRAGMA table_info(bets)");
