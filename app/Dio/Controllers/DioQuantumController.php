@@ -13,6 +13,7 @@ class DioQuantumController
     private $bf;
     private $gemini;
     private $db;
+    private $cachedPortfolio = null;
 
     public function __construct()
     {
@@ -24,11 +25,15 @@ class DioQuantumController
     public function index()
     {
         $pageTitle = 'Scommetto.AI - Dio Quantum';
-        $stats = $this->getStats();
+        $portfolio = $this->recalculatePortfolio();
+        $stats = $portfolio;
         $recentBets = $this->getRecentBets();
         $recentLogs = $this->getRecentLogs();
         $recentExperiences = $this->getRecentExperiences();
-        $performanceHistory = $this->getPerformanceHistory();
+        $performanceHistory = $portfolio['history'];
+
+        // Synchronize virtual balance in DB
+        $this->updateVirtualBalance($portfolio['available_balance']);
 
         // Fetch live sports dynamically
         $eventTypesRes = $this->bf->getEventTypes(['inPlayOnly' => true]);
@@ -78,6 +83,17 @@ class DioQuantumController
     {
         $this->sendJsonHeader();
         $liveScores = [];
+
+        // CHECK IF AVAILABLE BALANCE >= 2€
+        $portfolio = $this->recalculatePortfolio();
+
+        // Synchronize virtual balance in DB
+        $this->updateVirtualBalance($portfolio['available_balance']);
+
+        if ($portfolio['available_balance'] < 2.00) {
+            echo json_encode(['status' => 'success', 'message' => 'Dio Quantum fermo: Saldo insufficiente (< 2€)']);
+            return;
+        }
 
         // Throttling: 1 scan ogni 180 secondi per non saturare Betfair e Gemini
         $cooldownFile = \App\Config\Config::DATA_PATH . 'dio_quantum_cooldown.txt';
@@ -238,7 +254,9 @@ class DioQuantumController
 
     private function analyzeQuantumBatch($tickers)
     {
-        $balance = $this->getVirtualBalance();
+        $portfolio = $this->recalculatePortfolio();
+        $totalBalance = $portfolio['total_balance'];
+        $availableBalance = $portfolio['available_balance'];
 
         // RAG BRAIN: Retrieve past experiences for sports in this batch
         $sports = array_unique(array_column($tickers, 'sport'));
@@ -263,7 +281,7 @@ class DioQuantumController
 
         $prompt = "Sei un QUANT TRADER denominato 'Dio'. Non sei uno scommettitore, sei un analista di Price Action (Tape Reading).\n\n" .
             ($ragContext ? $ragContext . "\n" : "") .
-            "SITUAZIONE PORTAFOGLIO: Bankroll " . number_format($balance, 2) . "€\n\n" .
+            "SITUAZIONE PORTAFOGLIO: Saldo Totale " . number_format($totalBalance, 2) . "€, Saldo Disponibile " . number_format($availableBalance, 2) . "€\n\n" .
             "DATI ASSET (BATCH DI TICKERS):\n" . json_encode($tickers, JSON_PRETTY_PRINT) . "\n\n" .
             "IL TUO VANTAGGIO (Price Action Rules):\n" .
             "1. Analizza 'lastPriceTraded' vs Quota Attuale: Se divergono, identifica il momentum.\n" .
@@ -272,7 +290,8 @@ class DioQuantumController
             "4. IGNORA i nomi delle squadre/atleti. Guarda solo l'efficienza del mercato.\n\n" .
             "STRATEGIA OPERATIVA:\n" .
             "- Quota minima: 1.10.\n" .
-            "- Stake: Min 2€, Max " . ($balance * 0.05) . "€ (5%).\n" .
+            "- Stake: Min 2€, Max " . min($availableBalance, $totalBalance * 0.05) . "€ (5% del totale, entro disponibilità).\n" .
+            "- Se il saldo disponibile è inferiore allo stake necessario, rispondi PASS.\n" .
             "- Decisione: BACK, LAY o PASS.\n" .
             "- Confidence >= 85 per operare.\n\n" .
             "RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI, uno per ogni ticker in ordine):\n" .
@@ -300,6 +319,14 @@ class DioQuantumController
 
     private function placeVirtualBet($ticker, $analysis)
     {
+        // Double check balance before placing
+        $available = $this->recalculatePortfolio()['available_balance'];
+        $stake = (float)($analysis['stake'] ?? 0);
+
+        if ($available < $stake || $stake < 2.0) {
+            return; // Safety guard
+        }
+
         $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, motivation, score, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'virtual')");
         $stmt->execute([
             $ticker['marketId'],
@@ -317,6 +344,9 @@ class DioQuantumController
         // Update temporary balance (to avoid over-stressing the bankroll in one scan cycle)
         $newBalance = $this->getVirtualBalance() - ($analysis['stake'] ?? 0);
         $this->updateVirtualBalance($newBalance);
+
+        // Invalidate cache to ensure subsequent checks in the same loop are accurate
+        $this->cachedPortfolio = null;
     }
 
     private function getVirtualBalance()
@@ -334,26 +364,7 @@ class DioQuantumController
 
     private function getStats()
     {
-        $balance = $this->getVirtualBalance();
-
-        $stmt = $this->db->prepare("SELECT COUNT(*) FROM bets");
-        $stmt->execute();
-        $totalBets = $stmt->fetchColumn();
-
-        $stmt = $this->db->prepare("SELECT SUM(profit) FROM bets WHERE status != 'pending'");
-        $stmt->execute();
-        $totalProfit = (float) $stmt->fetchColumn();
-
-        $stmt = $this->db->prepare("SELECT SUM(stake) FROM bets WHERE status != 'pending'");
-        $stmt->execute();
-        $totalStake = (float) $stmt->fetchColumn();
-
-        return [
-            'balance' => $balance,
-            'total_bets' => $totalBets,
-            'total_profit' => $totalProfit,
-            'roi' => $totalStake > 0 ? ($totalProfit / $totalStake) * 100 : 0
-        ];
+        return $this->recalculatePortfolio();
     }
 
     private function getRecentBets()
@@ -402,25 +413,104 @@ class DioQuantumController
 
     private function getPerformanceHistory()
     {
-        // Get settled bets ordered by date to calculate cumulative profit
-        $stmt = $this->db->prepare("SELECT profit, settled_at FROM bets WHERE status IN ('won', 'lost') ORDER BY settled_at ASC");
+        $portfolio = $this->recalculatePortfolio();
+        return $portfolio['history'];
+    }
+
+    private function recalculatePortfolio()
+    {
+        if ($this->cachedPortfolio !== null) {
+            return $this->cachedPortfolio;
+        }
+
+        $stmt = $this->db->prepare("SELECT id, stake, odds, profit, status, created_at, settled_at FROM bets ORDER BY created_at ASC");
         $stmt->execute();
-        $settled = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $allBets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $history = [];
-        $cumulative = 100.0; // Initial bankroll
+        $invested = 100.0;
+        $currentBalance = 100.0; // Current Available Balance
 
-        // Initial point
-        $history[] = ['t' => 'Start', 'v' => 100.0];
+        $events = [];
+        foreach ($allBets as $bet) {
+            $events[] = [
+                'time' => $bet['created_at'],
+                'type' => 'place',
+                'amount' => (float) $bet['stake'],
+                'id' => $bet['id']
+            ];
+            if ($bet['status'] !== 'pending' && $bet['settled_at']) {
+                $events[] = [
+                    'time' => $bet['settled_at'],
+                    'type' => 'settle',
+                    'status' => $bet['status'],
+                    'amount' => ($bet['status'] === 'won') ? (float) ($bet['stake'] * $bet['odds']) : 0,
+                    'id' => $bet['id']
+                ];
+            }
+        }
 
-        foreach ($settled as $s) {
-            $cumulative += (float) $s['profit'];
+        // Sort events by time
+        usort($events, function ($a, $b) {
+            $ta = strtotime($a['time']);
+            $tb = strtotime($b['time']);
+            if ($ta === $tb) {
+                return ($a['type'] === 'place') ? -1 : 1;
+            }
+            return $ta <=> $tb;
+        });
+
+        $exposure = 0;
+        $wins = 0;
+        $settledCount = 0;
+        $totalProfit = 0;
+        $history = [['t' => 'Start', 'v' => 100.0]];
+
+        $betById = [];
+        foreach ($allBets as $bet) {
+            $betById[$bet['id']] = $bet;
+        }
+
+        foreach ($events as $event) {
+            if ($event['type'] === 'place') {
+                if ($currentBalance < $event['amount']) {
+                    $topupsNeeded = ceil(($event['amount'] - $currentBalance) / 100);
+                    if ($topupsNeeded < 1)
+                        $topupsNeeded = 1;
+                    $currentBalance += $topupsNeeded * 100;
+                    $invested += $topupsNeeded * 100;
+                }
+                $currentBalance -= $event['amount'];
+                $exposure += $event['amount'];
+            } else {
+                $currentBalance += $event['amount'];
+                $bet = $betById[$event['id']];
+                $exposure -= (float) $bet['stake'];
+
+                $totalProfit += (float) $bet['profit'];
+                if ($event['status'] === 'won') {
+                    $wins++;
+                }
+                $settledCount++;
+            }
+
             $history[] = [
-                't' => date('d/m H:i', strtotime($s['settled_at'])),
-                'v' => round($cumulative, 2)
+                't' => date('d/m H:i', strtotime($event['time'])),
+                'v' => round($currentBalance + $exposure, 2)
             ];
         }
 
-        return $history;
+        $this->cachedPortfolio = [
+            'total_balance' => $currentBalance + $exposure,
+            'available_balance' => $currentBalance,
+            'exposure_balance' => $exposure,
+            'total_profit' => $totalProfit,
+            'total_invested' => $invested,
+            'roi' => ($invested > 0) ? ($totalProfit / $invested) * 100 : 0,
+            'win_rate' => ($settledCount > 0) ? ($wins / $settledCount) * 100 : 0,
+            'total_bets' => count($allBets),
+            'history' => $history
+        ];
+
+        return $this->cachedPortfolio;
     }
 }
