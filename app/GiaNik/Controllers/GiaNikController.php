@@ -923,22 +923,15 @@ class GiaNikController
                 $eventMarketsMap[$eid][] = $mc;
             }
 
-            $stmtPending = $this->db->prepare("SELECT DISTINCT market_id FROM bets WHERE status = 'pending'");
+            $stmtPending = $this->db->prepare("SELECT DISTINCT event_name FROM bets WHERE status = 'pending'");
             $stmtPending->execute();
-            $pendingMarketIds = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
+            $pendingEventNames = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
 
             // Recuperiamo il conteggio delle scommesse per oggi per ogni match (per limitare ingressi multipli)
             $stmtCount = $this->db->prepare("SELECT event_name, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name");
             $stmtCount->execute();
             $matchBetCounts = $stmtCount->fetchAll(PDO::FETCH_KEY_PAIR);
 
-            // Counts per match and period (today)
-            $stmtPeriodCounts = $this->db->prepare("SELECT event_name, placed_at_period, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name, placed_at_period");
-            $stmtPeriodCounts->execute();
-            $matchPeriodCounts = [];
-            while ($row = $stmtPeriodCounts->fetch(PDO::FETCH_ASSOC)) {
-                $matchPeriodCounts[$row['event_name']][$row['placed_at_period']] = (int) $row['cnt'];
-            }
 
             // Fetch correct balance for Gemini based on operational mode
             $activeBalance = ['available' => 0, 'total' => 0];
@@ -975,12 +968,15 @@ class GiaNikController
                 }
 
                 // Hard Limits:
-                // 1. Max 2 bets per match total today (1 per half)
-                $totalBetsForMatch = $matchBetCounts[$eventName] ?? 0;
-                // 2. Max 1 bet per half (1H/2H)
-                $betsInCurrentPeriod = $matchPeriodCounts[$eventName][$currentPeriod] ?? 0;
+                // 1. Single Concurrent Bet: One bet at a time per match.
+                if (in_array($eventName, $pendingEventNames)) {
+                    $results['skipped_already_bet']++;
+                    continue;
+                }
 
-                if ($totalBetsForMatch >= 2 || ($currentPeriod !== 'FT' && $betsInCurrentPeriod >= 1)) {
+                // 2. Daily Limit: Max 4 bets total per match today (safety guardrail).
+                $totalBetsForMatch = $matchBetCounts[$eventName] ?? 0;
+                if ($totalBetsForMatch >= 4) {
                     $results['skipped_already_bet']++;
                     continue;
                 }
@@ -1004,10 +1000,6 @@ class GiaNikController
                     foreach ($catalogues as $mc) {
                         $mId = $mc['marketId'];
                         if (!isset($booksMap[$mId]))
-                            continue;
-
-                        // Skip markets with pending bets to avoid duplicates
-                        if (in_array($mId, $pendingMarketIds))
                             continue;
 
                         $book = $booksMap[$mId];
