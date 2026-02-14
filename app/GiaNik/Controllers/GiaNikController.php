@@ -147,6 +147,7 @@ class GiaNikController
             $stmtBets = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending'");
             $stmtBets->execute();
             $allActiveBets = $stmtBets->fetchAll(PDO::FETCH_ASSOC);
+            $activeMarketIds = array_column($allActiveBets, 'market_id');
 
             // --- Score Tracking for Highlighting ---
             if (session_status() === PHP_SESSION_NONE)
@@ -160,6 +161,15 @@ class GiaNikController
                 $marketBooksMap[$mb['marketId']] = $mb;
             }
 
+            // --- Performance Optimization: Detect if there are live matches ---
+            $anyLive = false;
+            foreach ($marketBooksMap as $mb) {
+                if ($mb['marketDefinition']['inPlay'] ?? false) {
+                    $anyLive = true;
+                    break;
+                }
+            }
+
             // Prioritize market types (Match Odds > Winner > Moneyline)
             usort($marketCatalogues, function ($a, $b) {
                 $prio = ['MATCH_ODDS' => 1, 'WINNER' => 2, 'MONEYLINE' => 3];
@@ -170,6 +180,7 @@ class GiaNikController
 
             $groupedMatches = [];
             $processedEvents = [];
+            $processedCount = 0;
             foreach ($marketCatalogues as $mc) {
                 $marketId = $mc['marketId'];
                 $eventId = $mc['event']['id'];
@@ -179,8 +190,24 @@ class GiaNikController
                 if (!isset($marketBooksMap[$marketId]))
                     continue;
 
-                $processedEvents[$eventId] = true;
                 $mb = $marketBooksMap[$marketId];
+                $isInPlay = $mb['marketDefinition']['inPlay'] ?? false;
+                $hasActiveBet = in_array($marketId, $activeMarketIds);
+
+                // --- EARLY FILTERING TO PREVENT 504 TIMEOUT ---
+                // Se ci sono match live, processiamo SOLO i match live o quelli con scommesse attive
+                if ($anyLive && !$isInPlay && !$hasActiveBet) {
+                    continue;
+                }
+
+                // Se NON ci sono match live, limitiamo comunque il numero di match processati (max 40)
+                // per evitare di saturare il gateway con centinaia di match futuri.
+                if (!$anyLive && $processedCount >= 40 && !$hasActiveBet) {
+                    continue;
+                }
+
+                $processedEvents[$eventId] = true;
+                $processedCount++;
                 $sport = 'Soccer'; // Hardcoded as we only fetch eventType 1
 
                 $startTime = $eventStartTimes[$eventId] ?? null;
@@ -482,11 +509,6 @@ class GiaNikController
                 return ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0);
             });
 
-            // Filter logic: Show ONLY LIVE if any live exists. Otherwise show all (upcoming).
-            $liveMatchesOnly = array_filter($allMatches, fn($m) => ($m['is_in_play'] ?? false) === true);
-            if (!empty($liveMatchesOnly)) {
-                $allMatches = $liveMatchesOnly;
-            }
 
             // Funds
             $account = ['available' => 0, 'exposure' => 0];
