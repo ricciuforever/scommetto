@@ -19,7 +19,7 @@ class Config
     const MIN_BETFAIR_STAKE = 2.00;
     const MAX_STAKE_REAL = 20.00;
     const MIN_BETFAIR_ODDS = 1.25;
-    const BETFAIR_CONFIDENCE_THRESHOLD = 80;
+    const BETFAIR_CONFIDENCE_THRESHOLD = 85;
     const DEFAULT_TIMEZONE = 'Europe/Rome';
 
     // Popular League IDs
