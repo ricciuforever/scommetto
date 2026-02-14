@@ -899,10 +899,10 @@ class GiaNikController
     {
         $this->sendJsonHeader();
 
-        // Throttling: 1 analisi ogni 60 secondi
+        // Throttling: 1 analisi ogni 120 secondi (Ottimizzazione Gemini)
         $cooldownFile = Config::DATA_PATH . 'gianik_gemini_cooldown.txt';
         $lastRun = file_exists($cooldownFile) ? (int) file_get_contents($cooldownFile) : 0;
-        if (time() - $lastRun < 60) {
+        if (time() - $lastRun < 120) {
             echo json_encode(['status' => 'success', 'message' => 'GiaNik in cooldown']);
             return;
         }
@@ -993,15 +993,10 @@ class GiaNikController
             $stmtPendingMarkets->execute();
             $pendingMarketIds = $stmtPendingMarkets->fetchAll(PDO::FETCH_COLUMN);
 
-            // Per evitare doppie giocate nello stesso ciclo di scansione
-            $justBetFixtureIds = [];
-            $justBetNormNames = [];
-
             // Recuperiamo il conteggio delle scommesse per oggi per ogni match (per limitare ingressi multipli)
             $stmtCount = $this->db->prepare("SELECT event_name, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name");
             $stmtCount->execute();
             $matchBetCounts = $stmtCount->fetchAll(PDO::FETCH_KEY_PAIR);
-
 
             // Fetch correct balance for Gemini based on operational mode
             $activeBalance = ['available' => 0, 'total' => 0];
@@ -1016,46 +1011,27 @@ class GiaNikController
                 $activeBalance['total'] = $vBal['total'];
             }
 
+            $batchEvents = [];
+            $batchMetadata = [];
+
+            // Collect candidates for batch processing
             foreach ($eventMarketsMap as $eid => $catalogues) {
                 $mainEvent = $catalogues[0];
                 $eventName = $mainEvent['event']['name'];
 
-                // Support Multi-Entry: Determine current period
-                $matchingFixture = $this->footballData->searchInFixtureList($eventName, $apiFullFixtures);
-                $currentPeriod = 'NS';
-                $currentMinute = 0;
-                if ($matchingFixture) {
-                    $status = $matchingFixture['fixture']['status']['short'] ?? 'NS';
-                    $currentMinute = (int) ($matchingFixture['fixture']['status']['elapsed'] ?? 0);
-
-                    // Map status to periods (1H/2H)
-                    if (in_array($status, ['NS', '1H', 'HT']))
-                        $currentPeriod = '1H';
-                    elseif (in_array($status, ['2H', 'ET', 'BT', 'P']))
-                        $currentPeriod = '2H';
-                    elseif ($status === 'FT')
-                        $currentPeriod = 'FT';
-                }
-
-                // Hard Limits:
-                // 1. Single Concurrent Bet: One bet at a time per match.
-                // Primo controllo rapido (Nome esatto o normalizzato)
+                // 1. Single Concurrent Bet check
                 $normCurrent = $this->normalizeEventName($eventName);
-                if (in_array($eventName, $pendingEventNames) || in_array($normCurrent, $normPendingNames) || in_array($normCurrent, $justBetNormNames)) {
-                    $results['skipped_already_bet']++;
+                if (in_array($eventName, $pendingEventNames) || in_array($normCurrent, $normPendingNames)) {
                     continue;
                 }
 
-                // 2. Daily Limit: Max 4 bets total per match today (safety guardrail).
+                // 2. Daily Limit check
                 $totalBetsForMatch = $matchBetCounts[$eventName] ?? 0;
                 if ($totalBetsForMatch >= 4) {
-                    $results['skipped_already_bet']++;
                     continue;
                 }
 
                 try {
-                    $results['scanned']++;
-
                     $marketIds = array_map(fn($mc) => $mc['marketId'], $catalogues);
                     $booksRes = $this->bf->getMarketBooks($marketIds);
                     $booksMap = [];
@@ -1071,8 +1047,7 @@ class GiaNikController
 
                     foreach ($catalogues as $mc) {
                         $mId = $mc['marketId'];
-                        if (!isset($booksMap[$mId]))
-                            continue;
+                        if (!isset($booksMap[$mId])) continue;
 
                         $book = $booksMap[$mId];
                         $m = [
@@ -1093,196 +1068,145 @@ class GiaNikController
                         $event['markets'][] = $m;
                     }
 
-                    if (empty($event['markets'])) {
-                        continue;
+                    if (empty($event['markets'])) continue;
+
+                    // Enrichment
+                    $firstMarketId = $event['markets'][0]['marketId'] ?? null;
+                    $firstBook = $booksMap[$firstMarketId] ?? null;
+                    $apiData = $this->enrichWithApiData($event['event'], $event['sport'], $apiFullFixtures, $event['competition'], $firstBook);
+                    $event['api_football'] = $apiData;
+
+                    // HEURISTIC PRIORITY FILTER: Only analyze if Intensity Index is high or there was a recent goal
+                    $intensity = $this->getLastIntensityBadge($apiData['fixture']['id'] ?? null);
+                    $isPriority = false;
+                    if ($intensity && $intensity['val'] >= 1.2) $isPriority = true;
+
+                    // Check for recent goals (last 5 mins)
+                    if (!$isPriority && !empty($apiData['events'])) {
+                        $currentMin = (int)($apiData['live']['live_status']['elapsed_minutes'] ?? 0);
+                        foreach ($apiData['events'] as $ev) {
+                            if ($ev['type'] === 'Goal' && ($currentMin - (int)$ev['time']['elapsed']) <= 5) {
+                                $isPriority = true;
+                                break;
+                            }
+                        }
                     }
 
-                    if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
-                        // Pass the first market book for fallback extraction
-                        $firstMarketId = $event['markets'][0]['marketId'] ?? null;
-                        $firstBook = $booksMap[$firstMarketId] ?? null;
-                        $apiData = $this->enrichWithApiData($event['event'], $event['sport'], $apiFullFixtures, $event['competition'], $firstBook);
-                        $event['api_football'] = $apiData;
+                    if (!$isPriority) continue;
 
-                        // --- Deep Context Integration ---
-                        if (!empty($apiData['fixture'])) {
-                            $fix = $apiData['fixture'];
-                            $deepCtx = $this->intelligence->getDeepContext($fix['id'], $fix['team_home_id'], $fix['team_away_id'], $fix['league_id']);
-                            $event['deep_context'] = $this->summarizeDeepContext($deepCtx);
-                        }
+                    // Deep Context & Performance
+                    if (!empty($apiData['fixture'])) {
+                        $fix = $apiData['fixture'];
+                        $deepCtx = $this->intelligence->getDeepContext($fix['id'], $fix['team_home_id'], $fix['team_away_id'], $fix['league_id']);
+                        $event['deep_context'] = $this->summarizeDeepContext($deepCtx);
 
-                        // --- Performance Metrics Integration ---
                         $teams = $this->intelligence->parseTeams($event['event']);
                         $event['performance_metrics'] = $this->intelligence->getPerformanceContext(
-                            $teams['home'] ?? '',
-                            $teams['away'] ?? '',
-                            '1X2', // Default context, it will also pull teams and league
-                            $event['competition'],
-                            $event['api_football']['fixture']['league_id'] ?? null
+                            $teams['home'] ?? '', $teams['away'] ?? '',
+                            '1X2', $event['competition'], $fix['league_id'] ?? null
                         );
 
-                        // --- Gatekeeper (Stop Loss) ---
-                        $leagueId = $event['api_football']['fixture']['league_id'] ?? null;
-                        $fixtureId = $event['api_football']['fixture']['id'] ?? null;
+                        // Gatekeeper check
+                        if ($fix['league_id'] && $this->checkGatekeeper($fix['league_id'])) continue;
 
-                        // SECONDO CONTROLLO ROBUSTO (fixture_id)
-                        if ($fixtureId && (in_array($fixtureId, $pendingFixtureIds) || in_array($fixtureId, $justBetFixtureIds))) {
-                            $results['skipped_already_bet']++;
-                            continue;
-                        }
-
-                        if ($leagueId && $this->checkGatekeeper($leagueId)) {
-                            continue; // Salta questo evento se in perdita cronica
-                        }
-
-                        // --- Circuit Breaker (Recent Trauma) ---
-                        if (!empty($apiData['events'])) {
-                            $currentMin = (int)($apiData['live']['live_status']['elapsed_minutes'] ?? 0);
-                            $isShock = false;
-                            foreach ($apiData['events'] as $ev) {
-                                $eventMin = (int)($ev['time']['elapsed'] ?? 0);
-                                $type = $ev['type'] ?? '';
-                                $detail = strtolower($ev['detail'] ?? '');
-
-                                $isCritical = false;
-                                if ($type === 'Goal') $isCritical = true;
-                                if ($type === 'Card' && strpos($detail, 'red') !== false) $isCritical = true;
-
-                                if (($currentMin - $eventMin) <= 4 && $isCritical) {
-                                    $isShock = true;
-                                    break;
-                                }
+                        // Shock check (Circuit Breaker)
+                        $isShock = false;
+                        foreach ($apiData['events'] as $ev) {
+                            $type = $ev['type'] ?? '';
+                            if (($type === 'Goal' || ($type === 'Card' && strpos(strtolower($ev['detail'] ?? ''), 'red') !== false)) && ($currentMin - (int)$ev['time']['elapsed']) <= 4) {
+                                $isShock = true; break;
                             }
-                            if ($isShock) continue;
                         }
-
-                        // --- AI Lessons (Post-Mortem) ---
-                        $event['ai_lessons'] = $this->getRecentLessons($apiData);
+                        if ($isShock) continue;
                     }
 
-                    $gemini = new GeminiService();
+                    $event['ai_lessons'] = $this->getRecentLessons($apiData);
 
-                    // Debug: Log complete event data before AI analysis
-                    file_put_contents(Config::LOGS_PATH . 'gianik_ai_input.log', date('[Y-m-d H:i:s] ') . "Analyzing Event: {$event['event']}\n" . json_encode($event, JSON_PRETTY_PRINT) . PHP_EOL, FILE_APPEND);
+                    $batchEvents[] = $event;
+                    $batchMetadata[$event['event']] = [
+                        'api_data' => $apiData,
+                        'books_map' => $booksMap,
+                        'markets' => $event['markets']
+                    ];
 
-                    $predictionRaw = $gemini->analyze([$event], [
-                        'is_gianik' => true,
-                        'available_balance' => $activeBalance['available'],
-                        'current_portfolio' => $activeBalance['total']
-                    ]);
-
-                    $analysis = json_decode($predictionRaw, true);
-                    if (($analysis === null || !is_array($analysis)) && preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
-                        $analysis = json_decode($matches[1], true);
-                    }
-
-                    if (is_array($analysis)) {
-
-                        // Strict validation
-                        if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
-
-                            // Validazione ID Mercato
-                            $marketInEvent = false;
-                            foreach ($event['markets'] as $m) {
-                                if ($m['marketId'] === $analysis['marketId']) {
-                                    $marketInEvent = true;
-                                    break;
-                                }
-                            }
-                            if (!$marketInEvent) continue;
-
-                            // Controllo limite 4 scommesse per match (Calcio)
-                            $currentCount = $matchBetCounts[$event['event']] ?? 0;
-                            if (($event['sport'] === 'Soccer' || $event['sport'] === 'Football') && $currentCount >= 4) {
-                                continue;
-                            }
-                            $selectedMarket = null;
-                            foreach ($event['markets'] as $m) {
-                                if ($m['marketId'] === $analysis['marketId']) {
-                                    $selectedMarket = $m;
-                                    break;
-                                }
-                            }
-                            if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds))
-                                continue;
-
-                            // --- Dynamic Staking (No Kelly, Max 5% of Total Balance) ---
-                            $bankroll = $activeBalance['total'];
-                            $stake = $this->calculateDynamicStake($analysis['confidence'], $bankroll);
-
-                            // Protezione: non scommettere più del liquido disponibile
-                            if ($stake > $activeBalance['available']) {
-                                $stake = $activeBalance['available'];
-                            }
-
-                            if ($stake < Config::MIN_BETFAIR_STAKE)
-                                continue;
-
-                            if ($activeBalance['available'] < $stake)
-                                continue;
-
-                            $runners = array_map(fn($r) => ['runnerName' => $r['name'], 'selectionId' => $r['selectionId']], $selectedMarket['runners']);
-
-                            // Validazione Rigida Runner
-                            $selectionId = $this->bf->mapAdviceToSelection($analysis['advice'], $runners);
-
-                            if ($selectionId) {
-                                // Enforce minimum odds as per system rule
-                                if (($analysis['odds'] ?? 0) < Config::MIN_BETFAIR_ODDS) {
-                                    $analysis['odds'] = Config::MIN_BETFAIR_ODDS;
-                                }
-
-                                $betType = $globalMode;
-                                $betfairId = null;
-
-                                if ($betType === 'real') {
-                                    $res = $this->bf->placeBet($analysis['marketId'], $selectionId, $analysis['odds'], $stake);
-                                    if (($res['status'] ?? '') === 'SUCCESS') {
-                                        $betfairId = $res['instructionReports'][0]['betId'] ?? null;
-                                    } else {
-                                        // If real bet fails, skip insertion to avoid confusion
-                                        continue;
-                                    }
-                                }
-
-                                $bucket = $this->getOddsBucket($analysis['odds']);
-                                $leagueName = $event['competition'] ?? 'Unknown';
-                                $leagueId = $event['api_football']['fixture']['league_id'] ?? null;
-                                $motivation = $this->extractMotivation($analysis, $predictionRaw, $event);
-
-                                $fixtureId = $event['api_football']['fixture']['id'] ?? null;
-                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id, fixture_id, placed_at_minute, placed_at_period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                                $stmtInsert->execute([
-                                    $analysis['marketId'],
-                                    $selectedMarket['marketName'],
-                                    $event['event'],
-                                    $event['sport'],
-                                    $selectionId,
-                                    $analysis['advice'],
-                                    $analysis['odds'],
-                                    $stake,
-                                    $betType,
-                                    $betfairId,
-                                    $motivation,
-                                    $bucket,
-                                    $leagueName,
-                                    $leagueId,
-                                    $fixtureId,
-                                    $currentMinute,
-                                    $currentPeriod
-                                ]);
-
-                                if ($fixtureId) $justBetFixtureIds[] = $fixtureId;
-                                $justBetNormNames[] = $this->normalizeEventName($event['event']);
-
-                                $results['new_bets']++;
-                            }
-                        }
-                    }
+                    if (count($batchEvents) >= 3) break; // Batch cap
                 } catch (\Throwable $ex) {
                     $results['errors'][] = $ex->getMessage();
                 }
             }
+
+            if (!empty($batchEvents)) {
+                $gemini = new GeminiService();
+                $predictionRaw = $gemini->analyzeBatch($batchEvents, [
+                    'is_gianik' => true,
+                    'available_balance' => $activeBalance['available'],
+                    'current_portfolio' => $activeBalance['total']
+                ]);
+
+                $batchAnalysis = json_decode($predictionRaw, true);
+                if (!is_array($batchAnalysis)) {
+                    if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
+                        $batchAnalysis = json_decode($matches[1], true);
+                    }
+                }
+
+                if (is_array($batchAnalysis)) {
+                    foreach ($batchAnalysis as $analysis) {
+                        $eventName = $analysis['eventName'] ?? '';
+                        if (!isset($batchMetadata[$eventName])) continue;
+                        $meta = $batchMetadata[$eventName];
+
+                        if (!empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
+                            // Validation and Betting logic (similar to single process)
+                            $selectedMarket = null;
+                            foreach ($meta['markets'] as $m) {
+                                if ($m['marketId'] === $analysis['marketId']) {
+                                    $selectedMarket = $m; break;
+                                }
+                            }
+                            if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds)) continue;
+
+                            $bankroll = $activeBalance['total'];
+                            $stake = $this->calculateDynamicStake($analysis['confidence'], $bankroll);
+                            if ($stake > $activeBalance['available']) $stake = $activeBalance['available'];
+
+                            if ($stake < Config::MIN_BETFAIR_STAKE || $activeBalance['available'] < $stake) continue;
+
+                            $runners = array_map(fn($r) => ['runnerName' => $r['name'], 'selectionId' => $r['selectionId']], $selectedMarket['runners']);
+                            $selectionId = $this->bf->mapAdviceToSelection($analysis['advice'], $runners);
+
+                            if ($selectionId) {
+                                if (($analysis['odds'] ?? 0) < Config::MIN_BETFAIR_ODDS) $analysis['odds'] = Config::MIN_BETFAIR_ODDS;
+
+                                $betfairId = null;
+                                if ($globalMode === 'real') {
+                                    $res = $this->bf->placeBet($analysis['marketId'], $selectionId, $analysis['odds'], $stake);
+                                    if (($res['status'] ?? '') === 'SUCCESS') $betfairId = $res['instructionReports'][0]['betId'] ?? null;
+                                    else continue;
+                                }
+
+                                $bucket = $this->getOddsBucket($analysis['odds']);
+                                $motivation = $this->extractMotivation($analysis, $predictionRaw, ['api_football' => $meta['api_data']]);
+                                $fixtureId = $meta['api_data']['fixture']['id'] ?? null;
+
+                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id, fixture_id, placed_at_minute, placed_at_period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmtInsert->execute([
+                                    $analysis['marketId'], $selectedMarket['marketName'], $eventName, 'Soccer',
+                                    $selectionId, $analysis['advice'], $analysis['odds'], $stake,
+                                    $globalMode, $betfairId, $motivation, $bucket,
+                                    $meta['api_data']['fixture']['league_name'] ?? 'Unknown',
+                                    $meta['api_data']['fixture']['league_id'] ?? null,
+                                    $fixtureId,
+                                    (int)($meta['api_data']['live']['live_status']['elapsed_minutes'] ?? 0),
+                                    ($meta['api_data']['live']['live_status']['short'] ?? 'NS') === '1H' ? '1H' : '2H'
+                                ]);
+                                $results['new_bets']++;
+                            }
+                        }
+                    }
+                }
+            }
+
             $this->settleBets();
             echo json_encode(['status' => 'success', 'results' => $results]);
         } catch (\Throwable $e) {

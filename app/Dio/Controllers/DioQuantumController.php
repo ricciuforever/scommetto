@@ -79,10 +79,10 @@ class DioQuantumController
         $this->sendJsonHeader();
         $liveScores = [];
 
-        // Throttling: 1 scan ogni 60 secondi per non saturare Betfair e Gemini
+        // Throttling: 1 scan ogni 180 secondi per non saturare Betfair e Gemini
         $cooldownFile = \App\Config\Config::DATA_PATH . 'dio_quantum_cooldown.txt';
         $lastRun = file_exists($cooldownFile) ? (int) file_get_contents($cooldownFile) : 0;
-        if (time() - $lastRun < 60) {
+        if (time() - $lastRun < 180) {
             echo json_encode(['status' => 'success', 'message' => 'Dio Quantum in cooldown']);
             return;
         }
@@ -94,7 +94,7 @@ class DioQuantumController
             $eventTypes = $eventTypesRes['result'] ?? [];
 
             $allOpportunities = [];
-            $totalAiAnalyzed = 0;
+            $batchTickers = [];
 
             foreach ($eventTypes as $sportType) {
                 $sportId = $sportType['eventType']['id'];
@@ -109,7 +109,7 @@ class DioQuantumController
 
                 $eventIds = array_map(fn($e) => $e['event']['id'], $events);
 
-                // 3. Get Market Catalogues (Removing filters to allow ALL markets: Over/Under, Handicap, etc.)
+                // 3. Get Market Catalogues
                 $cataloguesRes = $this->bf->getMarketCatalogues($eventIds, 15);
                 $catalogues = $cataloguesRes['result'] ?? [];
 
@@ -123,12 +123,12 @@ class DioQuantumController
                 $books = $booksRes['result'] ?? [];
 
                 foreach ($books as $book) {
-                    // Safety Cap: Massimo 5 analisi AI per ciclo per non eccedere il rate-limit di Gemini
-                    if ($totalAiAnalyzed >= 5) break 2;
+                    // Safety Cap: Massimo 5 analisi AI per ciclo (in un singolo batch)
+                    if (count($batchTickers) >= 5) break 2;
 
-                    // Filter for high liquidity (> 5000€ matched total) - REMOVED PER USER REQUEST
-                    // if (($book['totalMatched'] ?? 0) < 5000)
-                    //    continue;
+                    // Filter for minimum liquidity to avoid wasting AI calls on irrelevant markets
+                    if (($book['totalMatched'] ?? 0) < 2000)
+                        continue;
 
                     // Find the matching catalogue for metadata
                     $mc = array_filter($catalogues, fn($c) => $c['marketId'] === $book['marketId']);
@@ -136,35 +136,39 @@ class DioQuantumController
 
                     // Normalize data into "Ticker" format
                     $ticker = $this->normalizeMarketData($book, $mc, $sportName);
-
-                    // 5. AI Analysis (Quantum Mode)
-                    $analysis = $this->analyzeQuantum($ticker);
-                    $totalAiAnalyzed++;
+                    $batchTickers[] = $ticker;
 
                     // CACHE LIVE SCORES FOR DASHBOARD
-                    // We collect scores of ALL scanned high-liquidity matches
                     if (!empty($ticker['score'])) {
                         $liveScores[$ticker['event']] = $ticker['score'];
                     }
+                }
+            }
 
-                    if ($analysis) {
-                        $confidence = $analysis['confidence'] ?? 0;
-                        $advice = $analysis['advice'] ?? '';
-                        $action = ($confidence >= 85 && stripos($advice, 'PASS') === false) ? 'bet' : 'pass';
+            if (!empty($batchTickers)) {
+                // 5. AI Analysis (Quantum Batch Mode - 1 call for 5 tickers)
+                $batchResults = $this->analyzeQuantumBatch($batchTickers);
 
-                        // Log thinking process
-                        $this->logActivity($ticker, $analysis, $action);
+                foreach ($batchResults as $index => $analysis) {
+                    $ticker = $batchTickers[$index] ?? null;
+                    if (!$ticker || !$analysis) continue;
 
-                        if ($action === 'bet') {
-                            $this->placeVirtualBet($ticker, $analysis);
-                            $allOpportunities[] = [
-                                'event' => $ticker['event'],
-                                'market' => $ticker['marketName'],
-                                'advice' => $analysis['advice'],
-                                'odds' => $analysis['odds'],
-                                'confidence' => $confidence
-                            ];
-                        }
+                    $confidence = $analysis['confidence'] ?? 0;
+                    $advice = $analysis['advice'] ?? '';
+                    $action = ($confidence >= 85 && stripos($advice, 'PASS') === false) ? 'bet' : 'pass';
+
+                    // Log thinking process
+                    $this->logActivity($ticker, $analysis, $action);
+
+                    if ($action === 'bet') {
+                        $this->placeVirtualBet($ticker, $analysis);
+                        $allOpportunities[] = [
+                            'event' => $ticker['event'],
+                            'market' => $ticker['marketName'],
+                            'advice' => $analysis['advice'],
+                            'odds' => $analysis['odds'],
+                            'confidence' => $confidence
+                        ];
                     }
                 }
             }
@@ -172,7 +176,7 @@ class DioQuantumController
             // SAVE SCORES CACHE
             file_put_contents(\App\Config\Config::DATA_PATH . 'live_scores.json', json_encode($liveScores));
 
-            echo json_encode(['status' => 'success', 'scanned' => count($allOpportunities), 'opportunities' => $allOpportunities]);
+            echo json_encode(['status' => 'success', 'scanned' => count($batchTickers), 'opportunities' => $allOpportunities]);
         } catch (\Throwable $e) {
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
@@ -232,56 +236,66 @@ class DioQuantumController
         ];
     }
 
-    private function analyzeQuantum($ticker)
+    private function analyzeQuantumBatch($tickers)
     {
         $balance = $this->getVirtualBalance();
 
-        // RAG BRAIN: Retrieve past experiences for this sport/market
-        $stmt = $this->db->prepare("SELECT outcome, lesson FROM experiences WHERE sport = ? ORDER BY created_at DESC LIMIT 3");
-        $stmt->execute([$ticker['sport']]);
-        $experiences = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // RAG BRAIN: Retrieve past experiences for sports in this batch
+        $sports = array_unique(array_column($tickers, 'sport'));
+        $ragContext = "MEMORIA RAG (Lezioni Apprese):\n";
+        $hasExperiences = false;
 
-        $ragContext = "";
-        if (!empty($experiences)) {
-            $ragContext = "MEMORIA RAG (Lezioni Apprese):\n";
-            foreach ($experiences as $exp) {
-                $status = ($exp['outcome'] === 'won') ? "✅ SUCCESSO" : "❌ FALLIMENTO";
-                $ragContext .= "- $status: {$exp['lesson']}\n";
+        foreach ($sports as $sport) {
+            $stmt = $this->db->prepare("SELECT outcome, lesson FROM experiences WHERE sport = ? ORDER BY created_at DESC LIMIT 2");
+            $stmt->execute([$sport]);
+            $experiences = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (!empty($experiences)) {
+                $hasExperiences = true;
+                $ragContext .= "Sport: $sport\n";
+                foreach ($experiences as $exp) {
+                    $status = ($exp['outcome'] === 'won') ? "✅ SUCCESSO" : "❌ FALLIMENTO";
+                    $ragContext .= "- $status: {$exp['lesson']}\n";
+                }
             }
-            $ragContext .= "\n";
         }
+        if (!$hasExperiences) $ragContext = "";
 
         $prompt = "Sei un QUANT TRADER denominato 'Dio'. Non sei uno scommettitore, sei un analista di Price Action (Tape Reading).\n\n" .
-            "MEMORIA RAG (Lezioni Precedenti):\n" . $ragContext . "\n" .
+            ($ragContext ? $ragContext . "\n" : "") .
             "SITUAZIONE PORTAFOGLIO: Bankroll " . number_format($balance, 2) . "€\n\n" .
-            "DATI ASSET (TICKER):\n" . json_encode($ticker, JSON_PRETTY_PRINT) . "\n\n" .
+            "DATI ASSET (BATCH DI TICKERS):\n" . json_encode($tickers, JSON_PRETTY_PRINT) . "\n\n" .
             "IL TUO VANTAGGIO (Price Action Rules):\n" .
             "1. Analizza 'lastPriceTraded' vs Quota Attuale: Se divergono, identifica il momentum.\n" .
-            "2. Analizza lo SCORE vs QUOTE: Se un tennista è avanti di un break ma la quota non crolla, il mercato è scettico. Identifica il perché.\n" .
+            "2. Analizza lo SCORE vs QUOTE: Se le quote non riflettono correttamente l'andamento del match, identifica il valore.\n" .
             "3. VOLUMI: Un volume alto indica precisione. Se il volume è basso, sii estremamente prudente.\n" .
             "4. IGNORA i nomi delle squadre/atleti. Guarda solo l'efficienza del mercato.\n\n" .
             "STRATEGIA OPERATIVA:\n" .
             "- Quota minima: 1.10.\n" .
-            "- Stake: Usa Kelly Criterion prudente. Min 2€, Max " . ($balance * 0.05) . "€ (5%).\n" .
+            "- Stake: Min 2€, Max " . ($balance * 0.05) . "€ (5%).\n" .
             "- Decisione: BACK, LAY o PASS.\n" .
             "- Confidence >= 85 per operare.\n\n" .
-            "RISPONDI IN JSON:\n" .
-            "{\n" .
-            "  \"advice\": \"Runner Name\",\n" .
-            "  \"selectionId\": \"ID\",\n" .
-            "  \"odds\": 1.80,\n" .
-            "  \"stake\": 2.0,\n" .
-            "  \"confidence\": 90,\n" .
-            "  \"motivation\": \"Analisi tecnica del nastro (es. Trend ribassista sulla favorita nonostante lo 0-0).\"\n" .
-            "}";
+            "RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI, uno per ogni ticker in ordine):\n" .
+            "[\n" .
+            "  {\n" .
+            "    \"advice\": \"Runner Name\",\n" .
+            "    \"selectionId\": \"ID\",\n" .
+            "    \"odds\": 1.80,\n" .
+            "    \"stake\": 2.0,\n" .
+            "    \"confidence\": 90,\n" .
+            "    \"motivation\": \"Sintesi tecnica qui.\"\n" .
+            "  }\n" .
+            "]";
 
         $response = $this->gemini->analyzeCustom($prompt);
 
+        $json = $response;
         if (preg_match('/```json\s*([\s\S]*?)(?:```|$)/', $response, $matches)) {
-            return json_decode(trim($matches[1]), true);
+            $json = trim($matches[1]);
         }
 
-        return json_decode($response, true);
+        $results = json_decode($json, true);
+        return is_array($results) ? $results : [];
     }
 
     private function placeVirtualBet($ticker, $analysis)
