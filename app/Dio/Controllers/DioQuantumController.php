@@ -429,6 +429,7 @@ class DioQuantumController
 
         $invested = 100.0;
         $currentBalance = 100.0; // Current Available Balance
+        $exposure = 0;
 
         $events = [];
         foreach ($allBets as $bet) {
@@ -459,10 +460,10 @@ class DioQuantumController
             return $ta <=> $tb;
         });
 
-        $exposure = 0;
         $wins = 0;
         $settledCount = 0;
         $totalProfit = 0;
+        $placedBets = []; // Track which bets were actually placed
         $history = [['t' => 'Start', 'v' => 100.0]];
 
         $betById = [];
@@ -472,16 +473,30 @@ class DioQuantumController
 
         foreach ($events as $event) {
             if ($event['type'] === 'place') {
-                if ($currentBalance < $event['amount']) {
-                    $topupsNeeded = ceil(($event['amount'] - $currentBalance) / 100);
-                    if ($topupsNeeded < 1)
-                        $topupsNeeded = 1;
-                    $currentBalance += $topupsNeeded * 100;
-                    $invested += $topupsNeeded * 100;
+                $stake = $event['amount'];
+
+                // If account is "broke" (Total Balance < 2), simulate a 100€ recharge
+                if ($currentBalance + $exposure < 2.0) {
+                    $currentBalance += 100.0;
+                    $invested += 100.0;
                 }
-                $currentBalance -= $event['amount'];
-                $exposure += $event['amount'];
+
+                // If still not enough available funds, SKIP this bet
+                if ($currentBalance < $stake) {
+                    $placedBets[$event['id']] = false;
+                    continue;
+                }
+
+                // Place the bet
+                $currentBalance -= $stake;
+                $exposure += $stake;
+                $placedBets[$event['id']] = true;
             } else {
+                // Settle
+                if (!($placedBets[$event['id']] ?? false)) {
+                    continue; // Skip settlement if bet was never placed
+                }
+
                 $currentBalance += $event['amount'];
                 $bet = $betById[$event['id']];
                 $exposure -= (float) $bet['stake'];
@@ -507,7 +522,7 @@ class DioQuantumController
             'total_invested' => $invested,
             'roi' => ($invested > 0) ? ($totalProfit / $invested) * 100 : 0,
             'win_rate' => ($settledCount > 0) ? ($wins / $settledCount) * 100 : 0,
-            'total_bets' => count($allBets),
+            'total_bets' => array_sum($placedBets), // Only count successfully placed bets
             'history' => $history
         ];
 
