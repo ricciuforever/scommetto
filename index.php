@@ -430,6 +430,9 @@ try {
     } elseif ($path === '/check_logs.php') {
         require_once __DIR__ . '/public/check_logs.php';
         return;
+    } elseif ($path === '/add_score_column.php') {
+        require_once __DIR__ . '/public/add_score_column.php';
+        return;
     } elseif ($path === '/api/settings' && $method === 'GET') {
         (new \App\Controllers\SystemController())->getSettings();
     } elseif ($path === '/api/settings/update' && $method === 'POST') {

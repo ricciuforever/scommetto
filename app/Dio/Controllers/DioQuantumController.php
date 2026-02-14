@@ -38,6 +38,12 @@ class DioQuantumController
         $pendingBetEvents = array_filter($recentBets, fn($b) => $b['status'] === 'pending');
         $activeMarketIds = array_column($pendingBetEvents, 'market_id');
 
+        // LOAD LIVE SCORES CACHE
+        $liveScoresCache = [];
+        if (file_exists(\App\Config\Config::DATA_PATH . 'live_scores.json')) {
+            $liveScoresCache = json_decode(file_get_contents(\App\Config\Config::DATA_PATH . 'live_scores.json'), true) ?? [];
+        }
+
         $liveSportsData = [];
         foreach ($eventTypes as $et) {
             $name = $et['eventType']['name'];
@@ -53,6 +59,17 @@ class DioQuantumController
                 ];
             }
         }
+
+        // INJECT SCORES
+        foreach ($liveSportsData as $sport => &$data) {
+            foreach ($data['events'] as &$eventObj) {
+                $eventName = $eventObj['event']['name'];
+                if (isset($liveScoresCache[$eventName])) {
+                    $eventObj['score'] = $liveScoresCache[$eventName];
+                }
+            }
+        }
+        unset($data, $eventObj); // Break references
 
         require __DIR__ . '/../Views/dashboard.php';
     }
@@ -109,6 +126,12 @@ class DioQuantumController
                     // 5. AI Analysis (Quantum Mode)
                     $analysis = $this->analyzeQuantum($ticker);
 
+                    // CACHE LIVE SCORES FOR DASHBOARD
+                    // We collect scores of ALL scanned high-liquidity matches
+                    if (!empty($ticker['score'])) {
+                        $liveScores[$ticker['event']] = $ticker['score'];
+                    }
+
                     if ($analysis) {
                         $confidence = $analysis['confidence'] ?? 0;
                         $advice = $analysis['advice'] ?? '';
@@ -130,6 +153,9 @@ class DioQuantumController
                     }
                 }
             }
+
+            // SAVE SCORES CACHE
+            file_put_contents(\App\Config\Config::DATA_PATH . 'live_scores.json', json_encode($liveScores));
 
             echo json_encode(['status' => 'success', 'scanned' => count($allOpportunities), 'opportunities' => $allOpportunities]);
         } catch (\Throwable $e) {
@@ -245,21 +271,22 @@ class DioQuantumController
 
     private function placeVirtualBet($ticker, $analysis)
     {
-        $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, motivation, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'virtual')");
+        $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, motivation, score, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'virtual')");
         $stmt->execute([
             $ticker['marketId'],
             $ticker['marketName'],
             $ticker['event'],
             $ticker['sport'],
-            $analysis['selectionId'],
-            $analysis['advice'],
-            $analysis['odds'],
-            $analysis['stake'],
-            "Quantum Algo: " . $analysis['motivation']
+            $analysis['selectionId'] ?? '',
+            $analysis['advice'] ?? 'Unknown',
+            $analysis['odds'] ?? 0,
+            $analysis['stake'] ?? 0,
+            "Quantum Algo: " . ($analysis['motivation'] ?? ''),
+            $ticker['score'] ?? null
         ]);
 
         // Update temporary balance (to avoid over-stressing the bankroll in one scan cycle)
-        $newBalance = $this->getVirtualBalance() - $analysis['stake'];
+        $newBalance = $this->getVirtualBalance() - ($analysis['stake'] ?? 0);
         $this->updateVirtualBalance($newBalance);
     }
 

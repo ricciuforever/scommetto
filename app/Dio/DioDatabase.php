@@ -38,6 +38,7 @@ class DioDatabase
             motivation TEXT,
             profit REAL DEFAULT 0,
             settled_at DATETIME,
+            score TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 

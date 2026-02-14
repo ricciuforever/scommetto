@@ -189,7 +189,15 @@ require __DIR__ . '/../../Views/layout/top.php';
                                 <div>
                                     <span
                                         class="text-[10px] font-black uppercase text-indigo-400"><?php echo $sportName; ?></span>
-                                    <h3 class="text-sm font-bold text-white mt-1"><?php echo $event['event']['name']; ?></h3>
+                                    <div class="text-xs text-slate-400 mb-1">
+                                        <?php echo $event['event']['countryCode'] ?? 'World'; ?></div>
+                                    <div class="font-bold text-white mb-2"><?php echo $event['event']['name']; ?></div>
+
+                                    <?php if (isset($event['score'])): ?>
+                                        <div class="text-xl font-black text-yellow-400 mb-2 animate-pulse">
+                                            <?php echo $event['score']; ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                                 <div
                                     class="bg-danger/10 text-danger px-2 py-1 rounded text-[10px] font-black uppercase flex items-center gap-1 border border-danger/20">
@@ -217,163 +225,165 @@ require __DIR__ . '/../../Views/layout/top.php';
         </div>
     </div>
 
-        <!-- Recent Bets -->
-        <div class="bg-white/5 rounded-2xl border border-white/10 glass overflow-hidden">
-            <div class="p-4 border-b border-white/10 flex justify-between items-center">
-                <h2 class="text-sm font-black uppercase tracking-widest">Ultime Operazioni Quantum</h2>
-                <span class="text-[10px] font-bold text-slate-500 uppercase">Live Tracking</span>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left">
-                    <thead>
-                        <tr
-                            class="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/10">
-                            <th class="px-6 py-4">Data</th>
-                            <th class="px-6 py-4">Sport / Evento</th>
-                            <th class="px-6 py-4">Mercato / Selezione</th>
-                            <th class="px-6 py-4">Quota</th>
-                            <th class="px-6 py-4 text-center">Stake</th>
-                            <th class="px-6 py-4 text-center">Stato</th>
+    <!-- Recent Bets -->
+    <div class="bg-white/5 rounded-2xl border border-white/10 glass overflow-hidden">
+        <div class="p-4 border-b border-white/10 flex justify-between items-center">
+            <h2 class="text-sm font-black uppercase tracking-widest">Ultime Operazioni Quantum</h2>
+            <span class="text-[10px] font-bold text-slate-500 uppercase">Live Tracking</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/10">
+                        <th class="px-6 py-4">Data</th>
+                        <th class="px-6 py-4">Sport / Evento</th>
+                        <th class="px-6 py-4">Mercato / Selezione</th>
+                        <th class="px-6 py-4">Quota</th>
+                        <th class="px-6 py-4 text-center">Stake</th>
+                        <th class="px-6 py-4 text-center">Stato</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5">
+                    <?php if (empty($recentBets)): ?>
+                        <tr>
+                            <td colspan="6" class="px-6 py-10 text-center text-slate-500 text-xs font-bold uppercase">
+                                Nessuna operazione registrata</td>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-white/5">
-                        <?php if (empty($recentBets)): ?>
-                            <tr>
-                                <td colspan="6" class="px-6 py-10 text-center text-slate-500 text-xs font-bold uppercase">
-                                    Nessuna operazione registrata</td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($recentBets as $bet): ?>
-                                <tr class="hover:bg-white/5 transition-colors group">
-                                    <td class="px-6 py-4 text-xs font-bold text-slate-400">
-                                        <?php echo date('H:i', strtotime($bet['created_at'])); ?>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span class="text-[10px] font-black uppercase text-indigo-400 block mb-0.5">
-                                            <?php echo $bet['sport']; ?>
-                                        </span>
-                                        <span class="text-xs font-bold text-white">
-                                            <?php echo $bet['event_name']; ?>
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span class="text-[10px] font-black uppercase text-slate-500 block mb-0.5">
-                                            <?php echo $bet['market_name']; ?>
-                                        </span>
-                                        <span class="text-xs font-bold text-white">
-                                            <?php echo $bet['runner_name']; ?>
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span
-                                            class="px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-black text-accent">
-                                            <?php echo number_format($bet['odds'], 2); ?>
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4 text-center text-xs font-bold text-white">
-                                        <?php echo number_format($bet['stake'], 2); ?>€
-                                    </td>
-                                    <td class="px-6 py-4 text-center">
-                                        <?php if ($bet['status'] === 'pending'): ?>
-                                            <span
-                                                class="px-2 py-1 bg-warning/10 text-warning text-[10px] font-black uppercase rounded-lg border border-warning/20">Abbinata</span>
-                                        <?php elseif ($bet['status'] === 'won'): ?>
-                                            <span
-                                                class="px-2 py-1 bg-success/10 text-success text-[10px] font-black uppercase rounded-lg border border-success/20">Vinta</span>
-                                        <?php else: ?>
-                                            <span
-                                                class="px-2 py-1 bg-danger/10 text-danger text-[10px] font-black uppercase rounded-lg border border-danger/20">Persa</span>
+                    <?php else: ?>
+                        <?php foreach ($recentBets as $bet): ?>
+                            <tr class="hover:bg-white/5 transition-colors group">
+                                <td class="px-6 py-4 text-xs font-bold text-slate-400">
+                                    <?php echo date('H:i', strtotime($bet['created_at'])); ?>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="text-[10px] font-black uppercase text-indigo-400 block mb-0.5">
+                                        <?php echo $bet['sport']; ?>
+                                    </span>
+                                    <span class="text-xs font-bold text-white">
+                                        <?php echo $bet['event_name']; ?>
+                                        <?php if (!empty($bet['score'])): ?>
+                                            <span class="text-yellow-400 ml-1 font-mono"><?php echo $bet['score']; ?></span>
                                         <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="text-[10px] font-black uppercase text-slate-500 block mb-0.5">
+                                        <?php echo $bet['market_name']; ?>
+                                    </span>
+                                    <span class="text-xs font-bold text-white">
+                                        <?php echo $bet['runner_name']; ?>
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span
+                                        class="px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-black text-accent">
+                                        <?php echo number_format($bet['odds'], 2); ?>
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-center text-xs font-bold text-white">
+                                    <?php echo number_format($bet['stake'], 2); ?>€
+                                </td>
+                                <td class="px-6 py-4 text-center">
+                                    <?php if ($bet['status'] === 'pending'): ?>
+                                        <span
+                                            class="px-2 py-1 bg-warning/10 text-warning text-[10px] font-black uppercase rounded-lg border border-warning/20">Abbinata</span>
+                                    <?php elseif ($bet['status'] === 'won'): ?>
+                                        <span
+                                            class="px-2 py-1 bg-success/10 text-success text-[10px] font-black uppercase rounded-lg border border-success/20">Vinta</span>
+                                    <?php else: ?>
+                                        <span
+                                            class="px-2 py-1 bg-danger/10 text-danger text-[10px] font-black uppercase rounded-lg border border-danger/20">Persa</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        // Initialize Performance Chart
-        const performanceData = <?php echo json_encode($performanceHistory); ?>;
-        if (performanceData.length > 1) {
-            const ctx = document.getElementById('performanceChart').getContext('2d');
-            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
-            gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Initialize Performance Chart
+    const performanceData = <?php echo json_encode($performanceHistory); ?>;
+    if (performanceData.length > 1) {
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
+        gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
 
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: performanceData.map(d => d.t),
-                    datasets: [{
-                        label: 'Virtual Bankroll (€)',
-                        data: performanceData.map(d => d.v),
-                        borderColor: '#6366f1',
-                        borderWidth: 3,
-                        fill: true,
-                        backgroundColor: gradient,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 6,
-                        pointHoverBackgroundColor: '#6366f1',
-                        pointHoverBorderColor: '#fff',
-                        pointHoverBorderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                            titleFont: { size: 10, weight: 'bold' },
-                            bodyFont: { size: 12, weight: 'black' },
-                            padding: 12,
-                            borderColor: 'rgba(255, 255, 255, 0.1)',
-                            borderWidth: 1,
-                            displayColors: false,
-                            callbacks: {
-                                label: function (context) {
-                                    return context.parsed.y.toFixed(2) + ' €';
-                                }
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: performanceData.map(d => d.t),
+                datasets: [{
+                    label: 'Virtual Bankroll (€)',
+                    data: performanceData.map(d => d.v),
+                    borderColor: '#6366f1',
+                    borderWidth: 3,
+                    fill: true,
+                    backgroundColor: gradient,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#6366f1',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        titleFont: { size: 10, weight: 'bold' },
+                        bodyFont: { size: 12, weight: 'black' },
+                        padding: 12,
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                        borderWidth: 1,
+                        displayColors: false,
+                        callbacks: {
+                            label: function (context) {
+                                return context.parsed.y.toFixed(2) + ' €';
                             }
                         }
+                    }
+                },
+                scales: {
+                    y: {
+                        grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
+                        ticks: { color: '#64748b', font: { size: 10, weight: 'bold' } }
                     },
-                    scales: {
-                        y: {
-                            grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
-                            ticks: { color: '#64748b', font: { size: 10, weight: 'bold' } }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#64748b', font: { size: 9, weight: 'bold' }, maxRotation: 0 }
-                        }
-                    },
-                    interaction: {
-                        intersect: false,
-                        mode: 'nearest',
-                    },
-                }
-            });
-        }
-
-        // Refresh Lucide icons after HTMX content swap
-        document.body.addEventListener('htmx:afterOnLoad', function () {
-            if (window.lucide) {
-                lucide.createIcons();
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#64748b', font: { size: 9, weight: 'bold' }, maxRotation: 0 }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'nearest',
+                },
             }
         });
+    }
 
-        // Auto-refresh the dashboard every 60 seconds
-        setTimeout(() => {
-            window.location.reload();
-        }, 60000);
-    </script>
+    // Refresh Lucide icons after HTMX content swap
+    document.body.addEventListener('htmx:afterOnLoad', function () {
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    });
 
-    <?php require __DIR__ . '/../../Views/layout/bottom.php'; ?>
+    // Auto-refresh the dashboard every 60 seconds
+    setTimeout(() => {
+        window.location.reload();
+    }, 60000);
+</script>
+
+<?php require __DIR__ . '/../../Views/layout/bottom.php'; ?>
