@@ -99,9 +99,6 @@ class DioQuantumController
                 $sportId = $sportType['eventType']['id'];
                 $sportName = $sportType['eventType']['name'];
 
-                // Conflict Prevention: Escludiamo il Calcio (gestito da GiaNik) per risparmiare risorse e sessioni
-                if ($sportId == '1') continue;
-
                 // 2. Get Live Events for this sport
                 $liveEventsRes = $this->bf->getLiveEvents([$sportId]);
                 $events = $liveEventsRes['result'] ?? [];

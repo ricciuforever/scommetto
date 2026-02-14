@@ -482,8 +482,11 @@ class GiaNikController
                 return ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0);
             });
 
-            // Re-group for view compatibility if needed, but the view expects $allMatches now
-            // Wait, the view was iterating over $groupedMatches? No, I'll update the view too.
+            // Filter logic: Show ONLY LIVE if any live exists. Otherwise show all (upcoming).
+            $liveMatchesOnly = array_filter($allMatches, fn($m) => ($m['is_in_play'] ?? false) === true);
+            if (!empty($liveMatchesOnly)) {
+                $allMatches = $liveMatchesOnly;
+            }
 
             // Funds
             $account = ['available' => 0, 'exposure' => 0];
