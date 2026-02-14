@@ -76,7 +76,8 @@ class DioQuantumController
 
     public function scanAndTrade()
     {
-        header('Content-Type: application/json');
+        $this->sendJsonHeader();
+        $liveScores = [];
 
         // Throttling: 1 scan ogni 60 secondi per non saturare Betfair e Gemini
         $cooldownFile = \App\Config\Config::DATA_PATH . 'dio_quantum_cooldown.txt';
@@ -376,6 +377,13 @@ class DioQuantumController
         $stmt = $this->db->prepare("SELECT * FROM experiences ORDER BY created_at DESC LIMIT 10");
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function sendJsonHeader()
+    {
+        if (PHP_SAPI !== 'cli' && !headers_sent()) {
+            header('Content-Type: application/json');
+        }
     }
 
     private function getPerformanceHistory()
