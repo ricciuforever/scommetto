@@ -1,6 +1,6 @@
 <?php
 // app/bootstrap.php is in the root, so from public/ we go up one level
-require __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/../bootstrap.php';
 
 use App\Dio\DioDatabase;
 use PDO;

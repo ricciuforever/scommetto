@@ -427,6 +427,9 @@ try {
         } catch (\Throwable $e) {
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
+    } elseif ($path === '/check_logs.php') {
+        require_once __DIR__ . '/public/check_logs.php';
+        return;
     } elseif ($path === '/api/settings' && $method === 'GET') {
         (new \App\Controllers\SystemController())->getSettings();
     } elseif ($path === '/api/settings/update' && $method === 'POST') {
