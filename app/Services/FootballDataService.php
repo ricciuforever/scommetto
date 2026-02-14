@@ -547,7 +547,7 @@ class FootballDataService
         // 2. Remove common prefixes/suffixes (word boundaries)
         // If the name would become empty, DON'T remove it (e.g. "Inter")
         $remove = [
-            'MGLADBACH',
+            'MGLA',
             'Frankfurt',
             'Heverlee',
             'OUD',
