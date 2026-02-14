@@ -19,7 +19,13 @@ try {
 // 2. GiaNik Auto-Process
 $gianik = new GiaNikController();
 try {
-    echo "[" . date('Y-m-d H:i:s') . "] Starting GiaNik Auto-Process...\n";
+    // Get mode for logging
+    $db = \App\GiaNik\GiaNikDatabase::getInstance()->getConnection();
+    $stmt = $db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
+    $stmt->execute();
+    $mode = strtoupper($stmt->fetchColumn() ?: 'VIRTUAL');
+
+    echo "[" . date('Y-m-d H:i:s') . "] Starting GiaNik Auto-Process ($mode MODE)...\n";
     $gianik->autoProcess();
     echo "\nGiaNik Auto-Process Completed.\n";
 } catch (\Throwable $e) {

@@ -197,6 +197,11 @@ class GiaNikController
                     }
                 }
 
+                $countryCode = $mc['event']['countryCode'] ?? null;
+                $mappedName = $this->getCountryMapping($countryCode);
+                $displayCountry = is_array($mappedName) ? $mappedName[0] : ($mappedName ?: $countryCode);
+                $fallbackFlag = $countryCode ? "https://media.api-sports.io/flags/" . strtolower($countryCode) . ".svg" : null;
+
                 $m = [
                     'marketId' => $marketId,
                     'event' => $mc['event']['name'],
@@ -216,16 +221,15 @@ class GiaNikController
                     'away_logo' => null,
                     'home_name' => null,
                     'away_name' => null,
-                    'country' => $mc['event']['countryCode'] ?? null,
-                    'flag' => null,
+                    'country' => $displayCountry,
+                    'flag' => $fallbackFlag,
                     'is_in_play' => $mb['marketDefinition']['inPlay'] ?? false
                 ];
 
                 // --- Enrichment ---
                 $foundApiData = false;
                 if ($sport === 'Soccer') {
-                    $countryCode = $m['country'];
-                    $mappedCountry = $this->getCountryMapping($countryCode);
+                    $mappedCountry = $mappedName;
 
                     // Handle international/continental competitions
                     $comp = strtolower($m['competition']);
@@ -1352,6 +1356,39 @@ class GiaNikController
             'AZ' => 'Azerbaijan',
             'MT' => 'Malta',
             'IS' => 'Iceland',
+            'CS' => 'Serbia',
+            'HK' => 'Hong Kong',
+            'TH' => 'Thailand',
+            'SG' => 'Singapore',
+            'NZ' => 'New Zealand',
+            'CA' => 'Canada',
+            'KW' => 'Kuwait',
+            'BH' => 'Bahrain',
+            'JO' => 'Jordan',
+            'LB' => 'Lebanon',
+            'SY' => 'Syria',
+            'IQ' => 'Iraq',
+            'IR' => 'Iran',
+            'UZ' => 'Uzbekistan',
+            'KZ' => 'Kazakhstan',
+            'GE' => 'Georgia',
+            'AM' => 'Armenia',
+            'MD' => 'Moldova',
+            'EE' => 'Estonia',
+            'LV' => 'Latvia',
+            'LT' => 'Lithuania',
+            'LU' => 'Luxembourg',
+            'LI' => 'Liechtenstein',
+            'MC' => 'Monaco',
+            'AD' => 'Andorra',
+            'SM' => 'San Marino',
+            'GI' => 'Gibraltar',
+            'FO' => 'Faroe Islands',
+            'ME' => 'Montenegro',
+            'MK' => 'North Macedonia',
+            'AL' => 'Albania',
+            'XK' => 'Kosovo',
+            'CY' => 'Cyprus',
         ];
         return $map[strtoupper($countryCode)] ?? null;
     }
