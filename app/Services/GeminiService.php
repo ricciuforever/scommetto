@@ -106,13 +106,14 @@ class GeminiService
                 "11. STILE RISPOSTA: La 'motivation' deve essere sintetica (max 80 parole). Evita di ripetere dati già chiari.\n\n" .
                 "RISPONDI ESCLUSIVAMENTE CON QUESTO SCHEMA JSON:\n" .
                 "{\n" .
+                "  \"eventName\": \"Team A v Team B\",\n" .
                 "  \"marketId\": \"1.XXXXX\",\n" .
                 "  \"advice\": \"Runner Name\",\n" .
                 "  \"odds\": 1.80,\n" .
                 "  \"stake\": 5.0,\n" .
                 "  \"confidence\": 90,\n" .
                 "  \"sentiment\": \"Bullish/Bearish/Neutral\",\n" .
-                "  \"motivation\": \"Sintesi tecnica qui.\"\n" .
+                "  \"motivation\": \"Sintesi tecnica qui (Menziona SEMPRE i nomi delle squadre e i dati statistici chiave usati per la decisione).\"\n" .
                 "}";
         } else {
             $prompt = "Sei un TRADER ELITE di Betfair. Il tuo compito è analizzare il mercato live multi-sport e scovare la scommessa migliore tra quelle fornite.\n\n" .
