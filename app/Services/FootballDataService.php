@@ -516,6 +516,7 @@ class FootballDataService
         $remove = [
             'crb',
             'usm',
+            'ag',
             'jsm',
             'aso',
             'msp',
