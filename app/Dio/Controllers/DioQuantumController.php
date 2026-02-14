@@ -77,16 +77,30 @@ class DioQuantumController
     public function scanAndTrade()
     {
         header('Content-Type: application/json');
+
+        // Throttling: 1 scan ogni 60 secondi per non saturare Betfair e Gemini
+        $cooldownFile = \App\Config\Config::DATA_PATH . 'dio_quantum_cooldown.txt';
+        $lastRun = file_exists($cooldownFile) ? (int) file_get_contents($cooldownFile) : 0;
+        if (time() - $lastRun < 60) {
+            echo json_encode(['status' => 'success', 'message' => 'Dio Quantum in cooldown']);
+            return;
+        }
+        file_put_contents($cooldownFile, time());
+
         try {
             // 1. Get ALL active sport types with live events
             $eventTypesRes = $this->bf->getEventTypes(['inPlayOnly' => true]);
             $eventTypes = $eventTypesRes['result'] ?? [];
 
             $allOpportunities = [];
+            $totalAiAnalyzed = 0;
 
             foreach ($eventTypes as $sportType) {
                 $sportId = $sportType['eventType']['id'];
                 $sportName = $sportType['eventType']['name'];
+
+                // Conflict Prevention: Escludiamo il Calcio (gestito da GiaNik) per risparmiare risorse e sessioni
+                if ($sportId == '1') continue;
 
                 // 2. Get Live Events for this sport
                 $liveEventsRes = $this->bf->getLiveEvents([$sportId]);
@@ -111,6 +125,9 @@ class DioQuantumController
                 $books = $booksRes['result'] ?? [];
 
                 foreach ($books as $book) {
+                    // Safety Cap: Massimo 5 analisi AI per ciclo per non eccedere il rate-limit di Gemini
+                    if ($totalAiAnalyzed >= 5) break 2;
+
                     // Filter for high liquidity (> 5000€ matched total) - REMOVED PER USER REQUEST
                     // if (($book['totalMatched'] ?? 0) < 5000)
                     //    continue;
@@ -124,6 +141,7 @@ class DioQuantumController
 
                     // 5. AI Analysis (Quantum Mode)
                     $analysis = $this->analyzeQuantum($ticker);
+                    $totalAiAnalyzed++;
 
                     // CACHE LIVE SCORES FOR DASHBOARD
                     // We collect scores of ALL scanned high-liquidity matches
