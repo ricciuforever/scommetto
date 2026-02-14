@@ -952,6 +952,10 @@ class GiaNikController
             $stmtPending->execute();
             $pendingEventNames = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
 
+            $stmtPendingMarkets = $this->db->prepare("SELECT DISTINCT market_id FROM bets WHERE status = 'pending'");
+            $stmtPendingMarkets->execute();
+            $pendingMarketIds = $stmtPendingMarkets->fetchAll(PDO::FETCH_COLUMN);
+
             // Recuperiamo il conteggio delle scommesse per oggi per ogni match (per limitare ingressi multipli)
             $stmtCount = $this->db->prepare("SELECT event_name, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name");
             $stmtCount->execute();
