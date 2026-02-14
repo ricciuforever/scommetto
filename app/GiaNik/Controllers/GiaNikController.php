@@ -702,7 +702,7 @@ class GiaNikController
             $jsonContent = $predictionRaw;
 
             // Fallback for markdown format or truncated JSON
-            if ($analysis === null) {
+            if ($analysis === null || !is_array($analysis)) {
                 if (preg_match('/```json\s*([\s\S]*?)(?:```|$)/', $predictionRaw, $matches)) {
                     $jsonContent = trim($matches[1]);
                     $analysis = json_decode($jsonContent, true);
@@ -1019,11 +1019,11 @@ class GiaNikController
                     ]);
 
                     $analysis = json_decode($predictionRaw, true);
-                    if ($analysis === null && preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
+                    if (($analysis === null || !is_array($analysis)) && preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
                         $analysis = json_decode($matches[1], true);
                     }
 
-                    if ($analysis) {
+                    if (is_array($analysis)) {
 
                         // Strict validation
                         if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {

@@ -58,14 +58,10 @@ class SyncController
                 return;
             }
 
-            // 1. Discover all Sports (Event Types)
-            $sports = $this->betfairService->getEventTypes();
-            if (empty($sports['result']))
-                throw new \Exception("Errore recupero sport Betfair");
+            // 1. Restrict to Soccer (Event Type ID 1)
+            $sportIds = ['1'];
 
-            $sportIds = array_map(fn($s) => $s['eventType']['id'], $sports['result']);
-
-            // 2. Fetch ALL live events for these sports (Batched)
+            // 2. Fetch ALL live soccer events (Batched)
             $allEvents = [];
             $sportChunks = array_chunk($sportIds, 5); // Limit per call
 
@@ -172,7 +168,7 @@ class SyncController
                             'marketId' => (string) $mId,
                             'sport' => (string) $meta['sport'],
                             'event_id' => (string) ($meta['event']['id'] ?? ''),
-                            'event' => (string) ($meta['event']['name'] ?? 'Unknown'),
+                            'event' => $meta['event'],
                             'competition' => (string) ($meta['competition']['name'] ?? $meta['sport']),
                             'market' => $meta['marketName'],
                             'totalMatched' => $book['totalMatched'],
@@ -266,7 +262,7 @@ class SyncController
         $betData = json_decode($prediction, true);
         $reasoning = "";
 
-        if ($betData === null) {
+        if ($betData === null || !is_array($betData)) {
             // Estrai l'analisi testuale (ragionamento) prima del blocco JSON
             $reasoning = trim(preg_replace('/```json[\s\S]*?```/', '', $prediction));
             if (preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches)) {
@@ -276,8 +272,8 @@ class SyncController
             $reasoning = $betData['motivation'] ?? "";
         }
 
-        if ($betData) {
-            if ($betData && !empty($betData['marketId']) && !empty($betData['advice'])) {
+        if (is_array($betData)) {
+            if (!empty($betData['marketId']) && !empty($betData['advice'])) {
 
                 // Recupera metadati completi del mercato scelto
                 $cacheFile = Config::DATA_PATH . 'betfair_live.json';
@@ -429,6 +425,9 @@ class SyncController
                 $sportId = $sport['eventType']['id'];
                 $sportName = $sport['eventType']['name'];
 
+                // Restrict to Soccer (ID 1)
+                if ($sportId != '1') continue;
+
                 // Recupera eventi per le prossime 48 ore
                 $events = $this->betfairService->request('listEvents', [
                     'filter' => [
@@ -529,11 +528,11 @@ class SyncController
             $prediction = $this->geminiService->analyze($candidates, ['is_upcoming' => true]);
 
             $data = json_decode($prediction, true);
-            if ($data === null && preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches)) {
+            if (($data === null || !is_array($data)) && preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches)) {
                 $data = json_decode($matches[1], true);
             }
 
-            if ($data) {
+            if (is_array($data)) {
                 if ($data) {
                     file_put_contents(Config::DATA_PATH . 'betfair_hot_predictions.json', json_encode(['response' => $data, 'timestamp' => time()]));
                 }
