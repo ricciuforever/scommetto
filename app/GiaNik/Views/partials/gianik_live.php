@@ -108,7 +108,7 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
     </div>
 </div>
 
-<?php if (empty($groupedMatches)): ?>
+<?php if (empty($allMatches)): ?>
     <div class="text-center py-10">
         <span class="text-slate-500 text-sm font-bold uppercase">Nessun evento live disponibile</span>
     </div>
@@ -117,7 +117,6 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
     <!-- Events List (One per row) -->
     <div class="animate-fade-in space-y-3 px-2">
         <?php
-        $allMatches = $allMatches ?? [];
         foreach ($allMatches as $m):
             $marketId = $m['marketId'];
             $fixtureId = $m['fixture_id'];
