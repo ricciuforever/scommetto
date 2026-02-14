@@ -541,7 +541,24 @@ class FootballDataService
             'atk mohun bagan' => 'mohun bagan',
             'mgladbach' => 'monchengladbach',
             'irt' => 'ittihad',
-            'ir' => 'ittihad'
+            'ir' => 'ittihad',
+            // Moroccan mappings
+            'uts' => 'union touarga',
+            'dhj' => 'difaa jadida',
+            'wac' => 'wydad',
+            'rca' => 'raja',
+            'fus' => 'fath union',
+            'mas' => 'maghreb fes',
+            'husa' => 'hassania agadir',
+            'mat' => 'moghreb tetouan',
+            'ocs' => 'olympic safi',
+            'codm' => 'meknes',
+            'jss' => 'soualem',
+            'sccm' => 'mohammedia',
+            'cayb' => 'berrechid',
+            'rcaz' => 'zemamra',
+            'jadidi' => 'jadida',
+            'ob' => 'odense',
         ];
         foreach ($replacements as $search => $replace) {
             $name = preg_replace('/\b' . preg_quote($search, '/') . '\b/i', $replace, $name);
@@ -704,7 +721,20 @@ class FootballDataService
             'de',
             'del',
             'da',
-            'es'
+            'es',
+            'hassani',
+            'casablanca',
+            'athletic',
+            'rabat',
+            'fes',
+            'tangier',
+            'marrakech',
+            'agadir',
+            'tetouan',
+            'safi',
+            'bodrum',
+            'ankara',
+            'istanbul'
         ];
 
         $tempName = $name;
