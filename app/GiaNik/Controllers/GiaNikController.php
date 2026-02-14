@@ -2392,7 +2392,8 @@ class GiaNikController
                     if ($match) $fixtureId = $match['fixture']['id'] ?? null;
                 }
 
-                $placedDate = isset($o['placedDate']) ? date('Y-m-d H:i:s', strtotime($o['placedDate'])) : date('Y-m-d H:i:s');
+                // Use gmdate to store in UTC (SQLite standard)
+                $placedDate = isset($o['placedDate']) ? gmdate('Y-m-d H:i:s', strtotime($o['placedDate'])) : gmdate('Y-m-d H:i:s');
 
                 // Verifica esistenza nel DB locale (Flessibile su prefisso 1:)
                 $altBetId = (strpos($betId, '1:') === 0) ? substr($betId, 2) : '1:' . $betId;
@@ -2570,7 +2571,8 @@ class GiaNikController
             $currentBalance += ((float) ($b['profit'] ?? 0) - (float) ($b['commission'] ?? 0));
             $history[] = round($currentBalance, 2);
             $dateSource = !empty($b['settled_at']) ? $b['settled_at'] : $b['created_at'];
-            $labels[] = date('d/m H:i', strtotime($dateSource));
+            // Append ' UTC' to force strtotime to interpret DB time as UTC and convert to local PHP timezone
+            $labels[] = date('d/m H:i', strtotime($dateSource . ' UTC'));
         }
 
         // Adjust stats for REAL mode to match actual balance growth from initial bankroll
@@ -2596,7 +2598,8 @@ class GiaNikController
                 $runningBalance += ((float) ($b['profit'] ?? 0) - (float) ($b['commission'] ?? 0));
                 $newHistory[] = round($runningBalance, 2);
                 $dateSource = !empty($b['settled_at']) ? $b['settled_at'] : $b['created_at'];
-                $newLabels[] = date('d/m H:i', strtotime($dateSource));
+                // Append ' UTC' to force strtotime to interpret DB time as UTC and convert to local PHP timezone
+                $newLabels[] = date('d/m H:i', strtotime($dateSource . ' UTC'));
             }
 
             $history = $newHistory;

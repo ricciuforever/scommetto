@@ -251,7 +251,7 @@
                 <p class="text-sm text-slate-300 italic">"<?php echo htmlspecialchars($lesson['lesson_text']); ?>"</p>
                 <div class="mt-2 flex justify-between text-xs text-slate-500">
                     <span>Context: <?php echo !empty($lesson['match_context']) ? $lesson['match_context'] : $lesson['entity_id']; ?></span>
-                    <span><?php echo date('d/m/Y H:i', strtotime($lesson['created_at'])); ?></span>
+                    <span><?php echo date('d/m/Y H:i', strtotime($lesson['created_at'] . ' UTC')); ?></span>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -314,7 +314,7 @@
                 <div class="mt-4 pt-4 border-t border-slate-700 flex justify-between">
                     <span class="text-[10px] text-slate-500">
                         Ultimo apprendimento:
-                        <strong><?php echo $lastUpdate ? date('d/m/Y H:i', strtotime($lastUpdate)) : 'Mai'; ?></strong>
+                        <strong><?php echo $lastUpdate ? date('d/m/Y H:i', strtotime($lastUpdate . ' UTC')) : 'Mai'; ?></strong>
                     </span>
                     <span class="text-[10px] text-purple-400 font-bold">STATE: REAL-TIME EVOLUTION</span>
                 </div>

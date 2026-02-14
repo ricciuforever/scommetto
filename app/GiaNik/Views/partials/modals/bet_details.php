@@ -87,7 +87,7 @@ $bet = $bet ?? [];
                 </div>
 
                 <div class="text-[8px] text-center text-slate-600 font-bold uppercase tracking-widest">
-                    ID: <?php echo $bet['market_id']; ?> • Registrata il <?php echo $bet['created_at']; ?>
+                    ID: <?php echo $bet['market_id']; ?> • Registrata il <?php echo date('d/m/Y H:i', strtotime($bet['created_at'] . ' UTC')); ?>
                 </div>
             </div>
         </div>
