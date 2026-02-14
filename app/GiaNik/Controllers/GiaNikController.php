@@ -199,8 +199,8 @@ class GiaNikController
 
                 $countryCode = $mc['event']['countryCode'] ?? null;
                 $mappedName = $this->getCountryMapping($countryCode);
-                $displayCountry = is_array($mappedName) ? $mappedName[0] : ($mappedName ?: $countryCode);
-                $fallbackFlag = $countryCode ? "https://media.api-sports.io/flags/" . strtolower($countryCode) . ".svg" : null;
+                $displayCountry = is_array($mappedName) ? $mappedName[0] : ($mappedName ?: ($countryCode ?: 'World'));
+                $fallbackFlag = $countryCode ? "https://media.api-sports.io/flags/" . strtolower($countryCode) . ".svg" : "https://media.api-sports.io/flags/world.svg";
 
                 $m = [
                     'marketId' => $marketId,
