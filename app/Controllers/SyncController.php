@@ -306,6 +306,11 @@ class SyncController
 
                     $selectionId = $this->betfairService->mapAdviceToSelection($betData['advice'], $event['runners']);
                     if ($selectionId) {
+                        // ENFORCE MINIMUM ODDS
+                        if ($finalPrice < Config::MIN_BETFAIR_ODDS) {
+                            $finalPrice = Config::MIN_BETFAIR_ODDS;
+                        }
+
                         // CRITICAL: Double check if we already have a bet on this market
                         if ($this->betModel->hasBet($event['marketId'])) {
                             echo "SKIP: Bet already exists for market " . $event['marketId'] . "\n";

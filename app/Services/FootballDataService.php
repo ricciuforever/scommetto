@@ -334,6 +334,9 @@ class FootballDataService
         // 1. Strip scores like "1-0", "0 - 0" if present in event name
         $name = preg_replace('/\d+\s*[-:]\s*\d+/', ' v ', $bfEventName);
 
+        // Remove single "y" (Spanish connector) between spaces
+        $name = preg_replace('/\s+y\s+/i', ' ', $name);
+
         $bfTeams = preg_split('/\s+(v|vs|@|-|\/)\s+/i', $name);
         if (count($bfTeams) < 2)
             return null;
@@ -512,6 +515,8 @@ class FootballDataService
             'dz',
             'fc',
             'f.c.',
+            'clube',
+            'club',
             'united',
             'city',
             'town',
