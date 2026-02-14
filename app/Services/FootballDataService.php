@@ -524,6 +524,7 @@ class FootballDataService
             'ca',
             'mo',
             'nc',
+            'ğ',
             'gc',
             'wa',
             'ib',
