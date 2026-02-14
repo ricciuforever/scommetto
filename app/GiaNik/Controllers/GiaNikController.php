@@ -834,7 +834,13 @@ class GiaNikController
         }
         file_put_contents($cooldownFile, time());
 
-        $results = ['scanned' => 0, 'new_bets' => 0, 'errors' => []];
+        $results = [
+            'found_on_betfair' => 0,
+            'skipped_already_bet' => 0,
+            'scanned' => 0,
+            'new_bets' => 0,
+            'errors' => []
+        ];
         try {
             // Sincronizza lo stato reale prima di procedere
             $this->syncWithBetfair();
@@ -856,6 +862,8 @@ class GiaNikController
                 echo json_encode(['status' => 'success', 'message' => 'Nessun evento live']);
                 return;
             }
+
+            $results['found_on_betfair'] = count($events);
 
             $eventIds = array_map(fn($e) => $e['event']['id'], $events);
             $marketTypes = [
@@ -914,11 +922,15 @@ class GiaNikController
 
             $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
+                $mainEvent = $catalogues[0];
+
+                if (in_array($mainEvent['event']['name'], $pendingEventNames)) {
+                    $results['skipped_already_bet']++;
+                    continue;
+                }
+
                 if ($eventCounter >= 10)
                     break;
-                $mainEvent = $catalogues[0];
-                if (in_array($mainEvent['event']['name'], $pendingEventNames))
-                    continue;
 
                 try {
                     $results['scanned']++;
