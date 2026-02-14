@@ -76,18 +76,24 @@ $event = $event ?? [];
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-3 gap-4">
                         <div class="glass p-5 rounded-3xl border-white/5">
                             <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Consiglio</div>
-                            <div class="text-lg font-black italic uppercase text-accent">
+                            <div class="text-sm font-black italic uppercase text-accent">
                                 <?php echo htmlspecialchars($analysis['advice'] ?? 'N/A'); ?>
                             </div>
                         </div>
                         <div class="glass p-5 rounded-3xl border-white/5">
-                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Quota Suggerita
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Quota
                             </div>
-                            <div class="text-xl font-black italic uppercase text-white">
+                            <div class="text-lg font-black italic uppercase text-white">
                                 @ <?php echo htmlspecialchars($analysis['odds'] ?? '0.00'); ?>
+                            </div>
+                        </div>
+                        <div class="glass p-5 rounded-3xl border-indigo-500/30 bg-indigo-500/10">
+                            <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Stake Kelly</div>
+                            <div class="text-lg font-black italic uppercase text-white">
+                                <?php echo number_format($analysis['stake'] ?? 0, 2); ?>€
                             </div>
                         </div>
                     </div>
@@ -124,11 +130,17 @@ $event = $event ?? [];
                     </button>
 
                     <?php if (!empty($analysis)): ?>
-                        <button onclick="placeGiaNikBet()" id="bet-btn"
-                            class="flex-[2] py-4 rounded-2xl bg-accent hover:bg-accent/80 text-white font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2">
-                            <i data-lucide="zap" class="w-4 h-4"></i> Piazza Scommessa <span id="btn-mode-label"
-                                class="opacity-50 ml-1"></span>
-                        </button>
+                        <?php if (($analysis['stake'] ?? 0) >= 2.0): ?>
+                            <button onclick="placeGiaNikBet()" id="bet-btn"
+                                class="flex-[2] py-4 rounded-2xl bg-accent hover:bg-accent/80 text-white font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2">
+                                <i data-lucide="zap" class="w-4 h-4"></i> Piazza Scommessa da <?php echo number_format($analysis['stake'], 2); ?>€ <span id="btn-mode-label"
+                                    class="opacity-50 ml-1"></span>
+                            </button>
+                        <?php else: ?>
+                            <div class="flex-[2] py-4 rounded-2xl bg-slate-800 text-slate-500 font-black uppercase tracking-widest text-[10px] flex items-center justify-center text-center border border-white/5">
+                                Edge Insufficiente o Stake troppo basso
+                            </div>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>

@@ -5,6 +5,8 @@ namespace App\Dio\Controllers;
 
 use App\Services\BetfairService;
 use App\Services\GeminiService;
+use App\Services\MoneyManagementService;
+use App\Config\Config;
 use App\Dio\DioDatabase;
 use PDO;
 
@@ -165,27 +167,60 @@ class DioQuantumController
                 // 5. AI Analysis (Quantum Batch Mode - 1 call for 5 tickers)
                 $batchResults = $this->analyzeQuantumBatch($batchTickers);
 
+                $workingTotalBankroll = $portfolio['total_balance'];
+                $workingAvailableBalance = $portfolio['available_balance'];
+
                 foreach ($batchResults as $index => $analysis) {
                     $ticker = $batchTickers[$index] ?? null;
                     if (!$ticker || !$analysis) continue;
 
-                    $confidence = $analysis['confidence'] ?? 0;
+                    $confidence = (float)($analysis['confidence'] ?? 0);
                     $advice = $analysis['advice'] ?? '';
+
+                    // Decidi l'azione base (Passa se confidence < 85)
                     $action = ($confidence >= 85 && stripos($advice, 'PASS') === false) ? 'bet' : 'pass';
+
+                    if ($action === 'bet') {
+                        // --- CALCOLO STAKE OTTIMALE (KELLY + EV) ---
+                        $decision = MoneyManagementService::calculateOptimalStake(
+                            $workingTotalBankroll,
+                            (float)$analysis['odds'],
+                            $confidence,
+                            Config::KELLY_MULTIPLIER_DIO
+                        );
+
+                        if (!$decision['is_value_bet'] || $decision['stake'] < Config::MIN_BETFAIR_STAKE) {
+                            $action = 'pass';
+                            $analysis['motivation'] .= " [SKIP MoneyManager: " . $decision['reason'] . "]";
+                        } else {
+                            $stake = $decision['stake'];
+                            if ($stake > $workingAvailableBalance) {
+                                $stake = $workingAvailableBalance;
+                            }
+
+                            if ($stake >= Config::MIN_BETFAIR_STAKE) {
+                                $analysis['stake'] = $stake;
+                                $this->placeVirtualBet($ticker, $analysis);
+
+                                $workingAvailableBalance -= $stake;
+                                $workingTotalBankroll -= $stake;
+
+                                $allOpportunities[] = [
+                                    'event' => $ticker['event'],
+                                    'market' => $ticker['marketName'],
+                                    'advice' => $analysis['advice'],
+                                    'odds' => $analysis['odds'],
+                                    'confidence' => $confidence,
+                                    'stake' => $stake
+                                ];
+                            } else {
+                                $action = 'pass';
+                            }
+                        }
+                    }
 
                     // Log thinking process
                     $this->logActivity($ticker, $analysis, $action);
-
-                    if ($action === 'bet') {
-                        $this->placeVirtualBet($ticker, $analysis);
-                        $allOpportunities[] = [
-                            'event' => $ticker['event'],
-                            'market' => $ticker['marketName'],
-                            'advice' => $analysis['advice'],
-                            'odds' => $analysis['odds'],
-                            'confidence' => $confidence
-                        ];
-                    }
                 }
             }
 
@@ -290,9 +325,8 @@ class DioQuantumController
             "4. IGNORA i nomi delle squadre/atleti. Guarda solo l'efficienza del mercato.\n\n" .
             "STRATEGIA OPERATIVA:\n" .
             "- Quota minima: 1.10.\n" .
-            "- Stake: Min 2€, Max " . min($availableBalance, $totalBalance * 0.05) . "€ (5% del totale, entro disponibilità).\n" .
-            "- Se il saldo disponibile è inferiore allo stake necessario, rispondi PASS.\n" .
             "- Decisione: BACK, LAY o PASS.\n" .
+            "- CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE. Sii onesto: se la quota è 1.50 (66% imp) e tu stimi il 60%, scrivi confidence 60.\n" .
             "- Confidence >= 85 per operare.\n\n" .
             "RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI, uno per ogni ticker in ordine):\n" .
             "[\n" .
@@ -300,7 +334,6 @@ class DioQuantumController
             "    \"advice\": \"Runner Name\",\n" .
             "    \"selectionId\": \"ID\",\n" .
             "    \"odds\": 1.80,\n" .
-            "    \"stake\": 2.0,\n" .
             "    \"confidence\": 90,\n" .
             "    \"motivation\": \"Sintesi tecnica qui.\"\n" .
             "  }\n" .

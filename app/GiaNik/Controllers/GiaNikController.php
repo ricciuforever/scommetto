@@ -10,6 +10,7 @@ use App\Services\FootballApiService;
 use App\Services\FootballDataService;
 use App\Services\BasketballApiService;
 use App\Services\IntelligenceService;
+use App\Services\MoneyManagementService;
 use App\GiaNik\GiaNikDatabase;
 use PDO;
 
@@ -749,6 +750,19 @@ class GiaNikController
                 }
             }
 
+            // Calcolo Stake con MoneyManager se l'analisi è valida
+            $decision = ['stake' => 0, 'reason' => 'N/A', 'is_value_bet' => false];
+            if ($analysis && isset($analysis['confidence'], $analysis['odds'])) {
+                $decision = MoneyManagementService::calculateOptimalStake(
+                    $balance['current_portfolio'],
+                    (float)$analysis['odds'],
+                    (float)$analysis['confidence'],
+                    Config::KELLY_MULTIPLIER_GIANIK
+                );
+                // Aggiorniamo lo stake suggerito nell'analisi per la vista
+                $analysis['stake'] = $decision['stake'];
+            }
+
             // --- AI Output Validation ---
             if (!empty($analysis['marketId']) && $analysis['marketId'] !== ($event['requestedMarketId'] ?? '')) {
                 $reasoning = "ERRORE VALIDAZIONE: L'AI ha suggerito un'operazione su un mercato diverso ({$analysis['marketId']}) da quello richiesto. Analisi scartata per sicurezza.";
@@ -1011,6 +1025,10 @@ class GiaNikController
                 $activeBalance['total'] = $vBal['total'];
             }
 
+            // --- WORKING BANKROLL FOR BATCH PROCESSING ---
+            $workingTotalBankroll = $activeBalance['total'];
+            $workingAvailableBalance = $activeBalance['available'];
+
             $batchEvents = [];
             $batchMetadata = [];
 
@@ -1156,8 +1174,9 @@ class GiaNikController
                         if (!isset($batchMetadata[$eventName])) continue;
                         $meta = $batchMetadata[$eventName];
 
+                        // Verifica confidenza minima (hard cap a 80% come da regola precedente, ma Kelly farà il resto)
                         if (!empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
-                            // Validation and Betting logic (similar to single process)
+
                             $selectedMarket = null;
                             foreach ($meta['markets'] as $m) {
                                 if ($m['marketId'] === $analysis['marketId']) {
@@ -1166,11 +1185,26 @@ class GiaNikController
                             }
                             if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds)) continue;
 
-                            $bankroll = $activeBalance['total'];
-                            $stake = $this->calculateDynamicStake($analysis['confidence'], $bankroll);
-                            if ($stake > $activeBalance['available']) $stake = $activeBalance['available'];
+                            // --- CALCOLO STAKE OTTIMALE (KELLY + EV) ---
+                            $decision = MoneyManagementService::calculateOptimalStake(
+                                $workingTotalBankroll,
+                                (float)$analysis['odds'],
+                                (float)$analysis['confidence'],
+                                Config::KELLY_MULTIPLIER_GIANIK
+                            );
 
-                            if ($stake < Config::MIN_BETFAIR_STAKE || $activeBalance['available'] < $stake) continue;
+                            if (!$decision['is_value_bet'] || $decision['stake'] < Config::MIN_BETFAIR_STAKE) {
+                                continue;
+                            }
+
+                            $stake = $decision['stake'];
+
+                            // Verifica disponibilità liquida effettiva nel working balance
+                            if ($stake > $workingAvailableBalance) {
+                                $stake = $workingAvailableBalance;
+                            }
+
+                            if ($stake < Config::MIN_BETFAIR_STAKE) continue;
 
                             $runners = array_map(fn($r) => ['runnerName' => $r['name'], 'selectionId' => $r['selectionId']], $selectedMarket['runners']);
                             $selectionId = $this->bf->mapAdviceToSelection($analysis['advice'], $runners);
@@ -1184,6 +1218,13 @@ class GiaNikController
                                     if (($res['status'] ?? '') === 'SUCCESS') $betfairId = $res['instructionReports'][0]['betId'] ?? null;
                                     else continue;
                                 }
+
+                                // Update working bankroll for the next iteration in the batch
+                                $workingAvailableBalance -= $stake;
+                                // $workingTotalBankroll remains same for the loop as it's the reference for Kelly during the scan,
+                                // but we could also decrease it to be even more conservative.
+                                // Gianik said: "il secondo deve calcolare la % sugli 80€ rimanenti, non su 100€"
+                                $workingTotalBankroll -= $stake;
 
                                 $bucket = $this->getOddsBucket($analysis['odds']);
                                 $motivation = $this->extractMotivation($analysis, $predictionRaw, ['api_football' => $meta['api_data']]);
@@ -1552,30 +1593,12 @@ class GiaNikController
 
     /**
      * Calcola lo stake dinamico basato sulla fiducia dell'AI e sul bankroll totale.
-     * @param int $confidence Fiducia dell'AI (0-100)
-     * @param float $bankroll Bankroll TOTALE (Disponibile + Esposizione)
+     * DEPRECATO: Usare MoneyManagementService::calculateOptimalStake
      */
-    private function calculateDynamicStake($confidence, $bankroll)
+    private function calculateDynamicStake($confidence, $bankroll, $odds = 1.50)
     {
-        // Rimosso Kelly Criterion come richiesto.
-        // Nuova logica: 5% del bankroll TOTALE, pesato sulla fiducia.
-        // Se fiducia = 100%, stake = 5% del bankroll totale.
-        // Se fiducia = 80%, stake = 4% del bankroll totale.
-        $p = (float)$confidence / 100.0;
-        $stake = $bankroll * 0.05 * $p;
-
-        // Minimo 2€ (Regola Betfair)
-        if ($stake < Config::MIN_BETFAIR_STAKE) {
-            $stake = Config::MIN_BETFAIR_STAKE;
-        }
-
-        // Massimale del 5% (già garantito se p <= 1.0, ma lo forziamo per sicurezza)
-        $maxStake = $bankroll * 0.05;
-        if ($stake > $maxStake && $maxStake >= Config::MIN_BETFAIR_STAKE) {
-            $stake = $maxStake;
-        }
-
-        return round($stake, 2);
+        $decision = MoneyManagementService::calculateOptimalStake($bankroll, $odds, $confidence, Config::KELLY_MULTIPLIER_GIANIK);
+        return $decision['stake'];
     }
 
     private function handleMomentum($fixtureId, $currentStats, $elapsed = 0)
