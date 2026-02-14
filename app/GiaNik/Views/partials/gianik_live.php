@@ -138,12 +138,12 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                     <!-- Home Logo -->
                     <div class="flex justify-center shrink-0">
                         <?php if ($m['home_logo']): ?>
-                            <div class="w-10 h-10 rounded-full bg-white/5 p-2 border border-white/5 flex items-center justify-center overflow-hidden">
+                            <div class="w-12 h-12 flex items-center justify-center overflow-hidden">
                                 <img src="<?php echo $m['home_logo']; ?>" class="w-full h-full object-contain" alt="">
                             </div>
                         <?php else: ?>
-                            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                                <i data-lucide="shield" class="w-5 h-5 text-slate-600"></i>
+                            <div class="w-12 h-12 flex items-center justify-center">
+                                <i data-lucide="shield" class="w-6 h-6 text-slate-600"></i>
                             </div>
                         <?php endif; ?>
                     </div>
@@ -183,12 +183,12 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
                     <!-- Away Logo -->
                     <div class="flex justify-center shrink-0">
                         <?php if ($m['away_logo']): ?>
-                            <div class="w-10 h-10 rounded-full bg-white/5 p-2 border border-white/5 flex items-center justify-center overflow-hidden">
+                            <div class="w-12 h-12 flex items-center justify-center overflow-hidden">
                                 <img src="<?php echo $m['away_logo']; ?>" class="w-full h-full object-contain" alt="">
                             </div>
                         <?php else: ?>
-                            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                                <i data-lucide="shield" class="w-5 h-5 text-slate-600"></i>
+                            <div class="w-12 h-12 flex items-center justify-center">
+                                <i data-lucide="shield" class="w-6 h-6 text-slate-600"></i>
                             </div>
                         <?php endif; ?>
                     </div>
