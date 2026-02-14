@@ -182,6 +182,67 @@ class GeminiService
         return $text ?: "Error: Nessuna risposta valida dall'AI.";
     }
 
+    public function analyzeBatch($events, $options = [])
+    {
+        if (!$this->apiKey) return "Error: Missing Gemini API Key";
+
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=" . $this->apiKey;
+
+        $balanceText = "";
+        if (isset($options['current_portfolio'])) {
+            $labelPortfolio = ($options['is_gianik'] ?? false) ? "Budget Totale Virtuale GiaNik" : "Portfolio Reale";
+            $labelAvailable = ($options['is_gianik'] ?? false) ? "Disponibilità Virtuale GiaNik" : "Disponibilità";
+
+            $balanceText = "SITUAZIONE PORTAFOGLIO:\n" .
+                "- $labelPortfolio: " . number_format($options['current_portfolio'], 2) . "€\n" .
+                "- $labelAvailable: " . number_format($options['available_balance'], 2) . "€\n\n";
+        }
+
+        $prompt = "Sei un ANALISTA ELITE e TRADER di Betfair Exchange. Il tuo compito è analizzare un BATCH di EVENTI LIVE (Calcio) e decidere le operazioni migliori.\n\n" .
+            $balanceText .
+            "LISTA EVENTI DA ANALIZZARE:\n" . json_encode($events, JSON_PRETTY_PRINT) . "\n\n" .
+            "REGOLE RIGIDE:\n" .
+            "1. Per ogni evento, analizza i mercati, i volumi, i dati statistici live, il momentum e il contesto storico.\n" .
+            "2. Scegli l'operazione migliore per ogni evento (o nessuna se il rischio/rendimento è scarso).\n" .
+            "3. Stake: Minimo 2€, massimo 5% del Budget Totale. Rispetta la disponibilità liquida.\n" .
+            "4. Confidenza: Suggerisci l'operazione solo se confidence >= 80%.\n" .
+            "5. Quota Minima: 1.25. Se la quota attuale è inferiore ma l'evento è valido, scrivi '1.25' per piazzare un ordine limite.\n" .
+            "6. Rispondi con un ARRAY JSON di oggetti, uno per ogni evento che ritieni meritevole di giocata.\n\n" .
+            "RISPONDI ESCLUSIVAMENTE CON QUESTO SCHEMA JSON (ARRAY):\n" .
+            "[\n" .
+            "  {\n" .
+            "    \"eventName\": \"Team A v Team B\",\n" .
+            "    \"marketId\": \"1.XXXXX\",\n" .
+            "    \"advice\": \"Runner Name\",\n" .
+            "    \"odds\": 1.80,\n" .
+            "    \"stake\": 5.0,\n" .
+            "    \"confidence\": 90,\n" .
+            "    \"sentiment\": \"Bullish/Bearish/Neutral\",\n" .
+            "    \"motivation\": \"Sintesi tecnica qui.\"\n" .
+            "  }\n" .
+            "]";
+
+        $data = [
+            "contents" => [["parts" => [["text" => $prompt]]]],
+            "generationConfig" => [
+                "temperature" => 0.1,
+                "response_mime_type" => "application/json"
+            ]
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $result = json_decode($response, true);
+        return $result['candidates'][0]['content']['parts'][0]['text'] ?? "[]";
+    }
+
     public function analyzeCustom($prompt)
     {
         if (!$this->apiKey) return "Error: Missing Gemini API Key";
