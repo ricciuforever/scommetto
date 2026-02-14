@@ -22,6 +22,7 @@ class GiaNikController
 
     public function __construct()
     {
+        set_time_limit(600);
         $this->bf = new BetfairService();
         $this->db = GiaNikDatabase::getInstance()->getConnection();
         $this->footballData = new FootballDataService();
@@ -920,21 +921,17 @@ class GiaNikController
                 $activeBalance['total'] = $vBal['total'];
             }
 
-            $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
                 $mainEvent = $catalogues[0];
 
+                // Skip if already have a pending bet for this match
                 if (in_array($mainEvent['event']['name'], $pendingEventNames)) {
                     $results['skipped_already_bet']++;
                     continue;
                 }
 
-                if ($eventCounter >= 10)
-                    break;
-
                 try {
                     $results['scanned']++;
-                    $eventCounter++;
 
                     $marketIds = array_map(fn($mc) => $mc['marketId'], $catalogues);
                     $booksRes = $this->bf->getMarketBooks($marketIds);
