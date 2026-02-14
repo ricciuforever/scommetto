@@ -472,7 +472,23 @@ class FootballDataService
             'č' => 'c',
             'đ' => 'd',
             'š' => 's',
-            'ž' => 'z'
+            'ž' => 'z',
+            'ł' => 'l',
+            'ń' => 'n',
+            'ą' => 'a',
+            'ę' => 'e',
+            'ś' => 's',
+            'ż' => 'z',
+            'ź' => 'z',
+            'Ł' => 'l',
+            'Ś' => 's',
+            'Ż' => 'z',
+            'Ź' => 'z',
+            'Ć' => 'c',
+            'Ń' => 'n',
+            'Ą' => 'a',
+            'Ę' => 'e',
+            'Ó' => 'o'
         ];
         $name = strtr($name, $chars);
 
@@ -734,7 +750,27 @@ class FootballDataService
             'safi',
             'bodrum',
             'ankara',
-            'istanbul'
+            'istanbul',
+            'lodz',
+            'glogow',
+            'warszawa',
+            'krakow',
+            'poznan',
+            'wroclaw',
+            'gdansk',
+            'szczecin',
+            'bialystok',
+            'kielce',
+            'lubin',
+            'gdynia',
+            'zabrze',
+            'gliwice',
+            'lks',
+            'gks',
+            'mks',
+            'oks',
+            'zks',
+            'ks'
         ];
 
         $tempName = $name;
