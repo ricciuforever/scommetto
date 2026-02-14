@@ -1602,25 +1602,28 @@ class GiaNikController
      */
     private function extractMotivation($analysis, $predictionRaw, $event)
     {
-        // 1. Priority: JSON motivation field
-        $motivation = $analysis['motivation'] ?? '';
+        // 1. Priority: JSON motivation field (and variants)
+        $motivation = $analysis['motivation'] ?? ($analysis['reasoning'] ?? ($analysis['logic'] ?? ($analysis['analysis'] ?? '')));
 
         // 2. Fallback: Narrative text after JSON (only if not raw JSON)
-        if (empty(trim($motivation)) && strpos($predictionRaw, '{') !== 0) {
-            $motivation = trim(preg_replace('/```json[\s\S]*?(?:```|$)/', '', $predictionRaw));
+        if (empty(trim($motivation))) {
+            $cleanedRaw = trim(preg_replace('/```json[\s\S]*?(?:```|$)/', '', $predictionRaw));
+            if (!empty($cleanedRaw) && strpos($predictionRaw, '{') !== 0) {
+                $motivation = $cleanedRaw;
+            }
         }
 
         // 3. Final Fallback: Auto-generated summary
         if (empty(trim($motivation))) {
             $sData = $event['api_football']['live']['live_score'] ?? null;
-            $score = is_array($sData) ? ($sData['home'] . '-' . $sData['away']) : '0-0';
+            $score = is_array($sData) ? (($sData['home'] ?? 0) . '-' . ($sData['away'] ?? 0)) : '0-0';
             $sentiment = $analysis['sentiment'] ?? 'Neutral';
             $confidence = $analysis['confidence'] ?? 0;
             $advice = $analysis['advice'] ?? 'N/A';
             $motivation = "Analisi GiaNik: Operazione suggerita su $advice con confidenza del $confidence%. Il match si trova sul punteggio di $score. Sentiment di mercato: $sentiment. L'analisi dei volumi e dei dati live suggerisce questa operazione come la più bilanciata.";
         }
 
-        return $motivation;
+        return trim($motivation);
     }
 
     /**
@@ -2489,8 +2492,8 @@ class GiaNikController
                     FROM bets
                     WHERE type = 'real'
                     ORDER BY (CASE
-                        WHEN motivation LIKE 'Analisi GiaNik%' THEN 0
-                        WHEN (motivation IS NOT NULL AND motivation != '' AND motivation != 'Scommessa importata da Betfair Exchange') THEN 1
+                        WHEN (motivation IS NOT NULL AND motivation != '' AND motivation != 'Scommessa importata da Betfair Exchange' AND motivation NOT LIKE 'Analisi GiaNik%') THEN 0
+                        WHEN motivation LIKE 'Analisi GiaNik%' THEN 1
                         WHEN (motivation = 'Scommessa importata da Betfair Exchange') THEN 2
                         ELSE 3 END) ASC, id ASC
                 ) as sorted
