@@ -733,9 +733,16 @@ class GiaNikController
         }
     }
 
+    private function sendJsonHeader()
+    {
+        if (PHP_SAPI !== 'cli' && !headers_sent()) {
+            header('Content-Type: application/json');
+        }
+    }
+
     public function placeBet()
     {
-        header('Content-Type: application/json');
+        $this->sendJsonHeader();
         try {
             $input = json_decode(file_get_contents('php://input'), true);
             $marketId = $input['marketId'] ?? null;
@@ -787,7 +794,7 @@ class GiaNikController
 
     public function setMode()
     {
-        header('Content-Type: application/json');
+        $this->sendJsonHeader();
         try {
             $input = json_decode(file_get_contents('php://input'), true);
             $mode = $input['mode'] ?? 'virtual';
@@ -803,7 +810,7 @@ class GiaNikController
 
     public function getMode()
     {
-        header('Content-Type: application/json');
+        $this->sendJsonHeader();
         $stmt = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
         $stmt->execute();
         $mode = $stmt->fetchColumn() ?: 'virtual';
@@ -812,7 +819,17 @@ class GiaNikController
 
     public function autoProcess()
     {
-        header('Content-Type: application/json');
+        $this->sendJsonHeader();
+
+        // Throttling: 1 analisi ogni 60 secondi
+        $cooldownFile = Config::DATA_PATH . 'gianik_gemini_cooldown.txt';
+        $lastRun = file_exists($cooldownFile) ? (int) file_get_contents($cooldownFile) : 0;
+        if (time() - $lastRun < 60) {
+            echo json_encode(['status' => 'success', 'message' => 'GiaNik in cooldown']);
+            return;
+        }
+        file_put_contents($cooldownFile, time());
+
         $results = ['scanned' => 0, 'new_bets' => 0, 'errors' => []];
         try {
             // Sincronizza lo stato reale prima di procedere
@@ -1787,7 +1804,7 @@ class GiaNikController
 
     public function learn()
     {
-        header('Content-Type: application/json');
+        $this->sendJsonHeader();
         try {
             // Analisi post-mortem delle scommesse perse
             $stmt = $this->db->prepare("SELECT * FROM bets WHERE status = 'lost' AND needs_analysis = 1 LIMIT 3");
