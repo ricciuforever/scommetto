@@ -538,7 +538,10 @@ class FootballDataService
             'corum bel' => 'corum',
             'mohun bagan super giants' => 'mohun bagan',
             'mohun bagan sg' => 'mohun bagan',
-            'atk mohun bagan' => 'mohun bagan'
+            'atk mohun bagan' => 'mohun bagan',
+            'mgladbach' => 'monchengladbach',
+            'irt' => 'ittihad',
+            'ir' => 'ittihad'
         ];
         foreach ($replacements as $search => $replace) {
             $name = preg_replace('/\b' . preg_quote($search, '/') . '\b/i', $replace, $name);
@@ -547,6 +550,10 @@ class FootballDataService
         // 2. Remove common prefixes/suffixes (word boundaries)
         // If the name would become empty, DON'T remove it (e.g. "Inter")
         $remove = [
+            'olympique',
+            'ittihad',
+            'moghreb',
+            'renaissance',
             'MGLA',
             'Frankfurt',
             'Heverlee',
