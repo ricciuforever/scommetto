@@ -86,6 +86,10 @@ class BetfairService
 
     private function log($message, $data = null)
     {
+        // Disabilitato come da richiesta: il file betfair_debug.log era troppo grande
+        return;
+
+        /*
         $dir = dirname($this->logFile);
         if (!is_dir($dir)) {
             mkdir($dir, 0777, true);
@@ -97,6 +101,7 @@ class BetfairService
             $logEntry .= " | Data: " . json_encode($data);
         }
         file_put_contents($this->logFile, $logEntry . PHP_EOL, FILE_APPEND);
+        */
     }
 
     public function isConfigured(): bool
