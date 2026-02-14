@@ -698,20 +698,23 @@ class GiaNikController
 
             $predictionRaw = $gemini->analyze([$event], array_merge($balance, ['is_gianik' => true]));
 
-            $analysis = [];
-            $jsonContent = '';
-            if (preg_match('/```json\s*([\s\S]*?)(?:```|$)/', $predictionRaw, $matches)) {
-                $jsonContent = trim($matches[1]);
-                $analysis = json_decode($jsonContent, true);
+            $analysis = json_decode($predictionRaw, true);
+            $jsonContent = $predictionRaw;
 
-                // Fallback parsing if json_decode fails (e.g. truncated)
+            // Fallback for markdown format or truncated JSON
+            if ($analysis === null) {
+                if (preg_match('/```json\s*([\s\S]*?)(?:```|$)/', $predictionRaw, $matches)) {
+                    $jsonContent = trim($matches[1]);
+                    $analysis = json_decode($jsonContent, true);
+                }
+
+                // If still null, attempt to fix truncated JSON (e.g. missing closing braces)
                 if ($analysis === null && !empty($jsonContent)) {
-                    // Try to fix missing closing braces
                     $bracesOpen = substr_count($jsonContent, '{');
                     $bracesClose = substr_count($jsonContent, '}');
                     if ($bracesOpen > $bracesClose) {
-                        $jsonContent .= str_repeat('}', $bracesOpen - $bracesClose);
-                        $analysis = json_decode($jsonContent, true);
+                        $fixedJson = $jsonContent . str_repeat('}', $bracesOpen - $bracesClose);
+                        $analysis = json_decode($fixedJson, true);
                     }
                 }
             }
@@ -998,8 +1001,12 @@ class GiaNikController
                         'current_portfolio' => $activeBalance['total']
                     ]);
 
-                    if (preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
+                    $analysis = json_decode($predictionRaw, true);
+                    if ($analysis === null && preg_match('/```json\s*([\s\S]*?)\s*```/', $predictionRaw, $matches)) {
                         $analysis = json_decode($matches[1], true);
+                    }
+
+                    if ($analysis) {
 
                         // Strict validation
                         if ($analysis && !empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
@@ -1340,8 +1347,8 @@ class GiaNikController
         // 1. Priority: JSON motivation field
         $motivation = $analysis['motivation'] ?? '';
 
-        // 2. Fallback: Narrative text after JSON
-        if (empty(trim($motivation))) {
+        // 2. Fallback: Narrative text after JSON (only if not raw JSON)
+        if (empty(trim($motivation)) && strpos($predictionRaw, '{') !== 0) {
             $motivation = trim(preg_replace('/```json[\s\S]*?(?:```|$)/', '', $predictionRaw));
         }
 

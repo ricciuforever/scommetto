@@ -263,11 +263,20 @@ class SyncController
         $prediction = $this->geminiService->analyze($topCandidates, $balance);
         $results['analyzed']++;
 
-        // Estrai l'analisi testuale (ragionamento) prima del blocco JSON
-        $reasoning = trim(preg_replace('/```json[\s\S]*?```/', '', $prediction));
+        $betData = json_decode($prediction, true);
+        $reasoning = "";
 
-        if (preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches)) {
-            $betData = json_decode($matches[1], true);
+        if ($betData === null) {
+            // Estrai l'analisi testuale (ragionamento) prima del blocco JSON
+            $reasoning = trim(preg_replace('/```json[\s\S]*?```/', '', $prediction));
+            if (preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches)) {
+                $betData = json_decode($matches[1], true);
+            }
+        } else {
+            $reasoning = $betData['motivation'] ?? "";
+        }
+
+        if ($betData) {
             if ($betData && !empty($betData['marketId']) && !empty($betData['advice'])) {
 
                 // Recupera metadati completi del mercato scelto
@@ -519,8 +528,12 @@ class SyncController
 
             $prediction = $this->geminiService->analyze($candidates, ['is_upcoming' => true]);
 
-            if (preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches)) {
+            $data = json_decode($prediction, true);
+            if ($data === null && preg_match('/```json\s*([\s\S]*?)\s*```/', $prediction, $matches)) {
                 $data = json_decode($matches[1], true);
+            }
+
+            if ($data) {
                 if ($data) {
                     file_put_contents(Config::DATA_PATH . 'betfair_hot_predictions.json', json_encode(['response' => $data, 'timestamp' => time()]));
                 }
