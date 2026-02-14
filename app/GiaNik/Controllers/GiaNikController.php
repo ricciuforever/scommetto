@@ -22,6 +22,7 @@ class GiaNikController
 
     public function __construct()
     {
+        set_time_limit(600);
         $this->bf = new BetfairService();
         $this->db = GiaNikDatabase::getInstance()->getConnection();
         $this->footballData = new FootballDataService();
@@ -787,8 +788,24 @@ class GiaNikController
             $leagueName = $input['competition'] ?? 'Unknown';
             $leagueId = $input['leagueId'] ?? null;
 
-            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation, $bucket, $leagueName, $leagueId]);
+            // Determine current period for manual bets
+            $pMinute = 0;
+            $pPeriod = 'NS';
+            if ($sport === 'Soccer' || $sport === 'Football') {
+                $liveRes = $this->footballData->getLiveMatches();
+                $matchingFixture = $this->footballData->searchInFixtureList($eventName, $liveRes['response'] ?? []);
+                if ($matchingFixture) {
+                    $status = $matchingFixture['fixture']['status']['short'] ?? 'NS';
+                    $pMinute = (int) ($matchingFixture['fixture']['status']['elapsed'] ?? 0);
+                    if (in_array($status, ['1H', 'HT']))
+                        $pPeriod = '1H';
+                    elseif (in_array($status, ['2H', 'ET', 'BT', 'P']))
+                        $pPeriod = '2H';
+                }
+            }
+
+            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id, placed_at_minute, placed_at_period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$marketId, $marketName, $eventName, $sport, $selectionId, $runnerName, $odds, $stake, $type, $betfairId, $motivation, $bucket, $leagueName, $leagueId, $pMinute, $pPeriod]);
 
             echo json_encode(['status' => 'success', 'message' => 'Scommessa piazzata (' . $type . ')']);
         } catch (\Throwable $e) {
@@ -896,16 +913,22 @@ class GiaNikController
                 $eventMarketsMap[$eid][] = $mc;
             }
 
-            $stmtPending = $this->db->prepare("SELECT DISTINCT event_name, market_id FROM bets WHERE status = 'pending'");
+            $stmtPending = $this->db->prepare("SELECT DISTINCT market_id FROM bets WHERE status = 'pending'");
             $stmtPending->execute();
-            $pendingBetsRaw = $stmtPending->fetchAll(PDO::FETCH_ASSOC);
-            $pendingEventNames = array_column($pendingBetsRaw, 'event_name');
-            $pendingMarketIds = array_column($pendingBetsRaw, 'market_id');
+            $pendingMarketIds = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
 
             // Recuperiamo il conteggio delle scommesse per oggi per ogni match (per limitare ingressi multipli)
             $stmtCount = $this->db->prepare("SELECT event_name, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name");
             $stmtCount->execute();
             $matchBetCounts = $stmtCount->fetchAll(PDO::FETCH_KEY_PAIR);
+
+            // Counts per match and period (today)
+            $stmtPeriodCounts = $this->db->prepare("SELECT event_name, placed_at_period, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name, placed_at_period");
+            $stmtPeriodCounts->execute();
+            $matchPeriodCounts = [];
+            while ($row = $stmtPeriodCounts->fetch(PDO::FETCH_ASSOC)) {
+                $matchPeriodCounts[$row['event_name']][$row['placed_at_period']] = (int) $row['cnt'];
+            }
 
             // Fetch correct balance for Gemini based on operational mode
             $activeBalance = ['available' => 0, 'total' => 0];
@@ -920,21 +943,38 @@ class GiaNikController
                 $activeBalance['total'] = $vBal['total'];
             }
 
-            $eventCounter = 0;
             foreach ($eventMarketsMap as $eid => $catalogues) {
                 $mainEvent = $catalogues[0];
+                $eventName = $mainEvent['event']['name'];
 
-                if (in_array($mainEvent['event']['name'], $pendingEventNames)) {
+                // Support Multi-Entry: Determine current period
+                $matchingFixture = $this->footballData->searchInFixtureList($eventName, $apiLiveFixtures);
+                $currentPeriod = 'NS';
+                $currentMinute = 0;
+                if ($matchingFixture) {
+                    $status = $matchingFixture['fixture']['status']['short'] ?? 'NS';
+                    $currentMinute = (int) ($matchingFixture['fixture']['status']['elapsed'] ?? 0);
+                    if (in_array($status, ['1H', 'HT']))
+                        $currentPeriod = '1H';
+                    elseif (in_array($status, ['2H', 'ET', 'BT', 'P']))
+                        $currentPeriod = '2H';
+                    elseif ($status === 'FT')
+                        $currentPeriod = 'FT';
+                }
+
+                // Hard Limits:
+                // 1. Max 4 bets per match total today
+                $totalBetsForMatch = $matchBetCounts[$eventName] ?? 0;
+                // 2. Max 2 bets per half (1H or 2H)
+                $betsInCurrentPeriod = $matchPeriodCounts[$eventName][$currentPeriod] ?? 0;
+
+                if ($totalBetsForMatch >= 4 || ($currentPeriod !== 'NS' && $betsInCurrentPeriod >= 2)) {
                     $results['skipped_already_bet']++;
                     continue;
                 }
 
-                if ($eventCounter >= 10)
-                    break;
-
                 try {
                     $results['scanned']++;
-                    $eventCounter++;
 
                     $marketIds = array_map(fn($mc) => $mc['marketId'], $catalogues);
                     $booksRes = $this->bf->getMarketBooks($marketIds);
@@ -953,6 +993,11 @@ class GiaNikController
                         $mId = $mc['marketId'];
                         if (!isset($booksMap[$mId]))
                             continue;
+
+                        // Skip markets with pending bets to avoid duplicates
+                        if (in_array($mId, $pendingMarketIds))
+                            continue;
+
                         $book = $booksMap[$mId];
                         $m = [
                             'marketId' => $mId,
@@ -970,6 +1015,10 @@ class GiaNikController
                             ];
                         }
                         $event['markets'][] = $m;
+                    }
+
+                    if (empty($event['markets'])) {
+                        continue;
                     }
 
                     if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
@@ -1113,7 +1162,7 @@ class GiaNikController
                                 $leagueId = $event['api_football']['fixture']['league_id'] ?? null;
                                 $motivation = $this->extractMotivation($analysis, $predictionRaw, $event);
 
-                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id, placed_at_minute, placed_at_period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                                 $stmtInsert->execute([
                                     $analysis['marketId'],
                                     $selectedMarket['marketName'],
@@ -1128,7 +1177,9 @@ class GiaNikController
                                     $motivation,
                                     $bucket,
                                     $leagueName,
-                                    $leagueId
+                                    $leagueId,
+                                    $currentMinute,
+                                    $currentPeriod
                                 ]);
                                 $results['new_bets']++;
                             }
