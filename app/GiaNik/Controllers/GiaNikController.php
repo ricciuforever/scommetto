@@ -875,6 +875,16 @@ class GiaNikController
             $apiLiveRes = $this->footballData->getLiveMatches();
             $apiLiveFixtures = $apiLiveRes['response'] ?? [];
 
+            // Pre-fetch Today and Tomorrow for better matching without redundant API calls
+            $apiTodayRes = $this->footballData->getFixturesByDate(date('Y-m-d'));
+            $apiTomorrowRes = $this->footballData->getFixturesByDate(date('Y-m-d', strtotime('+1 day')));
+
+            $apiFullFixtures = array_merge(
+                $apiLiveFixtures,
+                $apiTodayRes['response'] ?? [],
+                $apiTomorrowRes['response'] ?? []
+            );
+
             if (empty($events)) {
                 echo json_encode(['status' => 'success', 'message' => 'Nessun evento live']);
                 return;
@@ -913,22 +923,15 @@ class GiaNikController
                 $eventMarketsMap[$eid][] = $mc;
             }
 
-            $stmtPending = $this->db->prepare("SELECT DISTINCT market_id FROM bets WHERE status = 'pending'");
+            $stmtPending = $this->db->prepare("SELECT DISTINCT event_name FROM bets WHERE status = 'pending'");
             $stmtPending->execute();
-            $pendingMarketIds = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
+            $pendingEventNames = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
 
             // Recuperiamo il conteggio delle scommesse per oggi per ogni match (per limitare ingressi multipli)
             $stmtCount = $this->db->prepare("SELECT event_name, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name");
             $stmtCount->execute();
             $matchBetCounts = $stmtCount->fetchAll(PDO::FETCH_KEY_PAIR);
 
-            // Counts per match and period (today)
-            $stmtPeriodCounts = $this->db->prepare("SELECT event_name, placed_at_period, COUNT(*) as cnt FROM bets WHERE created_at >= date('now') GROUP BY event_name, placed_at_period");
-            $stmtPeriodCounts->execute();
-            $matchPeriodCounts = [];
-            while ($row = $stmtPeriodCounts->fetch(PDO::FETCH_ASSOC)) {
-                $matchPeriodCounts[$row['event_name']][$row['placed_at_period']] = (int) $row['cnt'];
-            }
 
             // Fetch correct balance for Gemini based on operational mode
             $activeBalance = ['available' => 0, 'total' => 0];
@@ -948,13 +951,15 @@ class GiaNikController
                 $eventName = $mainEvent['event']['name'];
 
                 // Support Multi-Entry: Determine current period
-                $matchingFixture = $this->footballData->searchInFixtureList($eventName, $apiLiveFixtures);
+                $matchingFixture = $this->footballData->searchInFixtureList($eventName, $apiFullFixtures);
                 $currentPeriod = 'NS';
                 $currentMinute = 0;
                 if ($matchingFixture) {
                     $status = $matchingFixture['fixture']['status']['short'] ?? 'NS';
                     $currentMinute = (int) ($matchingFixture['fixture']['status']['elapsed'] ?? 0);
-                    if (in_array($status, ['1H', 'HT']))
+
+                    // Map status to periods (1H/2H)
+                    if (in_array($status, ['NS', '1H', 'HT']))
                         $currentPeriod = '1H';
                     elseif (in_array($status, ['2H', 'ET', 'BT', 'P']))
                         $currentPeriod = '2H';
@@ -963,12 +968,15 @@ class GiaNikController
                 }
 
                 // Hard Limits:
-                // 1. Max 4 bets per match total today
-                $totalBetsForMatch = $matchBetCounts[$eventName] ?? 0;
-                // 2. Max 2 bets per half (1H or 2H)
-                $betsInCurrentPeriod = $matchPeriodCounts[$eventName][$currentPeriod] ?? 0;
+                // 1. Single Concurrent Bet: One bet at a time per match.
+                if (in_array($eventName, $pendingEventNames)) {
+                    $results['skipped_already_bet']++;
+                    continue;
+                }
 
-                if ($totalBetsForMatch >= 4 || ($currentPeriod !== 'NS' && $betsInCurrentPeriod >= 2)) {
+                // 2. Daily Limit: Max 4 bets total per match today (safety guardrail).
+                $totalBetsForMatch = $matchBetCounts[$eventName] ?? 0;
+                if ($totalBetsForMatch >= 4) {
                     $results['skipped_already_bet']++;
                     continue;
                 }
@@ -992,10 +1000,6 @@ class GiaNikController
                     foreach ($catalogues as $mc) {
                         $mId = $mc['marketId'];
                         if (!isset($booksMap[$mId]))
-                            continue;
-
-                        // Skip markets with pending bets to avoid duplicates
-                        if (in_array($mId, $pendingMarketIds))
                             continue;
 
                         $book = $booksMap[$mId];
@@ -1025,7 +1029,7 @@ class GiaNikController
                         // Pass the first market book for fallback extraction
                         $firstMarketId = $event['markets'][0]['marketId'] ?? null;
                         $firstBook = $booksMap[$firstMarketId] ?? null;
-                        $apiData = $this->enrichWithApiData($event['event'], $event['sport'], $apiLiveFixtures, $event['competition'], $firstBook);
+                        $apiData = $this->enrichWithApiData($event['event'], $event['sport'], $apiFullFixtures, $event['competition'], $firstBook);
                         $event['api_football'] = $apiData;
 
                         // --- Deep Context Integration ---
@@ -1118,8 +1122,8 @@ class GiaNikController
                             if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds))
                                 continue;
 
-                            // --- Dynamic Staking (No Kelly, Max 5% Total Budget) ---
-                            $bankroll = $activeBalance['total'];
+                            // --- Dynamic Staking (No Kelly, Max 5% of Available Balance) ---
+                            $bankroll = $activeBalance['available'];
                             $stake = $this->calculateDynamicStake($analysis['confidence'], $bankroll);
 
                             // Protezione: non scommettere più del liquido disponibile
@@ -1766,20 +1770,8 @@ class GiaNikController
             $existingId = $stmt->fetchColumn();
 
             if ($existingId) {
-                // First try in the provided list
+                // Check in the provided list
                 foreach ($allFixtures as $f) {
-                    if (($f['fixture']['id'] ?? null) == $existingId) {
-                        return $f;
-                    }
-                }
-
-                // If not found in provided list, try fetching fresh lists
-                $extraFixtures = array_merge(
-                    $this->footballData->getLiveMatches()['response'] ?? [],
-                    $this->footballData->getFixturesByDate(date('Y-m-d'))['response'] ?? [],
-                    $this->footballData->getFixturesByDate(date('Y-m-d', strtotime('+1 day')))['response'] ?? []
-                );
-                foreach ($extraFixtures as $f) {
                     if (($f['fixture']['id'] ?? null) == $existingId) {
                         return $f;
                     }
@@ -1789,18 +1781,8 @@ class GiaNikController
 
         $mappedCountry = $this->getCountryMapping($countryCode);
 
-        // Try to find in the provided list first
+        // Find in the provided list (which should be pre-fetched fully outside the loop)
         $match = $this->footballData->searchInFixtureList($bfEventName, $allFixtures, $mappedCountry, $startTime);
-
-        // If not found, try in full lists (Live + Today + Tomorrow)
-        if (!$match) {
-            $fullFixtures = array_merge(
-                $this->footballData->getLiveMatches()['response'] ?? [],
-                $this->footballData->getFixturesByDate(date('Y-m-d'))['response'] ?? [],
-                $this->footballData->getFixturesByDate(date('Y-m-d', strtotime('+1 day')))['response'] ?? []
-            );
-            $match = $this->footballData->searchInFixtureList($bfEventName, $fullFixtures, $mappedCountry, $startTime);
-        }
 
         // 2. If found, save the mapping for future use
         if ($match && $betfairEventId && isset($match['fixture']['id'])) {
