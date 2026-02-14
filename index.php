@@ -103,6 +103,17 @@ try {
         return;
     }
 
+    // --- DIO (QUANTUM) ROUTES ---
+    if ($path === '/dio') {
+        (new \App\Dio\Controllers\DioQuantumController())->index();
+        return;
+    }
+
+    if ($path === '/api/dio/scan') {
+        (new \App\Dio\Controllers\DioQuantumController())->scanAndTrade();
+        return;
+    }
+
     if ($path === '/api/gianik/live') {
         (new \App\GiaNik\Controllers\GiaNikController())->live();
         return;
@@ -228,8 +239,13 @@ try {
         return;
     }
 
-    // Intelligence Dashboard as Home
-    if ($path === '/' || $path === '/intelligence') {
+    // Dio Quantum as Home
+    if ($path === '/' || $path === '/dio') {
+        (new \App\Dio\Controllers\DioQuantumController())->index();
+        return;
+    }
+
+    if ($path === '/intelligence') {
         (new \App\Controllers\IntelligenceController())->index();
         return;
     }

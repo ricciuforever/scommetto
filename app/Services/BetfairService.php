@@ -620,9 +620,9 @@ class BetfairService
     /**
      * Multi-Sport Discovery: List all sport types
      */
-    public function getEventTypes()
+    public function getEventTypes(array $filter = [])
     {
-        return $this->request('listEventTypes', ['filter' => new \stdClass()]);
+        return $this->request('listEventTypes', ['filter' => $filter ?: new \stdClass()]);
     }
 
     /**

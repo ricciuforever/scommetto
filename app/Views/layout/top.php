@@ -41,6 +41,7 @@
     </script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/alpinejs" defer></script>
 
     <style>
         .glass {
@@ -109,15 +110,17 @@
                 Principale</span>
             <nav class="space-y-1">
                 <a href="/"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
-                    <i data-lucide="home" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Home</span>
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group border-l-2 border-indigo-500/50 bg-indigo-500/5">
+                    <i data-lucide="eye" class="w-4 h-4 text-indigo-400 transition-colors"></i>
+                    <span
+                        class="text-xs font-black text-white transition-colors uppercase italic tracking-tighter leading-none">Home
+                        (Dio)</span>
                 </a>
                 <a href="/gianik-live"
-                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group border-l-2 border-accent/50 bg-accent/5">
-                    <i data-lucide="zap" class="w-4 h-4 text-accent transition-colors"></i>
+                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition-all group">
+                    <i data-lucide="zap" class="w-4 h-4 text-slate-500 group-hover:text-accent transition-colors"></i>
                     <span
-                        class="text-xs font-black text-white transition-colors uppercase italic tracking-tighter leading-none">Gianik
+                        class="text-xs font-bold text-slate-400 group-hover:text-white transition-colors uppercase italic tracking-tighter leading-none">Gianik
                         Live</span>
                 </a>
             </nav>
