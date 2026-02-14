@@ -27,7 +27,7 @@ class DioQuantumController
         $pageTitle = 'Scommetto.AI - Dio Quantum';
         $portfolio = $this->recalculatePortfolio();
         $stats = $portfolio;
-        $recentBets = $this->getRecentBets();
+        $recentBets = $this->getRecentBets($portfolio['placed_ids'] ?? null);
         $recentLogs = $this->getRecentLogs();
         $recentExperiences = $this->getRecentExperiences();
         $performanceHistory = $portfolio['history'];
@@ -367,10 +367,19 @@ class DioQuantumController
         return $this->recalculatePortfolio();
     }
 
-    private function getRecentBets()
+    private function getRecentBets($validIds = null)
     {
-        $stmt = $this->db->prepare("SELECT * FROM bets WHERE runner_name NOT LIKE '%PASS%' ORDER BY created_at DESC LIMIT 10");
-        $stmt->execute();
+        if ($validIds !== null && empty($validIds)) return [];
+
+        $sql = "SELECT * FROM bets WHERE runner_name NOT LIKE '%PASS%'";
+        if ($validIds !== null) {
+            $placeholders = implode(',', array_fill(0, count($validIds), '?'));
+            $sql .= " AND id IN ($placeholders)";
+        }
+        $sql .= " ORDER BY created_at DESC LIMIT 10";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($validIds ?: []);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -514,6 +523,8 @@ class DioQuantumController
             ];
         }
 
+        $placedIds = array_keys(array_filter($placedBets));
+
         $this->cachedPortfolio = [
             'total_balance' => $currentBalance + $exposure,
             'available_balance' => $currentBalance,
@@ -522,7 +533,8 @@ class DioQuantumController
             'total_invested' => $invested,
             'roi' => ($invested > 0) ? ($totalProfit / $invested) * 100 : 0,
             'win_rate' => ($settledCount > 0) ? ($wins / $settledCount) * 100 : 0,
-            'total_bets' => array_sum($placedBets), // Only count successfully placed bets
+            'total_bets' => count($placedIds), // Only count successfully placed bets
+            'placed_ids' => $placedIds,
             'history' => $history
         ];
 
