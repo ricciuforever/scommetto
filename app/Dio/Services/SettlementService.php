@@ -44,8 +44,10 @@ class SettlementService
                 // Determine winner from runners
                 $winnerSelectionId = null;
                 foreach ($book['runners'] as $runner) {
+                    // echo "Runner {$runner['selectionId']} status: {$runner['status']}\n";
                     if ($runner['status'] === 'WINNER') {
-                        $winnerSelectionId = $runner['selection_id'];
+                        // BUG FIX: Betfair uses selectionId (camelCase)
+                        $winnerSelectionId = $runner['selectionId'];
                         break;
                     }
                 }

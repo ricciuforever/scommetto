@@ -315,11 +315,15 @@ class DioQuantumController
         $stmt->execute();
         $totalProfit = (float) $stmt->fetchColumn();
 
+        $stmt = $this->db->prepare("SELECT SUM(stake) FROM bets WHERE status != 'pending'");
+        $stmt->execute();
+        $totalStake = (float) $stmt->fetchColumn();
+
         return [
             'balance' => $balance,
             'total_bets' => $totalBets,
             'total_profit' => $totalProfit,
-            'roi' => $totalBets > 0 ? ($totalProfit / ($totalBets * 2)) * 100 : 0 // Simplified ROI calculation
+            'roi' => $totalStake > 0 ? ($totalProfit / $totalStake) * 100 : 0
         ];
     }
 
