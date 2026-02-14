@@ -22,6 +22,10 @@ class Config
     const BETFAIR_CONFIDENCE_THRESHOLD = 85;
     const DEFAULT_TIMEZONE = 'Europe/Rome';
 
+    const KELLY_MULTIPLIER_GIANIK = 0.15; // Conservativo
+    const KELLY_MULTIPLIER_DIO = 0.10;    // Molto conservativo (Dio è più rischioso)
+    const MIN_VALUE_THRESHOLD = 0.03;     // 3% di vantaggio minimo (Edge) per scommettere
+
     // Popular League IDs
     const LEAGUE_SERIE_A = 135;
     const LEAGUE_PREMIER = 39;

@@ -95,22 +95,21 @@ class GeminiService
                 "REGOLE RIGIDE:\n" .
                 "1. Analizza TUTTI i mercati forniti (Match Odds, Double Chance, varie linee di Under/Over, BTTS).\n" .
                 "2. Scegli l'operazione che offre il miglior rapporto rischio/rendimento. Non sei obbligato a scegliere il mercato principale se un altro (es. Over 1.5) è più sicuro o profittevole.\n" .
-                "3. Decidi lo STAKE (in Euro) da puntare. Hai piena libertà di arrivare fino al 5% del Budget Totale (minimo 2€). Ricorda che non puoi comunque superare la Disponibilità liquida attuale.\n" .
-                "4. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE.\n" .
-                "5. Usa la CLASSIFICA e i PRONOSTICI esterni (predictions) per validare la tua scelta.\n" .
-                "6. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
-                "7. SOGLIA DI CONFIDENZA: Suggerisci l'operazione SOLO se la tua 'confidence' è pari o superiore all'80%. Se è inferiore, non scommettere sul mercato.\n" .
-                "8. REGOLA CALCIO (SINGOLA GIOCATA CONTEMPORANEA): È permessa solo UNA scommessa attiva alla volta per match. Puoi rientrare con una nuova giocata sullo stesso evento SOLO dopo che la precedente è stata chiusa (vinta o persa). Massimo 4 giocate totali per match. Ogni ingresso deve avere confidence >= 80%.\n" .
-                "9. ⚠️ QUOTA MINIMA E VALORE (REGOLA FERREA): 1.25 è la tua quota MINIMA assoluta di ingresso. Non suggerire MAI quote inferiori a 1.25 nel campo 'odds'. Se la quota attuale del mercato è superiore a 1.25, usala. Se invece la quota attuale è inferiore (es. 1.01 - 1.24) ma la tua 'confidence' è >= 80%, devi OBBLIGATORIAMENTE impostare il campo 'odds' a 1.25 nel JSON. Questo creerà un ordine 'unmatched' che attenderà che il mercato salga a 1.25. Suggerire quote come 1.03 o 1.15 è VIETATO e considerato un errore grave.\n" .
-                "10. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON.\n" .
-                "11. STILE RISPOSTA: La 'motivation' deve essere sintetica (max 80 parole). Evita di ripetere dati già chiari.\n\n" .
+                "3. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE.\n" .
+                "4. Usa la CLASSIFICA e i PRONOSTICI esterni (predictions) per validare la tua scelta.\n" .
+                "5. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
+                "6. SOGLIA DI CONFIDENZA: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE che l'evento si verifichi. Non gonfiare i numeri.\n" .
+                "   Se la quota è 1.50 (probabilità implicita 66%) e tu stimi una probabilità del 60%, la tua confidence deve essere 60.\n" .
+                "7. REGOLA CALCIO (SINGOLA GIOCATA CONTEMPORANEA): È permessa solo UNA scommessa attiva alla volta per match.\n" .
+                "8. ⚠️ QUOTA MINIMA: 1.25 è la tua quota MINIMA di ingresso. Se la quota attuale è inferiore ma l'evento è valido, imposta 'odds' a 1.25 nel JSON.\n" .
+                "9. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON.\n" .
+                "10. STILE RISPOSTA: La 'motivation' deve essere sintetica (max 80 parole). Evita di ripetere dati già chiari.\n\n" .
                 "RISPONDI ESCLUSIVAMENTE CON QUESTO SCHEMA JSON:\n" .
                 "{\n" .
                 "  \"eventName\": \"Team A v Team B\",\n" .
                 "  \"marketId\": \"1.XXXXX\",\n" .
                 "  \"advice\": \"Runner Name\",\n" .
                 "  \"odds\": 1.80,\n" .
-                "  \"stake\": 5.0,\n" .
                 "  \"confidence\": 90,\n" .
                 "  \"sentiment\": \"Bullish/Bearish/Neutral\",\n" .
                 "  \"motivation\": \"Sintesi tecnica qui (Menziona SEMPRE i nomi delle squadre e i dati statistici chiave usati per la decisione).\"\n" .
@@ -124,15 +123,14 @@ class GeminiService
                 "2. SCEGLI SOLO 1 EVENTO dalla lista che ritieni più profittevole.\n" .
                 "3. Se nessun evento è convincente (risk/reward scarso), non scegliere nulla.\n" .
                 "4. NON INVENTARE QUOTE: usa solo quelle presenti nel JSON per il runner scelto.\n" .
-                "5. Stake: 1-5% del portfolio.\n" .
-                "6. QUOTA MINIMA: 1.25 è la quota minima di ingresso. Se la quota attuale è superiore, usala. Se è inferiore ma l'evento è eccezionale, scrivi '1.25' nel campo 'odds' per piazzare un ordine limite.\n" .
-                "7. Se per uno sport non hai dati statistici (but only quotes), be more prudent and look for obvious 'Value Bets'.\n\n" .
+                "5. CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE. Sii brutale e onesto. Se non c'è valore rispetto alla quota, scrivi una confidence bassa.\n" .
+                "6. QUOTA MINIMA: 1.25 è la quota minima di ingresso.\n" .
+                "7. Se per uno sport non hai dati statistici (ma solo quote), sii più prudente.\n\n" .
                 "RISPONDI ESCLUSIVAMENTE IN FORMATO JSON:\n" .
                 "{\n" .
                 "  \"marketId\": \"1.XXXXX\",\n" .
                 "  \"advice\": \"Runner Name\",\n" .
                 "  \"odds\": 1.80,\n" .
-                "  \"stake\": 2.0,\n" .
                 "  \"confidence\": 90,\n" .
                 "  \"sentiment\": \"Testo breve sul sentiment del mercato\",\n" .
                 "  \"motivation\": \"Spiegazione tecnica dettagliata (perché questo evento e questo runner?)\"\n" .
@@ -204,10 +202,9 @@ class GeminiService
             "REGOLE RIGIDE:\n" .
             "1. Per ogni evento, analizza i mercati, i volumi, i dati statistici live, il momentum e il contesto storico.\n" .
             "2. Scegli l'operazione migliore per ogni evento (o nessuna se il rischio/rendimento è scarso).\n" .
-            "3. Stake: Minimo 2€, massimo 5% del Budget Totale. Rispetta la disponibilità liquida.\n" .
-            "4. Confidenza: Suggerisci l'operazione solo se confidence >= 80%.\n" .
-            "5. Quota Minima: 1.25. Se la quota attuale è inferiore ma l'evento è valido, scrivi '1.25' per piazzare un ordine limite.\n" .
-            "6. Rispondi con un ARRAY JSON di oggetti, uno per ogni evento che ritieni meritevole di giocata.\n\n" .
+            "3. CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE. Sii onesto: se la quota è 1.50 (66% imp) e tu stimi il 60%, scrivi confidence 60.\n" .
+            "4. Quota Minima: 1.25. Se la quota attuale è inferiore ma l'evento è valido, scrivi '1.25' per piazzare un ordine limite.\n" .
+            "5. Rispondi con un ARRAY JSON di oggetti, uno per ogni evento che ritieni meritevole di analisi.\n\n" .
             "RISPONDI ESCLUSIVAMENTE CON QUESTO SCHEMA JSON (ARRAY):\n" .
             "[\n" .
             "  {\n" .
@@ -215,7 +212,6 @@ class GeminiService
             "    \"marketId\": \"1.XXXXX\",\n" .
             "    \"advice\": \"Runner Name\",\n" .
             "    \"odds\": 1.80,\n" .
-            "    \"stake\": 5.0,\n" .
             "    \"confidence\": 90,\n" .
             "    \"sentiment\": \"Bullish/Bearish/Neutral\",\n" .
             "    \"motivation\": \"Sintesi tecnica qui.\"\n" .
