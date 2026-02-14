@@ -32,30 +32,33 @@ require __DIR__ . '/../../Views/layout/top.php';
         </div>
     </div>
 
-    <!-- 2. Stats Grid (Bankroll Virtuale etc..) -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div
-            class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-indigo-500/30 transition-all">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Bankroll
-                Virtuale</span>
-            <div class="text-xl font-black text-white"><?php echo number_format($stats['balance'], 2); ?>€</div>
+    <!-- 2. Stats Grid (Reale Portfolio Metrics) -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-indigo-500/30 transition-all">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Saldo Totale</span>
+            <div class="text-lg font-black text-white"><?php echo number_format($stats['total_balance'], 2); ?>€</div>
         </div>
-        <div
-            class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-success/30 transition-all">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Profitto
-                Totale</span>
-            <div class="text-xl font-black <?php echo $stats['total_profit'] >= 0 ? 'text-success' : 'text-danger'; ?>">
+        <div class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-indigo-400/30 transition-all">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Saldo Disponibile</span>
+            <div class="text-lg font-black text-indigo-400"><?php echo number_format($stats['available_balance'], 2); ?>€</div>
+        </div>
+        <div class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-amber-500/30 transition-all">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Saldo Esposizione</span>
+            <div class="text-lg font-black text-amber-500"><?php echo number_format($stats['exposure_balance'], 2); ?>€</div>
+        </div>
+        <div class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-success/30 transition-all">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Profitto Totale (P&L)</span>
+            <div class="text-lg font-black <?php echo $stats['total_profit'] >= 0 ? 'text-success' : 'text-danger'; ?>">
                 <?php echo ($stats['total_profit'] >= 0 ? '+' : '') . number_format($stats['total_profit'], 2); ?>€
             </div>
         </div>
         <div class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-accent/30 transition-all">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Operazioni</span>
-            <div class="text-xl font-black text-white"><?php echo $stats['total_bets']; ?></div>
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">ROI Reale</span>
+            <div class="text-lg font-black text-accent"><?php echo number_format($stats['roi'], 2); ?>%</div>
         </div>
-        <div
-            class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-amber-500/30 transition-all">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">ROI Effettivo</span>
-            <div class="text-xl font-black text-indigo-400"><?php echo number_format($stats['roi'], 2); ?>%</div>
+        <div class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-blue-500/30 transition-all">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Win Rate</span>
+            <div class="text-lg font-black text-white"><?php echo number_format($stats['win_rate'], 1); ?>%</div>
         </div>
     </div>
 
