@@ -25,12 +25,22 @@ class BrainController
     {
         $this->sendJsonHeader();
 
+        // Throttling: Solo un ciclo di apprendimento ogni 10 minuti per Dio
+        $cooldownFile = \App\Config\Config::DATA_PATH . 'dio_brain_cooldown.txt';
+        $lastRun = file_exists($cooldownFile) ? (int) file_get_contents($cooldownFile) : 0;
+        if (time() - $lastRun < 600) {
+            return json_encode(['status' => 'success', 'message' => 'Dio Brain in cooldown']);
+        }
+        file_put_contents($cooldownFile, time());
+
         // Find settled bets without an experience entry
+        // Prioritizziamo le PERDITE per imparare dai fallimenti
         $stmt = $this->db->prepare("
             SELECT b.* FROM bets b
-            LEFT JOIN experiences e ON b.id = e.data_context -- Using id as link for now
+            LEFT JOIN experiences e ON b.id = e.data_context
             WHERE b.status IN ('won', 'lost') AND e.id IS NULL
-            LIMIT 5
+            ORDER BY CASE WHEN b.status = 'lost' THEN 0 ELSE 1 END ASC, b.created_at DESC
+            LIMIT 3
         ");
         $stmt->execute();
         $newSettled = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -46,7 +56,7 @@ class BrainController
                 $stmt = $this->db->prepare("INSERT INTO experiences (sport, market_type, outcome, lesson, data_context) VALUES (?, ?, ?, ?, ?)");
                 $stmt->execute([
                     $bet['sport'],
-                    'MATCH_ODDS', // assuming for now, could be dynamic
+                    'MATCH_ODDS',
                     $bet['status'],
                     $lesson,
                     (string) $bet['id']
