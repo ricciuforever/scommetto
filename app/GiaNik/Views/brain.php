@@ -33,12 +33,15 @@ if (!$isEmbedded):
             </div>
         </div>
         <div class="flex gap-2">
+            <?php if(isset($_SESSION['admin_user'])): ?>
             <button onclick="rebuildBrain()" class="px-4 py-2 bg-purple-900/50 hover:bg-purple-800 text-purple-200 border border-purple-500/30 rounded-lg text-sm transition flex items-center gap-2">
                 <i class="fa-solid fa-sync" id="rebuild-icon"></i> <span id="rebuild-text">Ricostruisci Memoria</span>
             </button>
+            <?php endif; ?>
+
             <?php if(!$isEmbedded): ?>
-            <a href="/gianik" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition flex items-center">
-                <i class="fa-solid fa-arrow-left mr-2"></i> Torna al Terminale
+            <a href="/" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition flex items-center">
+                <i class="fa-solid fa-arrow-left mr-2"></i> Torna alla Home
             </a>
             <?php endif; ?>
         </div>

@@ -112,6 +112,7 @@ class DioQuantumController
             $stakeMode = $this->db->query("SELECT value FROM system_state WHERE key = 'stake_mode'")->fetchColumn() ?: 'kelly';
             $stakeValue = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'stake_value'")->fetchColumn() ?: 0.10);
             $minConfidence = (int)($this->db->query("SELECT value FROM system_state WHERE key = 'min_confidence'")->fetchColumn() ?: 75);
+            $minStake = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'min_stake'")->fetchColumn() ?: 2.00);
 
             // 1. Get ALL active sport types with live events
             $eventTypesRes = $this->bf->getEventTypes(['inPlayOnly' => true]);
@@ -193,10 +194,11 @@ class DioQuantumController
                             (float)$analysis['odds'],
                             $confidence,
                             $stakeMode,
-                            $stakeValue
+                            $stakeValue,
+                            $minStake
                         );
 
-                        if (!$decision['is_value_bet'] || $decision['stake'] < Config::MIN_BETFAIR_STAKE) {
+                        if (!$decision['is_value_bet'] || $decision['stake'] < max(2.00, $minStake)) {
                             $action = 'pass';
                             $analysis['motivation'] .= " [SKIP MoneyManager: " . $decision['reason'] . "]";
                         } else {
@@ -205,7 +207,7 @@ class DioQuantumController
                                 $stake = $workingAvailableBalance;
                             }
 
-                            if ($stake >= Config::MIN_BETFAIR_STAKE) {
+                            if ($stake >= max(2.00, $minStake)) {
                                 $analysis['stake'] = $stake;
                                 $this->placeVirtualBet($ticker, $analysis);
 

@@ -130,12 +130,16 @@ $event = $event ?? [];
                     </button>
 
                     <?php if (!empty($analysis)): ?>
-                        <?php if (($analysis['stake'] ?? 0) >= 2.0): ?>
+                        <?php if(isset($_SESSION['admin_user']) && ($analysis['stake'] ?? 0) >= 2.0): ?>
                             <button onclick="placeGiaNikBet()" id="bet-btn"
                                 class="flex-[2] py-4 rounded-2xl bg-accent hover:bg-accent/80 text-white font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2">
                                 <i data-lucide="zap" class="w-4 h-4"></i> Piazza Scommessa da <?php echo number_format($analysis['stake'], 2); ?>€ <span id="btn-mode-label"
                                     class="opacity-50 ml-1"></span>
                             </button>
+                        <?php elseif(!isset($_SESSION['admin_user'])): ?>
+                            <div class="flex-[2] py-4 rounded-2xl bg-slate-800 text-slate-500 font-black uppercase tracking-widest text-[10px] flex items-center justify-center text-center border border-white/5">
+                                Login necessario per operare
+                            </div>
                         <?php else: ?>
                             <div class="flex-[2] py-4 rounded-2xl bg-slate-800 text-slate-500 font-black uppercase tracking-widest text-[10px] flex items-center justify-center text-center border border-white/5">
                                 Edge Insufficiente o Stake troppo basso

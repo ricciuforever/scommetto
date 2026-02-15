@@ -523,7 +523,7 @@ class GiaNikController
             // Global State for GiaNik
             $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
             $stmtMode->execute();
-            $operationalMode = $stmtMode->fetchColumn() ?: 'virtual';
+            $operationalMode = $stmtMode->fetchColumn() ?: 'real';
 
             // Calculate Portfolio Stats
             $realPortfolioStats = $this->getPortfolioStats('real', $account['available'] + $account['exposure']);
@@ -641,7 +641,7 @@ class GiaNikController
             // Fetch operational mode
             $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
             $stmtMode->execute();
-            $operationalMode = $stmtMode->fetchColumn() ?: 'virtual';
+            $operationalMode = $stmtMode->fetchColumn() ?: 'real';
 
             if ($operationalMode === 'real') {
                 $fundsData = $this->bf->getFunds();
@@ -728,6 +728,7 @@ class GiaNikController
             $strategyPrompt = $this->db->query("SELECT value FROM system_state WHERE key = 'strategy_prompt'")->fetchColumn();
             $stakeMode = $this->db->query("SELECT value FROM system_state WHERE key = 'stake_mode'")->fetchColumn() ?: 'kelly';
             $stakeValue = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'stake_value'")->fetchColumn() ?: 0.15);
+            $minStake = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'min_stake'")->fetchColumn() ?: 2.00);
 
             // Debug $event
             file_put_contents(Config::LOGS_PATH . 'gianik_event_debug.log', date('[Y-m-d H:i:s] ') . json_encode($event, JSON_PRETTY_PRINT) . PHP_EOL, FILE_APPEND);
@@ -766,7 +767,8 @@ class GiaNikController
                     (float)$analysis['odds'],
                     (float)$analysis['confidence'],
                     $stakeMode,
-                    $stakeValue
+                    $stakeValue,
+                    $minStake
                 );
                 // Aggiorniamo lo stake suggerito nell'analisi per la vista
                 $analysis['stake'] = $decision['stake'];
@@ -829,6 +831,9 @@ class GiaNikController
             }
 
             // --- Staking Guardrail: Max 5% of Total Balance ---
+            $minStake = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'min_stake'")->fetchColumn() ?: 2.00);
+            $effectiveMinStake = max(2.00, $minStake);
+
             if ($type === 'real') {
                 $fundsData = $this->bf->getFunds();
                 $funds = $fundsData['result'] ?? $fundsData;
@@ -849,8 +854,8 @@ class GiaNikController
             }
 
             // Enforce minimum IT stake
-            if ($stake < Config::MIN_BETFAIR_STAKE) {
-                $stake = Config::MIN_BETFAIR_STAKE;
+            if ($stake < $effectiveMinStake) {
+                $stake = $effectiveMinStake;
             }
 
             $betfairId = null;
@@ -914,7 +919,7 @@ class GiaNikController
         $this->sendJsonHeader();
         $stmt = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
         $stmt->execute();
-        $mode = $stmt->fetchColumn() ?: 'virtual';
+        $mode = $stmt->fetchColumn() ?: 'real';
         echo json_encode(['status' => 'success', 'mode' => $mode]);
     }
 
@@ -945,7 +950,7 @@ class GiaNikController
             // Check operational mode
             $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
             $stmtMode->execute();
-            $globalMode = $stmtMode->fetchColumn() ?: 'virtual';
+            $globalMode = $stmtMode->fetchColumn() ?: 'real';
 
             // Restricted to Soccer (ID 1)
             $eventTypeIds = ['1'];
@@ -1026,6 +1031,7 @@ class GiaNikController
             $stakeMode = $this->db->query("SELECT value FROM system_state WHERE key = 'stake_mode'")->fetchColumn() ?: 'kelly';
             $stakeValue = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'stake_value'")->fetchColumn() ?: 0.15);
             $minConfidence = (int)($this->db->query("SELECT value FROM system_state WHERE key = 'min_confidence'")->fetchColumn() ?: 80);
+            $minStake = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'min_stake'")->fetchColumn() ?: 2.00);
 
             // Fetch correct balance for Gemini based on operational mode
             $activeBalance = ['available' => 0, 'total' => 0];
@@ -1207,10 +1213,11 @@ class GiaNikController
                                 (float)$analysis['odds'],
                                 (float)$analysis['confidence'],
                                 $stakeMode,
-                                $stakeValue
+                                $stakeValue,
+                                $minStake
                             );
 
-                            if (!$decision['is_value_bet'] || $decision['stake'] < Config::MIN_BETFAIR_STAKE) {
+                            if (!$decision['is_value_bet'] || $decision['stake'] < max(2.00, $minStake)) {
                                 continue;
                             }
 
@@ -1221,7 +1228,7 @@ class GiaNikController
                                 $stake = $workingAvailableBalance;
                             }
 
-                            if ($stake < Config::MIN_BETFAIR_STAKE) continue;
+                            if ($stake < max(2.00, $minStake)) continue;
 
                             $runners = array_map(fn($r) => ['runnerName' => $r['name'], 'selectionId' => $r['selectionId']], $selectedMarket['runners']);
                             $selectionId = $this->bf->mapAdviceToSelection($analysis['advice'], $runners);
@@ -1381,7 +1388,7 @@ class GiaNikController
         return $results;
     }
 
-    private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $competition = '', $bfMarketBook = null)
+    private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $countryCode = null, $startTime = null, $betfairEventId = null)
     {
         // Restricted to Soccer
         $countryCode = null;
@@ -2452,7 +2459,7 @@ class GiaNikController
 
             // 5. MIRRORING & DEDUPLICAZIONE
             // Pulizia Preventiva Duplicati locali per BetID (flessibile su prefisso 1:)
-            // Utilizziamo una sottoquery ordinata per preservare il record con la motivazione tecnica più completa (Analisi GiaNik)
+            // Utilizziamo una sottoquery ordinata per preservare le record con la motivazione tecnica più completa (Analisi GiaNik)
             $this->db->exec("DELETE FROM bets WHERE type = 'real' AND id NOT IN (
                 SELECT id FROM (
                     SELECT id,

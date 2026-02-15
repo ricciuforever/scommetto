@@ -16,10 +16,20 @@ $user = $_SESSION['admin_user'];
         .sidebar-link.active { background: rgba(59, 130, 246, 0.1); color: #60a5fa; border-left: 2px solid #3b82f6; }
     </style>
 </head>
-<body class="h-screen flex overflow-hidden">
+<body class="h-screen flex flex-col lg:flex-row overflow-hidden">
+
+<!-- Mobile Admin Header -->
+<header class="lg:hidden h-16 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-6 shrink-0 z-50">
+    <h1 class="text-lg font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
+        🛡️ WAR ROOM
+    </h1>
+    <button onclick="toggleAdminMenu()" class="text-white">
+        <i data-lucide="menu" class="w-6 h-6"></i>
+    </button>
+</header>
 
 <!-- Sidebar Admin -->
-<aside class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0">
+<aside id="admin-sidebar" class="hidden lg:flex w-64 bg-gray-900 border-r border-gray-800 flex-col shrink-0 transition-all duration-300">
     <div class="p-6 border-b border-gray-800">
         <h1 class="text-xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
             🛡️ WAR ROOM <span class="text-[10px] text-gray-500 font-normal">v3.0</span>
@@ -63,6 +73,10 @@ $user = $_SESSION['admin_user'];
             <i data-lucide="users" class="w-4 h-4"></i>
             <span class="text-xs font-bold uppercase tracking-widest">Gestione Utenti</span>
         </a>
+        <a href="/admin/system" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all <?= strpos($_SERVER['REQUEST_URI'], '/system') !== false ? 'active' : '' ?>">
+            <i data-lucide="settings" class="w-4 h-4"></i>
+            <span class="text-xs font-bold uppercase tracking-widest">Sistema</span>
+        </a>
         <?php endif; ?>
     </nav>
 
@@ -75,6 +89,19 @@ $user = $_SESSION['admin_user'];
         </a>
     </div>
 </aside>
+
+<script>
+    function toggleAdminMenu() {
+        const sidebar = document.getElementById('admin-sidebar');
+        if (sidebar.classList.contains('hidden')) {
+            sidebar.classList.remove('hidden');
+            sidebar.classList.add('fixed', 'inset-0', 'w-full', 'h-full', 'z-[100]', 'flex');
+        } else {
+            sidebar.classList.add('hidden');
+            sidebar.classList.remove('fixed', 'inset-0', 'w-full', 'h-full', 'z-[100]', 'flex');
+        }
+    }
+</script>
 
 <main class="flex-1 flex flex-col overflow-hidden">
     <header class="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-8 shrink-0">

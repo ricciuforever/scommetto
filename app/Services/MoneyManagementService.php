@@ -18,8 +18,11 @@ class MoneyManagementService
     /**
      * Calcola lo stake basato sulla modalità scelta (Kelly, Flat, Percentage)
      */
-    public static function calculateStake(float $bankroll, float $odds, float $confidence, string $mode = 'kelly', float $value = 0.15): array
+    public static function calculateStake(float $bankroll, float $odds, float $confidence, string $mode = 'kelly', float $value = 0.15, float $minStake = 2.00): array
     {
+        // Enforce Betfair absolute minimum
+        $effectiveMinStake = max(2.00, $minStake);
+
         $res = [];
         if ($mode === 'flat') {
             $res = [
@@ -49,18 +52,18 @@ class MoneyManagementService
             $res['reason'] .= " (Capped at 5%)";
         }
 
-        if ($res['stake'] < 2.00 && $maxAllowed >= 2.00) {
-             $res['stake'] = 2.00;
-        } elseif ($res['stake'] < 2.00) {
+        if ($res['stake'] < $effectiveMinStake && $maxAllowed >= $effectiveMinStake) {
+             $res['stake'] = $effectiveMinStake;
+        } elseif ($res['stake'] < $effectiveMinStake) {
              $res['stake'] = 0;
-             $res['reason'] = "Bankroll insufficiente per puntata minima";
+             $res['reason'] = "Bankroll insufficiente per puntata minima (" . number_format($effectiveMinStake, 2) . "€)";
              $res['is_value_bet'] = false;
         }
 
         return $res;
     }
 
-    public static function calculateOptimalStake(float $bankroll, float $odds, float $confidence, float $kellyMultiplier = 0.15): array
+    public static function calculateOptimalStake(float $bankroll, float $odds, float $confidence, float $kellyMultiplier = 0.15, float $minStake = 2.00): array
     {
 
         // 1. Controllo base
@@ -116,12 +119,17 @@ class MoneyManagementService
         // 5. Applicazione Frazionaria
         $suggestedStake = $bankroll * $kellyFraction * $kellyMultiplier;
 
-        // 6. Logica "Smart Floor" e Limiti Hard
-        // - Stake < 1.00€: SCARTA (SKIP)
-        // - 1.00€ <= Stake < 2.00€: FORZA A 2.00€ (Minimo Betfair)
-        // - Stake >= 2.00€: Usa valore calcolato
+        // Enforce Betfair absolute minimum
+        $effectiveMinStake = max(2.00, $minStake);
 
-        if ($suggestedStake < 1.00) {
+        // 6. Logica "Smart Floor" e Limiti Hard
+        // - Stake < (MinStake/2): SCARTA (SKIP)
+        // - (MinStake/2) <= Stake < MinStake: FORZA A MinStake
+        // - Stake >= MinStake: Usa valore calcolato
+
+        $floor = $effectiveMinStake / 2;
+
+        if ($suggestedStake < $floor) {
             return [
                 'stake' => 0,
                 'reason' => 'Stake suggerito troppo basso per il rischio (' . round($suggestedStake, 2) . '€)',
@@ -131,7 +139,7 @@ class MoneyManagementService
             ];
         }
 
-        $finalStake = max(2.00, $suggestedStake);
+        $finalStake = max($effectiveMinStake, $suggestedStake);
 
         // Limite di Sicurezza: Mai più del 5% del bankroll totale su una singola operazione
         $maxAllowed = $bankroll * 0.05;
@@ -139,14 +147,14 @@ class MoneyManagementService
             $finalStake = $maxAllowed;
         }
 
-        // Se dopo il cap siamo sotto il minimo di 2€ (può succedere se bankroll < 40€)
-        if ($finalStake < 2.00) {
-            if ($maxAllowed >= 2.00) {
-                $finalStake = 2.00;
+        // Se dopo il cap siamo sotto il minimo (può succedere se bankroll < MinStake * 20)
+        if ($finalStake < $effectiveMinStake) {
+            if ($maxAllowed >= $effectiveMinStake) {
+                $finalStake = $effectiveMinStake;
             } else {
                 return [
                     'stake' => 0,
-                    'reason' => 'Bankroll troppo basso per rispettare i limiti minimi di sicurezza',
+                    'reason' => 'Bankroll troppo basso per rispettare i limiti minimi di sicurezza (' . number_format($effectiveMinStake, 2) . '€)',
                     'is_value_bet' => true, // Sarebbe value bet ma non abbiamo budget
                     'kelly_fraction' => $kellyFraction,
                     'edge' => $edge
