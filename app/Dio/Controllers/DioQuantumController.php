@@ -756,6 +756,10 @@ class DioQuantumController
             // 1. Recupera ordini aperti
             $currentRes = $this->bf->getCurrentOrders();
             $currentOrders = $currentRes['currentOrders'] ?? [];
+
+            // Collect marketIds for batch resolution
+            $pendingMarketIds = [];
+
             foreach ($currentOrders as $o) {
                 $allBfOrders[$o['betId']] = [
                     'betId' => $o['betId'],
@@ -765,7 +769,42 @@ class DioQuantumController
                     'stake' => $o['priceSize']['size'] ?? 0,
                     'status' => 'pending',
                     'placedDate' => $o['placedDate'] ?? null,
+                    'marketName' => 'Unknown', // Default
+                    'eventName' => 'Unknown',  // Default
+                    'runnerName' => 'Unknown', // Default
+                    'sport' => 'Unknown'       // Default
                 ];
+                $pendingMarketIds[$o['marketId']] = true;
+            }
+
+            // Resolve Unknown Pending Bets via listMarketCatalogue
+            if (!empty($pendingMarketIds)) {
+                $uniqueMarketIds = array_keys($pendingMarketIds);
+                // Chunk requests if needed (though current orders usually few)
+                $chunks = array_chunk($uniqueMarketIds, 25);
+                foreach ($chunks as $chunk) {
+                    $catRes = $this->bf->getMarketCatalogues($chunk, count($chunk), ['RUNNER_DESCRIPTION', 'EVENT'], 'FIRST_TO_START');
+                    $catalogues = $catRes['result'] ?? [];
+
+                    foreach ($catalogues as $cat) {
+                        // Update all pending orders for this market
+                        foreach ($allBfOrders as &$order) {
+                            if ($order['marketId'] === $cat['marketId']) {
+                                $order['marketName'] = $cat['marketName'];
+                                $order['eventName'] = $cat['event']['name'];
+                                $order['sport'] = $this->standardizeSportName('Unknown'); // Catalogue doesn't return sport name easily without navigation, but event usually enough
+
+                                // Resolve Runner Name
+                                foreach ($cat['runners'] as $runner) {
+                                    if ($runner['selectionId'] == $order['selectionId']) {
+                                        $order['runnerName'] = $runner['runnerName'];
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // 2. Recupera ordini definiti (con paginazione se necessario)
@@ -805,7 +844,8 @@ class DioQuantumController
 
             foreach ($allBfOrders as $betId => $o) {
                 // Filter by Dio target sports if possible, UNLESS deep sync is requested
-                if (!$syncHistory && isset($o['sport']) && !in_array($o['sport'], $targetSports)) continue;
+                // Note: Pending bets resolved via catalogue might still have 'Unknown' sport if not inferred, but we import them anyway to fix visibility
+                if (!$syncHistory && isset($o['sport']) && $o['sport'] !== 'Unknown' && !in_array($o['sport'], $targetSports)) continue;
 
                 $altBetId = (strpos($betId, '1:') === 0) ? substr($betId, 2) : '1:' . $betId;
                 $stmt = $this->db->prepare("SELECT id FROM bets WHERE betfair_id = ? OR betfair_id = ?");
@@ -816,8 +856,14 @@ class DioQuantumController
                 $settledDate = isset($o['settledDate']) ? gmdate('Y-m-d H:i:s', strtotime($o['settledDate'])) : null;
 
                 if ($dbId) {
-                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = ?, betfair_id = ? WHERE id = ?");
-                    $stmtUpdate->execute([$o['status'], $o['profit'] ?? 0, $settledDate, $betId, $dbId]);
+                    // If it's pending, update names if we resolved them from 'Unknown'
+                    if ($o['status'] === 'pending' && $o['eventName'] !== 'Unknown') {
+                         $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = ?, betfair_id = ?, event_name = ?, market_name = ?, runner_name = ? WHERE id = ?");
+                         $stmtUpdate->execute([$o['status'], $o['profit'] ?? 0, $settledDate, $betId, $o['eventName'], $o['marketName'], $o['runnerName'], $dbId]);
+                    } else {
+                         $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = ?, betfair_id = ? WHERE id = ?");
+                         $stmtUpdate->execute([$o['status'], $o['profit'] ?? 0, $settledDate, $betId, $dbId]);
+                    }
                 } else {
                     // Dio import only if it looks like a Quantum trade or we are importing history
                     // For now, let's import ALL trades from target sports to populate history correctly
