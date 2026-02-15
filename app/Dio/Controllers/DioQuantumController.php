@@ -63,6 +63,9 @@ class DioQuantumController
         $recentExperiences = $this->getRecentExperiences();
         $performanceHistory = $portfolio['history'];
 
+        // Recupera timestamp ultima scansione AI
+        $lastScan = $this->db->query("SELECT value FROM system_state WHERE key = 'last_quantum_scan'")->fetchColumn();
+
         // Synchronize virtual balance in DB (only if in virtual mode)
         if ($operationalMode === 'virtual') {
             $this->updateVirtualBalance($portfolio['available_balance']);
@@ -141,6 +144,9 @@ class DioQuantumController
             return;
         }
         file_put_contents($cooldownFile, time());
+
+        // Aggiorna timestamp ultima scansione nel database per monitoraggio dashboard
+        $this->db->prepare("INSERT OR REPLACE INTO system_state (key, value, updated_at) VALUES ('last_quantum_scan', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")->execute();
 
         try {
             // Fetch dynamic config for Dio
@@ -591,7 +597,11 @@ class DioQuantumController
         try {
             if (!$this->bf->isConfigured()) return;
 
-            $clearedRes = $this->bf->getClearedOrders();
+            // Deep Sync se richiesto (es. ricarica manuale dello storico)
+            $syncHistory = isset($_GET['sync_history']) && $_GET['sync_history'] === '1';
+            $fromDate = $syncHistory ? gmdate('Y-m-d\TH:i:s\Z', time() - (30 * 86400)) : null;
+
+            $clearedRes = $this->bf->getClearedOrders(false, $fromDate);
             $clearedOrders = $clearedRes['clearedOrders'] ?? [];
 
             $currentRes = $this->bf->getCurrentOrders();
@@ -626,7 +636,8 @@ class DioQuantumController
                     'settledDate' => $o['settledDate'] ?? null,
                     'marketName' => $o['itemDescription']['marketDesc'] ?? null,
                     'eventName' => $o['itemDescription']['eventDesc'] ?? null,
-                    'sport' => $o['itemDescription']['eventTypeDesc'] ?? null
+                    'sport' => $o['itemDescription']['eventTypeDesc'] ?? null,
+                    'runnerName' => $o['itemDescription']['runnerDesc'] ?? null
                 ];
             }
 

@@ -748,7 +748,7 @@ class BetfairService
     /**
      * Get Settled Bets (Cleared Orders)
      */
-    public function getClearedOrders($isRetry = false)
+    public function getClearedOrders($isRetry = false, $fromDate = null)
     {
         $token = $this->authenticate();
         if (!$token) {
@@ -756,14 +756,20 @@ class BetfairService
             return ['error' => ['message' => 'Authentication failed']];
         }
 
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/listClearedOrders/');
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+        $params = [
             'betStatus' => 'SETTLED',
             'recordCount' => 1000,
             'includeItemDescription' => true
-        ]));
+        ];
+
+        if ($fromDate) {
+            $params['settledDateRange'] = ['from' => $fromDate];
+        }
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/listClearedOrders/');
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($params));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             "X-Application: {$this->appKey}",
