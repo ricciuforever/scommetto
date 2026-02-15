@@ -77,7 +77,7 @@ class BrainController
 
     private function extractLesson($bet)
     {
-        $prompt = "Sei il 'Cervello' analitico di Dio, un AI Quant Trader. Analizza questa operazione conclusa e scrivi una BREVISSIMA lezione tecnica (massimo 20 parole) per il futuro.\n\n" .
+        $prompt = "Sei il 'Cervello' analitico di Dio, un AI Quant Trader. Analizza questa operazione conclusa e scrivi una BREVISSIMA lezione tecnica (massimo 20 parole) per il futuro. Usa un linguaggio chiaro, meno astratto.\n\n" .
             "DETTAGLI OPERAZIONE:\n" .
             "- Sport: {$bet['sport']}\n" .
             "- Evento: {$bet['event_name']}\n" .
@@ -85,8 +85,8 @@ class BrainController
             "- Scelta: {$bet['runner_name']} (Quota: {$bet['odds']})\n" .
             "- Motivazione Originale: {$bet['motivation']}\n" .
             "- ESITO: " . strtoupper($bet['status']) . " (Profitto: {$bet['profit']}€)\n\n" .
-            "OBIETTIVO: Se hai vinto, identifica perché l'analisi era corretta. Se hai perso, identifica l'errore tecnico (spread, momentum o volume).\n" .
-            "RISPONDI SOLO CON LA LEZIONE TECNICA.";
+            "OBIETTIVO: Se hai vinto, spiega brevemente perché l'intuizione era giusta. Se hai perso, indica se l'errore è stato nella quota troppo bassa, nel timing sbagliato o nella scarsa liquidità del mercato.\n" .
+            "RISPONDI SOLO CON LA LEZIONE TECNICA IN ITALIANO.";
 
         return $this->gemini->analyzeCustom($prompt);
     }
