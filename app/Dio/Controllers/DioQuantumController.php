@@ -183,8 +183,8 @@ class DioQuantumController
 
                 $eventIds = array_map(fn($e) => $e['event']['id'], $events);
 
-                // 3. Get Market Catalogues
-                $cataloguesRes = $this->bf->getMarketCatalogues($eventIds, 50);
+                // 3. Get Market Catalogues (Higher limit to scan more events)
+                $cataloguesRes = $this->bf->getMarketCatalogues($eventIds, 100);
                 $catalogues = $cataloguesRes['result'] ?? [];
 
                 if (empty($catalogues))
@@ -196,10 +196,19 @@ class DioQuantumController
                 $booksRes = $this->bf->getMarketBooks($marketIds);
                 $books = $booksRes['result'] ?? [];
 
+                $lowLiquidityQueue = [];
+
                 foreach ($books as $book) {
                     // Find the matching catalogue for metadata
                     $mc = array_filter($catalogues, fn($c) => $c['marketId'] === $book['marketId']);
                     $mc = reset($mc);
+
+                    // Extract score for cache (for all events)
+                    $scoreData = $book['marketDefinition']['score'] ?? null;
+                    if ($scoreData && isset($mc['event']['name'])) {
+                        $score = $scoreData['home']['score'] . " - " . $scoreData['away']['score'];
+                        $liveScores[$mc['event']['name']] = $score;
+                    }
 
                     // Filter for OPEN markets only
                     if (($book['status'] ?? '') !== 'OPEN') {
@@ -215,8 +224,12 @@ class DioQuantumController
                     // Filter for minimum liquidity to avoid wasting AI calls on irrelevant markets
                     $liquidity = (float)($book['totalMatched'] ?? 0);
                     if ($liquidity < $minLiquidity) {
-                        if ($liquidity > 0) {
-                            $this->logActivity(['event' => $mc['event']['name'] ?? 'Unknown', 'marketName' => $mc['marketName'] ?? 'Unknown'], ['motivation' => 'Liquidità insufficiente (< ' . $minLiquidity . '€): ' . round($liquidity) . '€'], 'SKIP_LIQUIDITY');
+                        // Collect interesting low-liquidity matches for logging, but only if they have significant volume (> 1000)
+                        if ($liquidity >= 1000) {
+                            $lowLiquidityQueue[] = [
+                                'ticker' => ['event' => $mc['event']['name'] ?? 'Unknown', 'marketName' => $mc['marketName'] ?? 'Unknown'],
+                                'liquidity' => $liquidity
+                            ];
                         }
                         continue;
                     }
@@ -224,10 +237,14 @@ class DioQuantumController
                     // Normalize data into "Ticker" format
                     $ticker = $this->normalizeMarketData($book, $mc, $sportName);
                     $allOpportunities[] = $ticker; // Temporary collection for sorting
+                }
 
-                    // CACHE LIVE SCORES FOR DASHBOARD
-                    if (!empty($ticker['score'])) {
-                        $liveScores[$ticker['event']] = $ticker['score'];
+                // Log ONLY the top 3 low-liquidity markets to avoid terminal flooding
+                if (!empty($lowLiquidityQueue)) {
+                    usort($lowLiquidityQueue, fn($a, $b) => $b['liquidity'] <=> $a['liquidity']);
+                    $toLog = array_slice($lowLiquidityQueue, 0, 3);
+                    foreach ($toLog as $item) {
+                        $this->logActivity($item['ticker'], ['motivation' => 'Liquidità insufficiente (< ' . $minLiquidity . '€): ' . round($item['liquidity']) . '€'], 'SKIP_LIQUIDITY');
                     }
                 }
             }
