@@ -716,6 +716,18 @@ class BetfairService
     }
 
     /**
+     * Get Market Catalogues for specific Market IDs
+     */
+    public function getMarketCataloguesByIds(array $marketIds, int $maxResults = 50, array $marketProjection = [])
+    {
+        return $this->request('listMarketCatalogue', [
+            'filter' => ['marketIds' => $marketIds],
+            'maxResults' => $maxResults,
+            'marketProjection' => !empty($marketProjection) ? $marketProjection : ['RUNNER_DESCRIPTION', 'MARKET_DESCRIPTION', 'EVENT', 'COMPETITION', 'EVENT_TYPE']
+        ]);
+    }
+
+    /**
      * Get Prices for specific Market IDs
      */
     public function getMarketBooks(array $marketIds, array $customProjection = [])
