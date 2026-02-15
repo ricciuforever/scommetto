@@ -1,8 +1,8 @@
 <?php
-// public/import_history.php
+// import_history.php
 
-// Define base path for bootstrap
-define('BASE_PATH', __DIR__ . '/../');
+// Define base path (CURRENT DIR IS ROOT)
+define('BASE_PATH', __DIR__ . '/');
 
 require_once BASE_PATH . 'bootstrap.php';
 
@@ -10,7 +10,7 @@ use App\Services\BetfairService;
 use App\Dio\DioDatabase;
 
 echo "<pre>";
-echo "--- STARTING HISTORY IMPORT (BROWSER MODE) ---\n";
+echo "--- STARTING HISTORY IMPORT (BROWSER MODE - ROOT) ---\n";
 
 $bf = new BetfairService();
 $db = DioDatabase::getInstance()->getConnection();
@@ -19,12 +19,9 @@ $db = DioDatabase::getInstance()->getConnection();
 echo "Checking Session...\n";
 $token = $bf->authenticate();
 if (!$token) {
-    // Try explicit login if auth fails
     echo "Session invalid/missing. Attempting explicit login...\n";
-    // We can't access private login() method easily, but creating new service usually triggers it if session file missing.
-    // Let's try to clear session file here if auth failed.
-    // actually authenticate() tries to login if no session.
-    echo "Login failed. Check logs.\n";
+    // We expect authenticate() to try login. Check logs if this fails.
+    echo "Login failed. Please check logs/betfair_debug.log.\n";
 } else {
     echo "Session Token: " . substr($token, 0, 10) . "...\n";
 }
@@ -34,7 +31,7 @@ echo "\nFetching ALL Cleared Orders (No Date Filter)...\n";
 
 $allOrders = [];
 $fromRecord = 0;
-$maxPages = 20;
+$maxPages = 20; // Safety limit
 
 while ($maxPages-- > 0) {
     echo "Fetching page starting at $fromRecord...\n";
@@ -43,9 +40,10 @@ while ($maxPages-- > 0) {
 
     if (isset($res['error'])) {
         echo "API Error: " . json_encode($res['error']) . "\n";
-        // If INVALID_SESSION, we might want to stop
+        // If INVALID_SESSION, we must stop
         if (($res['error']['code'] ?? '') == -32099 || ($res['error']['message'] ?? '') == 'INVALID_SESSION_INFORMATION') {
-            echo "CRITICAL: Session Invalid. Please restart loop or clear session file manually.\n";
+            echo "CRITICAL: Session Invalid. Please restart script.\n";
+            // Optional: $bf->clearPersistentToken();
             break;
         }
         break;
