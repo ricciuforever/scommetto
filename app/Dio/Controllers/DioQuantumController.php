@@ -183,7 +183,7 @@ class DioQuantumController
                 $eventIds = array_map(fn($e) => $e['event']['id'], $events);
 
                 // 3. Get Market Catalogues
-                $cataloguesRes = $this->bf->getMarketCatalogues($eventIds, 15);
+                $cataloguesRes = $this->bf->getMarketCatalogues($eventIds, 50);
                 $catalogues = $cataloguesRes['result'] ?? [];
 
                 if (empty($catalogues))
@@ -212,8 +212,11 @@ class DioQuantumController
                     }
 
                     // Filter for minimum liquidity to avoid wasting AI calls on irrelevant markets
-                    if (($book['totalMatched'] ?? 0) < 2000) {
-                        $this->logActivity(['event' => $mc['event']['name'] ?? 'Unknown', 'marketName' => $mc['marketName'] ?? 'Unknown'], ['motivation' => 'Liquidità insufficiente (< 2000€): ' . round($book['totalMatched'] ?? 0) . '€'], 'SKIP_LIQUIDITY');
+                    $liquidity = (float)($book['totalMatched'] ?? 0);
+                    if ($liquidity < 2000) {
+                        if ($liquidity > 0) {
+                            $this->logActivity(['event' => $mc['event']['name'] ?? 'Unknown', 'marketName' => $mc['marketName'] ?? 'Unknown'], ['motivation' => 'Liquidità insufficiente (< 2000€): ' . round($liquidity) . '€'], 'SKIP_LIQUIDITY');
+                        }
                         continue;
                     }
 
@@ -232,11 +235,11 @@ class DioQuantumController
                 // Sort by liquidity (totalMatched) descending
                 usort($allOpportunities, fn($a, $b) => ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0));
 
-                // Take top 10 for analysis
-                $batchTickers = array_slice($allOpportunities, 0, 10);
+                // Take top 30 for analysis
+                $batchTickers = array_slice($allOpportunities, 0, 30);
                 $allOpportunities = []; // Reset for recording actual opportunities later
 
-                // 5. AI Analysis (Quantum Batch Mode - 1 call for up to 10 tickers)
+                // 5. AI Analysis (Quantum Batch Mode - 1 call for up to 30 tickers)
                 $batchResults = $this->analyzeQuantumBatch($batchTickers, $strategyPrompt, $minConfidence);
 
                 $workingTotalBankroll = $portfolio['total_balance'];
