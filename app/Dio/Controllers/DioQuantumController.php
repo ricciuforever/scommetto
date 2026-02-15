@@ -236,7 +236,7 @@ class DioQuantumController
 
                 $trace['found_events'] += count($events);
                 $trace['scanned_details'][$sportName]['events'] = count($events);
-                $eventIds = array_map(fn($e) => $e['event']['id'], $events);
+                $eventIds = array_values(array_map(fn($e) => $e['event']['id'], $events));
 
                 // 3. Get Market Catalogues (Explicit types for better discovery on .it)
                 $marketTypes = [];
@@ -541,26 +541,26 @@ class DioQuantumController
         }
         if (!$hasExperiences) $ragContext = "";
 
-        $systemOverride = "SYSTEM OVERRIDE (USER SETTINGS):\n" .
-            "- LIQUIDITY THRESHOLD: " . number_format($minLiquidity, 0, '', '') . "€. If volume > " . number_format($minLiquidity, 0, '', '') . ", consider it SUFFICIENT. Do not PASS solely because of volume if it exceeds this threshold.\n" .
-            "- CONFIDENCE THRESHOLD: " . $minConfidence . "%. If you identify a profitable opportunity (Value Bet), your Confidence score MUST be scaled to at least " . $minConfidence . " (or higher) to trigger the bet. Do not output low confidence (e.g. 60) for valid trades just because the raw probability is low; scale it to the signal strength.\n";
+        $systemOverride = "SYSTEM OVERRIDE (USER SETTINGS) - READ CAREFULLY:\n" .
+            "- LIQUIDITY THRESHOLD: " . number_format($minLiquidity, 0, '', '') . "€. If volume > " . number_format($minLiquidity, 0, '', '') . ", consider it SUFFICIENT. Do NOT pass because of 'low volume' if it exceeds this threshold.\n" .
+            "- CONFIDENCE THRESHOLD: " . $minConfidence . "%. If you identify a profitable opportunity (Value Bet), your Confidence score MUST be scaled to at least " . $minConfidence . " (or higher) to trigger the bet. Do NOT output low confidence (e.g. 60) for valid trades just because the raw probability is low; scale it to the signal strength (Value).\n";
 
         $prompt = ($customPrompt ?: "Sei un QUANT TRADER denominato 'Dio'. Non sei uno scommettitore, sei un analista di Price Action (Tape Reading).") . "\n\n" .
             ($ragContext ? $ragContext . "\n" : "") .
-            $systemOverride . "\n" .
             "SITUAZIONE PORTAFOGLIO: Saldo Totale " . number_format($totalBalance, 2) . "€, Saldo Disponibile " . number_format($availableBalance, 2) . "€\n\n" .
             "DATI ASSET (BATCH DI TICKERS):\n" . json_encode($tickers, JSON_PRETTY_PRINT) . "\n\n" .
             "IL TUO VANTAGGIO (Price Action Rules):\n" .
             "1. Analizza 'lastPriceTraded' vs Quota Attuale: Se divergono, identifica il momentum.\n" .
             "2. Analizza lo SCORE vs QUOTE: Se le quote non riflettono correttamente l'andamento del match, identifica il valore.\n" .
-            "3. VOLUMI: Un volume alto indica precisione. Se il volume è basso, sii estremamente prudente.\n" .
+            "3. VOLUMI: Se il volume supera la 'LIQUIDITY THRESHOLD' definita sopra, consideralo sufficiente. Altrimenti, sii prudente.\n" .
             "4. IGNORA i nomi delle squadre/atleti. Guarda solo l'efficienza del mercato.\n\n" .
             "STRATEGIA OPERATIVA:\n" .
             "- Quota minima: 1.10.\n" .
             "- Decisione: BACK, LAY o PASS.\n" .
-            "- CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE stimata. Sii onesto: se la quota è 1.50 (66% imp) e tu stimi il 60%, scrivi confidence 60.\n" .
+            "- CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la FORZA DEL SEGNALE (Value Bet). Se trovi valore, la confidence DEVE essere alta (80-99). Non aver paura di dare punteggi alti.\n" .
             "- Fornisci SEMPRE un valore numerico per la 'confidence' (0-100), anche se decidi di passare.\n" .
             "- Confidence >= " . $minConfidence . " per operare.\n\n" .
+            $systemOverride . "\n" .
             "RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI, uno per ogni ticker in ordine):\n" .
             "[\n" .
             "  {\n" .

@@ -84,7 +84,7 @@ class GiaNikController
 
             $allMatches = [];
             if (!empty($events)) {
-                $eventIds = array_map(fn($e) => $e['event']['id'], $events);
+                $eventIds = array_values(array_map(fn($e) => $e['event']['id'], $events));
                 $eventStartTimes = [];
                 foreach ($events as $e) {
                     $eventStartTimes[$e['event']['id']] = $e['event']['openDate'] ?? null;
@@ -1014,7 +1014,7 @@ class GiaNikController
 
             $results['found_on_betfair'] = count($events);
 
-            $eventIds = array_map(fn($e) => $e['event']['id'], $events);
+            $eventIds = array_values(array_map(fn($e) => $e['event']['id'], $events));
             $marketTypes = [
                 'MATCH_ODDS',
                 'MONEYLINE',
