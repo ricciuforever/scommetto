@@ -67,10 +67,12 @@ class GiaNikController
             // --- Auto-Sync with Betfair ---
             $this->syncWithBetfair();
 
-            // 1. Get Event Types (Sports) - Restricted to Soccer (ID 1)
-            $eventTypeIds = ['1'];
+            // 1. Get Event Types (Sports) - From System State
+            $config = $this->db->query("SELECT value FROM system_state WHERE key = 'target_sports'")->fetchColumn();
+            $targetSports = $config ? explode(',', $config) : ['1'];
+            $eventTypeIds = array_map('trim', $targetSports);
 
-            // 2. Get Upcoming Events for Soccer (Next 24h)
+            // 2. Get Upcoming Events (Next 24h)
             $liveEventsRes = $this->bf->getUpcomingEvents($eventTypeIds, 24);
             $events = $liveEventsRes['result'] ?? [];
 
@@ -94,6 +96,7 @@ class GiaNikController
                 foreach ($chunks as $chunk) {
                     $targetMarkets = [
                         'MATCH_ODDS',
+                        'MONEYLINE',
                         'DOUBLE_CHANCE',
                         'DRAW_NO_BET',
                         'HALF_TIME',
@@ -218,7 +221,7 @@ class GiaNikController
 
                     $processedEvents[$eventId] = true;
                     $processedCount++;
-                    $sport = 'Soccer'; // Hardcoded as we only fetch eventType 1
+                    $sport = $mc['eventType']['name'] ?? 'Soccer';
 
                     $startTime = $eventStartTimes[$eventId] ?? null;
                     $statusLabel = 'LIVE';
@@ -960,8 +963,11 @@ class GiaNikController
             $stmtMode->execute();
             $globalMode = $stmtMode->fetchColumn() ?: 'real';
 
-            // Restricted to Soccer (ID 1)
-            $eventTypeIds = ['1'];
+            // Target Sports
+            $config = $this->db->query("SELECT value FROM system_state WHERE key = 'target_sports'")->fetchColumn();
+            $targetSports = $config ? explode(',', $config) : ['1'];
+            $eventTypeIds = array_map('trim', $targetSports);
+
             $liveEventsRes = $this->bf->getLiveEvents($eventTypeIds);
             $events = $liveEventsRes['result'] ?? [];
 
@@ -988,6 +994,7 @@ class GiaNikController
             $eventIds = array_map(fn($e) => $e['event']['id'], $events);
             $marketTypes = [
                 'MATCH_ODDS',
+                'MONEYLINE',
                 'OVER_UNDER_05',
                 'OVER_UNDER_15',
                 'OVER_UNDER_25',
@@ -1266,7 +1273,7 @@ class GiaNikController
 
                                 $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, type, betfair_id, motivation, bucket, league, league_id, fixture_id, placed_at_minute, placed_at_period) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                                 $stmtInsert->execute([
-                                    $analysis['marketId'], $selectedMarket['marketName'], $eventName, 'Soccer',
+                                    $analysis['marketId'], $selectedMarket['marketName'], $eventName, $event['sport'] ?? 'Soccer',
                                     $selectionId, $analysis['advice'], $analysis['odds'], $stake,
                                     $globalMode, $betfairId, $motivation, $bucket,
                                     $meta['api_data']['fixture']['league_name'] ?? 'Unknown',
@@ -2351,7 +2358,7 @@ class GiaNikController
                             'marketIds' => $chunk
                         ],
                         'maxResults' => 1000,
-                        'marketProjection' => ['EVENT', 'COMPETITION', 'MARKET_DESCRIPTION', 'RUNNER_DESCRIPTION']
+                        'marketProjection' => ['EVENT', 'COMPETITION', 'MARKET_DESCRIPTION', 'RUNNER_DESCRIPTION', 'EVENT_TYPE']
                     ]);
                     foreach ($catRes['result'] ?? [] as $cat) {
                         $runners = [];
@@ -2362,6 +2369,7 @@ class GiaNikController
                             'event' => $cat['event']['name'] ?? null,
                             'market' => $cat['marketName'] ?? null,
                             'competition' => $cat['competition']['name'] ?? null,
+                            'sport' => $cat['eventType']['name'] ?? null,
                             'runners' => $runners
                         ];
                     }
@@ -2377,6 +2385,7 @@ class GiaNikController
                 $marketName = $info['market'] ?? ($o['marketName'] ?? null);
                 $runnerName = $info['runners'][$o['selectionId']] ?? ($o['runnerName'] ?? null);
                 $leagueName = $info['competition'] ?? null;
+                $sportName = $info['sport'] ?? ($o['sport'] ?? 'Soccer');
 
                 $fixtureId = null;
                 if ($eventName) {
@@ -2436,12 +2445,13 @@ class GiaNikController
                     // Import Automatico (se non esisteva)
                     $stmtInsert = $this->db->prepare("INSERT INTO bets 
                         (betfair_id, market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, size_matched, status, type, profit, commission, league, fixture_id, created_at, motivation)
-                        VALUES (:betfair_id, :market_id, :market_name, :event_name, 'Soccer', :selection_id, :runner_name, :odds, :stake, :size_matched, :status, 'real', :profit, :commission, :league, :fixture_id, :created_at, 'Scommessa importata da Betfair Exchange')");
+                        VALUES (:betfair_id, :market_id, :market_name, :event_name, :sport, :selection_id, :runner_name, :odds, :stake, :size_matched, :status, 'real', :profit, :commission, :league, :fixture_id, :created_at, 'Scommessa importata da Betfair Exchange')");
                     $stmtInsert->execute([
                         ':betfair_id' => $betId,
                         ':market_id' => $o['marketId'],
                         ':market_name' => $marketName ?: 'Unknown Market',
                         ':event_name' => $eventName ?: 'Unknown Event',
+                        ':sport' => $sportName,
                         ':selection_id' => $o['selectionId'],
                         ':runner_name' => $runnerName ?: 'Unknown Runner',
                         ':odds' => $o['odds'],
