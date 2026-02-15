@@ -29,15 +29,15 @@ $user = $_SESSION['admin_user'];
 </header>
 
 <!-- Sidebar Admin -->
-<aside id="admin-sidebar" class="hidden lg:flex w-64 bg-gray-900 border-r border-gray-800 flex-col shrink-0 transition-all duration-300">
-    <div class="p-6 border-b border-gray-800">
-        <h1 class="text-xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
+<aside id="admin-sidebar" class="hidden lg:flex w-56 bg-gray-900 border-r border-gray-800 flex-col shrink-0 transition-all duration-300">
+    <div class="p-4 border-b border-gray-800">
+        <h1 class="text-lg font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
             🛡️ WAR ROOM <span class="text-[10px] text-gray-500 font-normal">v3.0</span>
         </h1>
-        <p class="text-[9px] text-gray-500 uppercase font-bold mt-1">Logged as: <?= htmlspecialchars($user['username']) ?></p>
+        <p class="text-[8px] text-gray-500 uppercase font-bold mt-1">Logged as: <?= htmlspecialchars($user['username']) ?></p>
     </div>
 
-    <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+    <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
         <a href="/admin/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all <?= strpos($_SERVER['REQUEST_URI'], '/dashboard') !== false || $_SERVER['REQUEST_URI'] === '/admin' ? 'active' : '' ?>">
             <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
             <span class="text-xs font-bold uppercase tracking-widest">Dashboard</span>
@@ -121,4 +121,4 @@ $user = $_SESSION['admin_user'];
         </div>
     </header>
 
-    <div class="flex-1 overflow-y-auto p-8">
+    <div class="flex-1 overflow-y-auto p-5">
