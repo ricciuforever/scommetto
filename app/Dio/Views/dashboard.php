@@ -25,6 +25,13 @@ if (!$isEmbedded) {
                     <span class="text-[9px] font-black text-success uppercase tracking-widest">Sistema Autonomo
                         Attivo</span>
                 </div>
+                <div class="mt-2">
+                    <?php if (($currentMode ?? 'virtual') === 'real'): ?>
+                        <span class="px-2 py-0.5 bg-red-500/20 border border-red-500/50 text-red-500 text-[8px] font-black uppercase tracking-tighter rounded">Real Money Mode</span>
+                    <?php else: ?>
+                        <span class="px-2 py-0.5 bg-blue-500/20 border border-blue-500/50 text-blue-500 text-[8px] font-black uppercase tracking-tighter rounded">Virtual Simulation</span>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
         <div class="flex items-center gap-3">
@@ -330,7 +337,7 @@ if (!$isEmbedded) {
             data: {
                 labels: performanceData.map(d => d.t),
                 datasets: [{
-                    label: 'Virtual Bankroll (€)',
+                    label: '<?= ($currentMode ?? 'virtual') === 'real' ? 'Real' : 'Virtual' ?> Bankroll (€)',
                     data: performanceData.map(d => d.v),
                     borderColor: '#6366f1',
                     borderWidth: 3,
