@@ -200,8 +200,10 @@ class DioQuantumController
                     $mc = array_filter($catalogues, fn($c) => $c['marketId'] === $book['marketId']);
                     $mc = reset($mc);
 
-                    // Safety Cap: Massimo 5 analisi AI per ciclo (in un singolo batch)
-                    if (count($batchTickers) >= 5) break 2;
+                    // Filter for OPEN markets only
+                    if (($book['status'] ?? '') !== 'OPEN') {
+                        continue;
+                    }
 
                     // Avoid duplicate bets in Dio for the same match
                     if ($this->isMatchActiveInDio($mc['event']['name'] ?? '')) {
@@ -217,7 +219,7 @@ class DioQuantumController
 
                     // Normalize data into "Ticker" format
                     $ticker = $this->normalizeMarketData($book, $mc, $sportName);
-                    $batchTickers[] = $ticker;
+                    $allOpportunities[] = $ticker; // Temporary collection for sorting
 
                     // CACHE LIVE SCORES FOR DASHBOARD
                     if (!empty($ticker['score'])) {
@@ -226,8 +228,15 @@ class DioQuantumController
                 }
             }
 
-            if (!empty($batchTickers)) {
-                // 5. AI Analysis (Quantum Batch Mode - 1 call for 5 tickers)
+            if (!empty($allOpportunities)) {
+                // Sort by liquidity (totalMatched) descending
+                usort($allOpportunities, fn($a, $b) => ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0));
+
+                // Take top 10 for analysis
+                $batchTickers = array_slice($allOpportunities, 0, 10);
+                $allOpportunities = []; // Reset for recording actual opportunities later
+
+                // 5. AI Analysis (Quantum Batch Mode - 1 call for up to 10 tickers)
                 $batchResults = $this->analyzeQuantumBatch($batchTickers, $strategyPrompt, $minConfidence);
 
                 $workingTotalBankroll = $portfolio['total_balance'];
@@ -403,7 +412,8 @@ class DioQuantumController
             "STRATEGIA OPERATIVA:\n" .
             "- Quota minima: 1.10.\n" .
             "- Decisione: BACK, LAY o PASS.\n" .
-            "- CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE. Sii onesto: se la quota è 1.50 (66% imp) e tu stimi il 60%, scrivi confidence 60.\n" .
+            "- CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE stimata. Sii onesto: se la quota è 1.50 (66% imp) e tu stimi il 60%, scrivi confidence 60.\n" .
+            "- Fornisci SEMPRE un valore numerico per la 'confidence' (0-100), anche se decidi di passare.\n" .
             "- Confidence >= " . $minConfidence . " per operare.\n\n" .
             "RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI, uno per ogni ticker in ordine):\n" .
             "[\n" .
