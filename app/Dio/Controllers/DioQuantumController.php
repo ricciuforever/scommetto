@@ -196,21 +196,24 @@ class DioQuantumController
                 $books = $booksRes['result'] ?? [];
 
                 foreach ($books as $book) {
+                    // Find the matching catalogue for metadata
+                    $mc = array_filter($catalogues, fn($c) => $c['marketId'] === $book['marketId']);
+                    $mc = reset($mc);
+
                     // Safety Cap: Massimo 5 analisi AI per ciclo (in un singolo batch)
                     if (count($batchTickers) >= 5) break 2;
 
                     // Avoid duplicate bets in Dio for the same match
                     if ($this->isMatchActiveInDio($mc['event']['name'] ?? '')) {
+                        $this->logActivity(['event' => $mc['event']['name'] ?? 'Unknown', 'marketName' => $mc['marketName'] ?? 'Unknown'], ['motivation' => 'Match già attivo in Dio'], 'SKIP_ACTIVE');
                         continue;
                     }
 
                     // Filter for minimum liquidity to avoid wasting AI calls on irrelevant markets
-                    if (($book['totalMatched'] ?? 0) < 2000)
+                    if (($book['totalMatched'] ?? 0) < 2000) {
+                        $this->logActivity(['event' => $mc['event']['name'] ?? 'Unknown', 'marketName' => $mc['marketName'] ?? 'Unknown'], ['motivation' => 'Liquidità insufficiente (< 2000€): ' . round($book['totalMatched'] ?? 0) . '€'], 'SKIP_LIQUIDITY');
                         continue;
-
-                    // Find the matching catalogue for metadata
-                    $mc = array_filter($catalogues, fn($c) => $c['marketId'] === $book['marketId']);
-                    $mc = reset($mc);
+                    }
 
                     // Normalize data into "Ticker" format
                     $ticker = $this->normalizeMarketData($book, $mc, $sportName);
@@ -252,8 +255,8 @@ class DioQuantumController
                         );
 
                         if (!$decision['is_value_bet'] || $decision['stake'] < max(2.00, $minStake)) {
-                            $action = 'pass';
-                            $analysis['motivation'] .= " [SKIP MoneyManager: " . $decision['reason'] . "]";
+                            $action = 'SKIP_MM';
+                            $analysis['motivation'] .= " [SKIP MM: " . $decision['reason'] . "]";
                         } else {
                             $stake = $decision['stake'];
                             if ($stake > $workingAvailableBalance) {
@@ -527,9 +530,6 @@ class DioQuantumController
 
     private function logActivity($ticker, $analysis, $action)
     {
-        if ($action === 'pass')
-            return;
-
         $stmt = $this->db->prepare("INSERT INTO logs (event_name, market_name, selection_name, confidence, action, motivation) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([
             $ticker['event'],
@@ -543,7 +543,7 @@ class DioQuantumController
 
     private function getRecentLogs()
     {
-        $stmt = $this->db->prepare("SELECT * FROM logs WHERE action = 'bet' ORDER BY created_at DESC LIMIT 20");
+        $stmt = $this->db->prepare("SELECT * FROM logs ORDER BY created_at DESC LIMIT 50");
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
