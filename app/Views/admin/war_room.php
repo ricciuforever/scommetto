@@ -33,7 +33,27 @@
     <div class="flex-1 flex flex-col bg-gray-900/50 rounded-3xl border border-gray-800 overflow-hidden relative">
 
         <div class="p-6 border-b border-gray-800 bg-gray-800/50 flex justify-between items-center shrink-0">
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-8">
+                <!-- Tabs -->
+                <div class="flex bg-black/20 p-1 rounded-xl border border-white/5">
+                    <a href="?db=<?= $currentDbKey ?>&tab=data" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all <?= ($tab ?? 'data') === 'data' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white' ?>">
+                        Data Browser
+                    </a>
+                    <?php if($currentDbKey === 'gianik'): ?>
+                        <a href="?db=<?= $currentDbKey ?>&tab=intelligence" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all <?= ($tab ?? '') === 'intelligence' ? 'bg-purple-600 text-white' : 'text-gray-500 hover:text-white' ?>">
+                            Brain Intelligence
+                        </a>
+                    <?php endif; ?>
+                    <?php if($currentDbKey === 'dio'): ?>
+                        <a href="?db=<?= $currentDbKey ?>&tab=quantum" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all <?= ($tab ?? '') === 'quantum' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-white' ?>">
+                            Quantum Tracker
+                        </a>
+                    <?php endif; ?>
+                </div>
+
+                <div class="h-8 w-px bg-white/10"></div>
+
+                <div class="flex items-center gap-4">
                 <div>
                     <span class="text-[10px] text-gray-500 uppercase font-bold block">Tabella Corrente</span>
                     <span class="<?= $dbConfig['color'] ?> font-black italic text-xl"><?= strtoupper($currentTable) ?></span>

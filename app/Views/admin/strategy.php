@@ -33,8 +33,48 @@
                 </button>
             </div>
             <textarea id="strategy_prompt" name="config[strategy_prompt]" class="w-full bg-black/40 border border-white/5 rounded-2xl p-6 text-sm font-mono text-blue-200 focus:border-blue-500 outline-none h-64 leading-relaxed" placeholder="Inserisci qui il prompt strategico per l'AI..."><?= htmlspecialchars($config['strategy_prompt'] ?? '') ?></textarea>
-            <p class="text-[10px] text-gray-600 mt-4 uppercase font-bold tracking-widest">Questo prompt definisce il "carattere" e le priorità dell'Agente durante l'analisi.</p>
+
+            <!-- Placeholder Legend -->
+            <div class="mt-6">
+                <h4 class="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Dati disponibili per l'AI (Placeholder):</h4>
+                <div class="flex flex-wrap gap-2">
+                    <?php
+                    $placeholders = ($currentAgent === 'gianik') ? [
+                        '{{portfolio_stats}}' => 'Saldo e Budget',
+                        '{{event_markets}}' => 'Quote e Mercati',
+                        '{{live_match_data}}' => 'Score e Minuto',
+                        '{{live_statistics}}' => 'Stats (Tiri, Angoli)',
+                        '{{momentum}}' => 'Intensità 10 min',
+                        '{{historical_context}}' => 'H2H e Classifica',
+                        '{{ai_lessons}}' => 'Lezioni Passate',
+                        '{{live_events}}' => 'Gol e Cartellini',
+                        '{{events_batch}}' => 'Batch Eventi (Auto)'
+                    ] : [
+                        '{{portfolio_stats}}' => 'Saldo e Budget',
+                        '{{candidates_list}}' => 'Eventi e Price Action'
+                    ];
+                    foreach($placeholders as $ph => $desc): ?>
+                        <button type="button" onclick="insertAtCursor('<?= $ph ?>')" class="px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded text-[9px] text-blue-400 font-bold hover:bg-blue-500/20 transition-all cursor-pointer" title="<?= $desc ?>">
+                            <?= $ph ?>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+                <p class="text-[9px] text-gray-600 mt-3 italic">Clicca su un placeholder per inserirlo nel prompt. Se non ne usi nessuno, i dati verranno appesi automaticamente in coda.</p>
+            </div>
+
+            <p class="text-[10px] text-gray-600 mt-6 uppercase font-bold tracking-widest border-t border-white/5 pt-4">Questo prompt definisce il "carattere" e le priorità dell'Agente durante l'analisi.</p>
         </div>
+
+        <script>
+            function insertAtCursor(text) {
+                const textarea = document.getElementById('strategy_prompt');
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                textarea.value = textarea.value.substring(0, start) + text + textarea.value.substring(end);
+                textarea.focus();
+                textarea.selectionStart = textarea.selectionEnd = start + text.length;
+            }
+        </script>
 
         <script>
             function resetPrompt() {

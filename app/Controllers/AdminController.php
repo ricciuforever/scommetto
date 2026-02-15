@@ -59,11 +59,16 @@ class AdminController
         ];
 
         // Filter databases based on manager assignment
-        if ($user['role'] === 'manager' && $user['agent'] !== 'all') {
-            $assigned = explode(',', $user['agent']);
-            foreach ($databases as $key => $db) {
-                if ($key !== 'core' && !in_array($key, $assigned)) {
-                    unset($databases[$key]);
+        if ($user['role'] === 'manager') {
+            // Manager cannot see 'core'
+            unset($databases['core']);
+
+            if ($user['agent'] !== 'all') {
+                $assigned = explode(',', $user['agent']);
+                foreach ($databases as $key => $db) {
+                    if (!in_array($key, $assigned)) {
+                        unset($databases[$key]);
+                    }
                 }
             }
         }
@@ -167,15 +172,29 @@ class AdminController
                 $totalRows = $pdo->query("SELECT COUNT(*) FROM `$currentTable` $whereClause")->fetchColumn();
 
                 $orderBy = "";
+                $columns = [];
                 if ($dbConfig['driver'] === 'sqlite' || Database::getInstance()->isSQLite()) {
                     $orderBy = "ORDER BY rowid DESC";
                 } else {
-                    // Try to order by id if exists
-                    $cols = $pdo->query("DESCRIBE `$currentTable`")->fetchAll(PDO::FETCH_COLUMN);
-                    if (in_array('id', $cols)) $orderBy = "ORDER BY id DESC";
+                    // MySQL: Get columns to check for 'id' and build valid syntax
+                    $stmtCols = $pdo->query("DESCRIBE `$currentTable` ");
+                    $columns = $stmtCols->fetchAll(PDO::FETCH_COLUMN);
+                    if (in_array('id', $columns)) {
+                        $orderBy = "ORDER BY id DESC";
+                        $pkAlias = "id as _id";
+                    } else {
+                        $pkAlias = "NULL as _id";
+                    }
                 }
 
-                $sql = "SELECT $pkAlias, * FROM `$currentTable` $whereClause $orderBy LIMIT $limit OFFSET $offset";
+                // MySQL/MariaDB fix: SELECT *, col is valid, but SELECT col, * might fail or require table prefix
+                // To be safe and compatible with both:
+                if ($dbConfig['driver'] === 'sqlite') {
+                    $sql = "SELECT $pkAlias, * FROM `$currentTable` $whereClause $orderBy LIMIT $limit OFFSET $offset";
+                } else {
+                    $sql = "SELECT *, $pkAlias FROM `$currentTable` $whereClause $orderBy LIMIT $limit OFFSET $offset";
+                }
+
                 $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
             } catch (\Exception $e) {
                 $message = "⚠️ Errore Query: " . $e->getMessage();
@@ -184,8 +203,16 @@ class AdminController
 
         $totalPages = ceil($totalRows / $limit);
 
+        $tab = $_GET['tab'] ?? 'data';
+
         require __DIR__ . '/../Views/admin/layout/header.php';
-        require __DIR__ . '/../Views/admin/war_room.php';
+        if ($tab === 'intelligence' && $currentDbKey === 'gianik') {
+            (new \App\GiaNik\Controllers\BrainController())->index();
+        } elseif ($tab === 'quantum' && $currentDbKey === 'dio') {
+            (new \App\Dio\Controllers\DioQuantumController())->index();
+        } else {
+            require __DIR__ . '/../Views/admin/war_room.php';
+        }
         require __DIR__ . '/../Views/admin/layout/footer.php';
     }
 

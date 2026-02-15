@@ -1,9 +1,12 @@
 <?php
 // app/Dio/Views/dashboard.php
-require __DIR__ . '/../../Views/layout/top.php';
+$isEmbedded = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/war-room') !== false;
+if (!$isEmbedded) {
+    require __DIR__ . '/../../Views/layout/top.php';
+}
 ?>
 
-<div class="space-y-6">
+<div class="space-y-6 <?= $isEmbedded ? 'p-4' : '' ?>">
     <!-- Header -->
     <div
         class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/5 p-6 rounded-2xl border border-white/10 glass">
@@ -394,4 +397,8 @@ require __DIR__ . '/../../Views/layout/top.php';
     }, 60000);
 </script>
 
-<?php require __DIR__ . '/../../Views/layout/bottom.php'; ?>
+<?php
+if (!$isEmbedded) {
+    require __DIR__ . '/../../Views/layout/bottom.php';
+}
+?>

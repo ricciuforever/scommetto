@@ -32,14 +32,6 @@ require __DIR__ . '/../../Views/layout/top.php';
             </p>
         </div>
         <div class="flex items-center gap-4">
-            <!-- Mode Switcher -->
-            <div class="flex bg-white/5 p-1 rounded-xl border border-white/5">
-                <button onclick="setGiaNikMode('virtual')" id="mode-virtual"
-                    class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all bg-accent text-white">Virtual</button>
-                <button onclick="setGiaNikMode('real')" id="mode-real"
-                    class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all text-slate-500">Real</button>
-            </div>
-
             <div class="flex flex-col items-end">
                 <span class="text-[10px] font-black uppercase text-slate-500">Auto-Refresh</span>
                 <span class="text-xs font-bold text-success flex items-center gap-1.5">
@@ -47,12 +39,6 @@ require __DIR__ . '/../../Views/layout/top.php';
                     ATTIVO (60s)
                 </span>
             </div>
-
-            <!-- Brain Dashboard Link -->
-            <a href="/gianik/brain" title="GiaNik Brain"
-                class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center border border-white/5 transition-all text-slate-400 hover:text-white">
-                <i data-lucide="brain" class="w-5 h-5 text-purple-400"></i>
-            </a>
 
             <!-- Sound Toggle -->
             <button onclick="toggleGiaNikSound()" id="sound-toggle"

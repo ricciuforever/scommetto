@@ -8,6 +8,7 @@ $user = $_SESSION['admin_user'];
     <title>Scommetto - Admin War Room</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body { background-color: #0f172a; color: #cbd5e0; font-family: 'Courier New', Courier, monospace; }
         .input-dark { background: #1e293b; border: 1px solid #334155; color: white; padding: 4px 8px; border-radius: 4px; }
@@ -39,6 +40,24 @@ $user = $_SESSION['admin_user'];
             <i data-lucide="brain-circuit" class="w-4 h-4"></i>
             <span class="text-xs font-bold uppercase tracking-widest">Strategy Lab</span>
         </a>
+
+        <div class="h-px bg-gray-800 my-2"></div>
+        <span class="text-[9px] font-black text-gray-600 uppercase tracking-[.2em] block px-4 mb-2">Agent Intelligence</span>
+
+        <?php if ($user['role'] === 'admin' || strpos($user['agent'], 'gianik') !== false || $user['agent'] === 'all'): ?>
+        <a href="/admin/war-room?db=gianik&tab=intelligence" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all <?= strpos($_SERVER['REQUEST_URI'], 'db=gianik') !== false && strpos($_SERVER['REQUEST_URI'], 'tab=intelligence') !== false ? 'active' : '' ?>">
+            <i data-lucide="brain" class="w-4 h-4 text-purple-400"></i>
+            <span class="text-xs font-bold uppercase tracking-widest">GiaNik Brain</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if ($user['role'] === 'admin' || strpos($user['agent'], 'dio') !== false || $user['agent'] === 'all'): ?>
+        <a href="/admin/war-room?db=dio&tab=quantum" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all <?= strpos($_SERVER['REQUEST_URI'], 'db=dio') !== false && strpos($_SERVER['REQUEST_URI'], 'tab=quantum') !== false ? 'active' : '' ?>">
+            <i data-lucide="eye" class="w-4 h-4 text-indigo-400"></i>
+            <span class="text-xs font-bold uppercase tracking-widest">Dio Quantum</span>
+        </a>
+        <?php endif; ?>
+
         <?php if ($user['role'] === 'admin'): ?>
         <a href="/admin/users" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all <?= strpos($_SERVER['REQUEST_URI'], '/users') !== false ? 'active' : '' ?>">
             <i data-lucide="users" class="w-4 h-4"></i>
