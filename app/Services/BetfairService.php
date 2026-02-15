@@ -87,24 +87,30 @@ class BetfairService
         file_put_contents($this->activityFile, time());
     }
 
-    private function log($message, $data = null)
+    private function log($message, $data = null, $isError = false)
     {
-        // Disabilitato come da richiesta: il file betfair_debug.log era troppo grande
-        return;
+        // Log only errors or if explicitly enabled in Config
+        if (!$isError && !Config::get('BETFAIR_DEBUG', false)) {
+            return;
+        }
 
-        /*
         $dir = dirname($this->logFile);
         if (!is_dir($dir)) {
             mkdir($dir, 0777, true);
         }
 
+        // Rotate log if > 5MB
+        if (file_exists($this->logFile) && filesize($this->logFile) > 5 * 1024 * 1024) {
+            @rename($this->logFile, $this->logFile . '.old');
+        }
+
         $timestamp = date('Y-m-d H:i:s');
-        $logEntry = "[$timestamp] $message";
+        $tag = $isError ? 'ERROR' : 'DEBUG';
+        $logEntry = "[$timestamp] [$tag] [$this->agentId] $message";
         if ($data !== null) {
             $logEntry .= " | Data: " . json_encode($data);
         }
         file_put_contents($this->logFile, $logEntry . PHP_EOL, FILE_APPEND);
-        */
     }
 
     public function isConfigured(): bool
@@ -248,7 +254,7 @@ class BetfairService
                     fclose($fp);
                     return $this->sessionToken;
                 }
-                $this->log("Login con certificati fallito.", $data);
+                $this->log("Login con certificati fallito.", $data, true);
             }
 
             // --- TENTATIVO SENZA CERTIFICATI (API DESKTOP) ---
@@ -284,16 +290,16 @@ class BetfairService
             if (isset($data['error'])) {
                 $criticalErrors = ['TEMPORARY_BAN_TOO_MANY_REQUESTS', 'ACCOUNT_PENDING_PASSWORD_CHANGE', 'ACCOUNT_LOCKED'];
                 if (in_array($data['error'], $criticalErrors)) {
-                    $this->log("ERRORE CRITICO LOGIN: " . $data['error'] . ". Attivo ban temporaneo di 20 minuti.");
+                    $this->log("ERRORE CRITICO LOGIN: " . $data['error'] . ". Attivo ban temporaneo di 20 minuti.", null, true);
                     touch($banFile);
                 }
 
                 if ($data['error'] === 'STRONG_AUTH_CODE_REQUIRED') {
-                    $this->log("ERRORE CRITICO: Autenticazione a 2 fattori (2FA) rilevata. L'API Desktop non può accedere senza codice. Soluzioni: 1. Configura i certificati SSL nel .env; 2. Disabilita temporaneamente la 2FA su Betfair.it; 3. Inserisci un token manualmente in " . $this->sessionFile);
+                    $this->log("ERRORE CRITICO: Autenticazione a 2 fattori (2FA) rilevata. L'API Desktop non può accedere senza codice. Soluzioni: 1. Configura i certificati SSL nel .env; 2. Disabilita temporaneamente la 2FA su Betfair.it; 3. Inserisci un token manualmente in " . $this->sessionFile, null, true);
                 }
             }
 
-            $this->log("Login fallito.", $data);
+            $this->log("Login fallito.", $data, true);
             $this->authFailed = true;
             flock($fp, LOCK_UN);
         }
@@ -306,8 +312,8 @@ class BetfairService
     {
         $token = $this->authenticate();
         if (!$token) {
-            $this->log("Request Failed: No Auth Token for method $method");
-            return null;
+            $this->log("Request Failed: No Auth Token for method $method", null, true);
+            return ['error' => ['message' => 'Betfair Authentication Failed']];
         }
 
         // Rate Limiting: max 5 requests per second (0.2s interval)
@@ -350,6 +356,7 @@ class BetfairService
                 $this->clearPersistentToken("INVALID_SESSION_INFORMATION (JSON-RPC)");
                 return $this->request($method, $params, true);
             }
+            $this->log("JSON-RPC Error: $method", $decoded, true);
         }
 
         $this->log("JSON-RPC Request: $method", ['params' => $params, 'response' => $decoded]);
@@ -561,7 +568,7 @@ class BetfairService
         if ($response === false) {
             $err = curl_error($ch);
             curl_close($ch);
-            $this->log("PlaceBet CURL Error: $err");
+            $this->log("PlaceBet CURL Error: $err", null, true);
             return ['status' => 'FAILURE', 'errorCode' => 'CURL_ERROR', 'raw' => $err];
         }
         curl_close($ch);
@@ -575,6 +582,10 @@ class BetfairService
             return $this->placeBet($marketId, $selectionId, $price, $size, true);
         }
 
+        if (isset($decoded['status']) && $decoded['status'] !== 'SUCCESS') {
+            $this->log("PlaceBet API Error", $decoded, true);
+        }
+
         $this->log("PlaceBet Response", $decoded);
 
         return $decoded ?: ['status' => 'FAILURE', 'errorCode' => 'API_ERROR_NO_JSON', 'raw' => $response];
@@ -586,8 +597,10 @@ class BetfairService
     public function getFunds($isRetry = false)
     {
         $token = $this->authenticate();
-        if (!$token)
-            return null;
+        if (!$token) {
+            $this->log("getFunds Failed: No Auth Token", null, true);
+            return ['error' => ['message' => 'Authentication failed']];
+        }
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/account/rest/v1.0/getAccountFunds/');
@@ -703,8 +716,10 @@ class BetfairService
     public function getAccountStatement($isRetry = false)
     {
         $token = $this->authenticate();
-        if (!$token)
-            return null;
+        if (!$token) {
+            $this->log("getAccountStatement Failed: No Auth Token", null, true);
+            return ['error' => ['message' => 'Authentication failed']];
+        }
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/account/rest/v1.0/getAccountStatement/');
@@ -736,8 +751,10 @@ class BetfairService
     public function getClearedOrders($isRetry = false)
     {
         $token = $this->authenticate();
-        if (!$token)
-            return null;
+        if (!$token) {
+            $this->log("getClearedOrders Failed: No Auth Token", null, true);
+            return ['error' => ['message' => 'Authentication failed']];
+        }
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/listClearedOrders/');
@@ -773,8 +790,10 @@ class BetfairService
     public function getCurrentOrders($isRetry = false)
     {
         $token = $this->authenticate();
-        if (!$token)
-            return null;
+        if (!$token) {
+            $this->log("getCurrentOrders Failed: No Auth Token", null, true);
+            return ['error' => ['message' => 'Authentication failed']];
+        }
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/listCurrentOrders/');

@@ -73,448 +73,450 @@ class GiaNikController
             $liveEventsRes = $this->bf->getUpcomingEvents($eventTypeIds, 24);
             $events = $liveEventsRes['result'] ?? [];
 
-            if (empty($events)) {
-                echo '<div class="text-center py-10"><span class="text-slate-500 text-sm font-bold uppercase">Nessun evento nelle prossime 24 ore su Betfair</span></div>';
-                return;
+            // Check for API Errors explicitly
+            $apiError = null;
+            if (isset($liveEventsRes['error'])) {
+                $apiError = "Errore Betfair API: " . ($liveEventsRes['error']['message'] ?? json_encode($liveEventsRes['error']));
             }
 
-            $eventIds = array_map(fn($e) => $e['event']['id'], $events);
-            $eventStartTimes = [];
-            foreach ($events as $e) {
-                $eventStartTimes[$e['event']['id']] = $e['event']['openDate'] ?? null;
-            }
-
-            // 3. Get Market Catalogues for these events (Match Odds)
-            $marketCatalogues = [];
-            $chunks = array_chunk($eventIds, 40);
-            foreach ($chunks as $chunk) {
-                $targetMarkets = [
-                    'MATCH_ODDS',
-                    'DOUBLE_CHANCE',
-                    'DRAW_NO_BET',
-                    'HALF_TIME',
-                    'OVER_UNDER_05',
-                    'OVER_UNDER_15',
-                    'OVER_UNDER_25',
-                    'OVER_UNDER_35',
-                    'OVER_UNDER_45',
-                    'BOTH_TEAMS_TO_SCORE'
-                ];
-                $res = $this->bf->getMarketCatalogues($chunk, 100, $targetMarkets);
-                if (isset($res['result'])) {
-                    $marketCatalogues = array_merge($marketCatalogues, $res['result']);
-                }
-            }
-
-            // 4. Get Market Books (Prices)
-            $marketIds = array_map(fn($m) => $m['marketId'], $marketCatalogues);
-            $marketBooks = [];
-            $chunks = array_chunk($marketIds, 40);
-            foreach ($chunks as $chunk) {
-                $res = $this->bf->getMarketBooks($chunk);
-                if (isset($res['result'])) {
-                    $marketBooks = array_merge($marketBooks, $res['result']);
-                }
-            }
-
-            // --- Pre-fetch Enrichment Data ---
-            $today = date('Y-m-d');
-            $tomorrow = date('Y-m-d', strtotime('+1 day'));
-            // Fetch Live with short cache (15s) for high reactivity in GiaNik
-            $apiLiveRes = $this->footballData->getLiveMatches([], 15);
-            $apiTodayRes = $this->footballData->getFixturesByDate($today);
-            $apiTomorrowRes = $this->footballData->getFixturesByDate($tomorrow);
-
-            // Merge order: Today/Tomorrow first, then Live.
-            // This ensures Live data (most fresh) overwrites any stale Today/Tomorrow cached records in the map.
-            $allApiFixtures = array_merge(
-                $apiTodayRes['response'] ?? [],
-                $apiTomorrowRes['response'] ?? [],
-                $apiLiveRes['response'] ?? []
-            );
-            // Deduplicate by fixture ID
-            $apiLiveMatchesMap = [];
-            foreach ($allApiFixtures as $f) {
-                if (isset($f['fixture']['id'])) {
-                    $apiLiveMatchesMap[$f['fixture']['id']] = $f;
-                }
-            }
-            $apiLiveMatches = array_values($apiLiveMatchesMap);
-
-            // --- Truth Overlay from Local DB (for most up-to-date individual status) ---
-            $fixtureModel = new \App\Models\Fixture();
-            $dbFixtures = $fixtureModel->getActiveFixtures();
-            $dbFixturesMap = [];
-            foreach ($dbFixtures as $f) {
-                $dbFixturesMap[$f['id']] = $f;
-            }
-
-            // --- Active Bets Tracking (Real & Virtual) ---
-            $stmtBets = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending'");
-            $stmtBets->execute();
-            $allActiveBets = $stmtBets->fetchAll(PDO::FETCH_ASSOC);
-            $activeMarketIds = array_column($allActiveBets, 'market_id');
-
-            // --- Score Tracking for Highlighting ---
-            if (session_status() === PHP_SESSION_NONE)
-                session_start();
-            $prevScores = $_SESSION['gianik_scores'] ?? [];
-            $newScores = [];
-
-            // 5. Merge Data
-            $marketBooksMap = [];
-            foreach ($marketBooks as $mb) {
-                $marketBooksMap[$mb['marketId']] = $mb;
-            }
-
-            // --- Performance Optimization: Detect if there are live matches ---
-            $anyLive = false;
-            foreach ($marketBooksMap as $mb) {
-                if ($mb['marketDefinition']['inPlay'] ?? false) {
-                    $anyLive = true;
-                    break;
-                }
-            }
-
-            // Prioritize market types (Match Odds > Winner > Moneyline)
-            usort($marketCatalogues, function ($a, $b) {
-                $prio = ['MATCH_ODDS' => 1, 'WINNER' => 2, 'MONEYLINE' => 3];
-                $typeA = $a['description']['marketType'] ?? '';
-                $typeB = $b['description']['marketType'] ?? '';
-                return ($prio[$typeA] ?? 99) <=> ($prio[$typeB] ?? 99);
-            });
-
-            $groupedMatches = [];
-            $processedEvents = [];
-            $processedCount = 0;
-            foreach ($marketCatalogues as $mc) {
-                $marketId = $mc['marketId'];
-                $eventId = $mc['event']['id'];
-
-                if (isset($processedEvents[$eventId]))
-                    continue;
-                if (!isset($marketBooksMap[$marketId]))
-                    continue;
-
-                $mb = $marketBooksMap[$marketId];
-                $isInPlay = $mb['marketDefinition']['inPlay'] ?? false;
-                $hasActiveBet = in_array($marketId, $activeMarketIds);
-
-                // --- EARLY FILTERING TO PREVENT 504 TIMEOUT ---
-                // Se ci sono match live, processiamo SOLO i match live o quelli con scommesse attive
-                if ($anyLive && !$isInPlay && !$hasActiveBet) {
-                    continue;
-                }
-
-                // Se NON ci sono match live, limitiamo comunque il numero di match processati (max 40)
-                // per evitare di saturare il gateway con centinaia di match futuri.
-                if (!$anyLive && $processedCount >= 40 && !$hasActiveBet) {
-                    continue;
-                }
-
-                $processedEvents[$eventId] = true;
-                $processedCount++;
-                $sport = 'Soccer'; // Hardcoded as we only fetch eventType 1
-
-                $startTime = $eventStartTimes[$eventId] ?? null;
-                $statusLabel = 'LIVE';
-                if ($startTime) {
-                    $odt = new \DateTime($startTime);
-                    $odt->setTimezone(new \DateTimeZone('Europe/Rome'));
-                    $now = new \DateTime();
-                    if ($odt > $now && !($mb['marketDefinition']['inPlay'] ?? false)) {
-                        if ($odt->format('Y-m-d') === $now->format('Y-m-d')) {
-                            $statusLabel = $odt->format('H:i');
-                        } else {
-                            $statusLabel = $odt->format('d/m H:i');
-                        }
-                    }
-                }
-
-                $countryCode = $mc['event']['countryCode'] ?? null;
-                $mappedName = $this->getCountryMapping($countryCode);
-                $displayCountry = is_array($mappedName) ? $mappedName[0] : ($mappedName ?: ($countryCode ?: 'World'));
-                $fallbackFlag = $countryCode ? "https://media.api-sports.io/flags/" . strtolower($countryCode) . ".svg" : "https://media.api-sports.io/flags/world.svg";
-
-                $m = [
-                    'marketId' => $marketId,
-                    'event' => $mc['event']['name'],
-                    'event_id' => $mc['event']['id'],
-                    'fixture_id' => null,
-                    'home_id' => null,
-                    'away_id' => null,
-                    'competition' => $mc['competition']['name'] ?? '',
-                    'sport' => $sport,
-                    'totalMatched' => $mb['totalMatched'] ?? 0,
-                    'runners' => [],
-                    'status_label' => $statusLabel,
-                    'start_time' => $startTime,
-                    'score' => null,
-                    'has_api_data' => false,
-                    'home_logo' => null,
-                    'away_logo' => null,
-                    'home_name' => null,
-                    'away_name' => null,
-                    'country' => $displayCountry,
-                    'flag' => $fallbackFlag,
-                    'is_in_play' => $mb['marketDefinition']['inPlay'] ?? false
-                ];
-
-                // --- Enrichment ---
-                $foundApiData = false;
-                if ($sport === 'Soccer') {
-                    $mappedCountry = $mappedName;
-
-                    // Handle international/continental competitions
-                    $comp = strtolower($m['competition']);
-                    if (
-                        strpos($comp, 'champions league') !== false ||
-                        strpos($comp, 'europa league') !== false ||
-                        strpos($comp, 'conference league') !== false ||
-                        strpos($comp, 'friendly') !== false ||
-                        strpos($comp, 'cup') !== false ||
-                        strpos($comp, 'international') !== false ||
-                        strpos($comp, 'world cup') !== false ||
-                        strpos($comp, 'euro ') !== false ||
-                        strpos($comp, 'copa america') !== false
-                    ) {
-                        if ($mappedCountry) {
-                            $mappedCountry = is_array($mappedCountry) ? $mappedCountry : [$mappedCountry];
-                            $mappedCountry[] = 'World';
-                        } else {
-                            $mappedCountry = 'World';
-                        }
-                    }
-
-                    $match = $this->findMatchingFixture($m['event'], $sport, $apiLiveMatches, $countryCode, $startTime, $m['event_id']);
-
-                    if ($match) {
-                        $fid = $match['fixture']['id'] ?? null;
-                        $m['fixture_id'] = $fid;
-                        $m['home_id'] = $match['teams']['home']['id'] ?? null;
-                        $m['away_id'] = $match['teams']['away']['id'] ?? null;
-
-                        $scoreHome = $match['goals']['home'] ?? '0';
-                        $scoreAway = $match['goals']['away'] ?? '0';
-                        $statusShort = $match['fixture']['status']['short'] ?? 'LIVE';
-                        $elapsed = $match['fixture']['status']['elapsed'] ?? 0;
-
-                        // Overlay with DB data if we have it and it's newer or more detailed
-                        if ($fid && isset($dbFixturesMap[$fid])) {
-                            $dbf = $dbFixturesMap[$fid];
-                            // If DB has a higher elapsed time or a different (more advanced) status, use it
-                            if ($dbf['elapsed'] > $elapsed || in_array($dbf['status_short'], ['FT', 'AET', 'PEN'])) {
-                                $scoreHome = $dbf['score_home'];
-                                $scoreAway = $dbf['score_away'];
-                                $statusShort = $dbf['status_short'];
-                                $elapsed = $dbf['elapsed'];
-                            }
-                        }
-
-                        $m['score'] = "$scoreHome-$scoreAway";
-                        if ($statusShort !== 'NS') {
-                            $m['status_label'] = $statusShort . ($elapsed ? " $elapsed'" : "");
-                        }
-                        $m['elapsed'] = $elapsed;
-                        $m['status_short'] = $statusShort;
-                        $m['has_api_data'] = true;
-                        $m['intensity'] = $this->getLastIntensityBadge($fid);
-                        $m['home_logo'] = $match['teams']['home']['logo'] ?? null;
-                        $m['away_logo'] = $match['teams']['away']['logo'] ?? null;
-                        $m['home_name'] = $match['teams']['home']['name'] ?? null;
-                        $m['away_name'] = $match['teams']['away']['name'] ?? null;
-                        $m['country'] = $match['league']['country'] ?? $m['country'];
-                        $m['flag'] = $match['league']['flag'] ?? null;
-                        $m['league_id'] = $match['league']['id'] ?? null;
-                        $m['season'] = $match['league']['season'] ?? null;
-                        $foundApiData = true;
-                    }
-                }
-
-                // If no API data, try to split the event name for UI purposes
-                if (!$foundApiData) {
-                    $teams = preg_split('/\s+(v|vs|@)\s+/i', $m['event']);
-                    if (count($teams) >= 2) {
-                        $m['home_name'] = trim($teams[0]);
-                        $m['away_name'] = trim($teams[1]);
-                    } else {
-                        $m['home_name'] = $m['event'];
-                        $m['away_name'] = '';
-                    }
-                }
-
-                // Generic Betfair-based enrichment (fallback or additional info)
-                if (!$foundApiData && isset($mb['marketDefinition'])) {
-                    $def = $mb['marketDefinition'];
-
-                    // 1. Try to get score from marketDefinition['score'] (Reliable for Tennis, Volley, etc)
-                    if (isset($def['score'])) {
-                        $s = $def['score'];
-                        // Tennis sets/games style
-                        if (isset($s['homeSets']) || isset($s['awaySets']) || isset($s['homeGames'])) {
-                            $hs = $s['homeSets'] ?? 0;
-                            $as = $s['awaySets'] ?? 0;
-                            $m['score'] = "$hs-$as";
-                            if (isset($s['homeGames'], $s['awayGames'])) {
-                                $m['score'] .= " (" . $s['homeGames'] . "-" . $s['awayGames'] . ")";
-                            }
-                            if ($m['status_label'] === 'LIVE')
-                                $m['status_label'] = 'SET';
-                        }
-                        // Generic homeScore/awayScore
-                        elseif (isset($s['homeScore'], $s['awayScore'])) {
-                            if (!$m['score'])
-                                $m['score'] = $s['homeScore'] . '-' . $s['awayScore'];
-                        }
-                    }
-
-                    // 2. Score check in runner names (sometimes present in specific markets)
-                    if (!$m['score']) {
-                        foreach ($mb['runners'] as $runner) {
-                            if (isset($runner['description']['runnerName']) && preg_match('/(\d+)\s*-\s*(\d+)/', $runner['description']['runnerName'], $runnerScore)) {
-                                // $m['score'] = $runnerScore[1] . '-' . $runnerScore[2]; // Rischioso prenderlo dai runner
-                            }
-                        }
-                    }
-
-                    // 3. Fallback: Extract scores from event name if present (e.g. "Team A 1-0 Team B")
-                    if (!$m['score'] && preg_match('/(\d+)\s*[-]\s*(\d+)/', $m['event'], $scoreMatches)) {
-                        $m['score'] = $scoreMatches[1] . '-' . $scoreMatches[2];
-                    }
-
-                    // 4. Status label refinements
-                    if (preg_match('/\((Q[1-4]|Set\s*[1-5]|HT|End\s*Set\s*\d)\)/i', $m['event'], $periodMatches)) {
-                        $m['status_label'] = strtoupper($periodMatches[1]);
-                    } elseif (isset($def['inPlay']) && $def['inPlay'] && $m['status_label'] === 'LIVE') {
-                        $m['status_label'] = 'LIVE';
-                    }
-                }
-
-                // Merge runners
-                $runnerNames = [];
-                foreach ($mc['runners'] as $r) {
-                    $runnerNames[$r['selectionId']] = $r['runnerName'];
-                }
-
-                foreach ($mb['runners'] as $r) {
-                    $m['runners'][] = [
-                        'selectionId' => $r['selectionId'],
-                        'name' => $runnerNames[$r['selectionId']] ?? 'Unknown',
-                        'back' => $r['ex']['availableToBack'][0]['price'] ?? '-'
-                    ];
-                }
-
-                $groupedMatches[$sport][] = $m;
-            }
-
-            // Flatten and Sort matches dynamically
             $allMatches = [];
-            foreach ($groupedMatches as $sportMatches) {
-                foreach ($sportMatches as $m) {
-                    $m['has_active_real_bet'] = false;
-                    $m['has_active_virtual_bet'] = false;
-                    $m['current_pl'] = 0;
-                    $m['just_updated'] = false;
-                    $m['my_bets'] = [];
+            if (!empty($events)) {
+                $eventIds = array_map(fn($e) => $e['event']['id'], $events);
+                $eventStartTimes = [];
+                foreach ($events as $e) {
+                    $eventStartTimes[$e['event']['id']] = $e['event']['openDate'] ?? null;
+                }
 
-                    // Track active bets for this match
-                    foreach ($allActiveBets as $bet) {
-                        if ($bet['market_id'] === $m['marketId']) {
-                            // Filter for matched bets only if real
-                            if ($bet['type'] === 'real' && ($bet['size_matched'] ?? 0) <= 0) {
-                                continue;
+                // 3. Get Market Catalogues for these events (Match Odds)
+                $marketCatalogues = [];
+                $chunks = array_chunk($eventIds, 40);
+                foreach ($chunks as $chunk) {
+                    $targetMarkets = [
+                        'MATCH_ODDS',
+                        'DOUBLE_CHANCE',
+                        'DRAW_NO_BET',
+                        'HALF_TIME',
+                        'OVER_UNDER_05',
+                        'OVER_UNDER_15',
+                        'OVER_UNDER_25',
+                        'OVER_UNDER_35',
+                        'OVER_UNDER_45',
+                        'BOTH_TEAMS_TO_SCORE'
+                    ];
+                    $res = $this->bf->getMarketCatalogues($chunk, 100, $targetMarkets);
+                    if (isset($res['result'])) {
+                        $marketCatalogues = array_merge($marketCatalogues, $res['result']);
+                    }
+                }
+
+                // 4. Get Market Books (Prices)
+                $marketIds = array_map(fn($m) => $m['marketId'], $marketCatalogues);
+                $marketBooks = [];
+                $chunks = array_chunk($marketIds, 40);
+                foreach ($chunks as $chunk) {
+                    $res = $this->bf->getMarketBooks($chunk);
+                    if (isset($res['result'])) {
+                        $marketBooks = array_merge($marketBooks, $res['result']);
+                    }
+                }
+
+                // --- Pre-fetch Enrichment Data ---
+                $today = date('Y-m-d');
+                $tomorrow = date('Y-m-d', strtotime('+1 day'));
+                // Fetch Live with short cache (15s) for high reactivity in GiaNik
+                $apiLiveRes = $this->footballData->getLiveMatches([], 15);
+                $apiTodayRes = $this->footballData->getFixturesByDate($today);
+                $apiTomorrowRes = $this->footballData->getFixturesByDate($tomorrow);
+
+                // Merge order: Today/Tomorrow first, then Live.
+                // This ensures Live data (most fresh) overwrites any stale Today/Tomorrow cached records in the map.
+                $allApiFixtures = array_merge(
+                    $apiTodayRes['response'] ?? [],
+                    $apiTomorrowRes['response'] ?? [],
+                    $apiLiveRes['response'] ?? []
+                );
+                // Deduplicate by fixture ID
+                $apiLiveMatchesMap = [];
+                foreach ($allApiFixtures as $f) {
+                    if (isset($f['fixture']['id'])) {
+                        $apiLiveMatchesMap[$f['fixture']['id']] = $f;
+                    }
+                }
+                $apiLiveMatches = array_values($apiLiveMatchesMap);
+
+                // --- Truth Overlay from Local DB (for most up-to-date individual status) ---
+                $fixtureModel = new \App\Models\Fixture();
+                $dbFixtures = $fixtureModel->getActiveFixtures();
+                $dbFixturesMap = [];
+                foreach ($dbFixtures as $f) {
+                    $dbFixturesMap[$f['id']] = $f;
+                }
+
+                // --- Active Bets Tracking (Real & Virtual) ---
+                $stmtBets = $this->db->prepare("SELECT * FROM bets WHERE status = 'pending'");
+                $stmtBets->execute();
+                $allActiveBets = $stmtBets->fetchAll(PDO::FETCH_ASSOC);
+                $activeMarketIds = array_column($allActiveBets, 'market_id');
+
+                // --- Score Tracking for Highlighting ---
+                if (session_status() === PHP_SESSION_NONE)
+                    session_start();
+                $prevScores = $_SESSION['gianik_scores'] ?? [];
+                $newScores = [];
+
+                // 5. Merge Data
+                $marketBooksMap = [];
+                foreach ($marketBooks as $mb) {
+                    $marketBooksMap[$mb['marketId']] = $mb;
+                }
+
+                // --- Performance Optimization: Detect if there are live matches ---
+                $anyLive = false;
+                foreach ($marketBooksMap as $mb) {
+                    if ($mb['marketDefinition']['inPlay'] ?? false) {
+                        $anyLive = true;
+                        break;
+                    }
+                }
+
+                // Prioritize market types (Match Odds > Winner > Moneyline)
+                usort($marketCatalogues, function ($a, $b) {
+                    $prio = ['MATCH_ODDS' => 1, 'WINNER' => 2, 'MONEYLINE' => 3];
+                    $typeA = $a['description']['marketType'] ?? '';
+                    $typeB = $b['description']['marketType'] ?? '';
+                    return ($prio[$typeA] ?? 99) <=> ($prio[$typeB] ?? 99);
+                });
+
+                $groupedMatches = [];
+                $processedEvents = [];
+                $processedCount = 0;
+                foreach ($marketCatalogues as $mc) {
+                    $marketId = $mc['marketId'];
+                    $eventId = $mc['event']['id'];
+
+                    if (isset($processedEvents[$eventId]))
+                        continue;
+                    if (!isset($marketBooksMap[$marketId]))
+                        continue;
+
+                    $mb = $marketBooksMap[$marketId];
+                    $isInPlay = $mb['marketDefinition']['inPlay'] ?? false;
+                    $hasActiveBet = in_array($marketId, $activeMarketIds);
+
+                    // --- EARLY FILTERING TO PREVENT 504 TIMEOUT ---
+                    // Se ci sono match live, processiamo SOLO i match live o quelli con scommesse attive
+                    if ($anyLive && !$isInPlay && !$hasActiveBet) {
+                        continue;
+                    }
+
+                    // Se NON ci sono match live, limitiamo comunque il numero di match processati (max 40)
+                    // per evitare di saturare il gateway con centinaia di match futuri.
+                    if (!$anyLive && $processedCount >= 40 && !$hasActiveBet) {
+                        continue;
+                    }
+
+                    $processedEvents[$eventId] = true;
+                    $processedCount++;
+                    $sport = 'Soccer'; // Hardcoded as we only fetch eventType 1
+
+                    $startTime = $eventStartTimes[$eventId] ?? null;
+                    $statusLabel = 'LIVE';
+                    if ($startTime) {
+                        $odt = new \DateTime($startTime);
+                        $odt->setTimezone(new \DateTimeZone('Europe/Rome'));
+                        $now = new \DateTime();
+                        if ($odt > $now && !($mb['marketDefinition']['inPlay'] ?? false)) {
+                            if ($odt->format('Y-m-d') === $now->format('Y-m-d')) {
+                                $statusLabel = $odt->format('H:i');
+                            } else {
+                                $statusLabel = $odt->format('d/m H:i');
                             }
+                        }
+                    }
 
-                            if ($bet['type'] === 'real') $m['has_active_real_bet'] = true;
-                            if ($bet['type'] === 'virtual') $m['has_active_virtual_bet'] = true;
+                    $countryCode = $mc['event']['countryCode'] ?? null;
+                    $mappedName = $this->getCountryMapping($countryCode);
+                    $displayCountry = is_array($mappedName) ? $mappedName[0] : ($mappedName ?: ($countryCode ?: 'World'));
+                    $fallbackFlag = $countryCode ? "https://media.api-sports.io/flags/" . strtolower($countryCode) . ".svg" : "https://media.api-sports.io/flags/world.svg";
 
-                            // Find current Back odds for this runner
-                            $currentOdds = 0;
-                            foreach ($m['runners'] as $r) {
-                                if ($r['selectionId'] == $bet['selection_id']) {
-                                    $currentOdds = is_numeric($r['back']) ? (float) $r['back'] : 0;
-                                    break;
+                    $m = [
+                        'marketId' => $marketId,
+                        'event' => $mc['event']['name'],
+                        'event_id' => $mc['event']['id'],
+                        'fixture_id' => null,
+                        'home_id' => null,
+                        'away_id' => null,
+                        'competition' => $mc['competition']['name'] ?? '',
+                        'sport' => $sport,
+                        'totalMatched' => $mb['totalMatched'] ?? 0,
+                        'runners' => [],
+                        'status_label' => $statusLabel,
+                        'start_time' => $startTime,
+                        'score' => null,
+                        'has_api_data' => false,
+                        'home_logo' => null,
+                        'away_logo' => null,
+                        'home_name' => null,
+                        'away_name' => null,
+                        'country' => $displayCountry,
+                        'flag' => $fallbackFlag,
+                        'is_in_play' => $mb['marketDefinition']['inPlay'] ?? false
+                    ];
+
+                    // --- Enrichment ---
+                    $foundApiData = false;
+                    if ($sport === 'Soccer') {
+                        $mappedCountry = $mappedName;
+
+                        // Handle international/continental competitions
+                        $comp = strtolower($m['competition']);
+                        if (
+                            strpos($comp, 'champions league') !== false ||
+                            strpos($comp, 'europa league') !== false ||
+                            strpos($comp, 'conference league') !== false ||
+                            strpos($comp, 'friendly') !== false ||
+                            strpos($comp, 'cup') !== false ||
+                            strpos($comp, 'international') !== false ||
+                            strpos($comp, 'world cup') !== false ||
+                            strpos($comp, 'euro ') !== false ||
+                            strpos($comp, 'copa america') !== false
+                        ) {
+                            if ($mappedCountry) {
+                                $mappedCountry = is_array($mappedCountry) ? $mappedCountry : [$mappedCountry];
+                                $mappedCountry[] = 'World';
+                            } else {
+                                $mappedCountry = 'World';
+                            }
+                        }
+
+                        $match = $this->findMatchingFixture($m['event'], $sport, $apiLiveMatches, $countryCode, $startTime, $m['event_id']);
+
+                        if ($match) {
+                            $fid = $match['fixture']['id'] ?? null;
+                            $m['fixture_id'] = $fid;
+                            $m['home_id'] = $match['teams']['home']['id'] ?? null;
+                            $m['away_id'] = $match['teams']['away']['id'] ?? null;
+
+                            $scoreHome = $match['goals']['home'] ?? '0';
+                            $scoreAway = $match['goals']['away'] ?? '0';
+                            $statusShort = $match['fixture']['status']['short'] ?? 'LIVE';
+                            $elapsed = $match['fixture']['status']['elapsed'] ?? 0;
+
+                            // Overlay with DB data if we have it and it's newer or more detailed
+                            if ($fid && isset($dbFixturesMap[$fid])) {
+                                $dbf = $dbFixturesMap[$fid];
+                                // If DB has a higher elapsed time or a different (more advanced) status, use it
+                                if ($dbf['elapsed'] > $elapsed || in_array($dbf['status_short'], ['FT', 'AET', 'PEN'])) {
+                                    $scoreHome = $dbf['score_home'];
+                                    $scoreAway = $dbf['score_away'];
+                                    $statusShort = $dbf['status_short'];
+                                    $elapsed = $dbf['elapsed'];
                                 }
                             }
 
-                            $pl = 0;
-                            $effectiveStake = ($bet['type'] === 'real') ? ($bet['size_matched'] ?? 0) : $bet['stake'];
-                            if ($currentOdds > 1.0 && $effectiveStake > 0) {
-                                // Estimated Cashout: (Placed Odds / Current Odds) * Stake - Stake
-                                $pl = (($bet['odds'] / $currentOdds) * $effectiveStake) - $effectiveStake;
+                            $m['score'] = "$scoreHome-$scoreAway";
+                            if ($statusShort !== 'NS') {
+                                $m['status_label'] = $statusShort . ($elapsed ? " $elapsed'" : "");
                             }
-
-                            $m['my_bets'][] = [
-                                'type' => $bet['type'],
-                                'runner' => $bet['runner_name'],
-                                'odds' => $bet['odds'],
-                                'stake' => $bet['type'] === 'real' ? $bet['size_matched'] : $bet['stake'],
-                                'pl' => $pl
-                            ];
-
-                            if ($bet['type'] === 'real') {
-                                $m['current_pl'] += $pl;
-                            }
+                            $m['elapsed'] = $elapsed;
+                            $m['status_short'] = $statusShort;
+                            $m['has_api_data'] = true;
+                            $m['intensity'] = $this->getLastIntensityBadge($fid);
+                            $m['home_logo'] = $match['teams']['home']['logo'] ?? null;
+                            $m['away_logo'] = $match['teams']['away']['logo'] ?? null;
+                            $m['home_name'] = $match['teams']['home']['name'] ?? null;
+                            $m['away_name'] = $match['teams']['away']['name'] ?? null;
+                            $m['country'] = $match['league']['country'] ?? $m['country'];
+                            $m['flag'] = $match['league']['flag'] ?? null;
+                            $m['league_id'] = $match['league']['id'] ?? null;
+                            $m['season'] = $match['league']['season'] ?? null;
+                            $foundApiData = true;
                         }
                     }
 
-                    // Detect Score Changes
-                    $scoreKey = $m['event_id'];
-                    $currentScore = $m['score'] ?? '0-0';
-                    $newScores[$scoreKey] = $currentScore;
-                    if (isset($prevScores[$scoreKey]) && $prevScores[$scoreKey] !== $currentScore) {
-                        $m['just_updated'] = time();
-                        $m['is_goal'] = true;
+                    // If no API data, try to split the event name for UI purposes
+                    if (!$foundApiData) {
+                        $teams = preg_split('/\s+(v|vs|@)\s+/i', $m['event']);
+                        if (count($teams) >= 2) {
+                            $m['home_name'] = trim($teams[0]);
+                            $m['away_name'] = trim($teams[1]);
+                        } else {
+                            $m['home_name'] = $m['event'];
+                            $m['away_name'] = '';
+                        }
                     }
 
-                    $allMatches[] = $m;
+                    // Generic Betfair-based enrichment (fallback or additional info)
+                    if (!$foundApiData && isset($mb['marketDefinition'])) {
+                        $def = $mb['marketDefinition'];
+
+                        // 1. Try to get score from marketDefinition['score'] (Reliable for Tennis, Volley, etc)
+                        if (isset($def['score'])) {
+                            $s = $def['score'];
+                            // Tennis sets/games style
+                            if (isset($s['homeSets']) || isset($s['awaySets']) || isset($s['homeGames'])) {
+                                $hs = $s['homeSets'] ?? 0;
+                                $as = $s['awaySets'] ?? 0;
+                                $m['score'] = "$hs-$as";
+                                if (isset($s['homeGames'], $s['awayGames'])) {
+                                    $m['score'] .= " (" . $s['homeGames'] . "-" . $s['awayGames'] . ")";
+                                }
+                                if ($m['status_label'] === 'LIVE')
+                                    $m['status_label'] = 'SET';
+                            }
+                            // Generic homeScore/awayScore
+                            elseif (isset($s['homeScore'], $s['awayScore'])) {
+                                if (!$m['score'])
+                                    $m['score'] = $s['homeScore'] . '-' . $s['awayScore'];
+                            }
+                        }
+
+                        // 2. Score check in runner names (sometimes present in specific markets)
+                        if (!$m['score']) {
+                            foreach ($mb['runners'] as $runner) {
+                                if (isset($runner['description']['runnerName']) && preg_match('/(\d+)\s*-\s*(\d+)/', $runner['description']['runnerName'], $runnerScore)) {
+                                    // $m['score'] = $runnerScore[1] . '-' . $runnerScore[2]; // Rischioso prenderlo dai runner
+                                }
+                            }
+                        }
+
+                        // 3. Fallback: Extract scores from event name if present (e.g. "Team A 1-0 Team B")
+                        if (!$m['score'] && preg_match('/(\d+)\s*[-]\s*(\d+)/', $m['event'], $scoreMatches)) {
+                            $m['score'] = $scoreMatches[1] . '-' . $scoreMatches[2];
+                        }
+
+                        // 4. Status label refinements
+                        if (preg_match('/\((Q[1-4]|Set\s*[1-5]|HT|End\s*Set\s*\d)\)/i', $m['event'], $periodMatches)) {
+                            $m['status_label'] = strtoupper($periodMatches[1]);
+                        } elseif (isset($def['inPlay']) && $def['inPlay'] && $m['status_label'] === 'LIVE') {
+                            $m['status_label'] = 'LIVE';
+                        }
+                    }
+
+                    // Merge runners
+                    $runnerNames = [];
+                    foreach ($mc['runners'] as $r) {
+                        $runnerNames[$r['selectionId']] = $r['runnerName'];
+                    }
+
+                    foreach ($mb['runners'] as $r) {
+                        $m['runners'][] = [
+                            'selectionId' => $r['selectionId'],
+                            'name' => $runnerNames[$r['selectionId']] ?? 'Unknown',
+                            'back' => $r['ex']['availableToBack'][0]['price'] ?? '-'
+                        ];
+                    }
+
+                    $groupedMatches[$sport][] = $m;
                 }
+
+                // Flatten and Sort matches dynamically
+                foreach ($groupedMatches as $sportMatches) {
+                    foreach ($sportMatches as $m) {
+                        $m['has_active_real_bet'] = false;
+                        $m['has_active_virtual_bet'] = false;
+                        $m['current_pl'] = 0;
+                        $m['just_updated'] = false;
+                        $m['my_bets'] = [];
+
+                        // Track active bets for this match
+                        foreach ($allActiveBets as $bet) {
+                            if ($bet['market_id'] === $m['marketId']) {
+                                // Filter for matched bets only if real
+                                if ($bet['type'] === 'real' && ($bet['size_matched'] ?? 0) <= 0) {
+                                    continue;
+                                }
+
+                                if ($bet['type'] === 'real') $m['has_active_real_bet'] = true;
+                                if ($bet['type'] === 'virtual') $m['has_active_virtual_bet'] = true;
+
+                                // Find current Back odds for this runner
+                                $currentOdds = 0;
+                                foreach ($m['runners'] as $r) {
+                                    if ($r['selectionId'] == $bet['selection_id']) {
+                                        $currentOdds = is_numeric($r['back']) ? (float) $r['back'] : 0;
+                                        break;
+                                    }
+                                }
+
+                                $pl = 0;
+                                $effectiveStake = ($bet['type'] === 'real') ? ($bet['size_matched'] ?? 0) : $bet['stake'];
+                                if ($currentOdds > 1.0 && $effectiveStake > 0) {
+                                    // Estimated Cashout: (Placed Odds / Current Odds) * Stake - Stake
+                                    $pl = (($bet['odds'] / $currentOdds) * $effectiveStake) - $effectiveStake;
+                                }
+
+                                $m['my_bets'][] = [
+                                    'type' => $bet['type'],
+                                    'runner' => $bet['runner_name'],
+                                    'odds' => $bet['odds'],
+                                    'stake' => $bet['type'] === 'real' ? $bet['size_matched'] : $bet['stake'],
+                                    'pl' => $pl
+                                ];
+
+                                if ($bet['type'] === 'real') {
+                                    $m['current_pl'] += $pl;
+                                }
+                            }
+                        }
+
+                        // Detect Score Changes
+                        $scoreKey = $m['event_id'];
+                        $currentScore = $m['score'] ?? '0-0';
+                        $newScores[$scoreKey] = $currentScore;
+                        if (isset($prevScores[$scoreKey]) && $prevScores[$scoreKey] !== $currentScore) {
+                            $m['just_updated'] = time();
+                            $m['is_goal'] = true;
+                        }
+
+                        $allMatches[] = $m;
+                    }
+                }
+                $_SESSION['gianik_scores'] = $newScores;
+
+                // Sort logic: 1. Real Bets (P&L DESC), 2. Virtual Bets, 3. Live (Elapsed DESC), 4. Upcoming (Start ASC)
+                usort($allMatches, function ($a, $b) {
+                    // Priority 1: Active Real Bets
+                    if ($a['has_active_real_bet'] && !$b['has_active_real_bet'])
+                        return -1;
+                    if (!$a['has_active_real_bet'] && $b['has_active_real_bet'])
+                        return 1;
+                    if ($a['has_active_real_bet'] && $b['has_active_real_bet']) {
+                        // Sort by absolute P&L value to put the most "active" positions first
+                        return abs($b['current_pl']) <=> abs($a['current_pl']);
+                    }
+
+                    // Priority 2: Active Virtual Bets
+                    if (($a['has_active_virtual_bet'] ?? false) && !($b['has_active_virtual_bet'] ?? false))
+                        return -1;
+                    if (!($a['has_active_virtual_bet'] ?? false) && ($b['has_active_virtual_bet'] ?? false))
+                        return 1;
+
+                    // Priority 3: Is Live (In Play)
+                    if ($a['is_in_play'] && !$b['is_in_play'])
+                        return -1;
+                    if (!$a['is_in_play'] && $b['is_in_play'])
+                        return 1;
+                    if ($a['is_in_play'] && $b['is_in_play']) {
+                        // Among live matches, sort by elapsed time descending (ending soonest first)
+                        $aElapsed = $a['elapsed'] ?? 0;
+                        $bElapsed = $b['elapsed'] ?? 0;
+                        if ($aElapsed !== $bElapsed)
+                            return $bElapsed <=> $aElapsed;
+                    }
+
+                    // Priority 4: Upcoming Matches (Start Time)
+                    if (!$a['is_in_play'] && !$b['is_in_play']) {
+                        $aStart = $a['start_time'] ?? '9999-99-99';
+                        $bStart = $b['start_time'] ?? '9999-99-99';
+                        if ($aStart !== $bStart)
+                            return $aStart <=> $bStart;
+                    }
+
+                    // Priority 5: Matched Volume
+                    return ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0);
+                });
             }
-            $_SESSION['gianik_scores'] = $newScores;
-
-            // Sort logic: 1. Real Bets (P&L DESC), 2. Virtual Bets, 3. Live (Elapsed DESC), 4. Upcoming (Start ASC)
-            usort($allMatches, function ($a, $b) {
-                // Priority 1: Active Real Bets
-                if ($a['has_active_real_bet'] && !$b['has_active_real_bet'])
-                    return -1;
-                if (!$a['has_active_real_bet'] && $b['has_active_real_bet'])
-                    return 1;
-                if ($a['has_active_real_bet'] && $b['has_active_real_bet']) {
-                    // Sort by absolute P&L value to put the most "active" positions first
-                    return abs($b['current_pl']) <=> abs($a['current_pl']);
-                }
-
-                // Priority 2: Active Virtual Bets
-                if (($a['has_active_virtual_bet'] ?? false) && !($b['has_active_virtual_bet'] ?? false))
-                    return -1;
-                if (!($a['has_active_virtual_bet'] ?? false) && ($b['has_active_virtual_bet'] ?? false))
-                    return 1;
-
-                // Priority 3: Is Live (In Play)
-                if ($a['is_in_play'] && !$b['is_in_play'])
-                    return -1;
-                if (!$a['is_in_play'] && $b['is_in_play'])
-                    return 1;
-                if ($a['is_in_play'] && $b['is_in_play']) {
-                    // Among live matches, sort by elapsed time descending (ending soonest first)
-                    $aElapsed = $a['elapsed'] ?? 0;
-                    $bElapsed = $b['elapsed'] ?? 0;
-                    if ($aElapsed !== $bElapsed)
-                        return $bElapsed <=> $aElapsed;
-                }
-
-                // Priority 4: Upcoming Matches (Start Time)
-                if (!$a['is_in_play'] && !$b['is_in_play']) {
-                    $aStart = $a['start_time'] ?? '9999-99-99';
-                    $bStart = $b['start_time'] ?? '9999-99-99';
-                    if ($aStart !== $bStart)
-                        return $aStart <=> $bStart;
-                }
-
-                // Priority 5: Matched Volume
-                return ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0);
-            });
-
 
             // Funds
             $account = ['available' => 0, 'exposure' => 0];
