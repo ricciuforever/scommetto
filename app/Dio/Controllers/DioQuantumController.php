@@ -146,11 +146,22 @@ class DioQuantumController
             'errors' => []
         ];
 
+        $operationalMode = $this->db->query("SELECT value FROM system_state WHERE key = 'operational_mode'")->fetchColumn() ?: 'virtual';
+
+        // IF REAL MODE, SYNC FUNDS FIRST
+        $actualTotal = null;
+        if ($operationalMode === 'real') {
+            $fundsData = $this->bf->getFunds();
+            $funds = $fundsData['result'] ?? $fundsData;
+            if (isset($funds['availableToBetBalance'])) {
+                $actualTotal = (float)$funds['availableToBetBalance'] + abs((float)($funds['exposure'] ?? 0));
+            }
+        }
+
         // CHECK IF AVAILABLE BALANCE >= 2€
-        $portfolio = $this->recalculatePortfolio();
+        $portfolio = $this->recalculatePortfolio($actualTotal);
 
         // Synchronize virtual balance in DB (only if in virtual mode)
-        $operationalMode = $this->db->query("SELECT value FROM system_state WHERE key = 'operational_mode'")->fetchColumn() ?: 'virtual';
         if ($operationalMode === 'virtual') {
             $this->updateVirtualBalance($portfolio['available_balance']);
         }
@@ -824,14 +835,17 @@ class DioQuantumController
             return $this->cachedPortfolio;
         }
 
-        $operationalMode = $this->db->query("SELECT value FROM system_state WHERE key = 'operational_mode'")->fetchColumn() ?: 'virtual';
+        $config = $this->db->query("SELECT key, value FROM system_state WHERE key IN ('operational_mode', 'initial_bankroll', 'initial_pnl_adjustment')")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $operationalMode = $config['operational_mode'] ?? 'virtual';
+        $initialBankroll = (float)($config['initial_bankroll'] ?? 100.0);
+        $initialPnl = (float)($config['initial_pnl_adjustment'] ?? 0.0);
 
         $stmt = $this->db->prepare("SELECT id, stake, odds, profit, status, created_at, settled_at, type FROM bets WHERE type = ? ORDER BY created_at ASC");
         $stmt->execute([$operationalMode]);
         $allBets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $invested = 100.0;
-        $currentBalance = 100.0; // Current Available Balance
+        $invested = $initialBankroll;
+        $currentBalance = $initialBankroll + $initialPnl; // Current Available Balance
         $exposure = 0;
 
         $events = [];
@@ -869,7 +883,7 @@ class DioQuantumController
         $settledCount = 0;
         $totalProfit = 0;
         $placedBets = []; // Track which bets were actually placed
-        $history = [['t' => 'Start', 'v' => 100.0]];
+        $history = [['t' => 'Start', 'v' => $initialBankroll + $initialPnl]];
 
         $betById = [];
         foreach ($allBets as $bet) {
@@ -927,13 +941,13 @@ class DioQuantumController
             $trackedTotal = $currentBalance + $exposure;
             $offset = $realTotal - $trackedTotal;
 
-            $newHistory = [['t' => 'Start', 'v' => 100.0]];
+            $newHistory = [['t' => 'Start', 'v' => $initialBankroll + $initialPnl]];
             if (abs($offset) > 0.01) {
-                $newHistory[] = ['t' => 'ADJ', 'v' => round(100.0 + $offset, 2)];
+                $newHistory[] = ['t' => 'ADJ', 'v' => round($initialBankroll + $initialPnl + $offset, 2)];
             }
 
             // Re-trace history with the offset
-            $runningTotal = 100.0 + $offset;
+            $runningTotal = $initialBankroll + $initialPnl + $offset;
             foreach ($events as $event) {
                 if ($event['type'] === 'place') {
                     if (!($placedBets[$event['id']] ?? false)) continue;

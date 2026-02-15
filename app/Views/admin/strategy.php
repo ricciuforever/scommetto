@@ -175,6 +175,17 @@
                         <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Stop Loss Giornaliero (€)</label>
                         <input type="number" step="0.01" name="config[daily_stop_loss]" value="<?= htmlspecialchars($config['daily_stop_loss'] ?? '50.00') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-mono outline-none focus:border-blue-500">
                     </div>
+
+                    <div class="grid grid-cols-2 gap-4 border-t border-white/5 pt-6">
+                        <div>
+                            <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Bankroll Iniziale (€)</label>
+                            <input type="number" step="1" name="config[initial_bankroll]" value="<?= htmlspecialchars($config['initial_bankroll'] ?? '100') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-mono outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Ricalibrazione P&L (€)</label>
+                            <input type="number" step="0.01" name="config[initial_pnl_adjustment]" value="<?= htmlspecialchars($config['initial_pnl_adjustment'] ?? '0.00') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-mono outline-none focus:border-blue-500">
+                        </div>
+                    </div>
                 </div>
             </div>
 

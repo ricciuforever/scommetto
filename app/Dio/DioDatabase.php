@@ -94,7 +94,9 @@ class DioDatabase
             'daily_stop_loss' => '100.00',
             'virtual_balance' => '100.00',
             'operational_mode' => 'virtual',
-            'target_sports' => '1'
+            'target_sports' => '1',
+            'initial_bankroll' => '100.00',
+            'initial_pnl_adjustment' => '0.00'
         ];
 
         foreach ($defaults as $key => $val) {
