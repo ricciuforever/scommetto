@@ -91,7 +91,8 @@ class DioDatabase
             'stake_value' => '0.10',
             'min_confidence' => '75',
             'daily_stop_loss' => '100.00',
-            'virtual_balance' => '100.00'
+            'virtual_balance' => '100.00',
+            'operational_mode' => 'virtual'
         ];
 
         foreach ($defaults as $key => $val) {
