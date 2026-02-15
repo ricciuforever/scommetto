@@ -273,9 +273,23 @@ if (!$isEmbedded) {
                                     </td>
                                     <td class="px-6 py-3">
                                         <div class="flex items-center gap-2">
+                                            <?php
+                                            $actionClass = 'text-slate-500';
+                                            $actionLabel = $log['action'];
+                                            if ($log['action'] === 'bet') {
+                                                $actionClass = 'text-success';
+                                                $actionLabel = 'BET';
+                                            } elseif ($log['action'] === 'pass') {
+                                                $actionClass = 'text-slate-500';
+                                                $actionLabel = 'PASS';
+                                            } elseif (strpos($log['action'], 'SKIP') === 0) {
+                                                $actionClass = 'text-amber-500';
+                                                $actionLabel = str_replace('SKIP_', '', $log['action']);
+                                            }
+                                            ?>
                                             <span
-                                                class="text-[10px] font-black uppercase <?php echo $log['action'] === 'bet' ? 'text-success' : 'text-slate-500'; ?> transition-all">
-                                                <?php echo $log['action'] === 'bet' ? 'BET' : 'PASS'; ?>
+                                                class="text-[10px] font-black uppercase <?php echo $actionClass; ?> transition-all">
+                                                <?php echo $actionLabel; ?>
                                             </span>
                                             <span
                                                 class="text-[10px] font-bold text-white truncate max-w-[150px]"><?php echo $log['event_name']; ?></span>
