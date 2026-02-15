@@ -709,14 +709,16 @@ class BetfairService
     /**
      * Get Prices for specific Market IDs
      */
-    public function getMarketBooks(array $marketIds)
+    public function getMarketBooks(array $marketIds, array $customProjection = [])
     {
+        $priceProjection = !empty($customProjection) ? $customProjection : [
+            'priceData' => ['EX_BEST_OFFERS', 'EX_TRADED'], // Added EX_TRADED by default for correct totalMatched
+            'virtualise' => true
+        ];
+
         return $this->request('listMarketBook', [
             'marketIds' => $marketIds,
-            'priceProjection' => [
-                'priceData' => ['EX_BEST_OFFERS'],
-                'virtualise' => true
-            ],
+            'priceProjection' => $priceProjection,
             'includeMarketDefinition' => true
         ]);
     }
