@@ -36,41 +36,43 @@ class SettlementService
             return 0;
 
         $settledCount = 0;
-        foreach ($pendingBets as $bet) {
-            $marketId = $bet['market_id'];
+        // Optimized: Chunking requests to avoid TOO_MUCH_DATA with EX_TRADED (Limit 5 per batch)
+        $chunks = array_chunk($pendingBets, 5);
 
-            // Check if market is settled via listClearedOrders
-            // Note: Since these are virtual, we look for the market status in listMarketBook first
-            // because listClearedOrders only shows real bets.
-            $bookRes = $this->bf->getMarketBooks([$marketId]);
-            $book = $bookRes['result'][0] ?? null;
+        foreach ($chunks as $batch) {
+            $marketIds = array_unique(array_column($batch, 'market_id'));
+            $bookRes = $this->bf->getMarketBooks($marketIds);
+            $booksMap = [];
+            foreach ($bookRes['result'] ?? [] as $b) {
+                $booksMap[$b['marketId']] = $b;
+            }
 
-            if ($book && $book['status'] === 'CLOSED') {
-                // Determine winner from runners
-                $winnerSelectionId = null;
-                foreach ($book['runners'] as $runner) {
-                    // echo "Runner {$runner['selectionId']} status: {$runner['status']}\n";
-                    if ($runner['status'] === 'WINNER') {
-                        // BUG FIX: Betfair uses selectionId (camelCase)
-                        $winnerSelectionId = $runner['selectionId'];
-                        break;
-                    }
-                }
+            foreach ($batch as $bet) {
+                $book = $booksMap[$bet['market_id']] ?? null;
 
-                if ($winnerSelectionId !== null) {
-                    $isWin = ($winnerSelectionId == $bet['selection_id']);
-                    $profit = $isWin ? ($bet['stake'] * $bet['odds']) - $bet['stake'] : -$bet['stake'];
-                    $status = $isWin ? 'won' : 'lost';
-
-                    $update = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?");
-                    $update->execute([$status, $profit, $bet['id']]);
-
-                    // Update bankroll
-                    if ($isWin) {
-                        $this->updateVirtualBalance($profit + $bet['stake']);
+                if ($book && $book['status'] === 'CLOSED') {
+                    $winnerSelectionId = null;
+                    foreach ($book['runners'] as $runner) {
+                        if ($runner['status'] === 'WINNER') {
+                            $winnerSelectionId = $runner['selectionId'];
+                            break;
+                        }
                     }
 
-                    $settledCount++;
+                    if ($winnerSelectionId !== null) {
+                        $isWin = ($winnerSelectionId == $bet['selection_id']);
+                        $profit = $isWin ? ($bet['stake'] * $bet['odds']) - $bet['stake'] : -$bet['stake'];
+                        $status = $isWin ? 'won' : 'lost';
+
+                        $update = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = CURRENT_TIMESTAMP WHERE id = ?");
+                        $update->execute([$status, $profit, $bet['id']]);
+
+                        if ($isWin) {
+                            $this->updateVirtualBalance($profit + $bet['stake']);
+                        }
+
+                        $settledCount++;
+                    }
                 }
             }
         }

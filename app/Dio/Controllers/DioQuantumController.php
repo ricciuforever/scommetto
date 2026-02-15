@@ -171,10 +171,10 @@ class DioQuantumController
             return;
         }
 
-        // Throttling: 1 scan ogni 180 secondi per non saturare Betfair e Gemini
+        // Throttling: 1 scan ogni 60 secondi (più frequente, batch più piccoli)
         $cooldownFile = \App\Config\Config::DATA_PATH . 'dio_quantum_cooldown.txt';
         $lastRun = file_exists($cooldownFile) ? (int) file_get_contents($cooldownFile) : 0;
-        if (time() - $lastRun < 180) {
+        if (time() - $lastRun < 60) {
             echo json_encode(['status' => 'success', 'message' => 'Dio Quantum in cooldown']);
             return;
         }
@@ -253,8 +253,8 @@ class DioQuantumController
 
                 $marketIds = array_map(fn($m) => $m['marketId'], $catalogues);
 
-                // 4. Get Market Books (Prices & Liquidity) - Chunked for API efficiency (max 40 per call)
-                $chunks = array_chunk($marketIds, 40);
+                // 4. Get Market Books (Prices & Liquidity) - Chunked small (max 5) to fit 200pt limit with EX_TRADED
+                $chunks = array_chunk($marketIds, 5);
                 $books = [];
                 foreach ($chunks as $chunk) {
                     // Use default robust price projection from BetfairService (EX_TRADED + VIRTUAL)
