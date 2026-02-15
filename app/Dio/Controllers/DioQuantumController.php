@@ -646,18 +646,27 @@ class DioQuantumController
 
     private function getRecentBets($validIds = null)
     {
-        if ($validIds !== null && empty($validIds)) return [];
+        // ALWAYS include pending bets, regardless of portfolio reconstruction
+        $pendingSql = "SELECT * FROM bets WHERE status = 'pending' ORDER BY created_at DESC";
+        $pendingStmt = $this->db->query($pendingSql);
+        $pendingBets = $pendingStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $sql = "SELECT * FROM bets WHERE runner_name NOT LIKE '%PASS%'";
-        if ($validIds !== null) {
+        $historyBets = [];
+        if ($validIds !== null && !empty($validIds)) {
             $placeholders = implode(',', array_fill(0, count($validIds), '?'));
-            $sql .= " AND id IN ($placeholders)";
+            $sql = "SELECT * FROM bets WHERE id IN ($placeholders) AND status != 'pending' AND runner_name NOT LIKE '%PASS%' ORDER BY created_at DESC LIMIT 10";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($validIds);
+            $historyBets = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } elseif ($validIds === null) {
+            // If no validIds filter (e.g. initial load or error), just show recent history
+            $sql = "SELECT * FROM bets WHERE status != 'pending' AND runner_name NOT LIKE '%PASS%' ORDER BY created_at DESC LIMIT 10";
+            $stmt = $this->db->query($sql);
+            $historyBets = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
-        $sql .= " ORDER BY created_at DESC LIMIT 10";
 
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($validIds ?: []);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // Merge: Pending first, then History
+        return array_merge($pendingBets, $historyBets);
     }
 
     private function logActivity($ticker, $analysis, $action)
@@ -732,9 +741,15 @@ class DioQuantumController
 
             // Deep Sync se richiesto (es. ricarica manuale dello storico)
             $syncHistory = isset($_GET['sync_history']) && $_GET['sync_history'] === '1';
-            $fromDate = $syncHistory ? gmdate('Y-m-d\TH:i:s\Z', time() - (30 * 86400)) : null;
+            $fromDate = $syncHistory ? gmdate('Y-m-d\TH:i:s\Z', time() - (90 * 86400)) : null; // Extended to 90 days for deep sync
 
-            // Target Sports for Dio
+            if ($syncHistory) {
+                // PURGE existing real bets to prevent duplicates/conflicts during deep rebuild
+                $this->db->exec("DELETE FROM bets WHERE type = 'real' OR type LIKE '1:%'");
+                $this->cachedPortfolio = null;
+            }
+
+            // Target Sports for Dio (ignored if deep sync)
             $targetSports = ['Soccer', 'Tennis', 'Rugby Union', 'Basketball'];
             $allBfOrders = [];
 
@@ -755,7 +770,7 @@ class DioQuantumController
 
             // 2. Recupera ordini definiti (con paginazione se necessario)
             $fromRecord = 0;
-            $maxRecords = $syncHistory ? 5000 : 1000;
+            $maxRecords = $syncHistory ? 10000 : 1000; // Increased limit for deep sync
 
             do {
                 $clearedRes = $this->bf->getClearedOrders(false, $fromDate, $fromRecord);
@@ -789,8 +804,8 @@ class DioQuantumController
             } while ($moreAvailable && $fromRecord < $maxRecords);
 
             foreach ($allBfOrders as $betId => $o) {
-                // Filter by Dio target sports if possible
-                if (isset($o['sport']) && !in_array($o['sport'], $targetSports)) continue;
+                // Filter by Dio target sports if possible, UNLESS deep sync is requested
+                if (!$syncHistory && isset($o['sport']) && !in_array($o['sport'], $targetSports)) continue;
 
                 $altBetId = (strpos($betId, '1:') === 0) ? substr($betId, 2) : '1:' . $betId;
                 $stmt = $this->db->prepare("SELECT id FROM bets WHERE betfair_id = ? OR betfair_id = ?");
