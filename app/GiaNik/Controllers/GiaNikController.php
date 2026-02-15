@@ -113,10 +113,10 @@ class GiaNikController
                     }
                 }
 
-                // 4. Get Market Books (Prices)
+                // 4. Get Market Books (Prices) - Reduced chunk size for EX_TRADED weight
                 $marketIds = array_map(fn($m) => $m['marketId'], $marketCatalogues);
                 $marketBooks = [];
-                $chunks = array_chunk($marketIds, 40);
+                $chunks = array_chunk($marketIds, 10);
                 foreach ($chunks as $chunk) {
                     $res = $this->bf->getMarketBooks($chunk);
                     if (isset($res['result'])) {
@@ -938,10 +938,10 @@ class GiaNikController
     {
         $this->sendJsonHeader();
 
-        // Throttling: 1 analisi ogni 120 secondi (Ottimizzazione Gemini)
+        // Throttling: 1 analisi ogni 60 secondi (più frequente, batch più piccoli)
         $cooldownFile = Config::DATA_PATH . 'gianik_gemini_cooldown.txt';
         $lastRun = file_exists($cooldownFile) ? (int) file_get_contents($cooldownFile) : 0;
-        if (time() - $lastRun < 120) {
+        if (time() - $lastRun < 60) {
             echo json_encode(['status' => 'success', 'message' => 'GiaNik in cooldown']);
             return;
         }
@@ -1350,7 +1350,7 @@ class GiaNikController
                 return $results;
 
             $marketIds = array_values(array_unique(array_column($pending, 'market_id')));
-            $chunks = array_chunk($marketIds, 50);
+            $chunks = array_chunk($marketIds, 5);
 
             foreach ($chunks as $chunk) {
                 $res = $this->bf->getMarketBooks($chunk);
