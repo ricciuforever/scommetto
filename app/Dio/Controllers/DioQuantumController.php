@@ -21,12 +21,12 @@ class DioQuantumController
     {
         $this->db = DioDatabase::getInstance()->getConnection();
 
-        // Fetch custom Betfair credentials from agent database
-        $overrides = $this->db->query("SELECT key, value FROM system_state WHERE key LIKE 'BETFAIR_%'")->fetchAll(PDO::FETCH_KEY_PAIR);
-        $overrides = array_filter($overrides);
+        // Fetch custom credentials from agent database
+        $config = $this->db->query("SELECT key, value FROM system_state WHERE key LIKE 'BETFAIR_%' OR key = 'GEMINI_API_KEY'")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $overrides = array_filter($config);
 
         $this->bf = new BetfairService($overrides, 'dio');
-        $this->gemini = new GeminiService();
+        $this->gemini = new GeminiService($config['GEMINI_API_KEY'] ?? null);
     }
 
     public function index()
@@ -155,8 +155,9 @@ class DioQuantumController
             $strategyPrompt = $config['strategy_prompt'] ?? '';
             $stakeMode = $config['stake_mode'] ?? 'kelly';
             $stakeValue = (float)($config['stake_value'] ?? 0.10);
-            $minConfidence = (int)($config['min_confidence'] ?? 75);
+            $minConfidence = (int)($config['min_confidence'] ?? 80);
             $minStake = (float)($config['min_stake'] ?? 2.00);
+            $minLiquidity = (float)($config['min_liquidity'] ?? 2000.00);
             $operationalMode = $config['operational_mode'] ?? 'virtual';
 
             // 1. Get ALL active sport types with live events
@@ -213,9 +214,9 @@ class DioQuantumController
 
                     // Filter for minimum liquidity to avoid wasting AI calls on irrelevant markets
                     $liquidity = (float)($book['totalMatched'] ?? 0);
-                    if ($liquidity < 2000) {
+                    if ($liquidity < $minLiquidity) {
                         if ($liquidity > 0) {
-                            $this->logActivity(['event' => $mc['event']['name'] ?? 'Unknown', 'marketName' => $mc['marketName'] ?? 'Unknown'], ['motivation' => 'Liquidità insufficiente (< 2000€): ' . round($liquidity) . '€'], 'SKIP_LIQUIDITY');
+                            $this->logActivity(['event' => $mc['event']['name'] ?? 'Unknown', 'marketName' => $mc['marketName'] ?? 'Unknown'], ['motivation' => 'Liquidità insufficiente (< ' . $minLiquidity . '€): ' . round($liquidity) . '€'], 'SKIP_LIQUIDITY');
                         }
                         continue;
                     }
