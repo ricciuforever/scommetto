@@ -75,7 +75,7 @@ class SettlementService
                     }
                 } else {
                     // Market is OPEN/SUSPENDED - Update Score for Dashboard
-                    $score = $this->extractScore($book);
+                    $score = $this->extractScore($book, $bet['sport'] ?? 'Unknown');
                     if ($score && $score !== $bet['score']) {
                         $upd = $this->db->prepare("UPDATE bets SET score = ? WHERE id = ?");
                         $upd->execute([$score, $bet['id']]);
@@ -93,23 +93,26 @@ class SettlementService
         $stmt->execute([number_format($amount, 2, '.', '')]);
     }
 
-    private function extractScore($book)
+    private function extractScore($book, $sportName = 'Unknown')
     {
         $scoreData = $book['marketDefinition']['score'] ?? null;
         if (!$scoreData)
             return null;
 
-        // Generic Home - Away
-        if (isset($scoreData['home']['score']) && isset($scoreData['away']['score'])) {
-            $score = $scoreData['home']['score'] . " - " . $scoreData['away']['score'];
+        $home = $scoreData['home'] ?? [];
+        $away = $scoreData['away'] ?? [];
 
-            // Tennis Specific
-            if (isset($scoreData['home']['numberOfSets'])) {
-                $homeSets = $scoreData['home']['numberOfSets'] ?? 0;
-                $awaySets = $scoreData['away']['numberOfSets'] ?? 0;
-                $homeGames = $scoreData['home']['games'] ?? 0;
-                $awayGames = $scoreData['away']['games'] ?? 0;
-                $score = "Sets: $homeSets-$awaySets (G: $homeGames-$awayGames)";
+        // Attempt to find the main score (Goals for Soccer, Sets for Tennis)
+        // Try 'score', then 'numberOfSets', then 'sets'
+        $sHome = $home['score'] ?? $home['numberOfSets'] ?? $home['sets'] ?? null;
+        $sAway = $away['score'] ?? $away['numberOfSets'] ?? $away['sets'] ?? null;
+
+        if ($sHome !== null && $sAway !== null) {
+            $score = "$sHome - $sAway";
+
+            // Add details for Tennis (Games) - Check for variations of 'Tennis' in sportName
+            if (stripos($sportName, 'Tennis') !== false && isset($home['games']) && isset($away['games'])) {
+                $score = "Sets: $score (G: {$home['games']}-{$away['games']})";
             }
             return $score;
         }

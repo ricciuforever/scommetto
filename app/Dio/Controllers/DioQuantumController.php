@@ -500,19 +500,21 @@ class DioQuantumController
         $scoreData = $book['marketDefinition']['score'] ?? null;
 
         if ($scoreData) {
-            // Generic Home - Away
-            if (isset($scoreData['home']['score']) && isset($scoreData['away']['score'])) {
-                $score = $scoreData['home']['score'] . " - " . $scoreData['away']['score'];
-            }
+            $home = $scoreData['home'] ?? [];
+            $away = $scoreData['away'] ?? [];
 
-            // Tennis Specific: Sets and Games
-            if ($sportName === 'Tennis') {
-                $homeSets = $scoreData['home']['numberOfSets'] ?? 0;
-                $awaySets = $scoreData['away']['numberOfSets'] ?? 0;
-                $homeGames = $scoreData['home']['games'] ?? 0;
-                $awayGames = $scoreData['away']['games'] ?? 0;
+            // Attempt to find the main score (Goals for Soccer, Sets for Tennis)
+            // Try 'score', then 'numberOfSets', then 'sets'
+            $sHome = $home['score'] ?? $home['numberOfSets'] ?? $home['sets'] ?? null;
+            $sAway = $away['score'] ?? $away['numberOfSets'] ?? $away['sets'] ?? null;
 
-                $score = "Sets: $homeSets-$awaySets (G: $homeGames-$awayGames)";
+            if ($sHome !== null && $sAway !== null) {
+                $score = "$sHome - $sAway";
+
+                // Add details for Tennis (Games) if available
+                if ($sportName === 'Tennis' && isset($home['games']) && isset($away['games'])) {
+                    $score = "Sets: $score (G: {$home['games']}-{$away['games']})";
+                }
             }
         }
 
