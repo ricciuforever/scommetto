@@ -68,6 +68,18 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
             </div>
         </div>
 
+        <div class="h-8 w-px bg-white/10 mx-2"></div>
+
+        <!-- Mode Toggle -->
+        <div class="flex bg-black/40 p-1 rounded-xl border border-white/5">
+            <button onclick="setGiaNikMode('virtual')" id="mode-virtual" class="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all <?= $operationalMode === 'virtual' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-slate-500 hover:text-white' ?>">
+                VIRTUAL
+            </button>
+            <button onclick="setGiaNikMode('real')" id="mode-real" class="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all <?= $operationalMode === 'real' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-slate-500 hover:text-white' ?>">
+                REAL
+            </button>
+        </div>
+
         <?php if ($operationalMode !== 'real'): ?>
             <div class="h-8 w-px bg-white/10 mx-2"></div>
 

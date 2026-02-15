@@ -155,16 +155,18 @@ require __DIR__ . '/../../Views/layout/top.php';
         const vBtn = document.getElementById('mode-virtual');
         const rBtn = document.getElementById('mode-real');
 
-        if (mode === 'virtual') {
-            vBtn.classList.add('bg-accent', 'text-white');
-            vBtn.classList.remove('text-slate-500');
-            rBtn.classList.remove('bg-accent', 'text-white');
-            rBtn.classList.add('text-slate-500');
-        } else {
-            rBtn.classList.add('bg-accent', 'text-white');
-            rBtn.classList.remove('text-slate-500');
-            vBtn.classList.remove('bg-accent', 'text-white');
-            vBtn.classList.add('text-slate-500');
+        if (vBtn && rBtn) {
+            if (mode === 'virtual') {
+                vBtn.classList.add('bg-accent', 'text-white');
+                vBtn.classList.remove('text-slate-500');
+                rBtn.classList.remove('bg-accent', 'text-white');
+                rBtn.classList.add('text-slate-500');
+            } else {
+                rBtn.classList.add('bg-accent', 'text-white');
+                rBtn.classList.remove('text-slate-500');
+                vBtn.classList.remove('bg-accent', 'text-white');
+                vBtn.classList.add('text-slate-500');
+            }
         }
 
         if (saveToServer) {

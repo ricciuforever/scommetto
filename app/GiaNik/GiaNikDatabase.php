@@ -207,6 +207,7 @@ class GiaNikDatabase
 
         // Ensure Soccer-Only consistency
         $this->connection->exec("UPDATE bets SET sport = 'Soccer' WHERE sport IS NULL");
+        $this->connection->exec("UPDATE bets SET type = 'virtual' WHERE type IS NULL OR type = ''");
         $this->connection->exec("DELETE FROM bets WHERE sport NOT IN ('Soccer', 'Football')");
     }
 
