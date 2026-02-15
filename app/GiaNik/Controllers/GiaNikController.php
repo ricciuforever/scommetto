@@ -1193,21 +1193,36 @@ class GiaNikController
                 }
 
                 if (is_array($batchAnalysis)) {
+                    // Mappa marketId -> eventName per associare correttamente i metadati
+                    $marketToEventMap = [];
+                    foreach ($batchMetadata as $eName => $meta) {
+                        foreach ($meta['markets'] as $m) {
+                            $marketToEventMap[$m['marketId']] = $eName;
+                        }
+                    }
+
+                    $processedMarkets = [];
+
                     foreach ($batchAnalysis as $analysis) {
-                        $eventName = $analysis['eventName'] ?? '';
-                        if (!isset($batchMetadata[$eventName])) continue;
+                        $mId = $analysis['marketId'] ?? '';
+                        if (empty($mId) || !isset($marketToEventMap[$mId])) continue;
+
+                        $eventName = $marketToEventMap[$mId];
                         $meta = $batchMetadata[$eventName];
 
                         // Verifica confidenza minima (hard cap dinamico, default 80%)
-                        if (!empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= $minConfidence) {
+                        if (!empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= $minConfidence) {
+
+                            if (in_array($mId, $processedMarkets)) continue;
+                            $processedMarkets[] = $mId;
 
                             $selectedMarket = null;
                             foreach ($meta['markets'] as $m) {
-                                if ($m['marketId'] === $analysis['marketId']) {
+                                if ($m['marketId'] === $mId) {
                                     $selectedMarket = $m; break;
                                 }
                             }
-                            if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds)) continue;
+                            if (!$selectedMarket || in_array($mId, $pendingMarketIds)) continue;
 
                             // --- CALCOLO STAKE (Dinamico) ---
                             $decision = MoneyManagementService::calculateStake(
@@ -2353,6 +2368,7 @@ class GiaNikController
                         }
                         $marketInfoMap[$cat['marketId']] = [
                             'event' => $cat['event']['name'] ?? null,
+                            'eventId' => $cat['event']['id'] ?? null,
                             'market' => $cat['marketName'] ?? null,
                             'competition' => $cat['competition']['name'] ?? null,
                             'runners' => $runners
@@ -2364,16 +2380,20 @@ class GiaNikController
             // 4. MIRRORING & UPDATE: Sincronizza lo stato locale con Betfair
             foreach ($allBfOrders as $betId => $o) {
                 $info = $marketInfoMap[$o['marketId']] ?? null;
+                if (!$info) {
+                    error_log("GiaNik Sync: Nessun dato catalogo per marketId " . $o['marketId'] . " (BetID $betId)");
+                }
 
                 // Priorità Nome Evento: 1. Catalogo, 2. ItemDesc (eventDesc), 3. EventMap
                 $eventName = $info['event'] ?? ($o['eventName'] ?? ($eventNameMap[$o['eventId'] ?? ''] ?? null));
                 $marketName = $info['market'] ?? ($o['marketName'] ?? null);
                 $runnerName = $info['runners'][$o['selectionId']] ?? ($o['runnerName'] ?? null);
                 $leagueName = $info['competition'] ?? null;
+                $oEventId = $o['eventId'] ?? ($info['eventId'] ?? null);
 
                 $fixtureId = null;
                 if ($eventName) {
-                    $match = $this->findMatchingFixture($eventName, 'Soccer', null, null, null, $o['eventId'] ?? null);
+                    $match = $this->findMatchingFixture($eventName, 'Soccer', null, null, null, $oEventId);
                     if ($match) $fixtureId = $match['fixture']['id'] ?? null;
                 }
 
@@ -2397,8 +2417,8 @@ class GiaNikController
                     $finalRunnerName = $runnerName ?: ($existing['runner_name'] ?? 'Unknown Runner');
                     $finalLeagueName = $leagueName ?: ($existing['league'] ?? null);
 
-                    // Update: aggiorna sempre per avere l'ultimo stato (profitto, commissioni, status, sizeMatched)
-                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = :status, profit = :profit, commission = :commission, market_id = :market_id, market_name = :market_name, event_name = :event_name, runner_name = :runner_name, league = :league, league_id = COALESCE(league_id, :league_id), fixture_id = COALESCE(fixture_id, :fixture_id), created_at = :created_at, betfair_id = :betfair_id, size_matched = :size_matched WHERE id = :id");
+                    // Update: aggiorna sempre per avere l'ultimo stato (profitto, commissioni, status, sizeMatched, quote e nomi reali)
+                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = :status, profit = :profit, commission = :commission, market_id = :market_id, market_name = :market_name, event_name = :event_name, runner_name = :runner_name, odds = :odds, stake = :stake, league = :league, league_id = COALESCE(league_id, :league_id), fixture_id = COALESCE(fixture_id, :fixture_id), created_at = :created_at, betfair_id = :betfair_id, size_matched = :size_matched WHERE id = :id");
                     $stmtUpdate->execute([
                         ':status' => $o['status'],
                         ':profit' => $o['profit'],
@@ -2407,6 +2427,8 @@ class GiaNikController
                         ':market_name' => $finalMarketName,
                         ':event_name' => $finalEventName,
                         ':runner_name' => $finalRunnerName,
+                        ':odds' => $o['odds'],
+                        ':stake' => $o['stake'],
                         ':league' => $finalLeagueName,
                         ':league_id' => $o['league_id'] ?? null,
                         ':fixture_id' => $fixtureId,
