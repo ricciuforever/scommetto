@@ -246,18 +246,20 @@ if (!$isEmbedded) {
         </div>
     </div>
 
-    <!-- 6. Analisi Autonoma (Thinking Logs) -->
-    <div class="grid grid-cols-1 gap-6">
+    <!-- 6. Analisi Autonoma (Thinking Logs) & Live Trace -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Thinking Logs (Background Activity) -->
-        <div class="bg-white/5 rounded-2xl border border-white/10 glass overflow-hidden flex flex-col">
+        <div class="lg:col-span-2 bg-white/5 rounded-2xl border border-white/10 glass overflow-hidden flex flex-col">
             <div class="p-4 border-b border-white/10 flex justify-between items-center bg-indigo-500/5">
                 <div class="flex items-center gap-2">
                     <i data-lucide="brain" class="w-4 h-4 text-indigo-400"></i>
                     <h2 class="text-sm font-black uppercase tracking-widest">Analisi Autonoma</h2>
                 </div>
-                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Real-time Thinking</span>
+                <div class="flex items-center gap-4">
+                    <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Real-time Thinking</span>
+                </div>
             </div>
-            <div class="flex-1 max-h-[300px] overflow-y-auto custom-scrollbar">
+            <div class="flex-1 max-h-[400px] overflow-y-auto custom-scrollbar">
                 <table class="w-full text-left">
                     <tbody class="divide-y divide-white/5">
                         <?php if (empty($recentLogs)): ?>
@@ -312,6 +314,70 @@ if (!$isEmbedded) {
         </div>
 
 
+        <!-- Live Trace Debugger -->
+        <div class="bg-white/5 rounded-2xl border border-white/10 glass overflow-hidden flex flex-col">
+            <div class="p-4 border-b border-white/10 flex justify-between items-center bg-amber-500/5">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="terminal" class="w-4 h-4 text-amber-500"></i>
+                    <h2 class="text-sm font-black uppercase tracking-widest">Live Trace Debugger</h2>
+                </div>
+                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Last Scan</span>
+            </div>
+            <div class="p-4 space-y-4 text-[10px] max-h-[400px] overflow-y-auto custom-scrollbar">
+                <?php if (empty($lastScanTrace)): ?>
+                    <p class="text-slate-500 italic">Nessuna traccia disponibile.</p>
+                <?php else: ?>
+                    <div class="flex justify-between border-b border-white/5 pb-2">
+                        <span class="text-slate-500">Ultimo Check:</span>
+                        <span class="text-white font-mono"><?php echo date('H:i:s', strtotime(($lastScanTrace['timestamp'] ?? 'now') . ' UTC')); ?></span>
+                    </div>
+
+                    <div>
+                        <p class="text-indigo-400 font-bold uppercase mb-1">Sport Scansionati</p>
+                        <div class="flex flex-wrap gap-1">
+                            <?php foreach (($lastScanTrace['scanned_sports'] ?? []) as $s): ?>
+                                <span class="px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded"><?php echo $s; ?></span>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="p-2 bg-black/20 rounded border border-white/5">
+                            <p class="text-slate-500 uppercase text-[8px]">Eventi</p>
+                            <p class="text-white font-black"><?php echo $lastScanTrace['found_events'] ?? 0; ?></p>
+                        </div>
+                        <div class="p-2 bg-black/20 rounded border border-white/5">
+                            <p class="text-slate-500 uppercase text-[8px]">Mercati</p>
+                            <p class="text-white font-black"><?php echo $lastScanTrace['found_markets'] ?? 0; ?></p>
+                        </div>
+                    </div>
+
+                    <?php if (!empty($lastScanTrace['errors'])): ?>
+                        <div class="p-2 bg-danger/10 border border-danger/20 rounded text-danger font-bold">
+                            <p class="uppercase text-[8px] mb-1 text-danger/80">Errori Critici</p>
+                            <?php foreach ($lastScanTrace['errors'] as $err): ?>
+                                <p class="leading-tight">• <?php echo $err; ?></p>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <div>
+                        <p class="text-amber-400 font-bold uppercase mb-1">Dettagli Skipping</p>
+                        <div class="space-y-1 opacity-80">
+                            <?php
+                            $reasons = array_slice($lastScanTrace['skipped_reasons'] ?? [], 0, 15);
+                            if (empty($reasons)) echo '<p class="text-slate-600">Nessuno skip registrato.</p>';
+                            foreach ($reasons as $reason): ?>
+                                <p class="truncate border-l border-white/10 pl-2 py-0.5"><?php echo $reason; ?></p>
+                            <?php endforeach; ?>
+                            <?php if (count($lastScanTrace['skipped_reasons'] ?? []) > 15): ?>
+                                <p class="text-slate-600 italic">... + altri <?php echo count($lastScanTrace['skipped_reasons']) - 15; ?> skip</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
 
 </div>

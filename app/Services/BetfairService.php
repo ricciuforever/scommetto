@@ -135,10 +135,13 @@ class BetfairService
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS, "");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             "X-Application: {$this->appKey}",
             "X-Authentication: {$this->sessionToken}",
-            "Accept: application/json"
+            "Accept: application/json",
+            "Accept-Language: it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer: https://www.betfair.it/"
         ]);
 
         $response = curl_exec($ch);
@@ -233,9 +236,12 @@ class BetfairService
                 curl_setopt($ch, CURLOPT_POST, 1);
                 curl_setopt($ch, CURLOPT_POSTFIELDS, "username={$this->username}&password={$this->password}");
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
                 curl_setopt($ch, CURLOPT_HTTPHEADER, [
                     "X-Application: {$this->appKey}",
-                    "Content-Type: application/x-www-form-urlencoded"
+                    "Content-Type: application/x-www-form-urlencoded",
+                    "Accept-Language: it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+                    "Referer: https://www.betfair.it/"
                 ]);
                 curl_setopt($ch, CURLOPT_SSLCERT, $this->certPath);
                 curl_setopt($ch, CURLOPT_SSLKEY, $this->keyPath);
@@ -265,15 +271,22 @@ class BetfairService
             curl_setopt($ch, CURLOPT_POST, 1);
             curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(['username' => $this->username, 'password' => $this->password]));
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 "X-Application: {$this->appKey}",
                 "Content-Type: application/x-www-form-urlencoded",
-                "Accept: application/json"
+                "Accept: application/json",
+                "Accept-Language: it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Referer: https://www.betfair.it/"
             ]);
 
             $response = curl_exec($ch);
             curl_close($ch);
             $data = json_decode($response, true);
+
+            if (!$data) {
+                $this->log("Login response non-JSON: " . substr($response, 0, 500), null, true);
+            }
 
             if (isset($data['token']) && !empty($data['token'])) {
                 $this->sessionToken = $data['token'];
@@ -308,6 +321,36 @@ class BetfairService
         return null;
     }
 
+    private function setupCurl($ch, $url, $headers = [], $postFields = null)
+    {
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+        $defaultHeaders = [
+            "X-Application: {$this->appKey}",
+            "Accept: application/json",
+            "Accept-Language: it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer: https://www.betfair.it/"
+        ];
+
+        if ($this->sessionToken) {
+            $defaultHeaders[] = "X-Authentication: {$this->sessionToken}";
+        }
+
+        $finalHeaders = array_merge($defaultHeaders, $headers);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $finalHeaders);
+
+        if ($postFields !== null) {
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
+        }
+
+        // SSL Fixes
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+    }
+
     public function request(string $method, array $params = [], $isRetry = false, string $prefix = 'SportsAPING/v1.0/', ?string $url = null)
     {
         $token = $this->authenticate();
@@ -332,16 +375,7 @@ class BetfairService
         ]);
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url ?? $this->apiUrl);
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "X-Application: {$this->appKey}",
-            "X-Authentication: {$token}",
-            "Content-Type: application/json",
-            "Accept: application/json"
-        ]);
+        $this->setupCurl($ch, $url ?? $this->apiUrl, ["Content-Type: application/json", "X-Authentication: $token"], $payload);
 
         $response = curl_exec($ch);
         curl_close($ch);
@@ -549,19 +583,7 @@ class BetfairService
 
         $ch = curl_init();
         // Endpoint REST Betting (comune per IT se autenticati su .it): https://api.betfair.com/exchange/betting/rest/v1.0/placeOrders/
-        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/placeOrders/');
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($params));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "X-Application: {$this->appKey}",
-            "X-Authentication: {$token}",
-            "Content-Type: application/json",
-            "Accept: application/json"
-        ]);
-        // Fix SSL locale
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+        $this->setupCurl($ch, 'https://api.betfair.com/exchange/betting/rest/v1.0/placeOrders/', ["Content-Type: application/json", "X-Authentication: $token"], json_encode($params));
 
         $response = curl_exec($ch);
 
@@ -603,18 +625,7 @@ class BetfairService
         }
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/account/rest/v1.0/getAccountFunds/');
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, '{}');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "X-Application: {$this->appKey}",
-            "X-Authentication: {$token}",
-            "Content-Type: application/json",
-            "Accept: application/json"
-        ]);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+        $this->setupCurl($ch, 'https://api.betfair.com/exchange/account/rest/v1.0/getAccountFunds/', ["Content-Type: application/json", "X-Authentication: $token"], '{}');
 
         $response = curl_exec($ch);
         curl_close($ch);
@@ -722,17 +733,7 @@ class BetfairService
         }
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/account/rest/v1.0/getAccountStatement/');
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['itemClass' => 'TRANSACTION']));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "X-Application: {$this->appKey}",
-            "X-Authentication: {$token}",
-            "Content-Type: application/json",
-            "Accept: application/json"
-        ]);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $this->setupCurl($ch, 'https://api.betfair.com/exchange/account/rest/v1.0/getAccountStatement/', ["Content-Type: application/json", "X-Authentication: $token"], json_encode(['itemClass' => 'TRANSACTION']));
         $response = curl_exec($ch);
         curl_close($ch);
 
@@ -768,17 +769,7 @@ class BetfairService
         }
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/listClearedOrders/');
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($params));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "X-Application: {$this->appKey}",
-            "X-Authentication: {$token}",
-            "Content-Type: application/json",
-            "Accept: application/json"
-        ]);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $this->setupCurl($ch, 'https://api.betfair.com/exchange/betting/rest/v1.0/listClearedOrders/', ["Content-Type: application/json", "X-Authentication: $token"], json_encode($params));
         $response = curl_exec($ch);
         curl_close($ch);
 
@@ -803,17 +794,7 @@ class BetfairService
         }
 
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, 'https://api.betfair.com/exchange/betting/rest/v1.0/listCurrentOrders/');
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, '{}');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "X-Application: {$this->appKey}",
-            "X-Authentication: {$token}",
-            "Content-Type: application/json",
-            "Accept: application/json"
-        ]);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $this->setupCurl($ch, 'https://api.betfair.com/exchange/betting/rest/v1.0/listCurrentOrders/', ["Content-Type: application/json", "X-Authentication: $token"], '{}');
         $response = curl_exec($ch);
         curl_close($ch);
 
