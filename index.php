@@ -92,38 +92,6 @@ try {
         '/standings' => StandingController::class,
     ];
 
-    // --- ADMIN ROUTES ---
-    if (strpos($path, '/admin') === 0) {
-        if ($path === '/admin/login') {
-            (new \App\Controllers\AuthController())->login();
-            return;
-        }
-        if ($path === '/admin/logout') {
-            (new \App\Controllers\AuthController())->logout();
-            return;
-        }
-
-        // Protected routes
-        \App\Controllers\AuthController::check();
-
-        if ($path === '/admin' || $path === '/admin/dashboard') {
-            (new \App\Controllers\AdminController())->index();
-            return;
-        }
-        if ($path === '/admin/war-room') {
-            (new \App\Controllers\AdminController())->warRoom();
-            return;
-        }
-        if ($path === '/admin/strategy') {
-            (new \App\Controllers\AdminController())->strategy();
-            return;
-        }
-        if ($path === '/admin/users' && \App\Controllers\AuthController::isAdmin()) {
-            (new \App\Controllers\AdminController())->users();
-            return;
-        }
-    }
-
     // --- GIANIK ROUTES ---
     if ($path === '/gianik-live' || $path === '/gianik') {
         (new \App\GiaNik\Controllers\GiaNikController())->index();
@@ -131,17 +99,20 @@ try {
     }
 
     if ($path === '/gianik/brain') {
+        \App\Controllers\AuthController::checkAgent('gianik');
         (new \App\GiaNik\Controllers\GiaNikController())->brain();
         return;
     }
 
     // --- DIO (QUANTUM) ROUTES ---
     if ($path === '/dio') {
+        \App\Controllers\AuthController::checkAgent('dio');
         (new \App\Dio\Controllers\DioQuantumController())->index();
         return;
     }
 
     if ($path === '/api/dio/scan') {
+        \App\Controllers\AuthController::checkAgent('dio');
         (new \App\Dio\Controllers\DioQuantumController())->scanAndTrade();
         return;
     }
@@ -152,6 +123,7 @@ try {
     }
 
     if ($path === '/api/gianik/analyze') {
+        \App\Controllers\AuthController::checkAgent('gianik');
         $mId = $_GET['marketId'] ?? null;
         if ($mId) {
             (new \App\GiaNik\Controllers\GiaNikController())->analyze($mId);
@@ -161,26 +133,31 @@ try {
 
 
     if (preg_match('#^/api/gianik/analyze/([\d\.]+)$#i', $path, $matches)) {
+        \App\Controllers\AuthController::checkAgent('gianik');
         (new \App\GiaNik\Controllers\GiaNikController())->analyze($matches[1]);
         return;
     }
 
     if ($path === '/api/gianik/place-bet') {
+        \App\Controllers\AuthController::checkAgent('gianik');
         (new \App\GiaNik\Controllers\GiaNikController())->placeBet();
         return;
     }
 
     if ($path === '/api/gianik/auto-process') {
+        \App\Controllers\AuthController::checkAgent('gianik');
         (new \App\GiaNik\Controllers\GiaNikController())->autoProcess();
         return;
     }
 
     if ($path === '/api/gianik/learn') {
+        \App\Controllers\AuthController::checkAgent('gianik');
         (new \App\GiaNik\Controllers\GiaNikController())->learn();
         return;
     }
 
     if ($path === '/api/gianik/brain-rebuild') {
+        \App\Controllers\AuthController::checkAgent('gianik');
         (new \App\GiaNik\Controllers\BrainController())->rebuild();
         return;
     }
@@ -196,6 +173,7 @@ try {
     }
 
     if ($path === '/api/gianik/set-mode') {
+        \App\Controllers\AuthController::checkAgent('gianik');
         (new \App\GiaNik\Controllers\GiaNikController())->setMode();
         return;
     }
@@ -271,10 +249,9 @@ try {
         return;
     }
 
-    // Dio Quantum as Home
-    if ($path === '/' || $path === '/dio') {
-        (new \App\Dio\Controllers\DioQuantumController())->index();
-        return;
+    if ($path === '/') {
+        header('Location: /gianik-live');
+        exit;
     }
 
     if ($path === '/intelligence') {
@@ -284,7 +261,7 @@ try {
 
     // Old Dashboard and other routes via MatchController (main.php wrapper)
     if (
-        in_array($path, ['/leagues']) ||
+        in_array($path, ['/leagues', '/settings']) ||
         preg_match('#^/(match|team|player)/(\d+)$#i', $path)
     ) {
         (new MatchController())->index();
@@ -465,6 +442,14 @@ try {
     } elseif ($path === '/add_score_column.php') {
         require_once __DIR__ . '/public/add_score_column.php';
         return;
+    } elseif ($path === '/api/settings' && $method === 'GET') {
+        (new \App\Controllers\SystemController())->getSettings();
+    } elseif ($path === '/api/settings/update' && $method === 'POST') {
+        (new \App\Controllers\SystemController())->updateSettings();
+    } elseif ($path === '/api/simulation/reset' && $method === 'POST') {
+        (new \App\Controllers\SystemController())->resetSimulation();
+    } elseif ($path === '/api/view/settings') {
+        (new \App\Controllers\SystemController())->viewSettings();
     } elseif ($path === '/api/view/tracker') {
         (new \App\Controllers\BetController())->viewTracker();
     } elseif (preg_match('#^/api/view/modal/bet/(\d+)$#', $path, $matches)) {

@@ -2,6 +2,10 @@
 // app/GiaNik/Views/brain.php
 // Layout base
 ?>
+<?php
+$isEmbedded = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/war-room') !== false;
+if (!$isEmbedded):
+?>
 <!DOCTYPE html>
 <html lang="it" class="dark">
 <head>
@@ -14,8 +18,9 @@
     </style>
 </head>
 <body class="bg-slate-900 text-gray-100 font-sans antialiased">
+<?php endif; ?>
 
-<div class="container mx-auto p-4">
+<div class="<?= $isEmbedded ? '' : 'container mx-auto p-4' ?>">
 
     <div class="flex justify-between items-center mb-8">
         <div class="flex items-center gap-4">
@@ -31,9 +36,11 @@
             <button onclick="rebuildBrain()" class="px-4 py-2 bg-purple-900/50 hover:bg-purple-800 text-purple-200 border border-purple-500/30 rounded-lg text-sm transition flex items-center gap-2">
                 <i class="fa-solid fa-sync" id="rebuild-icon"></i> <span id="rebuild-text">Ricostruisci Memoria</span>
             </button>
+            <?php if(!$isEmbedded): ?>
             <a href="/gianik" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition flex items-center">
                 <i class="fa-solid fa-arrow-left mr-2"></i> Torna al Terminale
             </a>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -324,5 +331,7 @@
 
 </div>
 
+<?php if(!$isEmbedded): ?>
 </body>
 </html>
+<?php endif; ?>

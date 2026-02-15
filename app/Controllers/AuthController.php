@@ -83,4 +83,20 @@ class AuthController
         $user = self::check();
         return $user['role'] === 'admin';
     }
+
+    public static function checkAgent($requiredAgent)
+    {
+        $user = self::check();
+        if ($user['role'] === 'admin' || $user['agent'] === 'all') {
+            return true;
+        }
+
+        $assigned = explode(',', $user['agent']);
+        if (!in_array($requiredAgent, $assigned)) {
+            http_response_code(403);
+            die("Access Denied: You do not have permission for agent '$requiredAgent'");
+        }
+
+        return true;
+    }
 }

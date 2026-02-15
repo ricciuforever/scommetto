@@ -71,8 +71,25 @@ class GeminiService
         $isGiaNik = $options['is_gianik'] ?? false;
 
         if ($isUpcoming) {
-            $prompt = ($options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('upcoming')) . "\n\n" .
-                "LISTA EVENTI CANDIDATI:\n" . json_encode($candidates) . "\n\n" .
+            $customPrompt = $options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('upcoming');
+
+            // Map placeholders
+            $mapping = [
+                '{{portfolio_stats}}' => $balanceText,
+                '{{candidates_list}}' => "LISTA EVENTI CANDIDATI:\n" . json_encode($candidates)
+            ];
+
+            // If prompt contains placeholders, replace them. Otherwise, append data for backward compatibility.
+            $hasPlaceholders = false;
+            foreach(array_keys($mapping) as $key) if(strpos($customPrompt, $key) !== false) $hasPlaceholders = true;
+
+            if ($hasPlaceholders) {
+                $prompt = str_replace(array_keys($mapping), array_values($mapping), $customPrompt);
+            } else {
+                $prompt = $customPrompt . "\n\n" .
+                    $mapping['{{candidates_list}}'] . "\n\n";
+            }
+
                 "SYSTEM CONSTRAINTS:\n" .
                 "1. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI).\n" .
                 "[\n" .
@@ -90,28 +107,34 @@ class GeminiService
                 "  }\n" .
                 "]";
         } elseif ($isGiaNik) {
-            $prompt = ($options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('gianik')) . "\n\n" .
-                $balanceText .
-                "DATI EVENTO E MERCATI:\n" . json_encode($candidates[0]) . "\n\n" .
-                "DATI STATISTICI AVANZATI (Se disponibili):\n" .
-                "Calcio: " . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili") . "\n\n" .
-                "📚 CONTESTO STORICO E PRE-MATCH (Intelligence):\n" .
-                (isset($candidates[0]['deep_context']) ? $candidates[0]['deep_context'] : "Non disponibile") . "\n\n" .
-                "📈 PERFORMANCE STORICHE AI (Metriche):\n" .
-                (isset($candidates[0]['performance_metrics']) ? $candidates[0]['performance_metrics'] : "Nessuna metrica disponibile") . "\n\n" .
-                "📚 LEZIONI IMPARATE (Post-Mortem):\n" .
-                (isset($candidates[0]['ai_lessons']) ? $candidates[0]['ai_lessons'] : "Nessuna lezione pertinente") . "\n\n" .
-                "🚨 DATI LIVE DEL MATCH:\n" .
-                "Se presenti in api_football.live, troverai:\n" .
-                "- live_score: {home, away, halftime_home, halftime_away} = SCORE ATTUALE E HALFTIME\n" .
-                "- live_status: {short, long, elapsed_minutes} = STATO MATCH E MINUTI TRASCORSI\n" .
-                "- match_info: {fixture_id, date, venue_id}\n\n" .
-                "📊 STATISTICS LIVE DEL MATCH:\n" .
-                (isset($candidates[0]['api_football']['statistics']) ? json_encode($candidates[0]['api_football']['statistics']) : "Non disponibili") . "\n\n" .
-                "⚡ MOMENTUM (Variazione ultimi 10-15 minuti):\n" .
-                (isset($candidates[0]['api_football']['momentum']) ? $candidates[0]['api_football']['momentum'] : "Dati momentum non ancora disponibili.") . "\n\n" .
-                "⚽ EVENTS LIVE DEL MATCH:\n" .
-                (isset($candidates[0]['api_football']['events']) ? json_encode($candidates[0]['api_football']['events']) : "Non disponibili") . "\n\n" .
+            $customPrompt = $options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('gianik');
+
+            $mapping = [
+                '{{portfolio_stats}}' => $balanceText,
+                '{{event_markets}}' => "DATI EVENTO E MERCATI:\n" . json_encode($candidates[0]),
+                '{{api_football_raw}}' => "DATI STATISTICI AVANZATI (Se disponibili):\n" . (isset($candidates[0]['api_football']) ? json_encode($candidates[0]['api_football']) : "Non disponibili"),
+                '{{historical_context}}' => "📚 CONTESTO STORICO E PRE-MATCH (Intelligence):\n" . (isset($candidates[0]['deep_context']) ? $candidates[0]['deep_context'] : "Non disponibile"),
+                '{{performance_metrics}}' => "📈 PERFORMANCE STORICHE AI (Metriche):\n" . (isset($candidates[0]['performance_metrics']) ? $candidates[0]['performance_metrics'] : "Nessuna metrica disponibile"),
+                '{{ai_lessons}}' => "📚 LEZIONI IMPARATE (Post-Mortem):\n" . (isset($candidates[0]['ai_lessons']) ? $candidates[0]['ai_lessons'] : "Nessuna lezione pertinente"),
+                '{{live_match_data}}' => "🚨 DATI LIVE DEL MATCH:\n" .
+                    "- live_score: " . json_encode($candidates[0]['api_football']['live']['live_score'] ?? []) . "\n" .
+                    "- live_status: " . json_encode($candidates[0]['api_football']['live']['live_status'] ?? []) . "\n" .
+                    "- match_info: " . json_encode($candidates[0]['api_football']['live']['match_info'] ?? []),
+                '{{live_statistics}}' => "📊 STATISTICS LIVE DEL MATCH:\n" . (isset($candidates[0]['api_football']['statistics']) ? json_encode($candidates[0]['api_football']['statistics']) : "Non disponibili"),
+                '{{momentum}}' => "⚡ MOMENTUM (Variazione ultimi 10-15 minuti):\n" . (isset($candidates[0]['api_football']['momentum']) ? $candidates[0]['api_football']['momentum'] : "Dati momentum non ancora disponibili."),
+                '{{live_events}}' => "⚽ EVENTS LIVE DEL MATCH:\n" . (isset($candidates[0]['api_football']['events']) ? json_encode($candidates[0]['api_football']['events']) : "Non disponibili")
+            ];
+
+            $hasPlaceholders = false;
+            foreach(array_keys($mapping) as $key) if(strpos($customPrompt, $key) !== false) $hasPlaceholders = true;
+
+            if ($hasPlaceholders) {
+                $prompt = str_replace(array_keys($mapping), array_values($mapping), $customPrompt);
+            } else {
+                $prompt = $customPrompt . "\n\n" .
+                    implode("\n\n", array_values($mapping));
+            }
+
                 "SYSTEM CONSTRAINTS (MANDATORY):\n" .
                 "1. REGOLA CALCIO: È permessa solo UNA scommessa attiva alla volta per match.\n" .
                 "2. ⚠️ QUOTA MINIMA: 1.25. Se la quota attuale è inferiore ma l'evento è valido, imposta 'odds' a 1.25.\n" .
@@ -128,9 +151,24 @@ class GeminiService
                 "  \"motivation\": \"Sintesi tecnica qui (Menziona SEMPRE i nomi delle squadre e i dati statistici chiave usati per la decisione).\"\n" .
                 "}";
         } else {
-            $prompt = ($options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('dio')) . "\n\n" .
-                $balanceText .
-                "LISTA EVENTI LIVE CANDIDATI:\n" . json_encode($candidates) . "\n\n" .
+            $customPrompt = $options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('dio');
+
+            $mapping = [
+                '{{portfolio_stats}}' => $balanceText,
+                '{{candidates_list}}' => "LISTA EVENTI LIVE CANDIDATI:\n" . json_encode($candidates)
+            ];
+
+            $hasPlaceholders = false;
+            foreach(array_keys($mapping) as $key) if(strpos($customPrompt, $key) !== false) $hasPlaceholders = true;
+
+            if ($hasPlaceholders) {
+                $prompt = str_replace(array_keys($mapping), array_values($mapping), $customPrompt);
+            } else {
+                $prompt = $customPrompt . "\n\n" .
+                    $mapping['{{portfolio_stats}}'] . "\n\n" .
+                    $mapping['{{candidates_list}}'];
+            }
+
                 "SYSTEM CONSTRAINTS (MANDATORY):\n" .
                 "1. QUOTA MINIMA: 1.25.\n" .
                 "2. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON:\n" .
@@ -203,10 +241,25 @@ class GeminiService
                 "- $labelAvailable: " . number_format($options['available_balance'], 2) . "€\n\n";
         }
 
-        $prompt = ($options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('batch')) . "\n\n" .
-            $balanceText .
-            "LISTA EVENTI DA ANALIZZARE:\n" . json_encode($events, JSON_PRETTY_PRINT) . "\n\n" .
-            "SYSTEM CONSTRAINTS:\n" .
+        $customPrompt = $options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('batch');
+
+        $mapping = [
+            '{{portfolio_stats}}' => $balanceText,
+            '{{events_batch}}' => "LISTA EVENTI DA ANALIZZARE:\n" . json_encode($events, JSON_PRETTY_PRINT)
+        ];
+
+        $hasPlaceholders = false;
+        foreach(array_keys($mapping) as $key) if(strpos($customPrompt, $key) !== false) $hasPlaceholders = true;
+
+        if ($hasPlaceholders) {
+            $prompt = str_replace(array_keys($mapping), array_values($mapping), $customPrompt);
+        } else {
+            $prompt = $customPrompt . "\n\n" .
+                $mapping['{{portfolio_stats}}'] . "\n\n" .
+                $mapping['{{events_batch}}'];
+        }
+
+        $prompt .= "\n\nSYSTEM CONSTRAINTS:\n" .
             "1. RISPONDI ESCLUSIVAMENTE CON QUESTO SCHEMA JSON (ARRAY DI OGGETTI):\n" .
             "[\n" .
             "  {\n" .
