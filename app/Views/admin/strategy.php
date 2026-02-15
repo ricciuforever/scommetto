@@ -120,6 +120,36 @@
                 </div>
             </div>
 
+            <!-- Betfair Credentials (Custom) -->
+            <div class="glass p-8 rounded-3xl md:col-span-2">
+                <div class="flex items-center gap-3 mb-6">
+                    <i data-lucide="key" class="text-yellow-500 w-6 h-6"></i>
+                    <h3 class="text-lg font-black italic uppercase text-white">Integrazione Betfair (Credenziali Personali)</h3>
+                </div>
+                <p class="text-[10px] text-gray-400 mb-6 uppercase font-bold tracking-widest italic">
+                    Inserisci qui le tue credenziali Betfair personali se desideri che l'agente operi sul tuo conto invece che su quello di sistema.
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">App Key (LIVE)</label>
+                        <input type="text" name="config[BETFAIR_APP_KEY_LIVE]" value="<?= htmlspecialchars($config['BETFAIR_APP_KEY_LIVE'] ?? '') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-[10px] font-mono outline-none focus:border-blue-500" placeholder="LASCIA VUOTO PER SISTEMA">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">App Key (DELAY)</label>
+                        <input type="text" name="config[BETFAIR_APP_KEY_DELAY]" value="<?= htmlspecialchars($config['BETFAIR_APP_KEY_DELAY'] ?? '') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-[10px] font-mono outline-none focus:border-blue-500" placeholder="LASCIA VUOTO PER SISTEMA">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Username</label>
+                        <input type="text" name="config[BETFAIR_USERNAME]" value="<?= htmlspecialchars($config['BETFAIR_USERNAME'] ?? '') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-[10px] font-mono outline-none focus:border-blue-500" placeholder="LASCIA VUOTO PER SISTEMA">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Password</label>
+                        <input type="password" name="config[BETFAIR_PASSWORD]" value="<?= htmlspecialchars($config['BETFAIR_PASSWORD'] ?? '') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-[10px] font-mono outline-none focus:border-blue-500" placeholder="••••••••">
+                    </div>
+                </div>
+            </div>
+
             <!-- Risk Management -->
             <div class="glass p-8 rounded-3xl">
                 <div class="flex items-center gap-3 mb-6">

@@ -14,8 +14,13 @@ class SettlementService
 
     public function __construct()
     {
-        $this->bf = new BetfairService();
         $this->db = DioDatabase::getInstance()->getConnection();
+
+        // Fetch custom Betfair credentials from agent database
+        $overrides = $this->db->query("SELECT key, value FROM system_state WHERE key LIKE 'BETFAIR_%'")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $overrides = array_filter($overrides);
+
+        $this->bf = new BetfairService($overrides);
     }
 
     /**

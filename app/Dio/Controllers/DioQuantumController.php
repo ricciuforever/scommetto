@@ -19,9 +19,14 @@ class DioQuantumController
 
     public function __construct()
     {
-        $this->bf = new BetfairService();
-        $this->gemini = new GeminiService();
         $this->db = DioDatabase::getInstance()->getConnection();
+
+        // Fetch custom Betfair credentials from agent database
+        $overrides = $this->db->query("SELECT key, value FROM system_state WHERE key LIKE 'BETFAIR_%'")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $overrides = array_filter($overrides);
+
+        $this->bf = new BetfairService($overrides);
+        $this->gemini = new GeminiService();
     }
 
     public function index()
@@ -108,11 +113,13 @@ class DioQuantumController
 
         try {
             // Fetch dynamic config for Dio
-            $strategyPrompt = $this->db->query("SELECT value FROM system_state WHERE key = 'strategy_prompt'")->fetchColumn();
-            $stakeMode = $this->db->query("SELECT value FROM system_state WHERE key = 'stake_mode'")->fetchColumn() ?: 'kelly';
-            $stakeValue = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'stake_value'")->fetchColumn() ?: 0.10);
-            $minConfidence = (int)($this->db->query("SELECT value FROM system_state WHERE key = 'min_confidence'")->fetchColumn() ?: 75);
-            $minStake = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'min_stake'")->fetchColumn() ?: 2.00);
+            $config = $this->db->query("SELECT key, value FROM system_state")->fetchAll(PDO::FETCH_KEY_PAIR);
+            $strategyPrompt = $config['strategy_prompt'] ?? '';
+            $stakeMode = $config['stake_mode'] ?? 'kelly';
+            $stakeValue = (float)($config['stake_value'] ?? 0.10);
+            $minConfidence = (int)($config['min_confidence'] ?? 75);
+            $minStake = (float)($config['min_stake'] ?? 2.00);
+            $operationalMode = $config['operational_mode'] ?? 'virtual';
 
             // 1. Get ALL active sport types with live events
             $eventTypesRes = $this->bf->getEventTypes(['inPlayOnly' => true]);
@@ -209,7 +216,19 @@ class DioQuantumController
 
                             if ($stake >= max(2.00, $minStake)) {
                                 $analysis['stake'] = $stake;
-                                $this->placeVirtualBet($ticker, $analysis);
+
+                                $placed = false;
+                                if ($operationalMode === 'real') {
+                                    $placed = $this->placeRealBet($ticker, $analysis);
+                                } else {
+                                    $this->placeVirtualBet($ticker, $analysis);
+                                    $placed = true;
+                                }
+
+                                if (!$placed) {
+                                    $action = 'pass';
+                                    continue;
+                                }
 
                                 $workingAvailableBalance -= $stake;
                                 $workingTotalBankroll -= $stake;
@@ -357,6 +376,41 @@ class DioQuantumController
 
         $results = json_decode($json, true);
         return is_array($results) ? $results : [];
+    }
+
+    private function placeRealBet($ticker, $analysis)
+    {
+        $marketId = $ticker['marketId'];
+        $selectionId = $analysis['selectionId'];
+        $odds = $analysis['odds'];
+        $stake = $analysis['stake'];
+
+        $res = $this->bf->placeBet($marketId, $selectionId, $odds, $stake);
+
+        if (($res['status'] ?? '') === 'SUCCESS') {
+            $betfairId = $res['instructionReports'][0]['betId'] ?? null;
+
+            $stmt = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, motivation, score, type, betfair_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'real', ?)");
+            $stmt->execute([
+                $ticker['marketId'],
+                $ticker['marketName'],
+                $ticker['event'],
+                $ticker['sport'],
+                $analysis['selectionId'] ?? '',
+                $analysis['advice'] ?? 'Unknown',
+                $analysis['odds'] ?? 0,
+                $analysis['stake'] ?? 0,
+                "Quantum Algo: " . ($analysis['motivation'] ?? ''),
+                $ticker['score'] ?? null,
+                $betfairId
+            ]);
+
+            // Invalidate cache
+            $this->cachedPortfolio = null;
+            return true;
+        }
+
+        return false;
     }
 
     private function placeVirtualBet($ticker, $analysis)
