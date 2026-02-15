@@ -14,8 +14,9 @@ class BrainController
 
     public function __construct()
     {
-        $this->gemini = new GeminiService();
         $this->db = DioDatabase::getInstance()->getConnection();
+        $apiKey = $this->db->query("SELECT value FROM system_state WHERE key = 'GEMINI_API_KEY'")->fetchColumn();
+        $this->gemini = new GeminiService($apiKey ?: null);
     }
 
     /**

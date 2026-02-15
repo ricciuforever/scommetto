@@ -9,9 +9,9 @@ class GeminiService
 {
     private $apiKey;
 
-    public function __construct()
+    public function __construct($customApiKey = null)
     {
-        $this->apiKey = Config::get('GEMINI_API_KEY');
+        $this->apiKey = $customApiKey ?: Config::get('GEMINI_API_KEY');
     }
 
     public function getDefaultStrategyPrompt($agent)

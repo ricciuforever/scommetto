@@ -90,6 +90,7 @@ class DioDatabase
             'stake_mode' => 'kelly',
             'stake_value' => '0.10',
             'min_confidence' => '80',
+            'min_liquidity' => '2000.00',
             'daily_stop_loss' => '100.00',
             'virtual_balance' => '100.00',
             'operational_mode' => 'virtual'

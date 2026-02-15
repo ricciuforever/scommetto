@@ -26,11 +26,12 @@ class GiaNikController
         set_time_limit(600);
         $this->db = GiaNikDatabase::getInstance()->getConnection();
 
-        // Fetch custom Betfair credentials from agent database
-        $overrides = $this->db->query("SELECT key, value FROM system_state WHERE key LIKE 'BETFAIR_%'")->fetchAll(PDO::FETCH_KEY_PAIR);
-        $overrides = array_filter($overrides);
+        // Fetch custom credentials from agent database
+        $config = $this->db->query("SELECT key, value FROM system_state WHERE key LIKE 'BETFAIR_%' OR key = 'GEMINI_API_KEY'")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $overrides = array_filter($config);
 
         $this->bf = new BetfairService($overrides, 'gianik');
+        $this->gemini_key = $config['GEMINI_API_KEY'] ?? null;
         $this->footballData = new FootballDataService();
         $this->intelligence = new IntelligenceService();
 
@@ -729,7 +730,7 @@ class GiaNikController
                 $event['ai_lessons'] = $this->getRecentLessons($apiData);
             }
 
-            $gemini = new GeminiService();
+            $gemini = new GeminiService($this->gemini_key);
 
             // Fetch Dynamic Config
             $strategyPrompt = $this->db->query("SELECT value FROM system_state WHERE key = 'strategy_prompt'")->fetchColumn();
@@ -1184,7 +1185,7 @@ class GiaNikController
             }
 
             if (!empty($batchEvents)) {
-                $gemini = new GeminiService();
+                $gemini = new GeminiService($this->gemini_key);
                 $predictionRaw = $gemini->analyzeBatch($batchEvents, [
                     'is_gianik' => true,
                     'available_balance' => $activeBalance['available'],
@@ -2034,7 +2035,7 @@ class GiaNikController
                 return;
             }
 
-            $gemini = new GeminiService();
+            $gemini = new GeminiService($this->gemini_key);
             $results = [];
 
             foreach ($lostBets as $bet) {
