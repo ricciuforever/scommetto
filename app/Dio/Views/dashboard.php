@@ -335,8 +335,11 @@ if (!$isEmbedded) {
                     <div>
                         <p class="text-indigo-400 font-bold uppercase mb-1">Sport Scansionati</p>
                         <div class="flex flex-wrap gap-1">
-                            <?php foreach (($lastScanTrace['scanned_sports'] ?? []) as $s): ?>
-                                <span class="px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded"><?php echo $s; ?></span>
+                            <?php foreach (($lastScanTrace['scanned_sports'] ?? []) as $s):
+                                $details = $lastScanTrace['scanned_details'][$s] ?? null;
+                                $label = $s . ($details ? " ({$details['events']}/{$details['markets']})" : "");
+                            ?>
+                                <span class="px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded"><?php echo $label; ?></span>
                             <?php endforeach; ?>
                         </div>
                     </div>

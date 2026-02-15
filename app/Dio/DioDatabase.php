@@ -93,7 +93,8 @@ class DioDatabase
             'min_liquidity' => '5000.00',
             'daily_stop_loss' => '100.00',
             'virtual_balance' => '100.00',
-            'operational_mode' => 'virtual'
+            'operational_mode' => 'virtual',
+            'target_sports' => '1'
         ];
 
         foreach ($defaults as $key => $val) {

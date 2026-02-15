@@ -251,6 +251,11 @@ class AdminController
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($_POST['config'] as $key => $val) {
+                // Handle array inputs (e.g. checkboxes)
+                if (is_array($val)) {
+                    $val = implode(',', $val);
+                }
+
                 // Validation for min_stake
                 if ($key === 'min_stake' && (float)$val < 2.0) {
                     $val = '2.00';

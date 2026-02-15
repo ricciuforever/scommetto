@@ -126,11 +126,17 @@ class DioQuantumController
     {
         $this->sendJsonHeader();
         $liveScores = [];
-        $targetSports = [1, 2, 5, 7522]; // Soccer, Tennis, Rugby Union, Basketball
+
+        // Fetch dynamic config for Dio
+        $config = $this->db->query("SELECT key, value FROM system_state")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $targetSportsStr = $config['target_sports'] ?? '1'; // Default only soccer
+        $targetSports = array_map('intval', explode(',', $targetSportsStr));
+
         $trace = [
             'timestamp' => date('Y-m-d H:i:s'),
             'target_sports' => $targetSports,
             'scanned_sports' => [],
+            'scanned_details' => [],
             'found_events' => 0,
             'found_markets' => 0,
             'skipped_reasons' => [],
@@ -169,8 +175,6 @@ class DioQuantumController
 
         try {
             file_put_contents(\App\Config\Config::DATA_PATH . 'dio_last_scan.json', json_encode($trace, JSON_PRETTY_PRINT));
-            // Fetch dynamic config for Dio
-            $config = $this->db->query("SELECT key, value FROM system_state")->fetchAll(PDO::FETCH_KEY_PAIR);
             $strategyPrompt = $config['strategy_prompt'] ?? '';
             $stakeMode = $config['stake_mode'] ?? 'kelly';
             $stakeValue = (float)($config['stake_value'] ?? 0.10);
@@ -192,12 +196,13 @@ class DioQuantumController
 
             foreach ($eventTypes as $sportType) {
                 $sportId = (int)$sportType['eventType']['id'];
-                $sportName = $sportType['eventType']['name'];
+                $sportName = $this->standardizeSportName($sportType['eventType']['name']);
 
                 // Filter for requested sports
                 if (!in_array($sportId, $targetSports)) continue;
 
                 $trace['scanned_sports'][] = $sportName;
+                $trace['scanned_details'][$sportName] = ['events' => 0, 'markets' => 0];
 
                 // 2. Get Live Events for this sport
                 $liveEventsRes = $this->bf->getLiveEvents([$sportId]);
@@ -209,11 +214,23 @@ class DioQuantumController
                 }
 
                 $trace['found_events'] += count($events);
+                $trace['scanned_details'][$sportName]['events'] = count($events);
                 $eventIds = array_map(fn($e) => $e['event']['id'], $events);
 
-                // 3. Get Market Catalogues (Higher limit to scan more events)
-                $cataloguesRes = $this->bf->getMarketCatalogues($eventIds, 250);
+                // 3. Get Market Catalogues (Explicit types for better discovery on .it)
+                $marketTypes = [];
+                if ($sportId === 1) $marketTypes = ['MATCH_ODDS', 'OVER_UNDER_25', 'BOTH_TEAMS_TO_SCORE'];
+                elseif ($sportId === 2) $marketTypes = ['MATCH_ODDS'];
+                elseif ($sportId === 7522) $marketTypes = ['MATCH_ODDS', 'MONEYLINE'];
+
+                $cataloguesRes = $this->bf->getMarketCatalogues($eventIds, 250, $marketTypes, 'FIRST_TO_START');
                 $catalogues = $cataloguesRes['result'] ?? [];
+
+                if (empty($catalogues)) {
+                    // Fallback broad search if explicit types failed
+                    $cataloguesRes = $this->bf->getMarketCatalogues($eventIds, 150, [], 'FIRST_TO_START');
+                    $catalogues = $cataloguesRes['result'] ?? [];
+                }
 
                 if (empty($catalogues)) {
                     $trace['skipped_reasons'][] = "[$sportName] Nessun catalogo mercati trovato";
@@ -221,6 +238,7 @@ class DioQuantumController
                 }
 
                 $trace['found_markets'] += count($catalogues);
+                $trace['scanned_details'][$sportName]['markets'] = count($catalogues);
 
                 $marketIds = array_map(fn($m) => $m['marketId'], $catalogues);
 
@@ -395,8 +413,25 @@ class DioQuantumController
         }
     }
 
+    private function standardizeSportName(string $name): string
+    {
+        $name = trim(strtolower($name));
+        $map = [
+            'calcio' => 'Soccer',
+            'football' => 'Soccer',
+            'soccer' => 'Soccer',
+            'tennis' => 'Tennis',
+            'pallacanestro' => 'Basketball',
+            'basketball' => 'Basketball',
+            'rugby union' => 'Rugby Union',
+            'rugby' => 'Rugby Union'
+        ];
+        return $map[$name] ?? ucfirst($name);
+    }
+
     private function normalizeMarketData($book, $mc, $sportName)
     {
+        $sportName = $this->standardizeSportName($sportName);
         $runners = [];
         $totalBack = 0;
         foreach ($book['runners'] as $runner) {
@@ -734,7 +769,7 @@ class DioQuantumController
                         'settledDate' => $o['settledDate'] ?? null,
                         'marketName' => $o['itemDescription']['marketDesc'] ?? null,
                         'eventName' => $o['itemDescription']['eventDesc'] ?? null,
-                        'sport' => $o['itemDescription']['eventTypeDesc'] ?? null,
+                    'sport' => $this->standardizeSportName($o['itemDescription']['eventTypeDesc'] ?? 'Unknown'),
                         'runnerName' => $o['itemDescription']['runnerDesc'] ?? null
                     ];
                 }
