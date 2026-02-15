@@ -219,6 +219,16 @@ class DioQuantumController
                 $liveEventsRes = $this->bf->getLiveEvents([$sportId]);
                 $events = $liveEventsRes['result'] ?? [];
 
+                // Filter out events with active pending bets early to save tokens
+                $events = array_filter($events, function($e) use (&$trace) {
+                    $name = $e['event']['name'] ?? '';
+                    if ($this->isMatchActiveInDio($name)) {
+                        $trace['skipped_reasons'][] = "Match già attivo: " . $name;
+                        return false;
+                    }
+                    return true;
+                });
+
                 if (empty($events)) {
                     $trace['skipped_reasons'][] = "[$sportName] Nessun evento live trovato";
                     continue;
@@ -377,6 +387,14 @@ class DioQuantumController
                                 } else {
                                     $this->placeVirtualBet($ticker, $analysis);
                                     $placed = true;
+                                }
+
+                                // Double-check for active match before placing to prevent race conditions
+                                if ($this->isMatchActiveInDio($ticker['event'])) {
+                                    $action = 'SKIP_ACTIVE_RACE';
+                                    $analysis['motivation'] .= " [SKIP: Match activated during analysis]";
+                                    $this->logActivity($ticker, $analysis, $action);
+                                    continue;
                                 }
 
                                 if (!$placed) {

@@ -678,6 +678,15 @@ class GiaNikController
             if ($event['sport'] === 'Soccer' || $event['sport'] === 'Football') {
                 // Pass the initial market book for fallback extraction
                 $mainBook = $booksMap[$marketId] ?? null;
+
+                // LIQUIDITY CHECK: Filter low liquidity markets to save tokens
+                $liquidity = (float)($mainBook['totalMatched'] ?? 0);
+                if ($liquidity < $minLiquidity) {
+                    $reasoning = "Liquidità insufficiente ($liquidity € < " . number_format($minLiquidity, 0, '', '') . " €). Analisi manuale annullata per risparmio token.";
+                    require __DIR__ . '/../Views/partials/modals/gianik_analysis.php';
+                    return;
+                }
+
                 $apiData = $this->enrichWithApiData($event['event'], $event['sport'], null, $event['competition'], $mainBook);
                 $event['api_football'] = $apiData;
 
@@ -993,6 +1002,16 @@ class GiaNikController
                 return;
             }
 
+            // Filter out events with active pending bets early to save tokens
+            $events = array_filter($events, function($e) {
+                return !$this->isBetAlreadyPendingForMatch(null, $e['event']['name'] ?? '');
+            });
+
+            if (empty($events)) {
+                echo json_encode(['status' => 'success', 'message' => 'Nessun evento live (tutti già attivi)']);
+                return;
+            }
+
             $results['found_on_betfair'] = count($events);
 
             $eventIds = array_map(fn($e) => $e['event']['id'], $events);
@@ -1258,6 +1277,11 @@ class GiaNikController
 
                             $runners = array_map(fn($r) => ['runnerName' => $r['name'], 'selectionId' => $r['selectionId']], $selectedMarket['runners']);
                             $selectionId = $this->bf->mapAdviceToSelection($analysis['advice'], $runners);
+
+                            // Double check before execution: Is match active? (Race Condition)
+                            if ($this->isBetAlreadyPendingForMatch($meta['api_data']['fixture']['id'] ?? null, $eventName)) {
+                                continue;
+                            }
 
                             if ($selectionId) {
                                 if (($analysis['odds'] ?? 0) < Config::MIN_BETFAIR_ODDS) $analysis['odds'] = Config::MIN_BETFAIR_ODDS;
