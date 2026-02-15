@@ -20,7 +20,7 @@ class SettlementService
         $overrides = $this->db->query("SELECT key, value FROM system_state WHERE key LIKE 'BETFAIR_%'")->fetchAll(PDO::FETCH_KEY_PAIR);
         $overrides = array_filter($overrides);
 
-        $this->bf = new BetfairService($overrides);
+        $this->bf = new BetfairService($overrides, 'dio');
     }
 
     /**

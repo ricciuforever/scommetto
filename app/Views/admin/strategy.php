@@ -130,7 +130,7 @@
                     Inserisci qui le tue credenziali Betfair personali se desideri che l'agente operi sul tuo conto invece che su quello di sistema.
                 </p>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div>
                         <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">App Key (LIVE)</label>
                         <input type="text" name="config[BETFAIR_APP_KEY_LIVE]" value="<?= htmlspecialchars($config['BETFAIR_APP_KEY_LIVE'] ?? '') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-[10px] font-mono outline-none focus:border-blue-500" placeholder="LASCIA VUOTO PER SISTEMA">
@@ -146,6 +146,10 @@
                     <div>
                         <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Password</label>
                         <input type="password" name="config[BETFAIR_PASSWORD]" value="<?= htmlspecialchars($config['BETFAIR_PASSWORD'] ?? '') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-[10px] font-mono outline-none focus:border-blue-500" placeholder="••••••••">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Identity SSO URL (Opzionale)</label>
+                        <input type="text" name="config[BETFAIR_SSO_URL]" value="<?= htmlspecialchars($config['BETFAIR_SSO_URL'] ?? '') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-[10px] font-mono outline-none focus:border-blue-500" placeholder="Es: https://identitysso.betfair.it/api/certlogin">
                     </div>
                 </div>
             </div>

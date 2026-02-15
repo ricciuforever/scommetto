@@ -23,22 +23,25 @@ class BetfairService
     private $apiUrl = 'https://api.betfair.com/exchange/betting/json-rpc/v1';
     private $lastRequestTime = 0;
     private $logFile;
+    private $agentId;
 
-    public function __construct(array $overrides = [])
+    public function __construct(array $overrides = [], string $agentId = 'default')
     {
+        $this->agentId = $agentId;
         // Prioritize overrides, then generic key, then Delayed Key as requested
         $this->appKey = $overrides['BETFAIR_APP_KEY_LIVE'] ?? $overrides['BETFAIR_APP_KEY_DELAY'] ?? (Config::get('BETFAIR_APP_KEY') ?: (Config::get('BETFAIR_APP_KEY_DELAY') ?: Config::get('BETFAIR_APP_KEY_LIVE')));
         $this->username = $overrides['BETFAIR_USERNAME'] ?? Config::get('BETFAIR_USERNAME');
         $this->password = $overrides['BETFAIR_PASSWORD'] ?? Config::get('BETFAIR_PASSWORD');
         $this->certPath = Config::get('BETFAIR_CERT_PATH');
         $this->keyPath = Config::get('BETFAIR_KEY_PATH');
-        $this->ssoUrl = Config::get('BETFAIR_SSO_URL', 'https://identitysso.betfair.it/api/certlogin');
+        $this->ssoUrl = $overrides['BETFAIR_SSO_URL'] ?? Config::get('BETFAIR_SSO_URL', 'https://identitysso.betfair.it/api/certlogin');
         $this->keepAliveUrl = 'https://identitysso.betfair.it/api/keepAlive';
 
-        $this->sessionFile = Config::DATA_PATH . 'betfair_session.txt';
-        $this->loginAttemptFile = Config::DATA_PATH . 'last_login_attempt.txt';
-        $this->activityFile = Config::DATA_PATH . 'betfair_last_activity.txt';
-        $this->lockFile = Config::DATA_PATH . 'betfair_login.lock';
+        $suffix = $agentId === 'default' ? '' : '_' . $agentId;
+        $this->sessionFile = Config::DATA_PATH . 'betfair_session' . $suffix . '.txt';
+        $this->loginAttemptFile = Config::DATA_PATH . 'last_login_attempt' . $suffix . '.txt';
+        $this->activityFile = Config::DATA_PATH . 'betfair_last_activity' . $suffix . '.txt';
+        $this->lockFile = Config::DATA_PATH . 'betfair_login' . $suffix . '.lock';
 
         // Carica token persistente o da configurazione
         $this->sessionToken = $this->loadPersistentToken() ?: Config::get('BETFAIR_SESSION_TOKEN');

@@ -81,6 +81,9 @@ class DioDatabase
             } catch (\Exception $e) {}
         }
 
+        // Migration: Ensure all bets have a type (legacy)
+        $this->connection->exec("UPDATE bets SET type = 'virtual' WHERE type IS NULL OR type = ''");
+
         // Ensure default dynamic configuration
         $defaults = [
             'strategy_prompt' => (new \App\Services\GeminiService())->getDefaultStrategyPrompt('dio'),

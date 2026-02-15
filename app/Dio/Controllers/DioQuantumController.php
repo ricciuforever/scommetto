@@ -25,7 +25,7 @@ class DioQuantumController
         $overrides = $this->db->query("SELECT key, value FROM system_state WHERE key LIKE 'BETFAIR_%'")->fetchAll(PDO::FETCH_KEY_PAIR);
         $overrides = array_filter($overrides);
 
-        $this->bf = new BetfairService($overrides);
+        $this->bf = new BetfairService($overrides, 'dio');
         $this->gemini = new GeminiService();
     }
 
@@ -34,6 +34,10 @@ class DioQuantumController
         $pageTitle = 'Scommetto.AI - Dio Quantum';
 
         $operationalMode = $this->db->query("SELECT value FROM system_state WHERE key = 'operational_mode'")->fetchColumn() ?: 'virtual';
+
+        if ($operationalMode === 'real') {
+            $this->syncWithBetfair();
+        }
 
         $actualTotal = null;
         if ($operationalMode === 'real') {
@@ -580,6 +584,91 @@ class DioQuantumController
     {
         $portfolio = $this->recalculatePortfolio();
         return $portfolio['history'];
+    }
+
+    public function syncWithBetfair()
+    {
+        try {
+            if (!$this->bf->isConfigured()) return;
+
+            $clearedRes = $this->bf->getClearedOrders();
+            $clearedOrders = $clearedRes['clearedOrders'] ?? [];
+
+            $currentRes = $this->bf->getCurrentOrders();
+            $currentOrders = $currentRes['currentOrders'] ?? [];
+
+            // Target Sports for Dio
+            $targetSports = ['Soccer', 'Tennis', 'Rugby Union', 'Basketball'];
+
+            $allBfOrders = [];
+            foreach ($currentOrders as $o) {
+                $allBfOrders[$o['betId']] = [
+                    'betId' => $o['betId'],
+                    'marketId' => $o['marketId'],
+                    'selectionId' => $o['selectionId'],
+                    'odds' => $o['priceSize']['price'] ?? 0,
+                    'stake' => $o['priceSize']['size'] ?? 0,
+                    'status' => 'pending',
+                    'placedDate' => $o['placedDate'] ?? null,
+                ];
+            }
+
+            foreach ($clearedRes['clearedOrders'] ?? [] as $o) {
+                $allBfOrders[$o['betId']] = [
+                    'betId' => $o['betId'],
+                    'marketId' => $o['marketId'],
+                    'selectionId' => $o['selectionId'],
+                    'odds' => $o['priceRequested'] ?? 0,
+                    'stake' => $o['sizeSettled'] ?? 0,
+                    'status' => ($o['betOutcome'] === 'WIN' || $o['betOutcome'] === 'WON') ? 'won' : 'lost',
+                    'profit' => (float)($o['profit'] ?? 0),
+                    'placedDate' => $o['placedDate'] ?? null,
+                    'settledDate' => $o['settledDate'] ?? null,
+                    'marketName' => $o['itemDescription']['marketDesc'] ?? null,
+                    'eventName' => $o['itemDescription']['eventDesc'] ?? null,
+                    'sport' => $o['itemDescription']['eventTypeDesc'] ?? null
+                ];
+            }
+
+            foreach ($allBfOrders as $betId => $o) {
+                // Filter by Dio target sports if possible
+                if (isset($o['sport']) && !in_array($o['sport'], $targetSports)) continue;
+
+                $altBetId = (strpos($betId, '1:') === 0) ? substr($betId, 2) : '1:' . $betId;
+                $stmt = $this->db->prepare("SELECT id FROM bets WHERE betfair_id = ? OR betfair_id = ?");
+                $stmt->execute([$betId, $altBetId]);
+                $dbId = $stmt->fetchColumn();
+
+                $placedDate = isset($o['placedDate']) ? gmdate('Y-m-d H:i:s', strtotime($o['placedDate'])) : gmdate('Y-m-d H:i:s');
+                $settledDate = isset($o['settledDate']) ? gmdate('Y-m-d H:i:s', strtotime($o['settledDate'])) : null;
+
+                if ($dbId) {
+                    $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = ?, betfair_id = ? WHERE id = ?");
+                    $stmtUpdate->execute([$o['status'], $o['profit'] ?? 0, $settledDate, $betId, $dbId]);
+                } else {
+                    // Dio import only if it looks like a Quantum trade or we are importing history
+                    // For now, let's import ALL trades from target sports to populate history correctly
+                    $stmtInsert = $this->db->prepare("INSERT INTO bets (market_id, market_name, event_name, sport, selection_id, runner_name, odds, stake, status, type, betfair_id, profit, settled_at, created_at, motivation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'real', ?, ?, ?, ?, 'Importato da Betfair')");
+                    $stmtInsert->execute([
+                        $o['marketId'],
+                        $o['marketName'] ?? 'Unknown',
+                        $o['eventName'] ?? 'Unknown',
+                        $o['sport'] ?? 'Unknown',
+                        $o['selectionId'],
+                        $o['runnerName'] ?? 'Unknown',
+                        $o['odds'],
+                        $o['stake'],
+                        $o['status'],
+                        $betId,
+                        $o['profit'] ?? 0,
+                        $settledDate,
+                        $placedDate
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log("Dio Sync Error: " . $e->getMessage());
+        }
     }
 
     private function recalculatePortfolio($actualTotal = null)
