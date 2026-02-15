@@ -503,17 +503,27 @@ class DioQuantumController
             $home = $scoreData['home'] ?? [];
             $away = $scoreData['away'] ?? [];
 
-            // Attempt to find the main score (Goals for Soccer, Sets for Tennis)
-            // Try 'score', then 'numberOfSets', then 'sets'
+            // 1. Try Nested Keys (standard doc)
             $sHome = $home['score'] ?? $home['numberOfSets'] ?? $home['sets'] ?? null;
             $sAway = $away['score'] ?? $away['numberOfSets'] ?? $away['sets'] ?? null;
+
+            // 2. Try Flat Keys (suggested feedback)
+            if ($sHome === null)
+                $sHome = $scoreData['homeScore'] ?? $scoreData['homeSets'] ?? null;
+            if ($sAway === null)
+                $sAway = $scoreData['awayScore'] ?? $scoreData['awaySets'] ?? null;
 
             if ($sHome !== null && $sAway !== null) {
                 $score = "$sHome - $sAway";
 
-                // Add details for Tennis (Games) if available
-                if ($sportName === 'Tennis' && isset($home['games']) && isset($away['games'])) {
+                // Add details: Games or Sets (if not main score)
+                // Nested 'games'
+                if ($sportName === 'Tennis' && isset($home['games'])) {
                     $score = "Sets: $score (G: {$home['games']}-{$away['games']})";
+                }
+                // Flat 'homeSets' (if main score was something else, or just to append)
+                elseif (isset($scoreData['homeSets']) && strpos($score, 'Sets') === false) {
+                    $score .= " (Sets: {$scoreData['homeSets']}-{$scoreData['awaySets']})";
                 }
             }
         }
