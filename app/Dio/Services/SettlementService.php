@@ -50,7 +50,7 @@ class SettlementService
             foreach ($batch as $bet) {
                 $book = $booksMap[$bet['market_id']] ?? null;
 
-                if ($book && $book['status'] === 'CLOSED') {
+                if ($book['status'] === 'CLOSED') {
                     $winnerSelectionId = null;
                     foreach ($book['runners'] as $runner) {
                         if ($runner['status'] === 'WINNER') {
@@ -73,6 +73,13 @@ class SettlementService
 
                         $settledCount++;
                     }
+                } else {
+                    // Market is OPEN/SUSPENDED - Update Score for Dashboard
+                    $score = $this->extractScore($book);
+                    if ($score && $score !== $bet['score']) {
+                        $upd = $this->db->prepare("UPDATE bets SET score = ? WHERE id = ?");
+                        $upd->execute([$score, $bet['id']]);
+                    }
                 }
             }
         }
@@ -84,5 +91,28 @@ class SettlementService
     {
         $stmt = $this->db->prepare("UPDATE system_state SET value = value + ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'virtual_balance'");
         $stmt->execute([number_format($amount, 2, '.', '')]);
+    }
+
+    private function extractScore($book)
+    {
+        $scoreData = $book['marketDefinition']['score'] ?? null;
+        if (!$scoreData)
+            return null;
+
+        // Generic Home - Away
+        if (isset($scoreData['home']['score']) && isset($scoreData['away']['score'])) {
+            $score = $scoreData['home']['score'] . " - " . $scoreData['away']['score'];
+
+            // Tennis Specific
+            if (isset($scoreData['home']['numberOfSets'])) {
+                $homeSets = $scoreData['home']['numberOfSets'] ?? 0;
+                $awaySets = $scoreData['away']['numberOfSets'] ?? 0;
+                $homeGames = $scoreData['home']['games'] ?? 0;
+                $awayGames = $scoreData['away']['games'] ?? 0;
+                $score = "Sets: $homeSets-$awaySets (G: $homeGames-$awayGames)";
+            }
+            return $score;
+        }
+        return null;
     }
 }
