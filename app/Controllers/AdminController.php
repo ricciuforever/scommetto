@@ -82,31 +82,25 @@ class AdminController
         try {
             if ($dbConfig['driver'] === 'sqlite') {
                 $pdo = new PDO("sqlite:" . $dbConfig['path']);
-                $pkName = 'rowid';
-                $pkAlias = 'rowid as _id';
             } else {
                 $pdo = Database::getInstance()->getConnection();
-                $pkName = 'id';
-                $pkAlias = 'id as _id';
             }
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         } catch (\Exception $e) {
             die("Errore Criticale DB: " . $e->getMessage());
         }
 
+        $isSqlite = ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite');
+
         $message = "";
         $action = $_POST['action'] ?? ($_GET['action'] ?? 'list');
         $currentTable = $_GET['table'] ?? '';
 
         // Fetch Tables first for whitelisting
-        if ($dbConfig['driver'] === 'sqlite') {
+        if ($isSqlite) {
             $tables = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
         } else {
-            if (Database::getInstance()->isSQLite()) {
-                 $tables = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
-            } else {
-                 $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
-            }
+            $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
         }
 
         // Security: Whitelist Table Name
@@ -115,15 +109,38 @@ class AdminController
         }
         if (!$currentTable && !empty($tables)) $currentTable = $tables[0];
 
-        // Fetch valid columns for the current table to prevent SQL injection in updates/searches
+        // Fetch valid columns and Primary Key
         $validColumns = [];
+        $pkName = $isSqlite ? 'rowid' : 'id';
+        $pkAlias = $isSqlite ? 'rowid as _id' : 'id as _id';
+
         if ($currentTable) {
-            if ($dbConfig['driver'] === 'sqlite') {
-                 $colsInfo = $pdo->query("PRAGMA table_info(`$currentTable`)")->fetchAll(PDO::FETCH_ASSOC);
-                 $validColumns = array_column($colsInfo, 'name');
+            if ($isSqlite) {
+                $colsInfo = $pdo->query("PRAGMA table_info(`$currentTable`)")->fetchAll(PDO::FETCH_ASSOC);
+                $validColumns = array_column($colsInfo, 'name');
             } else {
-                 // DESCRIBE works for MySQL and is standard
-                 $validColumns = $pdo->query("DESCRIBE `$currentTable`")->fetchAll(PDO::FETCH_COLUMN);
+                try {
+                    $validColumns = $pdo->query("DESCRIBE `$currentTable`")->fetchAll(PDO::FETCH_COLUMN);
+                    // Try to detect real PK for MySQL
+                    $pkInfo = $pdo->query("SHOW KEYS FROM `$currentTable` WHERE Key_name = 'PRIMARY'")->fetch();
+                    if ($pkInfo) {
+                        $pkName = $pkInfo['Column_name'];
+                        $pkAlias = "`$pkName` as _id";
+                    }
+                } catch (\Exception $e) {
+                    // Fallback for column detection
+                    $stmt = $pdo->query("SELECT * FROM `$currentTable` LIMIT 0");
+                    for ($i = 0; $i < $stmt->columnCount(); $i++) {
+                        $meta = $stmt->getColumnMeta($i);
+                        $validColumns[] = $meta['name'];
+                    }
+                }
+
+                // Final check for PK in validColumns for MySQL
+                if (!in_array($pkName, $validColumns) && !empty($validColumns)) {
+                    $pkName = $validColumns[0];
+                    $pkAlias = "`$pkName` as _id";
+                }
             }
         }
 
@@ -141,7 +158,7 @@ class AdminController
                 }
                 if (!empty($fields)) {
                     $params[] = $id;
-                    $sql = "UPDATE `$currentTable` SET " . implode(', ', $fields) . " WHERE $pkName = ?";
+                    $sql = "UPDATE `$currentTable` SET " . implode(', ', $fields) . " WHERE `$pkName` = ?";
                     try {
                         $pdo->prepare($sql)->execute($params);
                         $message = "✅ Record aggiornato con successo.";
@@ -152,7 +169,7 @@ class AdminController
 
         if ($action === 'delete' && isset($_GET['id']) && $dbConfig['editable'] && $currentTable) {
             try {
-                $pdo->prepare("DELETE FROM `$currentTable` WHERE $pkName = ?")->execute([$_GET['id']]);
+                $pdo->prepare("DELETE FROM `$currentTable` WHERE `$pkName` = ?")->execute([$_GET['id']]);
                 $message = "🗑️ Record eliminato.";
             } catch (\Exception $e) { $message = "❌ Errore Delete: " . $e->getMessage(); }
         }
@@ -180,20 +197,14 @@ class AdminController
                 $totalRows = $pdo->query("SELECT COUNT(*) FROM `$currentTable` $whereClause")->fetchColumn();
 
                 $orderBy = "";
-                if ($dbConfig['driver'] === 'sqlite') {
+                if ($pkName && in_array($pkName, $validColumns)) {
+                    $orderBy = "ORDER BY `$pkName` DESC";
+                } elseif ($isSqlite) {
                     $orderBy = "ORDER BY rowid DESC";
-                } else {
-                    if (in_array('id', $validColumns)) {
-                        $orderBy = "ORDER BY id DESC";
-                        $pkAlias = "id as _id";
-                    } else {
-                        $pkAlias = "NULL as _id";
-                    }
                 }
 
-                // MySQL/MariaDB fix: SELECT *, col requires table prefix in some versions
-                // To be safe and compatible with both:
-                if ($dbConfig['driver'] === 'sqlite') {
+                // Query construction
+                if ($isSqlite) {
                     $sql = "SELECT $pkAlias, * FROM `$currentTable` $whereClause $orderBy LIMIT $limit OFFSET $offset";
                 } else {
                     $sql = "SELECT `$currentTable`.*, $pkAlias FROM `$currentTable` $whereClause $orderBy LIMIT $limit OFFSET $offset";

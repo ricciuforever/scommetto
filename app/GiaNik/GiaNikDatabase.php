@@ -47,6 +47,15 @@ class GiaNikDatabase
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
+        // Repair system_state if updated_at is missing (legacy)
+        $stmtState = $this->connection->query("PRAGMA table_info(system_state)");
+        $existingStateCols = $stmtState->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (!in_array('updated_at', $existingStateCols)) {
+            try {
+                $this->connection->exec("ALTER TABLE system_state ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP");
+            } catch (\Exception $e) {}
+        }
+
         // Ensure default dynamic configuration
         $defaults = [
             'strategy_prompt' => (new \App\Services\GeminiService())->getDefaultStrategyPrompt('gianik'),
