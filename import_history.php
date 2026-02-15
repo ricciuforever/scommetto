@@ -8,58 +8,84 @@ require_once BASE_PATH . 'bootstrap.php';
 
 use App\Services\BetfairService;
 use App\Dio\DioDatabase;
+use App\Config\Config;
 
 echo "<pre>";
-echo "--- STARTING HISTORY IMPORT (BROWSER MODE - ROOT) ---\n";
+echo "--- HISTORY IMPORT DIAGNOSTIC TOOL ---\n";
+echo "--- STARTING AUTH DEBUG ---\n";
 
+// 1. Environment Checks
+$dataPath = Config::DATA_PATH;
+echo "Data Path: $dataPath\n";
+echo "Data Dir Exists: " . (is_dir($dataPath) ? "YES" : "NO") . "\n";
+echo "Data Dir Writable: " . (is_writable($dataPath) ? "YES" : "NO") . "\n";
+
+$certPath = Config::get('BETFAIR_CERT_PATH');
+$keyPath = Config::get('BETFAIR_KEY_PATH');
+echo "Cert Path: $certPath (" . (file_exists($certPath) ? "FOUND" : "MISSING") . ")\n";
+echo "Key Path: $keyPath (" . (file_exists($keyPath) ? "FOUND" : "MISSING") . ")\n";
+
+// 2. Explicit Service Login Debug
 $bf = new BetfairService();
-$db = DioDatabase::getInstance()->getConnection();
 
-// 1. Force Auth / Check Session
-echo "Checking Session...\n";
+echo "\nAttempting BetfairService->authenticate()...\n";
+// Temporarily enable debug logging to screen if possible, or just read the result
 $token = $bf->authenticate();
+
 if (!$token) {
-    echo "Session invalid/missing. Attempting explicit login...\n";
-    // We expect authenticate() to try login. Check logs if this fails.
-    echo "Login failed. Please check logs/betfair_debug.log.\n";
+    echo "Authenticate() returned FALSE/NULL.\n";
+    echo "Check logs/betfair_debug.log for details.\n";
+
+    // Try to read the last lines of the log
+    $logFile = BASE_PATH . 'logs/betfair_debug.log';
+    if (file_exists($logFile)) {
+        echo "\n--- TAIL OF BETFAIR DEBUG LOG ---\n";
+        $lines = file($logFile);
+        $tail = array_slice($lines, -20);
+        foreach ($tail as $line) {
+            echo htmlspecialchars($line);
+        }
+        echo "--- END LOG ---\n";
+    } else {
+        echo "Log file not found at $logFile\n";
+    }
+
+    die("\nCRITICAL: Authentication failed. Cannot proceed with import.\n");
 } else {
-    echo "Session Token: " . substr($token, 0, 10) . "...\n";
+    echo "Authentication SUCCESS! Token: " . substr($token, 0, 10) . "...\n";
 }
 
-// 2. Fetch History (No Date Filter)
-echo "\nFetching ALL Cleared Orders (No Date Filter)...\n";
+// 3. Import Logic (Only if Auth Success)
+echo "\n--- STARTING IMPORT LOGIC ---\n";
+$db = DioDatabase::getInstance()->getConnection();
 
+echo "\nFetching ALL Cleared Orders (No Date Filter)...\n";
 $allOrders = [];
 $fromRecord = 0;
-$maxPages = 20; // Safety limit
+$maxPages = 20;
 
 while ($maxPages-- > 0) {
-    echo "Fetching page starting at $fromRecord...\n";
-    // PASSING null for startDate to get everything
+    echo "Fetching page starting at $fromRecord... ";
     $res = $bf->getClearedOrders(false, null, $fromRecord);
 
     if (isset($res['error'])) {
-        echo "API Error: " . json_encode($res['error']) . "\n";
-        // If INVALID_SESSION, we must stop
-        if (($res['error']['code'] ?? '') == -32099 || ($res['error']['message'] ?? '') == 'INVALID_SESSION_INFORMATION') {
-            echo "CRITICAL: Session Invalid. Please restart script.\n";
-            // Optional: $bf->clearPersistentToken();
-            break;
-        }
+        echo "FAILED: " . json_encode($res['error']) . "\n";
         break;
     }
 
     $orders = $res['clearedOrders'] ?? [];
-    if (empty($orders))
+    $count = count($orders);
+    echo "Found $count orders.\n";
+
+    if ($count === 0)
         break;
 
     $allOrders = array_merge($allOrders, $orders);
 
     if (!$res['moreAvailable'])
         break;
-    $fromRecord += count($orders);
+    $fromRecord += $count;
 
-    // Sleep to avoid rate limits
     usleep(500000);
     flush();
 }
@@ -69,7 +95,6 @@ echo "Total Orders Fetched: " . count($allOrders) . "\n";
 if (empty($allOrders)) {
     echo "No history found. Aborting overwrite.\n";
 } else {
-    // 3. Backup & Truncate
     echo "Backing up 'bets' to 'bets_backup'...\n";
     $db->exec("DROP TABLE IF EXISTS bets_backup");
     $db->exec("CREATE TABLE bets_backup AS SELECT * FROM bets");
@@ -78,7 +103,6 @@ if (empty($allOrders)) {
     $db->exec("DELETE FROM bets");
     $db->exec("DELETE FROM sqlite_sequence WHERE name='bets'");
 
-    // 4. Insert Data
     echo "Inserting imported bets...\n";
     $stmt = $db->prepare("INSERT INTO bets (
         market_id, market_name, event_name, sport, selection_id, runner_name, 
@@ -90,7 +114,6 @@ if (empty($allOrders)) {
     $acceptedCount = 0;
     $totalPnL = 0;
 
-    // Sort by settledDate ASC
     usort($allOrders, function ($a, $b) {
         return strtotime($a['settledDate']) - strtotime($b['settledDate']);
     });
@@ -100,17 +123,11 @@ if (empty($allOrders)) {
             continue;
 
         $profit = $order['profit'] ?? 0;
-
-        $status = 'void';
-        if ($profit > 0)
-            $status = 'won';
-        if ($profit < 0)
-            $status = 'lost';
+        $status = ($profit > 0) ? 'won' : (($profit < 0) ? 'lost' : 'void');
 
         $odds = $order['priceMatched'] ?? 0;
         $stake = $order['sizeSettled'] ?? 0;
 
-        // Metadata
         $marketId = $order['marketId'];
         $marketName = $order['itemDescription']['marketDesc'] ?? 'Unknown Market';
         $eventName = $order['itemDescription']['eventDesc'] ?? 'Unknown Event';
@@ -145,16 +162,13 @@ if (empty($allOrders)) {
     echo "Successfully imported $acceptedCount bets.\n";
     echo "Total P&L from History: " . number_format($totalPnL, 2) . " EUR\n";
 
-    // 5. Align System Balance (P&L Driven)
     $initial = 100.00;
     $newBalance = $initial + $totalPnL;
-
-    echo "Updating System Balance: $initial (Base) + $totalPnL (PnL) = $newBalance\n";
+    echo "Updating System Balance: $newBalance\n";
 
     $upd = $db->prepare("UPDATE system_state SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'virtual_balance'");
     $upd->execute([number_format($newBalance, 2, '.', '')]);
 
-    // Reset mode to real
     $db->exec("UPDATE system_state SET value = 'real', updated_at = CURRENT_TIMESTAMP WHERE key = 'operational_mode'");
 }
 
