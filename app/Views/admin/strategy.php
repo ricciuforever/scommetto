@@ -1,0 +1,87 @@
+<?php if($message): ?>
+    <div class="bg-green-900/20 border border-green-500/50 text-green-400 p-6 mb-8 rounded-2xl text-center font-bold uppercase tracking-widest animate-pulse">
+        <?= $message ?>
+    </div>
+<?php endif; ?>
+
+<div class="max-w-4xl mx-auto">
+    <div class="flex justify-between items-center mb-8 border-b border-gray-800 pb-6">
+        <div>
+            <h1 class="text-3xl font-black italic uppercase text-white tracking-tighter">Strategy <span class="text-blue-500">Lab</span></h1>
+            <p class="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Configurazione Agente: <?= strtoupper($currentAgent) ?></p>
+        </div>
+
+        <div class="flex gap-2">
+            <?php foreach ($agents as $a): ?>
+                <a href="?agent=<?= $a ?>" class="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all <?= $currentAgent === $a ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-white' ?>">
+                    <?= $a ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+
+    <form method="POST" class="space-y-8">
+        <!-- System Prompt -->
+        <div class="glass p-8 rounded-3xl">
+            <div class="flex items-center gap-3 mb-6">
+                <i data-lucide="brain" class="text-blue-500 w-6 h-6"></i>
+                <h3 class="text-lg font-black italic uppercase text-white">System Strategy Prompt</h3>
+            </div>
+            <textarea name="config[strategy_prompt]" class="w-full bg-black/40 border border-white/5 rounded-2xl p-6 text-sm font-mono text-blue-200 focus:border-blue-500 outline-none h-64 leading-relaxed" placeholder="Inserisci qui il prompt strategico per l'AI..."><?= htmlspecialchars($config['strategy_prompt'] ?? '') ?></textarea>
+            <p class="text-[10px] text-gray-600 mt-4 uppercase font-bold tracking-widest">Questo prompt definisce il "carattere" e le priorità dell'Agente durante l'analisi.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Staking Mode -->
+            <div class="glass p-8 rounded-3xl">
+                <div class="flex items-center gap-3 mb-6">
+                    <i data-lucide="calculator" class="text-green-500 w-6 h-6"></i>
+                    <h3 class="text-lg font-black italic uppercase text-white">Gestione Stake</h3>
+                </div>
+
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Modalità Puntata</label>
+                        <select name="config[stake_mode]" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs font-bold uppercase outline-none focus:border-blue-500">
+                            <option value="kelly" <?= ($config['stake_mode'] ?? '') === 'kelly' ? 'selected' : '' ?>>Kelly Criterion (Dinamico)</option>
+                            <option value="flat" <?= ($config['stake_mode'] ?? '') === 'flat' ? 'selected' : '' ?>>Flat Bet (Importo Fisso)</option>
+                            <option value="percentage" <?= ($config['stake_mode'] ?? '') === 'percentage' ? 'selected' : '' ?>>Percentuale Saldo</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Valore Moltiplicatore / Fisso</label>
+                        <input type="number" step="0.01" name="config[stake_value]" value="<?= htmlspecialchars($config['stake_value'] ?? '0.15') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-mono outline-none focus:border-blue-500">
+                        <p class="text-[9px] text-gray-600 mt-2 italic">Kelly: 0.15 = 15% di Kelly frazionario. Flat: 5.00 = 5€ fissi.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Risk Management -->
+            <div class="glass p-8 rounded-3xl">
+                <div class="flex items-center gap-3 mb-6">
+                    <i data-lucide="shield-alert" class="text-red-500 w-6 h-6"></i>
+                    <h3 class="text-lg font-black italic uppercase text-white">Gestione Rischio</h3>
+                </div>
+
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Confidenza Minima (%)</label>
+                        <input type="number" name="config[min_confidence]" value="<?= htmlspecialchars($config['min_confidence'] ?? '80') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-mono outline-none focus:border-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Stop Loss Giornaliero (€)</label>
+                        <input type="number" step="0.01" name="config[daily_stop_loss]" value="<?= htmlspecialchars($config['daily_stop_loss'] ?? '50.00') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-mono outline-none focus:border-blue-500">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="pt-8">
+            <button type="submit" class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black uppercase italic tracking-tighter text-lg rounded-2xl shadow-2xl shadow-blue-500/20 transition-all">
+                Salva Nuova Strategia di Comando
+            </button>
+        </div>
+    </form>
+</div>

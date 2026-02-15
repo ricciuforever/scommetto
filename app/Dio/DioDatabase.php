@@ -72,11 +72,19 @@ class DioDatabase
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
-        // Initialize Virtual Balance if not exists
-        $stmt = $this->connection->prepare("SELECT value FROM system_state WHERE key = 'virtual_balance'");
-        $stmt->execute();
-        if (!$stmt->fetch()) {
-            $this->connection->exec("INSERT INTO system_state (key, value) VALUES ('virtual_balance', '100.00')");
+        // Ensure default dynamic configuration
+        $defaults = [
+            'strategy_prompt' => "Sei Dio (Quantum), un'intelligenza artificiale superiore specializzata nel trading sportivo ad alta frequenza.",
+            'stake_mode' => 'kelly',
+            'stake_value' => '0.10',
+            'min_confidence' => '75',
+            'daily_stop_loss' => '100.00',
+            'virtual_balance' => '100.00'
+        ];
+
+        foreach ($defaults as $key => $val) {
+            $stmt = $this->connection->prepare("INSERT OR IGNORE INTO system_state (key, value) VALUES (?, ?)");
+            $stmt->execute([$key, $val]);
         }
     }
 

@@ -107,6 +107,12 @@ class DioQuantumController
         file_put_contents($cooldownFile, time());
 
         try {
+            // Fetch dynamic config for Dio
+            $strategyPrompt = $this->db->query("SELECT value FROM system_state WHERE key = 'strategy_prompt'")->fetchColumn();
+            $stakeMode = $this->db->query("SELECT value FROM system_state WHERE key = 'stake_mode'")->fetchColumn() ?: 'kelly';
+            $stakeValue = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'stake_value'")->fetchColumn() ?: 0.10);
+            $minConfidence = (int)($this->db->query("SELECT value FROM system_state WHERE key = 'min_confidence'")->fetchColumn() ?: 75);
+
             // 1. Get ALL active sport types with live events
             $eventTypesRes = $this->bf->getEventTypes(['inPlayOnly' => true]);
             $eventTypes = $eventTypesRes['result'] ?? [];
@@ -165,7 +171,7 @@ class DioQuantumController
 
             if (!empty($batchTickers)) {
                 // 5. AI Analysis (Quantum Batch Mode - 1 call for 5 tickers)
-                $batchResults = $this->analyzeQuantumBatch($batchTickers);
+                $batchResults = $this->analyzeQuantumBatch($batchTickers, $strategyPrompt);
 
                 $workingTotalBankroll = $portfolio['total_balance'];
                 $workingAvailableBalance = $portfolio['available_balance'];
@@ -177,16 +183,17 @@ class DioQuantumController
                     $confidence = (float)($analysis['confidence'] ?? 0);
                     $advice = $analysis['advice'] ?? '';
 
-                    // Decidi l'azione base (Passa se confidence < 85)
-                    $action = ($confidence >= 85 && stripos($advice, 'PASS') === false) ? 'bet' : 'pass';
+                    // Decidi l'azione base (Passa se confidence < soglia)
+                    $action = ($confidence >= $minConfidence && stripos($advice, 'PASS') === false) ? 'bet' : 'pass';
 
                     if ($action === 'bet') {
-                        // --- CALCOLO STAKE OTTIMALE (KELLY + EV) ---
-                        $decision = MoneyManagementService::calculateOptimalStake(
+                        // --- CALCOLO STAKE (Dinamico) ---
+                        $decision = MoneyManagementService::calculateStake(
                             $workingTotalBankroll,
                             (float)$analysis['odds'],
                             $confidence,
-                            Config::KELLY_MULTIPLIER_DIO
+                            $stakeMode,
+                            $stakeValue
                         );
 
                         if (!$decision['is_value_bet'] || $decision['stake'] < Config::MIN_BETFAIR_STAKE) {
@@ -287,7 +294,7 @@ class DioQuantumController
         ];
     }
 
-    private function analyzeQuantumBatch($tickers)
+    private function analyzeQuantumBatch($tickers, $customPrompt = null)
     {
         $portfolio = $this->recalculatePortfolio();
         $totalBalance = $portfolio['total_balance'];
@@ -314,7 +321,7 @@ class DioQuantumController
         }
         if (!$hasExperiences) $ragContext = "";
 
-        $prompt = "Sei un QUANT TRADER denominato 'Dio'. Non sei uno scommettitore, sei un analista di Price Action (Tape Reading).\n\n" .
+        $prompt = ($customPrompt ?: "Sei un QUANT TRADER denominato 'Dio'. Non sei uno scommettitore, sei un analista di Price Action (Tape Reading).") . "\n\n" .
             ($ragContext ? $ragContext . "\n" : "") .
             "SITUAZIONE PORTAFOGLIO: Saldo Totale " . number_format($totalBalance, 2) . "€, Saldo Disponibile " . number_format($availableBalance, 2) . "€\n\n" .
             "DATI ASSET (BATCH DI TICKERS):\n" . json_encode($tickers, JSON_PRETTY_PRINT) . "\n\n" .

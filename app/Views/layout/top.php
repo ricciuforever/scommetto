@@ -127,9 +127,9 @@
         </div>
 
         <div class="p-4 border-t border-white/10">
-            <a href="/settings"
+            <a href="/admin"
                 class="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2">
-                <i data-lucide="settings" class="w-4 h-4"></i> Impostazioni
+                <i data-lucide="shield-check" class="w-4 h-4"></i> Admin Panel
             </a>
         </div>
     </aside>

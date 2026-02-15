@@ -15,11 +15,53 @@ class MoneyManagementService
      * @param float|null $kellyMultiplier Moltiplicatore di sicurezza
      * @return array [stake, reason, is_value_bet, kelly_fraction, edge]
      */
-    public static function calculateOptimalStake(float $bankroll, float $odds, float $confidence, float $kellyMultiplier = null): array
+    /**
+     * Calcola lo stake basato sulla modalità scelta (Kelly, Flat, Percentage)
+     */
+    public static function calculateStake(float $bankroll, float $odds, float $confidence, string $mode = 'kelly', float $value = 0.15): array
     {
-        if ($kellyMultiplier === null) {
-            $kellyMultiplier = Config::KELLY_MULTIPLIER_GIANIK;
+        $res = [];
+        if ($mode === 'flat') {
+            $res = [
+                'stake' => round($value, 2),
+                'reason' => 'Flat Bet',
+                'is_value_bet' => true,
+                'kelly_fraction' => 0,
+                'edge' => 0
+            ];
+        } elseif ($mode === 'percentage') {
+            $res = [
+                'stake' => round($bankroll * ($value / 100), 2),
+                'reason' => 'Percentage Bet (' . $value . '%)',
+                'is_value_bet' => true,
+                'kelly_fraction' => 0,
+                'edge' => 0
+            ];
+        } else {
+            // Default: Kelly
+            return self::calculateOptimalStake($bankroll, $odds, $confidence, $value);
         }
+
+        // Apply safety caps for Flat/Percentage too
+        $maxAllowed = $bankroll * 0.05;
+        if ($res['stake'] > $maxAllowed) {
+            $res['stake'] = round($maxAllowed, 2);
+            $res['reason'] .= " (Capped at 5%)";
+        }
+
+        if ($res['stake'] < 2.00 && $maxAllowed >= 2.00) {
+             $res['stake'] = 2.00;
+        } elseif ($res['stake'] < 2.00) {
+             $res['stake'] = 0;
+             $res['reason'] = "Bankroll insufficiente per puntata minima";
+             $res['is_value_bet'] = false;
+        }
+
+        return $res;
+    }
+
+    public static function calculateOptimalStake(float $bankroll, float $odds, float $confidence, float $kellyMultiplier = 0.15): array
+    {
 
         // 1. Controllo base
         if ($odds <= 1.01 || $confidence <= 0) {

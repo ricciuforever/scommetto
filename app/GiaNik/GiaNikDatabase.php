@@ -47,6 +47,20 @@ class GiaNikDatabase
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
+        // Ensure default dynamic configuration
+        $defaults = [
+            'strategy_prompt' => "Sei GiaNik, un esperto di scommesse sportive. Analizza i dati live e storici per trovare Value Bets.",
+            'stake_mode' => 'kelly',
+            'stake_value' => '0.15',
+            'min_confidence' => '80',
+            'daily_stop_loss' => '50.00'
+        ];
+
+        foreach ($defaults as $key => $val) {
+            $stmt = $this->connection->prepare("INSERT OR IGNORE INTO system_state (key, value) VALUES (?, ?)");
+            $stmt->execute([$key, $val]);
+        }
+
         // Check for old performance_metrics schema
         $stmtCheck = $this->connection->query("PRAGMA table_info(performance_metrics)");
         $checkCols = $stmtCheck->fetchAll(PDO::FETCH_COLUMN, 1);

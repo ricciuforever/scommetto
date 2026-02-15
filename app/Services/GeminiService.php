@@ -35,7 +35,7 @@ class GeminiService
         $isGiaNik = $options['is_gianik'] ?? false;
 
         if ($isUpcoming) {
-            $prompt = "Sei un ANALISTA ELITE di Betfair. Il tuo compito è analizzare gli eventi FUTURI forniti e suggerire i migliori pronostici (max 10).\n\n" .
+            $prompt = ($options['custom_prompt'] ?? "Sei un ANALISTA ELITE di Betfair. Il tuo compito è analizzare gli eventi FUTURI forniti e suggerire i migliori pronostici (max 10).") . "\n\n" .
                 "LISTA EVENTI CANDIDATI:\n" . json_encode($candidates) . "\n\n" .
                 "REGOLE:\n" .
                 "1. Analizza sport, competizione e volumi.\n" .
@@ -57,7 +57,7 @@ class GeminiService
                 "  }\n" .
                 "]";
         } elseif ($isGiaNik) {
-            $prompt = "Sei un ANALISTA ELITE e TRADER di Betfair. Il tuo compito è analizzare un EVENTO LIVE con i suoi molteplici mercati e decidere l'operazione migliore.\n\n" .
+            $prompt = ($options['custom_prompt'] ?? "Sei un ANALISTA ELITE e TRADER di Betfair. Il tuo compito è analizzare un EVENTO LIVE con i suoi molteplici mercati e decidere l'operazione migliore.") . "\n\n" .
                 $balanceText .
                 "DATI EVENTO E MERCATI:\n" . json_encode($candidates[0]) . "\n\n" .
                 "DATI STATISTICI AVANZATI (Se disponibili):\n" .
@@ -115,7 +115,7 @@ class GeminiService
                 "  \"motivation\": \"Sintesi tecnica qui (Menziona SEMPRE i nomi delle squadre e i dati statistici chiave usati per la decisione).\"\n" .
                 "}";
         } else {
-            $prompt = "Sei un TRADER ELITE di Betfair. Il tuo compito è analizzare il mercato live multi-sport e scovare la scommessa migliore tra quelle fornite.\n\n" .
+            $prompt = ($options['custom_prompt'] ?? "Sei un TRADER ELITE di Betfair. Il tuo compito è analizzare il mercato live multi-sport e scovare la scommessa migliore tra quelle fornite.") . "\n\n" .
                 $balanceText .
                 "LISTA EVENTI LIVE CANDIDATI:\n" . json_encode($candidates) . "\n\n" .
                 "REGOLE RIGIDE:\n" .
@@ -196,7 +196,7 @@ class GeminiService
                 "- $labelAvailable: " . number_format($options['available_balance'], 2) . "€\n\n";
         }
 
-        $prompt = "Sei un ANALISTA ELITE e TRADER di Betfair Exchange. Il tuo compito è analizzare un BATCH di EVENTI LIVE (Calcio) e decidere le operazioni migliori.\n\n" .
+        $prompt = ($options['custom_prompt'] ?? "Sei un ANALISTA ELITE e TRADER di Betfair Exchange. Il tuo compito è analizzare un BATCH di EVENTI LIVE (Calcio) e decidere le operazioni migliori.") . "\n\n" .
             $balanceText .
             "LISTA EVENTI DA ANALIZZARE:\n" . json_encode($events, JSON_PRETTY_PRINT) . "\n\n" .
             "REGOLE RIGIDE:\n" .

@@ -724,10 +724,18 @@ class GiaNikController
 
             $gemini = new GeminiService();
 
+            // Fetch Dynamic Config
+            $strategyPrompt = $this->db->query("SELECT value FROM system_state WHERE key = 'strategy_prompt'")->fetchColumn();
+            $stakeMode = $this->db->query("SELECT value FROM system_state WHERE key = 'stake_mode'")->fetchColumn() ?: 'kelly';
+            $stakeValue = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'stake_value'")->fetchColumn() ?: 0.15);
+
             // Debug $event
             file_put_contents(Config::LOGS_PATH . 'gianik_event_debug.log', date('[Y-m-d H:i:s] ') . json_encode($event, JSON_PRETTY_PRINT) . PHP_EOL, FILE_APPEND);
 
-            $predictionRaw = $gemini->analyze([$event], array_merge($balance, ['is_gianik' => true]));
+            $predictionRaw = $gemini->analyze([$event], array_merge($balance, [
+                'is_gianik' => true,
+                'custom_prompt' => $strategyPrompt
+            ]));
 
             $analysis = json_decode($predictionRaw, true);
             $jsonContent = $predictionRaw;
@@ -753,11 +761,12 @@ class GiaNikController
             // Calcolo Stake con MoneyManager se l'analisi è valida
             $decision = ['stake' => 0, 'reason' => 'N/A', 'is_value_bet' => false];
             if ($analysis && isset($analysis['confidence'], $analysis['odds'])) {
-                $decision = MoneyManagementService::calculateOptimalStake(
+                $decision = MoneyManagementService::calculateStake(
                     $balance['current_portfolio'],
                     (float)$analysis['odds'],
                     (float)$analysis['confidence'],
-                    Config::KELLY_MULTIPLIER_GIANIK
+                    $stakeMode,
+                    $stakeValue
                 );
                 // Aggiorniamo lo stake suggerito nell'analisi per la vista
                 $analysis['stake'] = $decision['stake'];
@@ -1012,6 +1021,12 @@ class GiaNikController
             $stmtCount->execute();
             $matchBetCounts = $stmtCount->fetchAll(PDO::FETCH_KEY_PAIR);
 
+            // Fetch dynamic config for GiaNik
+            $strategyPrompt = $this->db->query("SELECT value FROM system_state WHERE key = 'strategy_prompt'")->fetchColumn();
+            $stakeMode = $this->db->query("SELECT value FROM system_state WHERE key = 'stake_mode'")->fetchColumn() ?: 'kelly';
+            $stakeValue = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'stake_value'")->fetchColumn() ?: 0.15);
+            $minConfidence = (int)($this->db->query("SELECT value FROM system_state WHERE key = 'min_confidence'")->fetchColumn() ?: 80);
+
             // Fetch correct balance for Gemini based on operational mode
             $activeBalance = ['available' => 0, 'total' => 0];
             if ($globalMode === 'real') {
@@ -1158,7 +1173,8 @@ class GiaNikController
                 $predictionRaw = $gemini->analyzeBatch($batchEvents, [
                     'is_gianik' => true,
                     'available_balance' => $activeBalance['available'],
-                    'current_portfolio' => $activeBalance['total']
+                    'current_portfolio' => $activeBalance['total'],
+                    'custom_prompt' => $strategyPrompt
                 ]);
 
                 $batchAnalysis = json_decode($predictionRaw, true);
@@ -1174,8 +1190,8 @@ class GiaNikController
                         if (!isset($batchMetadata[$eventName])) continue;
                         $meta = $batchMetadata[$eventName];
 
-                        // Verifica confidenza minima (hard cap a 80% come da regola precedente, ma Kelly farà il resto)
-                        if (!empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= 80) {
+                        // Verifica confidenza minima (hard cap dinamico, default 80%)
+                        if (!empty($analysis['marketId']) && !empty($analysis['advice']) && ($analysis['confidence'] ?? 0) >= $minConfidence) {
 
                             $selectedMarket = null;
                             foreach ($meta['markets'] as $m) {
@@ -1185,12 +1201,13 @@ class GiaNikController
                             }
                             if (!$selectedMarket || in_array($analysis['marketId'], $pendingMarketIds)) continue;
 
-                            // --- CALCOLO STAKE OTTIMALE (KELLY + EV) ---
-                            $decision = MoneyManagementService::calculateOptimalStake(
+                            // --- CALCOLO STAKE (Dinamico) ---
+                            $decision = MoneyManagementService::calculateStake(
                                 $workingTotalBankroll,
                                 (float)$analysis['odds'],
                                 (float)$analysis['confidence'],
-                                Config::KELLY_MULTIPLIER_GIANIK
+                                $stakeMode,
+                                $stakeValue
                             );
 
                             if (!$decision['is_value_bet'] || $decision['stake'] < Config::MIN_BETFAIR_STAKE) {
