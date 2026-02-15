@@ -50,6 +50,16 @@ class SettlementService
             foreach ($batch as $bet) {
                 $book = $booksMap[$bet['market_id']] ?? null;
 
+                if (!$book)
+                    continue; // Skip if market not found in API
+
+                // DEBUG: Log the first marketDefinition found to inspect structure
+                static $debugLogged = false;
+                if (!$debugLogged && isset($book['marketDefinition'])) {
+                    file_put_contents(__DIR__ . '/../../../../logs/score_debug.json', json_encode($book['marketDefinition'], JSON_PRETTY_PRINT));
+                    $debugLogged = true;
+                }
+
                 if ($book['status'] === 'CLOSED') {
                     $winnerSelectionId = null;
                     foreach ($book['runners'] as $runner) {
