@@ -748,7 +748,7 @@ class BetfairService
     /**
      * Get Settled Bets (Cleared Orders)
      */
-    public function getClearedOrders($isRetry = false, $fromDate = null)
+    public function getClearedOrders($isRetry = false, $fromDate = null, $fromRecord = 0)
     {
         $token = $this->authenticate();
         if (!$token) {
@@ -759,6 +759,7 @@ class BetfairService
         $params = [
             'betStatus' => 'SETTLED',
             'recordCount' => 1000,
+            'fromRecord' => $fromRecord,
             'includeItemDescription' => true
         ];
 
