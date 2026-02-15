@@ -97,10 +97,9 @@
                 </div>
 
                 <div class="space-y-6">
-                    <?php if ($currentAgent === 'dio'): ?>
                     <!-- Sport Targeting -->
                     <div>
-                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Sport in Target (Quantum)</label>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Sport in Target</label>
                         <div class="grid grid-cols-2 gap-2">
                             <?php
                             $availableSports = [
@@ -118,7 +117,6 @@
                             <?php endforeach; ?>
                         </div>
                     </div>
-                    <?php endif; ?>
 
                     <div>
                         <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Modalità Puntata</label>

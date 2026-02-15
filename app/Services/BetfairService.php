@@ -273,11 +273,20 @@ class BetfairService
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "Host: identitysso.betfair.it",
                 "X-Application: {$this->appKey}",
                 "Content-Type: application/x-www-form-urlencoded",
                 "Accept: application/json",
                 "Accept-Language: it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
-                "Referer: https://www.betfair.it/"
+                "Referer: https://www.betfair.it/",
+                "Origin: https://www.betfair.it",
+                "Sec-Fetch-Dest: empty",
+                "Sec-Fetch-Mode: cors",
+                "Sec-Fetch-Site: same-site",
+                "Sec-Ch-Ua: \"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"",
+                "Sec-Ch-Ua-Mobile: ?0",
+                "Sec-Ch-Ua-Platform: \"Windows\"",
+                "Connection: keep-alive"
             ]);
 
             $response = curl_exec($ch);
@@ -712,8 +721,9 @@ class BetfairService
     public function getMarketBooks(array $marketIds, array $customProjection = [])
     {
         $priceProjection = !empty($customProjection) ? $customProjection : [
-            'priceData' => ['EX_BEST_OFFERS', 'EX_TRADED'], // Added EX_TRADED by default for correct totalMatched
-            'virtualise' => true
+            'priceData' => ['EX_BEST_OFFERS', 'EX_TRADED'],
+            'virtualise' => true,
+            'rolloverStakes' => false
         ];
 
         return $this->request('listMarketBook', [

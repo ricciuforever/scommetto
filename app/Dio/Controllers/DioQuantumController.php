@@ -257,23 +257,8 @@ class DioQuantumController
                 $chunks = array_chunk($marketIds, 40);
                 $books = [];
                 foreach ($chunks as $chunk) {
-                    // Use explicit price projection to ensure full volume data (EX_BEST_OFFERS + EX_TRADED + VIRTUAL)
-                    // This fixes discrepancy where API returns low liquidity on partial projections
-                    $params = [
-                        'marketIds' => $chunk,
-                        'priceProjection' => [
-                            'priceData' => ['EX_BEST_OFFERS', 'EX_TRADED'],
-                            'virtualise' => true
-                        ]
-                    ];
-                    // Call getMarketBooks with custom params instead of default wrapper
-                    // Note: Since BetfairService::getMarketBooks might not accept array for 2nd arg easily if not designed so,
-                    // we'll use the service method but verify its signature or use raw call if needed.
-                    // Checking BetfairService signature... if simple wrapper, we might need to modify it or trust default.
-                    // Assuming getMarketBooks($marketIds) uses default projection. Let's try to enforce it via the service if possible,
-                    // or just rely on the fact that default usually works but maybe 'virtualise' was missing.
-                    // Actually, let's use the robust approach:
-                    $booksRes = $this->bf->getMarketBooks($chunk, ['priceData' => ['EX_BEST_OFFERS', 'EX_TRADED'], 'virtualise' => true]);
+                    // Use default robust price projection from BetfairService (EX_TRADED + VIRTUAL)
+                    $booksRes = $this->bf->getMarketBooks($chunk);
                     $books = array_merge($books, $booksRes['result'] ?? []);
                 }
 
@@ -307,7 +292,7 @@ class DioQuantumController
                     // Filter for minimum liquidity to avoid wasting AI calls on irrelevant markets
                     $liquidity = (float)($book['totalMatched'] ?? 0);
                     if ($liquidity < $minLiquidity) {
-                        $trace['skipped_reasons'][] = "Liquidità bassa (" . round($liquidity) . "€): " . ($mc['event']['name'] ?? 'Unknown');
+                        $trace['skipped_reasons'][] = "Liquidità bassa (" . round($liquidity) . "€): " . ($mc['event']['name'] ?? 'Unknown') . " [" . ($mc['marketName'] ?? 'Unknown') . "]";
                         // Collect interesting low-liquidity matches for logging, but only if they have significant volume (> 1000)
                         if ($liquidity >= 1000) {
                             $lowLiquidityQueue[] = [
