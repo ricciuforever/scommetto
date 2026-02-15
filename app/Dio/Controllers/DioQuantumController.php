@@ -807,7 +807,7 @@ class DioQuantumController
                 // Chunk requests if needed (though current orders usually few)
                 $chunks = array_chunk($uniqueMarketIds, 25);
                 foreach ($chunks as $chunk) {
-                    $catRes = $this->bf->getMarketCatalogues($chunk, count($chunk), ['RUNNER_DESCRIPTION', 'EVENT'], 'FIRST_TO_START');
+                    $catRes = $this->bf->getMarketCataloguesByIds($chunk);
                     $catalogues = $catRes['result'] ?? [];
 
                     foreach ($catalogues as $cat) {
@@ -816,7 +816,7 @@ class DioQuantumController
                             if ($order['marketId'] === $cat['marketId']) {
                                 $order['marketName'] = $cat['marketName'];
                                 $order['eventName'] = $cat['event']['name'];
-                                $order['sport'] = $this->standardizeSportName('Unknown'); // Catalogue doesn't return sport name easily without navigation, but event usually enough
+                                $order['sport'] = $this->standardizeSportName($cat['eventType']['name'] ?? 'Unknown');
 
                                 // Resolve Runner Name
                                 foreach ($cat['runners'] as $runner) {
