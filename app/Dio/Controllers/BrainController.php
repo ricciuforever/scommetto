@@ -77,15 +77,20 @@ class BrainController
 
     private function extractLesson($bet)
     {
-        $prompt = "Sei il 'Cervello' analitico di Dio, un AI Quant Trader. Analizza questa operazione conclusa e scrivi una BREVISSIMA lezione tecnica (massimo 20 parole) per il futuro. Usa un linguaggio chiaro, meno astratto.\n\n" .
+        // Pulisci i riferimenti al CSV per evitare allucinazioni dell'AI sulla fonte dei dati
+        $runnerName = ($bet['runner_name'] === 'Runner CSV') ? 'Selezione' : $bet['runner_name'];
+        $motivation = (strpos($bet['motivation'], 'Importato da') !== false) ? 'Analisi tecnica post-match.' : $bet['motivation'];
+
+        $prompt = "Sei il 'Cervello' analitico di Dio, un AI Quant Trader. Analizza questa operazione conclusa e scrivi una BREVISSIMA lezione tecnica (massimo 20 parole) per il futuro. Usa un linguaggio chiaro, tecnico ma accessibile.\n\n" .
             "DETTAGLI OPERAZIONE:\n" .
             "- Sport: {$bet['sport']}\n" .
             "- Evento: {$bet['event_name']}\n" .
             "- Mercato: {$bet['market_name']}\n" .
-            "- Scelta: {$bet['runner_name']} (Quota: {$bet['odds']})\n" .
-            "- Motivazione Originale: {$bet['motivation']}\n" .
+            "- Scelta: {$runnerName} (Quota: {$bet['odds']})\n" .
+            "- Motivazione Originale: {$motivation}\n" .
             "- ESITO: " . strtoupper($bet['status']) . " (Profitto: {$bet['profit']}€)\n\n" .
-            "OBIETTIVO: Se hai vinto, spiega brevemente perché l'intuizione era giusta. Se hai perso, indica se l'errore è stato nella quota troppo bassa, nel timing sbagliato o nella scarsa liquidità del mercato.\n" .
+            "OBIETTIVO: Se hai vinto, spiega brevemente perché l'operazione ha avuto successo. Se hai perso, identifica se l'errore è stato nella quota non vantaggiosa, nel timing di ingresso o nella gestione della posizione.\n" .
+            "IMPORTANTE: Ignora la fonte dei dati (CSV o Betfair). Concentrati solo sulle dinamiche di mercato.\n" .
             "RISPONDI SOLO CON LA LEZIONE TECNICA IN ITALIANO.";
 
         return $this->gemini->analyzeCustom($prompt);
