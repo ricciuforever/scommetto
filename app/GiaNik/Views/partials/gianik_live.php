@@ -122,7 +122,17 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
 
 <?php if (empty($allMatches)): ?>
     <div class="text-center py-10">
-        <span class="text-slate-500 text-sm font-bold uppercase">Nessun evento live disponibile</span>
+        <?php if (isset($apiError) && $apiError): ?>
+            <div class="bg-danger/10 border border-danger/20 rounded-2xl p-6 mb-6 inline-block">
+                <div class="flex items-center gap-3 text-danger mb-2">
+                    <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                    <span class="text-sm font-black uppercase tracking-widest">Errore Connessione Betfair</span>
+                </div>
+                <p class="text-xs text-slate-400 font-bold"><?php echo $apiError; ?></p>
+            </div>
+        <?php else: ?>
+            <span class="text-slate-500 text-sm font-bold uppercase">Nessun evento nelle prossime 24 ore su Betfair</span>
+        <?php endif; ?>
     </div>
 <?php else: ?>
 
