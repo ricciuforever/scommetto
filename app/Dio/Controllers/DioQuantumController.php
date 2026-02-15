@@ -145,8 +145,9 @@ class DioQuantumController
         }
         file_put_contents($cooldownFile, time());
 
-        // Aggiorna timestamp ultima scansione nel database per monitoraggio dashboard
-        $this->db->prepare("INSERT OR REPLACE INTO system_state (key, value, updated_at) VALUES ('last_quantum_scan', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")->execute();
+        // Aggiorna timestamp ultima scansione nel database per monitoraggio dashboard (esplicito UTC)
+        $nowUtc = gmdate('Y-m-d H:i:s');
+        $this->db->prepare("INSERT OR REPLACE INTO system_state (key, value, updated_at) VALUES ('last_quantum_scan', ?, ?)")->execute([$nowUtc, $nowUtc]);
 
         try {
             // Fetch dynamic config for Dio
@@ -601,16 +602,13 @@ class DioQuantumController
             $syncHistory = isset($_GET['sync_history']) && $_GET['sync_history'] === '1';
             $fromDate = $syncHistory ? gmdate('Y-m-d\TH:i:s\Z', time() - (30 * 86400)) : null;
 
-            $clearedRes = $this->bf->getClearedOrders(false, $fromDate);
-            $clearedOrders = $clearedRes['clearedOrders'] ?? [];
-
-            $currentRes = $this->bf->getCurrentOrders();
-            $currentOrders = $currentRes['currentOrders'] ?? [];
-
             // Target Sports for Dio
             $targetSports = ['Soccer', 'Tennis', 'Rugby Union', 'Basketball'];
-
             $allBfOrders = [];
+
+            // 1. Recupera ordini aperti
+            $currentRes = $this->bf->getCurrentOrders();
+            $currentOrders = $currentRes['currentOrders'] ?? [];
             foreach ($currentOrders as $o) {
                 $allBfOrders[$o['betId']] = [
                     'betId' => $o['betId'],
@@ -623,23 +621,40 @@ class DioQuantumController
                 ];
             }
 
-            foreach ($clearedRes['clearedOrders'] ?? [] as $o) {
-                $allBfOrders[$o['betId']] = [
-                    'betId' => $o['betId'],
-                    'marketId' => $o['marketId'],
-                    'selectionId' => $o['selectionId'],
-                    'odds' => $o['priceRequested'] ?? 0,
-                    'stake' => $o['sizeSettled'] ?? 0,
-                    'status' => ($o['betOutcome'] === 'WIN' || $o['betOutcome'] === 'WON') ? 'won' : 'lost',
-                    'profit' => (float)($o['profit'] ?? 0),
-                    'placedDate' => $o['placedDate'] ?? null,
-                    'settledDate' => $o['settledDate'] ?? null,
-                    'marketName' => $o['itemDescription']['marketDesc'] ?? null,
-                    'eventName' => $o['itemDescription']['eventDesc'] ?? null,
-                    'sport' => $o['itemDescription']['eventTypeDesc'] ?? null,
-                    'runnerName' => $o['itemDescription']['runnerDesc'] ?? null
-                ];
-            }
+            // 2. Recupera ordini definiti (con paginazione se necessario)
+            $fromRecord = 0;
+            $maxRecords = $syncHistory ? 5000 : 1000;
+
+            do {
+                $clearedRes = $this->bf->getClearedOrders(false, $fromDate, $fromRecord);
+                $clearedOrders = $clearedRes['clearedOrders'] ?? [];
+                $moreAvailable = $clearedRes['moreAvailable'] ?? false;
+
+                foreach ($clearedOrders as $o) {
+                    $outcome = strtoupper($o['betOutcome'] ?? '');
+                    $status = 'lost';
+                    if ($outcome === 'WIN' || $outcome === 'WON') $status = 'won';
+                    elseif (in_array($outcome, ['VOIDED', 'LAPSED', 'REMOVED'])) $status = 'void';
+
+                    $allBfOrders[$o['betId']] = [
+                        'betId' => $o['betId'],
+                        'marketId' => $o['marketId'],
+                        'selectionId' => $o['selectionId'],
+                        'odds' => $o['priceRequested'] ?? 0,
+                        'stake' => $o['sizeSettled'] ?? 0,
+                        'status' => $status,
+                        'profit' => (float)($o['profit'] ?? 0),
+                        'placedDate' => $o['placedDate'] ?? null,
+                        'settledDate' => $o['settledDate'] ?? null,
+                        'marketName' => $o['itemDescription']['marketDesc'] ?? null,
+                        'eventName' => $o['itemDescription']['eventDesc'] ?? null,
+                        'sport' => $o['itemDescription']['eventTypeDesc'] ?? null,
+                        'runnerName' => $o['itemDescription']['runnerDesc'] ?? null
+                    ];
+                }
+
+                $fromRecord += count($clearedOrders);
+            } while ($moreAvailable && $fromRecord < $maxRecords);
 
             foreach ($allBfOrders as $betId => $o) {
                 // Filter by Dio target sports if possible
@@ -707,11 +722,13 @@ class DioQuantumController
                 'id' => $bet['id']
             ];
             if ($bet['status'] !== 'pending' && $bet['settled_at']) {
+                // Per le scommesse reali, usiamo stake + profit (preciso al centesimo su Betfair)
+                // Per le virtuali, profit è già calcolato come (stake*odds)-stake o -stake
                 $events[] = [
                     'time' => $bet['settled_at'],
                     'type' => 'settle',
                     'status' => $bet['status'],
-                    'amount' => ($bet['status'] === 'won') ? (float) ($bet['stake'] * $bet['odds']) : 0,
+                    'amount' => (float)$bet['stake'] + (float)$bet['profit'],
                     'id' => $bet['id']
                 ];
             }
