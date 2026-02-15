@@ -97,6 +97,29 @@
                 </div>
 
                 <div class="space-y-6">
+                    <?php if ($currentAgent === 'dio'): ?>
+                    <!-- Sport Targeting -->
+                    <div>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Sport in Target (Quantum)</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <?php
+                            $availableSports = [
+                                '1' => 'Soccer (Calcio)',
+                                '2' => 'Tennis',
+                                '7522' => 'Basketball',
+                                '5' => 'Rugby Union'
+                            ];
+                            $currentTargets = explode(',', $config['target_sports'] ?? '1');
+                            foreach ($availableSports as $id => $label): ?>
+                                <label class="flex items-center gap-2 p-3 bg-slate-900/50 border border-slate-700/50 rounded-xl cursor-pointer hover:bg-slate-800 transition-all">
+                                    <input type="checkbox" name="config[target_sports][]" value="<?= $id ?>" <?= in_array($id, $currentTargets) ? 'checked' : '' ?> class="w-4 h-4 rounded border-gray-700 text-blue-600 focus:ring-blue-500 bg-gray-900">
+                                    <span class="text-[10px] font-bold text-gray-300 uppercase"><?= $label ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                     <div>
                         <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Modalità Puntata</label>
                         <select name="config[stake_mode]" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs font-bold uppercase outline-none focus:border-blue-500">
