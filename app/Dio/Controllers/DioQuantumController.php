@@ -63,6 +63,12 @@ class DioQuantumController
         $recentExperiences = $this->getRecentExperiences();
         $performanceHistory = $portfolio['history'];
 
+        // Recupera ultima traccia scansione
+        $lastScanTrace = [];
+        if (file_exists(\App\Config\Config::DATA_PATH . 'dio_last_scan.json')) {
+            $lastScanTrace = json_decode(file_get_contents(\App\Config\Config::DATA_PATH . 'dio_last_scan.json'), true) ?? [];
+        }
+
         // Recupera timestamp ultima scansione AI
         $lastScan = $this->db->query("SELECT value FROM system_state WHERE key = 'last_quantum_scan'")->fetchColumn();
 
@@ -121,6 +127,18 @@ class DioQuantumController
         $this->sendJsonHeader();
         $liveScores = [];
         $targetSports = [1, 2, 5, 7522]; // Soccer, Tennis, Rugby Union, Basketball
+        $trace = [
+            'timestamp' => date('Y-m-d H:i:s'),
+            'target_sports' => $targetSports,
+            'scanned_sports' => [],
+            'found_events' => 0,
+            'found_markets' => 0,
+            'skipped_reasons' => [],
+            'ai_batch_size' => 0,
+            'ai_results' => [],
+            'placed_bets' => [],
+            'errors' => []
+        ];
 
         // CHECK IF AVAILABLE BALANCE >= 2€
         $portfolio = $this->recalculatePortfolio();
@@ -150,6 +168,7 @@ class DioQuantumController
         $this->db->prepare("INSERT OR REPLACE INTO system_state (key, value, updated_at) VALUES ('last_quantum_scan', ?, ?)")->execute([$nowUtc, $nowUtc]);
 
         try {
+            file_put_contents(\App\Config\Config::DATA_PATH . 'dio_last_scan.json', json_encode($trace, JSON_PRETTY_PRINT));
             // Fetch dynamic config for Dio
             $config = $this->db->query("SELECT key, value FROM system_state")->fetchAll(PDO::FETCH_KEY_PAIR);
             $strategyPrompt = $config['strategy_prompt'] ?? '';
@@ -157,7 +176,7 @@ class DioQuantumController
             $stakeValue = (float)($config['stake_value'] ?? 0.10);
             $minConfidence = (int)($config['min_confidence'] ?? 80);
             $minStake = (float)($config['min_stake'] ?? 2.00);
-            $minLiquidity = (float)($config['min_liquidity'] ?? 2000.00);
+            $minLiquidity = (float)($config['min_liquidity'] ?? 5000.00);
             $operationalMode = $config['operational_mode'] ?? 'virtual';
 
             // 1. Get ALL active sport types with live events
@@ -167,6 +186,10 @@ class DioQuantumController
             $allOpportunities = [];
             $batchTickers = [];
 
+            if (empty($eventTypes)) {
+                $trace['errors'][] = "Nessun tipo di evento trovato (Errore Betfair o Login Fallito)";
+            }
+
             foreach ($eventTypes as $sportType) {
                 $sportId = (int)$sportType['eventType']['id'];
                 $sportName = $sportType['eventType']['name'];
@@ -174,27 +197,40 @@ class DioQuantumController
                 // Filter for requested sports
                 if (!in_array($sportId, $targetSports)) continue;
 
+                $trace['scanned_sports'][] = $sportName;
+
                 // 2. Get Live Events for this sport
                 $liveEventsRes = $this->bf->getLiveEvents([$sportId]);
                 $events = $liveEventsRes['result'] ?? [];
 
-                if (empty($events))
+                if (empty($events)) {
+                    $trace['skipped_reasons'][] = "[$sportName] Nessun evento live trovato";
                     continue;
+                }
 
+                $trace['found_events'] += count($events);
                 $eventIds = array_map(fn($e) => $e['event']['id'], $events);
 
                 // 3. Get Market Catalogues (Higher limit to scan more events)
-                $cataloguesRes = $this->bf->getMarketCatalogues($eventIds, 100);
+                $cataloguesRes = $this->bf->getMarketCatalogues($eventIds, 250);
                 $catalogues = $cataloguesRes['result'] ?? [];
 
-                if (empty($catalogues))
+                if (empty($catalogues)) {
+                    $trace['skipped_reasons'][] = "[$sportName] Nessun catalogo mercati trovato";
                     continue;
+                }
+
+                $trace['found_markets'] += count($catalogues);
 
                 $marketIds = array_map(fn($m) => $m['marketId'], $catalogues);
 
-                // 4. Get Market Books (Prices & Liquidity)
-                $booksRes = $this->bf->getMarketBooks($marketIds);
-                $books = $booksRes['result'] ?? [];
+                // 4. Get Market Books (Prices & Liquidity) - Chunked for API efficiency (max 40 per call)
+                $chunks = array_chunk($marketIds, 40);
+                $books = [];
+                foreach ($chunks as $chunk) {
+                    $booksRes = $this->bf->getMarketBooks($chunk);
+                    $books = array_merge($books, $booksRes['result'] ?? []);
+                }
 
                 $lowLiquidityQueue = [];
 
@@ -212,18 +248,21 @@ class DioQuantumController
 
                     // Filter for OPEN markets only
                     if (($book['status'] ?? '') !== 'OPEN') {
+                        $trace['skipped_reasons'][] = "Mercato non aperto: " . ($mc['event']['name'] ?? 'Unknown');
                         continue;
                     }
 
                     // Avoid duplicate bets in Dio for the same match
                     if ($this->isMatchActiveInDio($mc['event']['name'] ?? '')) {
                         $this->logActivity(['event' => $mc['event']['name'] ?? 'Unknown', 'marketName' => $mc['marketName'] ?? 'Unknown'], ['motivation' => 'Match già attivo in Dio'], 'SKIP_ACTIVE');
+                        $trace['skipped_reasons'][] = "Match già attivo: " . ($mc['event']['name'] ?? 'Unknown');
                         continue;
                     }
 
                     // Filter for minimum liquidity to avoid wasting AI calls on irrelevant markets
                     $liquidity = (float)($book['totalMatched'] ?? 0);
                     if ($liquidity < $minLiquidity) {
+                        $trace['skipped_reasons'][] = "Liquidità bassa (" . round($liquidity) . "€): " . ($mc['event']['name'] ?? 'Unknown');
                         // Collect interesting low-liquidity matches for logging, but only if they have significant volume (> 1000)
                         if ($liquidity >= 1000) {
                             $lowLiquidityQueue[] = [
@@ -250,15 +289,21 @@ class DioQuantumController
             }
 
             if (!empty($allOpportunities)) {
-                // Sort by liquidity (totalMatched) descending
-                usort($allOpportunities, fn($a, $b) => ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0));
+                // Prioritize Soccer, then sort by liquidity (totalMatched) descending
+                usort($allOpportunities, function($a, $b) {
+                    if ($a['sport'] === 'Soccer' && $b['sport'] !== 'Soccer') return -1;
+                    if ($a['sport'] !== 'Soccer' && $b['sport'] === 'Soccer') return 1;
+                    return ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0);
+                });
 
-                // Take top 30 for analysis
-                $batchTickers = array_slice($allOpportunities, 0, 30);
+                // Take top 40 for analysis
+                $batchTickers = array_slice($allOpportunities, 0, 40);
+                $trace['ai_batch_size'] = count($batchTickers);
                 $allOpportunities = []; // Reset for recording actual opportunities later
 
-                // 5. AI Analysis (Quantum Batch Mode - 1 call for up to 30 tickers)
+                // 5. AI Analysis (Quantum Batch Mode - 1 call for up to 40 tickers)
                 $batchResults = $this->analyzeQuantumBatch($batchTickers, $strategyPrompt, $minConfidence);
+                $trace['ai_results'] = $batchResults;
 
                 $workingTotalBankroll = $portfolio['total_balance'];
                 $workingAvailableBalance = $portfolio['available_balance'];
@@ -306,8 +351,15 @@ class DioQuantumController
 
                                 if (!$placed) {
                                     $action = 'pass';
+                                    $trace['errors'][] = "Piazzamento scommessa fallito per: " . $ticker['event'];
                                     continue;
                                 }
+
+                                $trace['placed_bets'][] = [
+                                    'event' => $ticker['event'],
+                                    'stake' => $stake,
+                                    'odds' => $analysis['odds']
+                                ];
 
                                 $workingAvailableBalance -= $stake;
                                 $workingTotalBankroll -= $stake;
@@ -333,9 +385,12 @@ class DioQuantumController
 
             // SAVE SCORES CACHE
             file_put_contents(\App\Config\Config::DATA_PATH . 'live_scores.json', json_encode($liveScores));
+            file_put_contents(\App\Config\Config::DATA_PATH . 'dio_last_scan.json', json_encode($trace, JSON_PRETTY_PRINT));
 
             echo json_encode(['status' => 'success', 'scanned' => count($batchTickers), 'opportunities' => $allOpportunities]);
         } catch (\Throwable $e) {
+            $trace['errors'][] = $e->getMessage();
+            file_put_contents(\App\Config\Config::DATA_PATH . 'dio_last_scan.json', json_encode($trace, JSON_PRETTY_PRINT));
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
     }
