@@ -4,7 +4,7 @@
     </div>
 <?php endif; ?>
 
-<div class="flex flex-1 overflow-hidden gap-8 h-full">
+<div class="flex flex-1 gap-8 min-h-[600px]">
 
     <!-- Sidebar Tabelle -->
     <div class="w-64 bg-gray-900/50 rounded-3xl border border-gray-800 flex flex-col shrink-0 overflow-hidden">
@@ -14,23 +14,28 @@
         </div>
         <div class="overflow-y-auto flex-1 p-4 space-y-1 no-scrollbar">
             <?php foreach ($tables as $t): ?>
-                <a href="?db=<?= $currentDbKey ?>&table=<?= $t ?>"
+                <a href="?db=<?= $currentDbKey ?>&table=<?= $t ?>&tab=<?= $tab ?? 'data' ?>"
                    class="block px-4 py-2 rounded-xl text-xs truncate transition-all <?= $currentTable === $t ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-500 hover:bg-white/5 hover:text-white' ?>">
                     <?= $t ?>
                 </a>
             <?php endforeach; ?>
         </div>
-        <div class="p-4 border-t border-gray-800 flex bg-black/20 gap-2">
-            <?php foreach ($databases as $k => $info): ?>
-                <a href="?db=<?= $k ?>" class="flex-1 py-2 rounded-lg text-[9px] text-center font-bold uppercase border border-gray-800 hover:bg-gray-800 transition-all <?= $currentDbKey === $k ? 'bg-gray-800 text-white' : 'text-gray-600' ?>">
-                    <?= $k ?>
-                </a>
-            <?php endforeach; ?>
+        <div class="p-4 border-t border-gray-800 flex flex-col bg-black/20 gap-2">
+            <span class="text-[9px] text-gray-600 uppercase font-black tracking-widest ml-1 mb-1">Seleziona Database</span>
+            <div class="flex gap-2">
+                <?php foreach ($databases as $k => $info): ?>
+                    <a href="?db=<?= $k ?>"
+                       title="<?= $info['name'] ?>"
+                       class="flex-1 py-2 rounded-lg text-[9px] text-center font-bold uppercase border border-gray-800 hover:bg-gray-800 transition-all <?= $currentDbKey === $k ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'text-gray-600' ?>">
+                        <?= $k ?>
+                    </a>
+                <?php endforeach; ?>
+            </div>
         </div>
     </div>
 
     <!-- Main Data Table -->
-    <div class="flex-1 flex flex-col bg-gray-900/50 rounded-3xl border border-gray-800 overflow-hidden relative">
+    <div class="flex-1 flex flex-col bg-gray-900/50 rounded-3xl border border-gray-800 overflow-hidden relative min-h-[500px]">
 
         <div class="p-6 border-b border-gray-800 bg-gray-800/50 flex justify-between items-center shrink-0">
             <div class="flex items-center gap-8">
@@ -66,26 +71,33 @@
             <form action="" method="GET" class="flex items-center gap-2">
                 <input type="hidden" name="db" value="<?= $currentDbKey ?>">
                 <input type="hidden" name="table" value="<?= $currentTable ?>">
+                <input type="hidden" name="tab" value="<?= $tab ?? 'data' ?>">
                 <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Search..." class="input-dark w-64 text-xs py-2 px-4 rounded-xl bg-slate-900 border-slate-700 outline-none focus:border-blue-500">
 
                 <div class="flex gap-1 items-center ml-4">
                     <?php if($page > 1): ?>
-                        <a href="?db=<?= $currentDbKey ?>&table=<?= $currentTable ?>&search=<?= urlencode($search) ?>&page=<?= $page-1 ?>" class="w-8 h-8 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded-lg">◀</a>
+                        <a href="?db=<?= $currentDbKey ?>&table=<?= $currentTable ?>&tab=<?= $tab ?? 'data' ?>&search=<?= urlencode($search) ?>&page=<?= $page-1 ?>" class="w-8 h-8 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded-lg">◀</a>
                     <?php endif; ?>
                     <span class="px-3 text-[10px] font-bold text-gray-500 uppercase"><?= $page ?> / <?= $totalPages ?: 1 ?></span>
                     <?php if($page < $totalPages): ?>
-                        <a href="?db=<?= $currentDbKey ?>&table=<?= $currentTable ?>&search=<?= urlencode($search) ?>&page=<?= $page+1 ?>" class="w-8 h-8 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded-lg">▶</a>
+                        <a href="?db=<?= $currentDbKey ?>&table=<?= $currentTable ?>&tab=<?= $tab ?? 'data' ?>&search=<?= urlencode($search) ?>&page=<?= $page+1 ?>" class="w-8 h-8 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded-lg">▶</a>
                     <?php endif; ?>
                 </div>
             </form>
         </div>
 
-        <div class="flex-1 overflow-auto no-scrollbar">
+        <div class="flex-1 overflow-auto">
             <table class="w-full text-left border-collapse text-[11px] font-mono">
                 <thead class="bg-gray-900 text-gray-500 uppercase sticky top-0 z-10">
                     <tr>
                         <th class="p-4 border-b border-gray-800 w-16">Act</th>
-                        <?php if(!empty($rows)) foreach(array_keys($rows[0]) as $col) if($col !== '_id') echo "<th class='p-4 border-b border-gray-800 whitespace-nowrap'>$col</th>"; ?>
+                        <?php
+                        $displayCols = !empty($rows) ? array_keys($rows[0]) : $validColumns;
+                        foreach($displayCols as $col) {
+                            if($col === '_id') continue;
+                            echo "<th class='p-4 border-b border-gray-800 whitespace-nowrap'>$col</th>";
+                        }
+                        ?>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-800 bg-gray-900/20">
@@ -109,8 +121,14 @@
                                 $isNum = is_numeric($val);
                                 $color = $isNum ? 'text-blue-300' : 'text-gray-400';
                                 if ($val === null) { $val = 'NULL'; $color='text-gray-700 italic'; }
+
+                                // Dynamic max-width for content
+                                $maxWidth = 'max-w-[320px]';
+                                if ($col === 'strategy_prompt' || $col === 'motivation' || $col === 'lesson_text') {
+                                    $maxWidth = 'max-w-[500px]';
+                                }
                             ?>
-                                <td class="p-4 whitespace-nowrap max-w-xs truncate <?= $color ?>" title="<?= htmlspecialchars($val) ?>">
+                                <td class="p-4 whitespace-nowrap <?= $maxWidth ?> truncate <?= $color ?>" title="<?= htmlspecialchars($val) ?>">
                                     <?= htmlspecialchars($val) ?>
                                 </td>
                             <?php endforeach; ?>
