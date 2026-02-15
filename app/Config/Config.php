@@ -15,7 +15,6 @@ class Config
     const USAGE_FILE = self::DATA_PATH . 'usage.json';
     const SETTINGS_FILE = self::DATA_PATH . 'settings.json'; // New Settings File
     const DEFAULT_INITIAL_BANKROLL = 100.00;
-    const DEFAULT_VIRTUAL_BOOKMAKER_ID = 7; // William Hill
     const MIN_BETFAIR_STAKE = 2.00;
     const MAX_STAKE_REAL = 20.00;
     const MIN_BETFAIR_ODDS = 1.25;
@@ -79,15 +78,13 @@ class Config
         if (!file_exists(self::SETTINGS_FILE)) {
             return [
                 'simulation_mode' => true,
-                'initial_bankroll' => self::DEFAULT_INITIAL_BANKROLL,
-                'virtual_bookmaker_id' => self::DEFAULT_VIRTUAL_BOOKMAKER_ID
+                'initial_bankroll' => self::DEFAULT_INITIAL_BANKROLL
             ];
         }
         $settings = json_decode(file_get_contents(self::SETTINGS_FILE), true);
         return [
             'simulation_mode' => $settings['simulation_mode'] ?? true,
-            'initial_bankroll' => (float) ($settings['initial_bankroll'] ?? self::DEFAULT_INITIAL_BANKROLL),
-            'virtual_bookmaker_id' => (int) ($settings['virtual_bookmaker_id'] ?? self::DEFAULT_VIRTUAL_BOOKMAKER_ID)
+            'initial_bankroll' => (float) ($settings['initial_bankroll'] ?? self::DEFAULT_INITIAL_BANKROLL)
         ];
     }
 
@@ -101,12 +98,6 @@ class Config
     {
         $settings = self::getSettings();
         return $settings['initial_bankroll'];
-    }
-
-    public static function getVirtualBookmakerId()
-    {
-        $settings = self::getSettings();
-        return $settings['virtual_bookmaker_id'];
     }
 
     public static function getDB()

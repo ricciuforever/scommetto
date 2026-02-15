@@ -30,9 +30,6 @@ if (strpos($currentPath, '/leagues') !== false) {
 } elseif (preg_match('#^/player/(\d+)$#', $currentPath, $m)) {
     $initialApi = "/api/view/player/{$m[1]}";
     $initialTitle = 'Dettagli Giocatore';
-} elseif (strpos($currentPath, '/settings') !== false) {
-    $initialApi = '/api/view/settings';
-    $initialTitle = 'Impostazioni Sistema';
 }
 
 if (!empty($_SERVER['QUERY_STRING'])) {

@@ -37,7 +37,7 @@ class BrainController
         // Fetch operational mode
         $stmtMode = $this->db->prepare("SELECT value FROM system_state WHERE key = 'operational_mode'");
         $stmtMode->execute();
-        $operationalMode = $stmtMode->fetchColumn() ?: 'virtual';
+        $operationalMode = $stmtMode->fetchColumn() ?: 'real';
 
         // 1. Metriche Globali (Filtrate per MARKET e SYSTEM per allineamento totale)
         // Usiamo MARKET per le scommesse tracciate e SYSTEM per eventuali scarti/manuali

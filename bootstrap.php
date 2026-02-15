@@ -8,6 +8,10 @@ use App\Config\Config;
 Config::init();
 date_default_timezone_set(Config::DEFAULT_TIMEZONE);
 
+if (session_status() === PHP_SESSION_NONE && PHP_SAPI !== 'cli') {
+    session_start();
+}
+
 // Enable Error Logging
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);

@@ -90,7 +90,7 @@ class GeminiService
                     $mapping['{{candidates_list}}'] . "\n\n";
             }
 
-                "SYSTEM CONSTRAINTS:\n" .
+            $prompt .= "\n\nSYSTEM CONSTRAINTS:\n" .
                 "1. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI).\n" .
                 "[\n" .
                 "  {\n" .
@@ -135,7 +135,7 @@ class GeminiService
                     implode("\n\n", array_values($mapping));
             }
 
-                "SYSTEM CONSTRAINTS (MANDATORY):\n" .
+            $prompt .= "\n\nSYSTEM CONSTRAINTS (MANDATORY):\n" .
                 "1. REGOLA CALCIO: È permessa solo UNA scommessa attiva alla volta per match.\n" .
                 "2. ⚠️ QUOTA MINIMA: 1.25. Se la quota attuale è inferiore ma l'evento è valido, imposta 'odds' a 1.25.\n" .
                 "3. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON.\n" .
@@ -169,7 +169,7 @@ class GeminiService
                     $mapping['{{candidates_list}}'];
             }
 
-                "SYSTEM CONSTRAINTS (MANDATORY):\n" .
+            $prompt .= "\n\nSYSTEM CONSTRAINTS (MANDATORY):\n" .
                 "1. QUOTA MINIMA: 1.25.\n" .
                 "2. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON:\n" .
                 "{\n" .

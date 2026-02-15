@@ -98,34 +98,7 @@ class AdminController
         $action = $_POST['action'] ?? ($_GET['action'] ?? 'list');
         $currentTable = $_GET['table'] ?? '';
 
-        // Handle Actions
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dbConfig['editable']) {
-            if ($action === 'update') {
-                $id = $_POST['id'];
-                $fields = []; $params = [];
-                foreach ($_POST['data'] as $col => $val) {
-                    if ($col !== '_id') {
-                        $fields[] = "`$col` = ?";
-                        $params[] = ($val === '') ? null : $val;
-                    }
-                }
-                $params[] = $id;
-                $sql = "UPDATE `$currentTable` SET " . implode(', ', $fields) . " WHERE $pkName = ?";
-                try {
-                    $pdo->prepare($sql)->execute($params);
-                    $message = "✅ Record aggiornato con successo.";
-                } catch (\Exception $e) { $message = "❌ Errore Update: " . $e->getMessage(); }
-            }
-        }
-
-        if ($action === 'delete' && isset($_GET['id']) && $dbConfig['editable']) {
-            try {
-                $pdo->prepare("DELETE FROM `$currentTable` WHERE $pkName = ?")->execute([$_GET['id']]);
-                $message = "🗑️ Record eliminato.";
-            } catch (\Exception $e) { $message = "❌ Errore Delete: " . $e->getMessage(); }
-        }
-
-        // Fetch Tables
+        // Fetch Tables first for whitelisting
         if ($dbConfig['driver'] === 'sqlite') {
             $tables = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
         } else {
@@ -140,8 +113,49 @@ class AdminController
         if ($currentTable && !in_array($currentTable, $tables)) {
             die("Access Denied: Invalid Table");
         }
-
         if (!$currentTable && !empty($tables)) $currentTable = $tables[0];
+
+        // Fetch valid columns for the current table to prevent SQL injection in updates/searches
+        $validColumns = [];
+        if ($currentTable) {
+            if ($dbConfig['driver'] === 'sqlite') {
+                 $colsInfo = $pdo->query("PRAGMA table_info(`$currentTable`)")->fetchAll(PDO::FETCH_ASSOC);
+                 $validColumns = array_column($colsInfo, 'name');
+            } else {
+                 // DESCRIBE works for MySQL and is standard
+                 $validColumns = $pdo->query("DESCRIBE `$currentTable`")->fetchAll(PDO::FETCH_COLUMN);
+            }
+        }
+
+        // Handle Actions
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dbConfig['editable'] && $currentTable) {
+            if ($action === 'update') {
+                $id = $_POST['id'];
+                $fields = []; $params = [];
+                foreach ($_POST['data'] as $col => $val) {
+                    // Critical Whitelisting: Ensure column exists in table
+                    if ($col !== '_id' && in_array($col, $validColumns)) {
+                        $fields[] = "`$col` = ?";
+                        $params[] = ($val === '') ? null : $val;
+                    }
+                }
+                if (!empty($fields)) {
+                    $params[] = $id;
+                    $sql = "UPDATE `$currentTable` SET " . implode(', ', $fields) . " WHERE $pkName = ?";
+                    try {
+                        $pdo->prepare($sql)->execute($params);
+                        $message = "✅ Record aggiornato con successo.";
+                    } catch (\Exception $e) { $message = "❌ Errore Update: " . $e->getMessage(); }
+                }
+            }
+        }
+
+        if ($action === 'delete' && isset($_GET['id']) && $dbConfig['editable'] && $currentTable) {
+            try {
+                $pdo->prepare("DELETE FROM `$currentTable` WHERE $pkName = ?")->execute([$_GET['id']]);
+                $message = "🗑️ Record eliminato.";
+            } catch (\Exception $e) { $message = "❌ Errore Delete: " . $e->getMessage(); }
+        }
 
         // Fetch Data
         $rows = [];
@@ -154,14 +168,8 @@ class AdminController
         if ($currentTable) {
             $whereClause = "";
             if ($search) {
-                if ($dbConfig['driver'] === 'sqlite' || Database::getInstance()->isSQLite()) {
-                    $colsInfo = $pdo->query("PRAGMA table_info(`$currentTable`)")->fetchAll(PDO::FETCH_ASSOC);
-                    $columns = array_column($colsInfo, 'name');
-                } else {
-                    $columns = $pdo->query("DESCRIBE `$currentTable`")->fetchAll(PDO::FETCH_COLUMN);
-                }
                 $searchParts = [];
-                $searchableCols = array_slice($columns, 0, 8);
+                $searchableCols = array_slice($validColumns, 0, 8);
                 foreach ($searchableCols as $col) {
                     $searchParts[] = "`$col` LIKE " . $pdo->quote("%$search%");
                 }
@@ -172,14 +180,10 @@ class AdminController
                 $totalRows = $pdo->query("SELECT COUNT(*) FROM `$currentTable` $whereClause")->fetchColumn();
 
                 $orderBy = "";
-                $columns = [];
-                if ($dbConfig['driver'] === 'sqlite' || Database::getInstance()->isSQLite()) {
+                if ($dbConfig['driver'] === 'sqlite') {
                     $orderBy = "ORDER BY rowid DESC";
                 } else {
-                    // MySQL: Get columns to check for 'id' and build valid syntax
-                    $stmtCols = $pdo->query("DESCRIBE `$currentTable` ");
-                    $columns = $stmtCols->fetchAll(PDO::FETCH_COLUMN);
-                    if (in_array('id', $columns)) {
+                    if (in_array('id', $validColumns)) {
                         $orderBy = "ORDER BY id DESC";
                         $pkAlias = "id as _id";
                     } else {
@@ -187,12 +191,12 @@ class AdminController
                     }
                 }
 
-                // MySQL/MariaDB fix: SELECT *, col is valid, but SELECT col, * might fail or require table prefix
+                // MySQL/MariaDB fix: SELECT *, col requires table prefix in some versions
                 // To be safe and compatible with both:
                 if ($dbConfig['driver'] === 'sqlite') {
                     $sql = "SELECT $pkAlias, * FROM `$currentTable` $whereClause $orderBy LIMIT $limit OFFSET $offset";
                 } else {
-                    $sql = "SELECT *, $pkAlias FROM `$currentTable` $whereClause $orderBy LIMIT $limit OFFSET $offset";
+                    $sql = "SELECT `$currentTable`.*, $pkAlias FROM `$currentTable` $whereClause $orderBy LIMIT $limit OFFSET $offset";
                 }
 
                 $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
@@ -236,6 +240,11 @@ class AdminController
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($_POST['config'] as $key => $val) {
+                // Validation for min_stake
+                if ($key === 'min_stake' && (float)$val < 2.0) {
+                    $val = '2.00';
+                }
+
                 $stmt = $db->prepare("INSERT INTO system_state (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP");
                 $stmt->execute([$key, $val]);
             }
@@ -276,6 +285,12 @@ class AdminController
                 $id = $_POST['id'];
                 $db->prepare("DELETE FROM users WHERE id = ?")->execute([$id]);
                 $message = "🗑️ Utente eliminato.";
+            } elseif ($action === 'update_password') {
+                $id = $_POST['id'];
+                $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
+                $stmt = $db->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+                $stmt->execute([$password, $id]);
+                $message = "✅ Password aggiornata.";
             }
         }
 
@@ -283,6 +298,31 @@ class AdminController
 
         require __DIR__ . '/../Views/admin/layout/header.php';
         require __DIR__ . '/../Views/admin/users.php';
+        require __DIR__ . '/../Views/admin/layout/footer.php';
+    }
+
+    public function systemSettings()
+    {
+        if (!AuthController::isAdmin()) {
+            header('Location: /admin');
+            exit;
+        }
+
+        $message = "";
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $newSettings = [
+                'simulation_mode' => isset($_POST['simulation_mode']),
+                'initial_bankroll' => (float) $_POST['initial_bankroll']
+            ];
+
+            file_put_contents(Config::SETTINGS_FILE, json_encode($newSettings, JSON_PRETTY_PRINT));
+            $message = "✅ Impostazioni di sistema aggiornate.";
+        }
+
+        $settings = Config::getSettings();
+
+        require __DIR__ . '/../Views/admin/layout/header.php';
+        require __DIR__ . '/../Views/admin/system.php';
         require __DIR__ . '/../Views/admin/layout/footer.php';
     }
 }

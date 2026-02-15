@@ -66,7 +66,10 @@
                             </td>
                             <td class="p-4 text-gray-400"><?= htmlspecialchars($u['assigned_agent']) ?></td>
                             <td class="p-4 text-gray-600"><?= date('d/m/Y H:i', strtotime($u['created_at'])) ?></td>
-                            <td class="p-4 text-right">
+                            <td class="p-4 text-right flex justify-end gap-3">
+                                <button onclick="openPasswordModal(<?= $u['id'] ?>, '<?= htmlspecialchars($u['username']) ?>')" class="text-blue-500 hover:text-blue-300 transition-colors">
+                                    <i data-lucide="key" class="w-4 h-4"></i>
+                                </button>
                                 <?php if ($u['username'] !== $user['username']): ?>
                                 <form method="POST" onsubmit="return confirm('Sicuro di voler eliminare questo utente?')" class="inline">
                                     <input type="hidden" name="action" value="delete">
@@ -86,3 +89,35 @@
     </div>
 
 </div>
+
+<!-- Password Update Modal -->
+<div id="passwordModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center backdrop-blur-sm z-50">
+    <div class="bg-gray-800 border border-gray-600 rounded-3xl shadow-2xl w-full max-w-md flex flex-col">
+        <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+            <h3 class="font-black italic uppercase text-white">Aggiorna Password: <span id="modalUsername" class="text-blue-400"></span></h3>
+            <button onclick="document.getElementById('passwordModal').classList.add('hidden')" class="text-gray-400 hover:text-white">✕</button>
+        </div>
+        <form method="POST" class="p-8 space-y-6">
+            <input type="hidden" name="action" value="update_password">
+            <input type="hidden" name="id" id="modalUserId">
+
+            <div>
+                <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-2">Nuova Password</label>
+                <input type="password" name="password" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-blue-500">
+            </div>
+
+            <button type="submit" class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase italic tracking-tighter rounded-xl transition-all shadow-lg shadow-blue-500/20">
+                Salva Nuova Password
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+function openPasswordModal(id, username) {
+    document.getElementById('modalUserId').value = id;
+    document.getElementById('modalUsername').innerText = username;
+    document.getElementById('passwordModal').classList.remove('hidden');
+    document.getElementById('passwordModal').classList.add('flex');
+}
+</script>

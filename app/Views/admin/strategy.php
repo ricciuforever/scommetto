@@ -111,6 +111,12 @@
                         <input type="number" step="0.01" name="config[stake_value]" value="<?= htmlspecialchars($config['stake_value'] ?? '0.15') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-mono outline-none focus:border-blue-500">
                         <p class="text-[9px] text-gray-600 mt-2 italic">Kelly: 0.15 = 15% di Kelly frazionario. Flat: 5.00 = 5€ fissi.</p>
                     </div>
+
+                    <div>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Puntata Minima (€)</label>
+                        <input type="number" step="0.01" min="2.00" name="config[min_stake]" value="<?= htmlspecialchars($config['min_stake'] ?? '2.00') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-mono outline-none focus:border-blue-500">
+                        <p class="text-[9px] text-gray-600 mt-2 italic">Minimo assoluto: 2.00€ (limite Betfair).</p>
+                    </div>
                 </div>
             </div>
 
@@ -118,10 +124,19 @@
             <div class="glass p-8 rounded-3xl">
                 <div class="flex items-center gap-3 mb-6">
                     <i data-lucide="shield-alert" class="text-red-500 w-6 h-6"></i>
-                    <h3 class="text-lg font-black italic uppercase text-white">Gestione Rischio</h3>
+                    <h3 class="text-lg font-black italic uppercase text-white">Gestione Rischio & Modalità</h3>
                 </div>
 
                 <div class="space-y-6">
+                    <div>
+                        <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Modalità Operativa (Agente)</label>
+                        <select name="config[operational_mode]" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs font-bold uppercase outline-none focus:border-blue-500">
+                            <option value="real" <?= ($config['operational_mode'] ?? 'real') === 'real' ? 'selected' : '' ?>>Real (Scommesse Reali)</option>
+                            <option value="virtual" <?= ($config['operational_mode'] ?? 'real') === 'virtual' ? 'selected' : '' ?>>Virtual (Simulazione)</option>
+                        </select>
+                        <p class="text-[9px] text-gray-600 mt-2 italic">Specifica se questo agente deve operare su fondi reali o simulati.</p>
+                    </div>
+
                     <div>
                         <label class="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Confidenza Minima (%)</label>
                         <input type="number" name="config[min_confidence]" value="<?= htmlspecialchars($config['min_confidence'] ?? '80') ?>" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm font-mono outline-none focus:border-blue-500">

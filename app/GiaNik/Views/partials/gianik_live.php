@@ -357,6 +357,11 @@ $account = $account ?? ['available' => 0, 'exposure' => 0];
     })();
 
     function openManualBetModal(data) {
+        <?php if(!isset($_SESSION['admin_user'])): ?>
+        alert('Accesso negato. Effettua il login come amministratore per operare.');
+        return;
+        <?php endif; ?>
+
         // Build modal on the fly
         const modalId = 'manual-bet-modal';
         const existing = document.getElementById(modalId);
