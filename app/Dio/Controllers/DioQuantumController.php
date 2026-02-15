@@ -32,15 +32,37 @@ class DioQuantumController
     public function index()
     {
         $pageTitle = 'Scommetto.AI - Dio Quantum';
-        $portfolio = $this->recalculatePortfolio();
+
+        $operationalMode = $this->db->query("SELECT value FROM system_state WHERE key = 'operational_mode'")->fetchColumn() ?: 'virtual';
+
+        $actualTotal = null;
+        if ($operationalMode === 'real') {
+            $fundsData = $this->bf->getFunds();
+            $funds = $fundsData['result'] ?? $fundsData;
+            if (isset($funds['availableToBetBalance'])) {
+                $actualTotal = (float)$funds['availableToBetBalance'] + abs((float)($funds['exposure'] ?? 0));
+            }
+        }
+
+        $portfolio = $this->recalculatePortfolio($actualTotal);
         $stats = $portfolio;
+
+        // Overlay real balance if available
+        if ($operationalMode === 'real' && isset($funds['availableToBetBalance'])) {
+            $stats['available_balance'] = (float)$funds['availableToBetBalance'];
+            $stats['exposure_balance'] = abs((float)($funds['exposure'] ?? 0));
+            $stats['total_balance'] = $stats['available_balance'] + $stats['exposure_balance'];
+        }
+
         $recentBets = $this->getRecentBets($portfolio['placed_ids'] ?? null);
         $recentLogs = $this->getRecentLogs();
         $recentExperiences = $this->getRecentExperiences();
         $performanceHistory = $portfolio['history'];
 
-        // Synchronize virtual balance in DB
-        $this->updateVirtualBalance($portfolio['available_balance']);
+        // Synchronize virtual balance in DB (only if in virtual mode)
+        if ($operationalMode === 'virtual') {
+            $this->updateVirtualBalance($portfolio['available_balance']);
+        }
 
         // Fetch live sports dynamically
         $eventTypesRes = $this->bf->getEventTypes(['inPlayOnly' => true]);
@@ -83,6 +105,7 @@ class DioQuantumController
         }
         unset($data, $eventObj); // Break references
 
+        $currentMode = $operationalMode;
         require __DIR__ . '/../Views/dashboard.php';
     }
 
@@ -90,12 +113,16 @@ class DioQuantumController
     {
         $this->sendJsonHeader();
         $liveScores = [];
+        $targetSports = [1, 2, 5, 7522]; // Soccer, Tennis, Rugby Union, Basketball
 
         // CHECK IF AVAILABLE BALANCE >= 2€
         $portfolio = $this->recalculatePortfolio();
 
-        // Synchronize virtual balance in DB
-        $this->updateVirtualBalance($portfolio['available_balance']);
+        // Synchronize virtual balance in DB (only if in virtual mode)
+        $operationalMode = $this->db->query("SELECT value FROM system_state WHERE key = 'operational_mode'")->fetchColumn() ?: 'virtual';
+        if ($operationalMode === 'virtual') {
+            $this->updateVirtualBalance($portfolio['available_balance']);
+        }
 
         if ($portfolio['available_balance'] < 2.00) {
             echo json_encode(['status' => 'success', 'message' => 'Dio Quantum fermo: Saldo insufficiente (< 2€)']);
@@ -129,8 +156,11 @@ class DioQuantumController
             $batchTickers = [];
 
             foreach ($eventTypes as $sportType) {
-                $sportId = $sportType['eventType']['id'];
+                $sportId = (int)$sportType['eventType']['id'];
                 $sportName = $sportType['eventType']['name'];
+
+                // Filter for requested sports
+                if (!in_array($sportId, $targetSports)) continue;
 
                 // 2. Get Live Events for this sport
                 $liveEventsRes = $this->bf->getLiveEvents([$sportId]);
@@ -157,6 +187,16 @@ class DioQuantumController
                 foreach ($books as $book) {
                     // Safety Cap: Massimo 5 analisi AI per ciclo (in un singolo batch)
                     if (count($batchTickers) >= 5) break 2;
+
+                    // Conflict Prevention with GiaNik (for Soccer: avoid same match)
+                    if ($sportId === 1 && $this->isMatchActiveInGiaNik($mc['event']['name'] ?? '')) {
+                        continue;
+                    }
+
+                    // Avoid duplicate bets in Dio for the same match
+                    if ($this->isMatchActiveInDio($mc['event']['name'] ?? '')) {
+                        continue;
+                    }
 
                     // Filter for minimum liquidity to avoid wasting AI calls on irrelevant markets
                     if (($book['totalMatched'] ?? 0) < 2000)
@@ -509,6 +549,52 @@ class DioQuantumController
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    private function isMatchActiveInGiaNik($eventName)
+    {
+        if (empty($eventName)) return false;
+        try {
+            $gianikDbPath = \App\Config\Config::DATA_PATH . 'gianik.sqlite';
+            if (!file_exists($gianikDbPath)) return false;
+            $gDb = new PDO("sqlite:" . $gianikDbPath);
+
+            $stmt = $gDb->query("SELECT event_name FROM bets WHERE status = 'pending'");
+            $pending = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+            $normCurrent = $this->normalizeEventName($eventName);
+            foreach ($pending as $pName) {
+                if ($this->normalizeEventName($pName) === $normCurrent) return true;
+            }
+            return false;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    private function isMatchActiveInDio($eventName)
+    {
+        if (empty($eventName)) return false;
+        $stmt = $this->db->prepare("SELECT event_name FROM bets WHERE status = 'pending'");
+        $stmt->execute();
+        $pending = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $normCurrent = $this->normalizeEventName($eventName);
+        foreach ($pending as $pName) {
+            if ($this->normalizeEventName($pName) === $normCurrent) return true;
+        }
+        return false;
+    }
+
+    private function normalizeEventName($name)
+    {
+        if (!$name) return '';
+        $name = strtolower($name);
+        $name = preg_replace('/\d+\s*[-:]\s*\d+/', ' ', $name);
+        $name = preg_replace('/\b(v|vs|@|-|\/)\b/', ' ', $name);
+        $name = preg_replace('/[^a-z0-9 ]/', '', $name);
+        $name = preg_replace('/\s+/', ' ', trim($name));
+        return $name;
+    }
+
     private function sendJsonHeader()
     {
         if (PHP_SAPI !== 'cli' && !headers_sent()) {
@@ -522,14 +608,16 @@ class DioQuantumController
         return $portfolio['history'];
     }
 
-    private function recalculatePortfolio()
+    private function recalculatePortfolio($actualTotal = null)
     {
-        if ($this->cachedPortfolio !== null) {
+        if ($this->cachedPortfolio !== null && $actualTotal === null) {
             return $this->cachedPortfolio;
         }
 
-        $stmt = $this->db->prepare("SELECT id, stake, odds, profit, status, created_at, settled_at FROM bets ORDER BY created_at ASC");
-        $stmt->execute();
+        $operationalMode = $this->db->query("SELECT value FROM system_state WHERE key = 'operational_mode'")->fetchColumn() ?: 'virtual';
+
+        $stmt = $this->db->prepare("SELECT id, stake, odds, profit, status, created_at, settled_at, type FROM bets WHERE type = ? ORDER BY created_at ASC");
+        $stmt->execute([$operationalMode]);
         $allBets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $invested = 100.0;
@@ -620,6 +708,37 @@ class DioQuantumController
         }
 
         $placedIds = array_keys(array_filter($placedBets));
+
+        // Adjust for REAL mode if actual balance is provided
+        if ($operationalMode === 'real' && $actualTotal !== null) {
+            $realTotal = (float)$actualTotal;
+            $trackedTotal = $currentBalance + $exposure;
+            $offset = $realTotal - $trackedTotal;
+
+            $newHistory = [['t' => 'Start', 'v' => 100.0]];
+            if (abs($offset) > 0.01) {
+                $newHistory[] = ['t' => 'ADJ', 'v' => round(100.0 + $offset, 2)];
+            }
+
+            // Re-trace history with the offset
+            $runningTotal = 100.0 + $offset;
+            foreach ($events as $event) {
+                if ($event['type'] === 'place') {
+                    if (!($placedBets[$event['id']] ?? false)) continue;
+                    // No change to running total on place (exposure swap)
+                } else {
+                    if (!($placedBets[$event['id']] ?? false)) continue;
+                    $bet = $betById[$event['id']];
+                    $runningTotal += (float)$bet['profit'];
+                }
+                $newHistory[] = [
+                    't' => date('d/m H:i', strtotime($event['time'])),
+                    'v' => round($runningTotal, 2)
+                ];
+            }
+            $history = $newHistory;
+            $currentBalance += $offset; // Adjust current available balance to match real world
+        }
 
         $this->cachedPortfolio = [
             'total_balance' => $currentBalance + $exposure,
