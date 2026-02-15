@@ -1115,6 +1115,9 @@ class GiaNikController
                     $apiData = $this->enrichWithApiData($event['event'], $event['sport'], $apiFullFixtures, $event['competition'], $firstBook);
                     $event['api_football'] = $apiData;
 
+                    // Always define currentMin if apiData is available to avoid warnings in later priority/shock checks
+                    $currentMin = (int)($apiData['live']['live_status']['elapsed_minutes'] ?? 0);
+
                     // HEURISTIC PRIORITY FILTER: Only analyze if Intensity Index is high or there was a recent goal
                     $intensity = $this->getLastIntensityBadge($apiData['fixture']['id'] ?? null);
                     $isPriority = false;
@@ -1122,7 +1125,6 @@ class GiaNikController
 
                     // Check for recent goals (last 5 mins)
                     if (!$isPriority && !empty($apiData['events'])) {
-                        $currentMin = (int)($apiData['live']['live_status']['elapsed_minutes'] ?? 0);
                         foreach ($apiData['events'] as $ev) {
                             if ($ev['type'] === 'Goal' && ($currentMin - (int)$ev['time']['elapsed']) <= 5) {
                                 $isPriority = true;
@@ -1150,7 +1152,7 @@ class GiaNikController
 
                         // Shock check (Circuit Breaker)
                         $isShock = false;
-                        foreach ($apiData['events'] as $ev) {
+                        foreach (($apiData['events'] ?? []) as $ev) {
                             $type = $ev['type'] ?? '';
                             if (($type === 'Goal' || ($type === 'Card' && strpos(strtolower($ev['detail'] ?? ''), 'red') !== false)) && ($currentMin - (int)$ev['time']['elapsed']) <= 4) {
                                 $isShock = true; break;
@@ -1388,9 +1390,9 @@ class GiaNikController
         return $results;
     }
 
-    private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $countryCode = null, $startTime = null, $betfairEventId = null)
+    private function enrichWithApiData($bfEventName, $sport, $preFetchedLive = null, $competitionName = null, $bfMarketBook = null, $betfairEventId = null)
     {
-        // Restricted to Soccer
+        // Try to extract countryCode and startTime from MarketBook if available
         $countryCode = null;
         if ($bfMarketBook && isset($bfMarketBook['marketDefinition']['countryCode'])) {
             $countryCode = $bfMarketBook['marketDefinition']['countryCode'];
@@ -1401,7 +1403,9 @@ class GiaNikController
             $startTime = $bfMarketBook['marketDefinition']['marketTime'];
         }
 
-        $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive, $countryCode, $startTime, $bfMarketBook['marketDefinition']['eventId'] ?? null);
+        // Use competitionName as a fallback for country/league context if needed,
+        // but findMatchingFixture primarily uses countryCode and startTime.
+        $apiMatch = $this->findMatchingFixture($bfEventName, $sport, $preFetchedLive, $countryCode, $startTime, $betfairEventId ?: ($bfMarketBook['marketDefinition']['eventId'] ?? null));
 
         if (!$apiMatch) {
             // FALLBACK: If API-Football match not found, try to extract basic live data from Betfair
