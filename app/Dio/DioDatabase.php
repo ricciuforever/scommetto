@@ -89,7 +89,7 @@ class DioDatabase
             'strategy_prompt' => (new \App\Services\GeminiService())->getDefaultStrategyPrompt('dio'),
             'stake_mode' => 'kelly',
             'stake_value' => '0.10',
-            'min_confidence' => '75',
+            'min_confidence' => '80',
             'daily_stop_loss' => '100.00',
             'virtual_balance' => '100.00',
             'operational_mode' => 'virtual'

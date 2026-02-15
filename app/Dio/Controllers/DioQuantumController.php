@@ -228,7 +228,7 @@ class DioQuantumController
 
             if (!empty($batchTickers)) {
                 // 5. AI Analysis (Quantum Batch Mode - 1 call for 5 tickers)
-                $batchResults = $this->analyzeQuantumBatch($batchTickers, $strategyPrompt);
+                $batchResults = $this->analyzeQuantumBatch($batchTickers, $strategyPrompt, $minConfidence);
 
                 $workingTotalBankroll = $portfolio['total_balance'];
                 $workingAvailableBalance = $portfolio['available_balance'];
@@ -364,7 +364,7 @@ class DioQuantumController
         ];
     }
 
-    private function analyzeQuantumBatch($tickers, $customPrompt = null)
+    private function analyzeQuantumBatch($tickers, $customPrompt = null, $minConfidence = 80)
     {
         $portfolio = $this->recalculatePortfolio();
         $totalBalance = $portfolio['total_balance'];
@@ -404,7 +404,7 @@ class DioQuantumController
             "- Quota minima: 1.10.\n" .
             "- Decisione: BACK, LAY o PASS.\n" .
             "- CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE. Sii onesto: se la quota è 1.50 (66% imp) e tu stimi il 60%, scrivi confidence 60.\n" .
-            "- Confidence >= 85 per operare.\n\n" .
+            "- Confidence >= " . $minConfidence . " per operare.\n\n" .
             "RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI, uno per ogni ticker in ordine):\n" .
             "[\n" .
             "  {\n" .
