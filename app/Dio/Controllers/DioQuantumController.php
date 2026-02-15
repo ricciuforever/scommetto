@@ -44,7 +44,7 @@ class DioQuantumController
             $fundsData = $this->bf->getFunds();
             $funds = $fundsData['result'] ?? $fundsData;
             if (isset($funds['availableToBetBalance'])) {
-                $actualTotal = (float)$funds['availableToBetBalance'] + abs((float)($funds['exposure'] ?? 0));
+                $actualTotal = (float) $funds['availableToBetBalance'] + abs((float) ($funds['exposure'] ?? 0));
             }
         }
 
@@ -53,8 +53,8 @@ class DioQuantumController
 
         // Overlay real balance if available
         if ($operationalMode === 'real' && isset($funds['availableToBetBalance'])) {
-            $stats['available_balance'] = (float)$funds['availableToBetBalance'];
-            $stats['exposure_balance'] = abs((float)($funds['exposure'] ?? 0));
+            $stats['available_balance'] = (float) $funds['availableToBetBalance'];
+            $stats['exposure_balance'] = abs((float) ($funds['exposure'] ?? 0));
             $stats['total_balance'] = $stats['available_balance'] + $stats['exposure_balance'];
         }
 
@@ -92,6 +92,8 @@ class DioQuantumController
         }
 
         $liveSportsData = [];
+        $eventTypes = is_array($eventTypes) ? $eventTypes : [];
+
         foreach ($eventTypes as $et) {
             $name = $et['eventType']['name'];
             $id = $et['eventType']['id'];
@@ -154,7 +156,7 @@ class DioQuantumController
             $fundsData = $this->bf->getFunds();
             $funds = $fundsData['result'] ?? $fundsData;
             if (isset($funds['availableToBetBalance'])) {
-                $actualTotal = (float)$funds['availableToBetBalance'] + abs((float)($funds['exposure'] ?? 0));
+                $actualTotal = (float) $funds['availableToBetBalance'] + abs((float) ($funds['exposure'] ?? 0));
             }
         }
 
@@ -188,10 +190,10 @@ class DioQuantumController
             file_put_contents(\App\Config\Config::DATA_PATH . 'dio_last_scan.json', json_encode($trace, JSON_PRETTY_PRINT));
             $strategyPrompt = $config['strategy_prompt'] ?? '';
             $stakeMode = $config['stake_mode'] ?? 'kelly';
-            $stakeValue = (float)($config['stake_value'] ?? 0.10);
-            $minConfidence = (int)($config['min_confidence'] ?? 80);
-            $minStake = (float)($config['min_stake'] ?? 2.00);
-            $minLiquidity = (float)($config['min_liquidity'] ?? 5000.00);
+            $stakeValue = (float) ($config['stake_value'] ?? 0.10);
+            $minConfidence = (int) ($config['min_confidence'] ?? 80);
+            $minStake = (float) ($config['min_stake'] ?? 2.00);
+            $minLiquidity = (float) ($config['min_liquidity'] ?? 5000.00);
             $operationalMode = $config['operational_mode'] ?? 'virtual';
 
             // 1. Get ALL active sport types with live events
@@ -206,11 +208,12 @@ class DioQuantumController
             }
 
             foreach ($eventTypes as $sportType) {
-                $sportId = (int)$sportType['eventType']['id'];
+                $sportId = (int) $sportType['eventType']['id'];
                 $sportName = $this->standardizeSportName($sportType['eventType']['name']);
 
                 // Filter for requested sports
-                if (!in_array($sportId, $targetSports)) continue;
+                if (!in_array($sportId, $targetSports))
+                    continue;
 
                 $trace['scanned_sports'][] = $sportName;
                 $trace['scanned_details'][$sportName] = ['events' => 0, 'markets' => 0];
@@ -220,7 +223,7 @@ class DioQuantumController
                 $events = $liveEventsRes['result'] ?? [];
 
                 // Filter out events with active pending bets early to save tokens
-                $events = array_filter($events, function($e) use (&$trace) {
+                $events = array_filter($events, function ($e) use (&$trace) {
                     $name = $e['event']['name'] ?? '';
                     if ($this->isMatchActiveInDio($name)) {
                         $trace['skipped_reasons'][] = "Match già attivo: " . $name;
@@ -240,9 +243,12 @@ class DioQuantumController
 
                 // 3. Get Market Catalogues (Explicit types for better discovery on .it)
                 $marketTypes = [];
-                if ($sportId === 1) $marketTypes = ['MATCH_ODDS', 'OVER_UNDER_25', 'BOTH_TEAMS_TO_SCORE'];
-                elseif ($sportId === 2) $marketTypes = ['MATCH_ODDS'];
-                elseif ($sportId === 7522) $marketTypes = ['MATCH_ODDS', 'MONEYLINE'];
+                if ($sportId === 1)
+                    $marketTypes = ['MATCH_ODDS', 'OVER_UNDER_25', 'BOTH_TEAMS_TO_SCORE'];
+                elseif ($sportId === 2)
+                    $marketTypes = ['MATCH_ODDS'];
+                elseif ($sportId === 7522)
+                    $marketTypes = ['MATCH_ODDS', 'MONEYLINE'];
 
                 $cataloguesRes = $this->bf->getMarketCatalogues($eventIds, 250, $marketTypes, 'FIRST_TO_START');
                 $catalogues = $cataloguesRes['result'] ?? [];
@@ -300,7 +306,7 @@ class DioQuantumController
                     }
 
                     // Filter for minimum liquidity to avoid wasting AI calls on irrelevant markets
-                    $liquidity = (float)($book['totalMatched'] ?? 0);
+                    $liquidity = (float) ($book['totalMatched'] ?? 0);
                     if ($liquidity < $minLiquidity) {
                         $trace['skipped_reasons'][] = "Liquidità bassa (" . round($liquidity) . "€): " . ($mc['event']['name'] ?? 'Unknown') . " [" . ($mc['marketName'] ?? 'Unknown') . "]";
                         // Collect interesting low-liquidity matches for logging, but only if they have significant volume (> 1000)
@@ -330,9 +336,11 @@ class DioQuantumController
 
             if (!empty($allOpportunities)) {
                 // Prioritize Soccer, then sort by liquidity (totalMatched) descending
-                usort($allOpportunities, function($a, $b) {
-                    if ($a['sport'] === 'Soccer' && $b['sport'] !== 'Soccer') return -1;
-                    if ($a['sport'] !== 'Soccer' && $b['sport'] === 'Soccer') return 1;
+                usort($allOpportunities, function ($a, $b) {
+                    if ($a['sport'] === 'Soccer' && $b['sport'] !== 'Soccer')
+                        return -1;
+                    if ($a['sport'] !== 'Soccer' && $b['sport'] === 'Soccer')
+                        return 1;
                     return ($b['totalMatched'] ?? 0) <=> ($a['totalMatched'] ?? 0);
                 });
 
@@ -350,9 +358,10 @@ class DioQuantumController
 
                 foreach ($batchResults as $index => $analysis) {
                     $ticker = $batchTickers[$index] ?? null;
-                    if (!$ticker || !$analysis) continue;
+                    if (!$ticker || !$analysis)
+                        continue;
 
-                    $confidence = (float)($analysis['confidence'] ?? 0);
+                    $confidence = (float) ($analysis['confidence'] ?? 0);
                     $advice = $analysis['advice'] ?? '';
 
                     // Decidi l'azione base (Passa se confidence < soglia)
@@ -362,7 +371,7 @@ class DioQuantumController
                         // --- CALCOLO STAKE (Dinamico) ---
                         $decision = MoneyManagementService::calculateStake(
                             $workingTotalBankroll,
-                            (float)$analysis['odds'],
+                            (float) $analysis['odds'],
                             $confidence,
                             $stakeMode,
                             $stakeValue,
@@ -489,13 +498,21 @@ class DioQuantumController
         // Dynamic Score Extraction (Betfair Native)
         $score = null;
         $scoreData = $book['marketDefinition']['score'] ?? null;
+
         if ($scoreData) {
+            // Generic Home - Away
             if (isset($scoreData['home']['score']) && isset($scoreData['away']['score'])) {
                 $score = $scoreData['home']['score'] . " - " . $scoreData['away']['score'];
-                // Tennis often has games/sets nested
-                if (isset($scoreData['home']['games']) && $sportName === 'Tennis') {
-                    $score .= " (Games: " . $scoreData['home']['games'] . "-" . $scoreData['away']['games'] . ")";
-                }
+            }
+
+            // Tennis Specific: Sets and Games
+            if ($sportName === 'Tennis') {
+                $homeSets = $scoreData['home']['numberOfSets'] ?? 0;
+                $awaySets = $scoreData['away']['numberOfSets'] ?? 0;
+                $homeGames = $scoreData['home']['games'] ?? 0;
+                $awayGames = $scoreData['away']['games'] ?? 0;
+
+                $score = "Sets: $homeSets-$awaySets (G: $homeGames-$awayGames)";
             }
         }
 
@@ -539,7 +556,8 @@ class DioQuantumController
                 }
             }
         }
-        if (!$hasExperiences) $ragContext = "";
+        if (!$hasExperiences)
+            $ragContext = "";
 
         $systemOverride = "SYSTEM OVERRIDE (USER SETTINGS) - READ CAREFULLY:\n" .
             "- LIQUIDITY THRESHOLD: " . number_format($minLiquidity, 0, '', '') . "€. If volume > " . number_format($minLiquidity, 0, '', '') . ", consider it SUFFICIENT. Do NOT pass because of 'low volume' if it exceeds this threshold.\n" .
@@ -622,7 +640,7 @@ class DioQuantumController
     {
         // Double check balance before placing
         $available = $this->recalculatePortfolio()['available_balance'];
-        $stake = (float)($analysis['stake'] ?? 0);
+        $stake = (float) ($analysis['stake'] ?? 0);
 
         if ($available < $stake || $stake < 2.0) {
             return; // Safety guard
@@ -722,21 +740,24 @@ class DioQuantumController
 
     private function isMatchActiveInDio($eventName)
     {
-        if (empty($eventName)) return false;
+        if (empty($eventName))
+            return false;
         $stmt = $this->db->prepare("SELECT event_name FROM bets WHERE status = 'pending'");
         $stmt->execute();
         $pending = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
         $normCurrent = $this->normalizeEventName($eventName);
         foreach ($pending as $pName) {
-            if ($this->normalizeEventName($pName) === $normCurrent) return true;
+            if ($this->normalizeEventName($pName) === $normCurrent)
+                return true;
         }
         return false;
     }
 
     private function normalizeEventName($name)
     {
-        if (!$name) return '';
+        if (!$name)
+            return '';
         $name = strtolower($name);
         $name = preg_replace('/\d+\s*[-:]\s*\d+/', ' ', $name);
         $name = preg_replace('/\b(v|vs|@|-|\/)\b/', ' ', $name);
@@ -761,7 +782,8 @@ class DioQuantumController
     public function syncWithBetfair()
     {
         try {
-            if (!$this->bf->isConfigured()) return;
+            if (!$this->bf->isConfigured())
+                return;
 
             // Deep Sync se richiesto (es. ricarica manuale dello storico)
             $syncHistory = isset($_GET['sync_history']) && $_GET['sync_history'] === '1';
@@ -843,8 +865,10 @@ class DioQuantumController
                 foreach ($clearedOrders as $o) {
                     $outcome = strtoupper($o['betOutcome'] ?? '');
                     $status = 'lost';
-                    if ($outcome === 'WIN' || $outcome === 'WON') $status = 'won';
-                    elseif (in_array($outcome, ['VOIDED', 'LAPSED', 'REMOVED'])) $status = 'void';
+                    if ($outcome === 'WIN' || $outcome === 'WON')
+                        $status = 'won';
+                    elseif (in_array($outcome, ['VOIDED', 'LAPSED', 'REMOVED']))
+                        $status = 'void';
 
                     $allBfOrders[$o['betId']] = [
                         'betId' => $o['betId'],
@@ -853,12 +877,12 @@ class DioQuantumController
                         'odds' => $o['priceRequested'] ?? 0,
                         'stake' => $o['sizeSettled'] ?? 0,
                         'status' => $status,
-                        'profit' => (float)($o['profit'] ?? 0),
+                        'profit' => (float) ($o['profit'] ?? 0),
                         'placedDate' => $o['placedDate'] ?? null,
                         'settledDate' => $o['settledDate'] ?? null,
                         'marketName' => $o['itemDescription']['marketDesc'] ?? null,
                         'eventName' => $o['itemDescription']['eventDesc'] ?? null,
-                    'sport' => $this->standardizeSportName($o['itemDescription']['eventTypeDesc'] ?? 'Unknown'),
+                        'sport' => $this->standardizeSportName($o['itemDescription']['eventTypeDesc'] ?? 'Unknown'),
                         'runnerName' => $o['itemDescription']['runnerDesc'] ?? null
                     ];
                 }
@@ -869,7 +893,8 @@ class DioQuantumController
             foreach ($allBfOrders as $betId => $o) {
                 // Filter by Dio target sports if possible, UNLESS deep sync is requested
                 // Note: Pending bets resolved via catalogue might still have 'Unknown' sport if not inferred, but we import them anyway to fix visibility
-                if (!$syncHistory && isset($o['sport']) && $o['sport'] !== 'Unknown' && !in_array($o['sport'], $targetSports)) continue;
+                if (!$syncHistory && isset($o['sport']) && $o['sport'] !== 'Unknown' && !in_array($o['sport'], $targetSports))
+                    continue;
 
                 $altBetId = (strpos($betId, '1:') === 0) ? substr($betId, 2) : '1:' . $betId;
                 $stmt = $this->db->prepare("SELECT id FROM bets WHERE betfair_id = ? OR betfair_id = ?");
@@ -882,11 +907,11 @@ class DioQuantumController
                 if ($dbId) {
                     // If it's pending, update names if we resolved them from 'Unknown'
                     if ($o['status'] === 'pending' && $o['eventName'] !== 'Unknown') {
-                         $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = ?, betfair_id = ?, event_name = ?, market_name = ?, runner_name = ? WHERE id = ?");
-                         $stmtUpdate->execute([$o['status'], $o['profit'] ?? 0, $settledDate, $betId, $o['eventName'], $o['marketName'], $o['runnerName'], $dbId]);
+                        $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = ?, betfair_id = ?, event_name = ?, market_name = ?, runner_name = ? WHERE id = ?");
+                        $stmtUpdate->execute([$o['status'], $o['profit'] ?? 0, $settledDate, $betId, $o['eventName'], $o['marketName'], $o['runnerName'], $dbId]);
                     } else {
-                         $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = ?, betfair_id = ? WHERE id = ?");
-                         $stmtUpdate->execute([$o['status'], $o['profit'] ?? 0, $settledDate, $betId, $dbId]);
+                        $stmtUpdate = $this->db->prepare("UPDATE bets SET status = ?, profit = ?, settled_at = ?, betfair_id = ? WHERE id = ?");
+                        $stmtUpdate->execute([$o['status'], $o['profit'] ?? 0, $settledDate, $betId, $dbId]);
                     }
                 } else {
                     // Dio import only if it looks like a Quantum trade or we are importing history
@@ -922,8 +947,8 @@ class DioQuantumController
 
         $config = $this->db->query("SELECT key, value FROM system_state WHERE key IN ('operational_mode', 'initial_bankroll', 'initial_pnl_adjustment')")->fetchAll(PDO::FETCH_KEY_PAIR);
         $operationalMode = $config['operational_mode'] ?? 'virtual';
-        $initialBankroll = (float)($config['initial_bankroll'] ?? 100.0);
-        $initialPnl = (float)($config['initial_pnl_adjustment'] ?? 0.0);
+        $initialBankroll = (float) ($config['initial_bankroll'] ?? 100.0);
+        $initialPnl = (float) ($config['initial_pnl_adjustment'] ?? 0.0);
 
         $stmt = $this->db->prepare("SELECT id, stake, odds, profit, status, created_at, settled_at, type FROM bets WHERE type = ? ORDER BY created_at ASC");
         $stmt->execute([$operationalMode]);
@@ -948,7 +973,7 @@ class DioQuantumController
                     'time' => $bet['settled_at'],
                     'type' => 'settle',
                     'status' => $bet['status'],
-                    'amount' => (float)$bet['stake'] + (float)$bet['profit'],
+                    'amount' => (float) $bet['stake'] + (float) $bet['profit'],
                     'id' => $bet['id']
                 ];
             }
@@ -1022,7 +1047,7 @@ class DioQuantumController
 
         // Adjust for REAL mode if actual balance is provided
         if ($operationalMode === 'real' && $actualTotal !== null) {
-            $realTotal = (float)$actualTotal;
+            $realTotal = (float) $actualTotal;
             $trackedTotal = $currentBalance + $exposure;
             $offset = $realTotal - $trackedTotal;
 
@@ -1035,12 +1060,14 @@ class DioQuantumController
             $runningTotal = $initialBankroll + $initialPnl + $offset;
             foreach ($events as $event) {
                 if ($event['type'] === 'place') {
-                    if (!($placedBets[$event['id']] ?? false)) continue;
+                    if (!($placedBets[$event['id']] ?? false))
+                        continue;
                     // No change to running total on place (exposure swap)
                 } else {
-                    if (!($placedBets[$event['id']] ?? false)) continue;
+                    if (!($placedBets[$event['id']] ?? false))
+                        continue;
                     $bet = $betById[$event['id']];
-                    $runningTotal += (float)$bet['profit'];
+                    $runningTotal += (float) $bet['profit'];
                 }
                 $newHistory[] = [
                     't' => date('d/m H:i', strtotime($event['time'])),

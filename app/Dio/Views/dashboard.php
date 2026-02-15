@@ -5,8 +5,9 @@ if (!$isEmbedded) {
     require __DIR__ . '/../../Views/layout/top.php';
 }
 
-$formatRome = function($dateStr, $format = 'd/m H:i:s') {
-    if (empty($dateStr)) return '-';
+$formatRome = function ($dateStr, $format = 'd/m H:i:s') {
+    if (empty($dateStr))
+        return '-';
     try {
         $dt = new DateTime($dateStr, new DateTimeZone('UTC'));
         $dt->setTimezone(new DateTimeZone('Europe/Rome'));
@@ -46,12 +47,17 @@ $formatRome = function($dateStr, $format = 'd/m H:i:s') {
                 <?php endif; ?>
                 <div class="mt-2 flex items-center gap-2">
                     <?php if (($currentMode ?? 'virtual') === 'real'): ?>
-                        <span class="px-2 py-0.5 bg-red-500/20 border border-red-500/50 text-red-500 text-[8px] font-black uppercase tracking-tighter rounded">Real Money Mode</span>
-                        <a href="?sync_history=1" class="px-2 py-0.5 bg-indigo-500/20 border border-indigo-500/50 text-indigo-400 text-[8px] font-black uppercase tracking-tighter rounded hover:bg-indigo-500 hover:text-white transition-all">
+                        <span
+                            class="px-2 py-0.5 bg-red-500/20 border border-red-500/50 text-red-500 text-[8px] font-black uppercase tracking-tighter rounded">Real
+                            Money Mode</span>
+                        <a href="?sync_history=1"
+                            class="px-2 py-0.5 bg-indigo-500/20 border border-indigo-500/50 text-indigo-400 text-[8px] font-black uppercase tracking-tighter rounded hover:bg-indigo-500 hover:text-white transition-all">
                             <i data-lucide="refresh-cw" class="w-2 h-2 inline-block mr-1"></i> Sincronizza Storico
                         </a>
                     <?php else: ?>
-                        <span class="px-2 py-0.5 bg-blue-500/20 border border-blue-500/50 text-blue-500 text-[8px] font-black uppercase tracking-tighter rounded">Virtual Simulation</span>
+                        <span
+                            class="px-2 py-0.5 bg-blue-500/20 border border-blue-500/50 text-blue-500 text-[8px] font-black uppercase tracking-tighter rounded">Virtual
+                            Simulation</span>
                     <?php endif; ?>
                 </div>
             </div>
@@ -66,20 +72,29 @@ $formatRome = function($dateStr, $format = 'd/m H:i:s') {
 
     <!-- 2. Stats Grid (Reale Portfolio Metrics) -->
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-indigo-500/30 transition-all">
+        <div
+            class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-indigo-500/30 transition-all">
             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Saldo Totale</span>
             <div class="text-lg font-black text-white"><?php echo number_format($stats['total_balance'], 2); ?>€</div>
         </div>
-        <div class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-indigo-400/30 transition-all">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Saldo Disponibile</span>
-            <div class="text-lg font-black text-indigo-400"><?php echo number_format($stats['available_balance'], 2); ?>€</div>
+        <div
+            class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-indigo-400/30 transition-all">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Saldo
+                Disponibile</span>
+            <div class="text-lg font-black text-indigo-400">
+                <?php echo number_format($stats['available_balance'], 2); ?>€</div>
         </div>
-        <div class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-amber-500/30 transition-all">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Saldo Esposizione</span>
-            <div class="text-lg font-black text-amber-500"><?php echo number_format($stats['exposure_balance'], 2); ?>€</div>
+        <div
+            class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-amber-500/30 transition-all">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Saldo
+                Esposizione</span>
+            <div class="text-lg font-black text-amber-500"><?php echo number_format($stats['exposure_balance'], 2); ?>€
+            </div>
         </div>
-        <div class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-success/30 transition-all">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Profitto Totale (P&L)</span>
+        <div
+            class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-success/30 transition-all">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Profitto Totale
+                (P&L)</span>
             <div class="text-lg font-black <?php echo $stats['total_profit'] >= 0 ? 'text-success' : 'text-danger'; ?>">
                 <?php echo ($stats['total_profit'] >= 0 ? '+' : '') . number_format($stats['total_profit'], 2); ?>€
             </div>
@@ -88,7 +103,8 @@ $formatRome = function($dateStr, $format = 'd/m H:i:s') {
             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">ROI Reale</span>
             <div class="text-lg font-black text-accent"><?php echo number_format($stats['roi'], 2); ?>%</div>
         </div>
-        <div class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-blue-500/30 transition-all">
+        <div
+            class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-blue-500/30 transition-all">
             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Win Rate</span>
             <div class="text-lg font-black text-white"><?php echo number_format($stats['win_rate'], 1); ?>%</div>
         </div>
@@ -128,6 +144,7 @@ $formatRome = function($dateStr, $format = 'd/m H:i:s') {
                     <tr class="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/10">
                         <th class="px-6 py-4">Data</th>
                         <th class="px-6 py-4">Sport / Evento</th>
+                        <th class="px-6 py-4 text-center">Score</th>
                         <th class="px-6 py-4">Mercato / Selezione</th>
                         <th class="px-6 py-4">Quota</th>
                         <th class="px-6 py-4 text-center">Stake</th>
@@ -155,6 +172,11 @@ $formatRome = function($dateStr, $format = 'd/m H:i:s') {
                                         <?php if (!empty($bet['score'])): ?>
                                             <span class="text-yellow-400 ml-1 font-mono"><?php echo $bet['score']; ?></span>
                                         <?php endif; ?>
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-4 text-center">
+                                            <span class="text-xs font-mono font-bold text-yellow-400">
+                                                <?php echo !empty($bet['score']) ? $bet['score'] : '-'; ?>
                                     </span>
                                 </td>
                                 <td class="px-6 py-4">
@@ -267,7 +289,8 @@ $formatRome = function($dateStr, $format = 'd/m H:i:s') {
                     <h2 class="text-sm font-black uppercase tracking-widest">Analisi Autonoma</h2>
                 </div>
                 <div class="flex items-center gap-4">
-                    <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Real-time Thinking</span>
+                    <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Real-time
+                        Thinking</span>
                 </div>
             </div>
             <div class="flex-1 max-h-[400px] overflow-y-auto custom-scrollbar">
@@ -340,17 +363,19 @@ $formatRome = function($dateStr, $format = 'd/m H:i:s') {
                 <?php else: ?>
                     <div class="flex justify-between border-b border-white/5 pb-2">
                         <span class="text-slate-500">Ultimo Check:</span>
-                        <span class="text-white font-mono"><?php echo $formatRome($lastScanTrace['timestamp'] ?? 'now', 'H:i:s'); ?></span>
+                        <span
+                            class="text-white font-mono"><?php echo $formatRome($lastScanTrace['timestamp'] ?? 'now', 'H:i:s'); ?></span>
                     </div>
 
                     <div>
                         <p class="text-indigo-400 font-bold uppercase mb-1">Sport Scansionati</p>
                         <div class="flex flex-wrap gap-1">
-                            <?php foreach (($lastScanTrace['scanned_sports'] ?? []) as $s):
-                                $details = $lastScanTrace['scanned_details'][$s] ?? null;
-                                $label = $s . ($details ? " ({$details['events']}/{$details['markets']})" : "");
-                            ?>
-                                <span class="px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded"><?php echo $label; ?></span>
+                                <?php foreach (($lastScanTrace['scanned_sports'] ?? []) as $s):
+                                    $details = $lastScanTrace['scanned_details'][$s] ?? null;
+                                    $label = $s . ($details ? " ({$details['events']}/{$details['markets']})" : "");
+                                    ?>
+                                <span
+                                    class="px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded"><?php echo $label; ?></span>
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -380,12 +405,15 @@ $formatRome = function($dateStr, $format = 'd/m H:i:s') {
                         <div class="space-y-1 opacity-80">
                             <?php
                             $reasons = array_slice($lastScanTrace['skipped_reasons'] ?? [], 0, 15);
-                            if (empty($reasons)) echo '<p class="text-slate-600">Nessuno skip registrato.</p>';
+                            if (empty($reasons))
+                                echo '<p class="text-slate-600">Nessuno skip registrato.</p>';
                             foreach ($reasons as $reason): ?>
                                 <p class="truncate border-l border-white/10 pl-2 py-0.5"><?php echo $reason; ?></p>
                             <?php endforeach; ?>
                             <?php if (count($lastScanTrace['skipped_reasons'] ?? []) > 15): ?>
-                                <p class="text-slate-600 italic">... + altri <?php echo count($lastScanTrace['skipped_reasons']) - 15; ?> skip</p>
+                                <p class="text-slate-600 italic">... + altri
+                                    <?php echo count($lastScanTrace['skipped_reasons']) - 15; ?> skip
+                                </p>
                             <?php endif; ?>
                         </div>
                     </div>
