@@ -29,6 +29,7 @@ class Database
 
         try {
             $this->conn = new PDO($dsn, $user, $pass, $options);
+            $this->ensureSchema();
         } catch (PDOException $e) {
             // Fallback to SQLite if MySQL fails (mostly for sandbox environment)
             $dbPath = Config::DATA_PATH . 'scommetto.sqlite';
@@ -36,6 +37,7 @@ class Database
                 $this->conn = new PDO("sqlite:" . $dbPath);
                 $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
                 $this->conn->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+                $this->ensureSchema();
             } catch (PDOException $e2) {
                 throw new \Exception("Database Connection Error: " . $e->getMessage() . " AND SQLite Error: " . $e2->getMessage());
             }
@@ -58,5 +60,30 @@ class Database
     public function isSQLite()
     {
         return $this->conn->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+    }
+
+    private function ensureSchema()
+    {
+        $isSqlite = $this->isSQLite();
+        if ($isSqlite) {
+            $query = "CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT CHECK(role IN ('admin', 'manager')) DEFAULT 'manager',
+                assigned_agent TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )";
+        } else {
+            $query = "CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                role ENUM('admin', 'manager') DEFAULT 'manager',
+                assigned_agent VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        }
+        $this->conn->exec($query);
     }
 }
