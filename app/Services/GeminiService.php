@@ -24,8 +24,8 @@ class GeminiService
                 "3. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE.\n" .
                 "4. Usa la CLASSIFICA e i PRONOSTICI esterni (predictions) per validare la tua scelta.\n" .
                 "5. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
-                "6. SOGLIA DI CONFIDENZA: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE che l'evento si verifichi. Non gonfiare i numeri.\n" .
-                "   Se la quota è 1.50 (probabilità implicita 66%) e tu stimi una probabilità del 60%, la tua confidence deve essere 60.";
+                "6. SOGLIA DI CONFIDENZA: La tua 'confidence' (0-100) deve rispecchiare la FORZA DEL SEGNALE (Value Bet).\n" .
+                "   Se identifichi un'opportunità di valore, dai un punteggio alto (80-99). Non aver paura di dare punteggi alti se i dati supportano l'operazione.";
         } elseif ($agent === 'dio') {
             return "Sei un QUANT TRADER denominato 'Dio'. Non sei uno scommettitore, sei un analista di Price Action (Tape Reading).\n\n" .
                 "IL TUO VANTAGGIO (Price Action Rules):\n" .
@@ -33,10 +33,10 @@ class GeminiService
                 "2. Analizza ogni evento nel batch e identifica le migliori opportunità.\n" .
                 "3. Se un evento è convincente, proponi l'operazione. Se il rischio/rendimento è scarso, scrivi 'PASS'.\n" .
                 "4. NON INVENTARE QUOTE: usa solo quelle presenti nel JSON per il runner scelto.\n" .
-                "5. CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE stimata. Sii brutale e onesto. Fornisci SEMPRE un valore numerico per la confidence, anche se decidi di passare.\n" .
+                "5. CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la FORZA DEL SEGNALE (Value Bet). Fornisci SEMPRE un valore numerico per la confidence (80-99 se operi).\n" .
                 "6. Analizza 'lastPriceTraded' vs Quota Attuale: Se divergono, identifica il momentum.\n" .
                 "7. Analizza lo SCORE vs QUOTE: Se le quote non riflettono correttamente l'andamento del match, identifica il valore.\n" .
-                "8. VOLUMI: Un volume alto indica precisione. Se il volume è basso, sii estremamente prudente.\n" .
+                "8. VOLUMI: Un volume alto indica precisione. Se il volume supera la soglia minima, consideralo valido.\n" .
                 "9. IGNORA i nomi delle squadre/atleti. Guarda solo l'efficienza del mercato.\n" .
                 "10. Se per uno sport non hai dati statistici (ma solo quote), sii più prudente.";
         } elseif ($agent === 'batch') {
@@ -44,7 +44,7 @@ class GeminiService
                 "REGOLE RIGIDE:\n" .
                 "1. Per ogni evento, analizza i mercati, i volumi, i dati statistici live, il momentum e il contesto storico.\n" .
                 "2. Scegli l'operazione migliore per ogni evento (o nessuna se il rischio/rendimento è scarso).\n" .
-                "3. CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE. Sii onesto: se la quota è 1.50 (66% imp) e tu stimi il 60%, scrivi confidence 60.\n" .
+                "3. CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la FORZA DEL SEGNALE (Value Bet). Se trovi valore, usa confidence alta (80-99).\n" .
                 "4. Quota Minima: 1.25. Se la quota attuale è inferiore ma l'evento è valido, scrivi '1.25' per piazzare un ordine limite.";
         }
         return "";
@@ -72,9 +72,9 @@ class GeminiService
 
         $minLiquidity = $options['min_liquidity'] ?? 2000;
         $minConfidence = $options['min_confidence'] ?? 80;
-        $systemOverride = "SYSTEM OVERRIDE (USER SETTINGS):\n" .
-            "- LIQUIDITY THRESHOLD: " . number_format($minLiquidity, 0, '', '') . "€. If volume > " . number_format($minLiquidity, 0, '', '') . ", consider it SUFFICIENT. Do not PASS solely because of volume if it exceeds this threshold.\n" .
-            "- CONFIDENCE THRESHOLD: " . $minConfidence . "%. If you identify a profitable opportunity (Value Bet), your Confidence score MUST be scaled to at least " . $minConfidence . " (or higher) to trigger the bet. Do not output low confidence (e.g. 60) for valid trades just because the raw probability is low; scale it to the signal strength.";
+        $systemOverride = "SYSTEM OVERRIDE (USER SETTINGS) - READ CAREFULLY:\n" .
+            "- LIQUIDITY THRESHOLD: " . number_format($minLiquidity, 0, '', '') . "€. If volume > " . number_format($minLiquidity, 0, '', '') . ", consider it SUFFICIENT. Do NOT pass because of 'low volume' if it exceeds this threshold.\n" .
+            "- CONFIDENCE THRESHOLD: " . $minConfidence . "%. If you identify a profitable opportunity (Value Bet), your Confidence score MUST be scaled to at least " . $minConfidence . " (or higher) to trigger the bet. Do NOT output low confidence (e.g. 60) for valid trades just because the raw probability is low; scale it to the signal strength (Value).\n";
 
         if ($isUpcoming) {
             $customPrompt = $options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('upcoming');
@@ -96,7 +96,7 @@ class GeminiService
                     $mapping['{{candidates_list}}'] . "\n\n";
             }
 
-            $prompt .= "\n\nSYSTEM CONSTRAINTS:\n" .
+            $prompt .= "\n\n" . $systemOverride . "\n\nSYSTEM CONSTRAINTS:\n" .
                 "1. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI).\n" .
                 "[\n" .
                 "  {\n" .
@@ -175,7 +175,7 @@ class GeminiService
                     $mapping['{{candidates_list}}'];
             }
 
-            $prompt .= "\n\nSYSTEM CONSTRAINTS (MANDATORY):\n" .
+            $prompt .= "\n\n" . $systemOverride . "\n\nSYSTEM CONSTRAINTS (MANDATORY):\n" .
                 "1. QUOTA MINIMA: 1.25.\n" .
                 "2. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON:\n" .
                 "{\n" .
@@ -239,9 +239,9 @@ class GeminiService
 
         $minLiquidity = $options['min_liquidity'] ?? 2000;
         $minConfidence = $options['min_confidence'] ?? 80;
-        $systemOverride = "SYSTEM OVERRIDE (USER SETTINGS):\n" .
-            "- LIQUIDITY THRESHOLD: " . number_format($minLiquidity, 0, '', '') . "€. If volume > " . number_format($minLiquidity, 0, '', '') . ", consider it SUFFICIENT. Do not PASS solely because of volume if it exceeds this threshold.\n" .
-            "- CONFIDENCE THRESHOLD: " . $minConfidence . "%. If you identify a profitable opportunity (Value Bet), your Confidence score MUST be scaled to at least " . $minConfidence . " (or higher) to trigger the bet. Do not output low confidence (e.g. 60) for valid trades just because the raw probability is low; scale it to the signal strength.";
+        $systemOverride = "SYSTEM OVERRIDE (USER SETTINGS) - READ CAREFULLY:\n" .
+            "- LIQUIDITY THRESHOLD: " . number_format($minLiquidity, 0, '', '') . "€. If volume > " . number_format($minLiquidity, 0, '', '') . ", consider it SUFFICIENT. Do NOT pass because of 'low volume' if it exceeds this threshold.\n" .
+            "- CONFIDENCE THRESHOLD: " . $minConfidence . "%. If you identify a profitable opportunity (Value Bet), your Confidence score MUST be scaled to at least " . $minConfidence . " (or higher) to trigger the bet. Do NOT output low confidence (e.g. 60) for valid trades just because the raw probability is low; scale it to the signal strength (Value).\n";
 
         $balanceText = "";
         if (isset($options['current_portfolio'])) {
