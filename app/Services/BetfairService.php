@@ -24,12 +24,12 @@ class BetfairService
     private $lastRequestTime = 0;
     private $logFile;
 
-    public function __construct()
+    public function __construct(array $overrides = [])
     {
-        // Prioritize generic key, then Delayed Key as requested
-        $this->appKey = Config::get('BETFAIR_APP_KEY') ?: (Config::get('BETFAIR_APP_KEY_DELAY') ?: Config::get('BETFAIR_APP_KEY_LIVE'));
-        $this->username = Config::get('BETFAIR_USERNAME');
-        $this->password = Config::get('BETFAIR_PASSWORD');
+        // Prioritize overrides, then generic key, then Delayed Key as requested
+        $this->appKey = $overrides['BETFAIR_APP_KEY_LIVE'] ?? $overrides['BETFAIR_APP_KEY_DELAY'] ?? (Config::get('BETFAIR_APP_KEY') ?: (Config::get('BETFAIR_APP_KEY_DELAY') ?: Config::get('BETFAIR_APP_KEY_LIVE')));
+        $this->username = $overrides['BETFAIR_USERNAME'] ?? Config::get('BETFAIR_USERNAME');
+        $this->password = $overrides['BETFAIR_PASSWORD'] ?? Config::get('BETFAIR_PASSWORD');
         $this->certPath = Config::get('BETFAIR_CERT_PATH');
         $this->keyPath = Config::get('BETFAIR_KEY_PATH');
         $this->ssoUrl = Config::get('BETFAIR_SSO_URL', 'https://identitysso.betfair.it/api/certlogin');
