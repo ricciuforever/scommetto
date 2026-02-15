@@ -133,7 +133,7 @@ class DioQuantumController
         $targetSports = array_map('intval', explode(',', $targetSportsStr));
 
         $trace = [
-            'timestamp' => date('Y-m-d H:i:s'),
+            'timestamp' => gmdate('Y-m-d H:i:s'),
             'target_sports' => $targetSports,
             'scanned_sports' => [],
             'scanned_details' => [],
