@@ -74,7 +74,7 @@ class DioDatabase
 
         // Ensure default dynamic configuration
         $defaults = [
-            'strategy_prompt' => "Sei Dio (Quantum), un'intelligenza artificiale superiore specializzata nel trading sportivo ad alta frequenza.",
+            'strategy_prompt' => (new \App\Services\GeminiService())->getDefaultStrategyPrompt('dio'),
             'stake_mode' => 'kelly',
             'stake_value' => '0.10',
             'min_confidence' => '75',
