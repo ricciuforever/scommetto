@@ -23,13 +23,30 @@
     <form method="POST" class="space-y-8">
         <!-- System Prompt -->
         <div class="glass p-8 rounded-3xl">
-            <div class="flex items-center gap-3 mb-6">
-                <i data-lucide="brain" class="text-blue-500 w-6 h-6"></i>
-                <h3 class="text-lg font-black italic uppercase text-white">System Strategy Prompt</h3>
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="brain" class="text-blue-500 w-6 h-6"></i>
+                    <h3 class="text-lg font-black italic uppercase text-white">System Strategy Prompt</h3>
+                </div>
+                <button type="button" onclick="resetPrompt()" class="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white text-[9px] font-bold uppercase tracking-widest rounded-lg border border-white/5 transition-all">
+                    Ripristina Default
+                </button>
             </div>
-            <textarea name="config[strategy_prompt]" class="w-full bg-black/40 border border-white/5 rounded-2xl p-6 text-sm font-mono text-blue-200 focus:border-blue-500 outline-none h-64 leading-relaxed" placeholder="Inserisci qui il prompt strategico per l'AI..."><?= htmlspecialchars($config['strategy_prompt'] ?? '') ?></textarea>
+            <textarea id="strategy_prompt" name="config[strategy_prompt]" class="w-full bg-black/40 border border-white/5 rounded-2xl p-6 text-sm font-mono text-blue-200 focus:border-blue-500 outline-none h-64 leading-relaxed" placeholder="Inserisci qui il prompt strategico per l'AI..."><?= htmlspecialchars($config['strategy_prompt'] ?? '') ?></textarea>
             <p class="text-[10px] text-gray-600 mt-4 uppercase font-bold tracking-widest">Questo prompt definisce il "carattere" e le priorità dell'Agente durante l'analisi.</p>
         </div>
+
+        <script>
+            function resetPrompt() {
+                const defaults = {
+                    'gianik': `<?= addslashes((new \App\Services\GeminiService())->getDefaultStrategyPrompt('gianik')) ?>`,
+                    'dio': `<?= addslashes((new \App\Services\GeminiService())->getDefaultStrategyPrompt('dio')) ?>`
+                };
+                if (confirm("Sei sicuro di voler ripristinare il prompt predefinito per <?= strtoupper($currentAgent) ?>? Tutte le modifiche attuali verranno perse.")) {
+                    document.getElementById('strategy_prompt').value = defaults['<?= $currentAgent ?>'] || '';
+                }
+            }
+        </script>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
             <!-- Staking Mode -->

@@ -14,6 +14,42 @@ class GeminiService
         $this->apiKey = Config::get('GEMINI_API_KEY');
     }
 
+    public function getDefaultStrategyPrompt($agent)
+    {
+        if ($agent === 'gianik') {
+            return "Sei un ANALISTA ELITE e TRADER di Betfair. Il tuo compito è analizzare un EVENTO LIVE con i suoi molteplici mercati e decidere l'operazione migliore.\n\n" .
+                "IL TUO VANTAGGIO STRATEGICO:\n" .
+                "1. Analizza TUTTI i mercati forniti (Match Odds, Double Chance, varie linee di Under/Over, BTTS).\n" .
+                "2. Scegli l'operazione che offre il miglior rapporto rischio/rendimento. Non sei obbligato a scegliere il mercato principale se un altro (es. Over 1.5) è più sicuro o profittevole.\n" .
+                "3. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE.\n" .
+                "4. Usa la CLASSIFICA e i PRONOSTICI esterni (predictions) per validare la tua scelta.\n" .
+                "5. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
+                "6. SOGLIA DI CONFIDENZA: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE che l'evento si verifichi. Non gonfiare i numeri.\n" .
+                "   Se la quota è 1.50 (probabilità implicita 66%) e tu stimi una probabilità del 60%, la tua confidence deve essere 60.";
+        } elseif ($agent === 'dio') {
+            return "Sei un QUANT TRADER denominato 'Dio'. Non sei uno scommettitore, sei un analista di Price Action (Tape Reading).\n\n" .
+                "IL TUO VANTAGGIO (Price Action Rules):\n" .
+                "1. Analizza i volumi (totalMatched) e le quote Back/Lay.\n" .
+                "2. SCEGLI SOLO 1 EVENTO dalla lista che ritieni più profittevole.\n" .
+                "3. Se nessun evento è convincente (risk/reward scarso), non scegliere nulla.\n" .
+                "4. NON INVENTARE QUOTE: usa solo quelle presenti nel JSON per il runner scelto.\n" .
+                "5. CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE. Sii brutale e onesto. Se non c'è valore rispetto alla quota, scrivi una confidence bassa.\n" .
+                "6. Analizza 'lastPriceTraded' vs Quota Attuale: Se divergono, identifica il momentum.\n" .
+                "7. Analizza lo SCORE vs QUOTE: Se le quote non riflettono correttamente l'andamento del match, identifica il valore.\n" .
+                "8. VOLUMI: Un volume alto indica precisione. Se il volume è basso, sii estremamente prudente.\n" .
+                "9. IGNORA i nomi delle squadre/atleti. Guarda solo l'efficienza del mercato.\n" .
+                "10. Se per uno sport non hai dati statistici (ma solo quote), sii più prudente.";
+        } elseif ($agent === 'batch') {
+            return "Sei un ANALISTA ELITE e TRADER di Betfair Exchange. Il tuo compito è analizzare un BATCH di EVENTI LIVE (Calcio) e decidere le operazioni migliori.\n\n" .
+                "REGOLE RIGIDE:\n" .
+                "1. Per ogni evento, analizza i mercati, i volumi, i dati statistici live, il momentum e il contesto storico.\n" .
+                "2. Scegli l'operazione migliore per ogni evento (o nessuna se il rischio/rendimento è scarso).\n" .
+                "3. CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE. Sii onesto: se la quota è 1.50 (66% imp) e tu stimi il 60%, scrivi confidence 60.\n" .
+                "4. Quota Minima: 1.25. Se la quota attuale è inferiore ma l'evento è valido, scrivi '1.25' per piazzare un ordine limite.";
+        }
+        return "";
+    }
+
     public function analyze($candidates, $options = [])
     {
         if (!$this->apiKey)
@@ -35,13 +71,10 @@ class GeminiService
         $isGiaNik = $options['is_gianik'] ?? false;
 
         if ($isUpcoming) {
-            $prompt = ($options['custom_prompt'] ?? "Sei un ANALISTA ELITE di Betfair. Il tuo compito è analizzare gli eventi FUTURI forniti e suggerire i migliori pronostici (max 10).") . "\n\n" .
+            $prompt = ($options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('upcoming')) . "\n\n" .
                 "LISTA EVENTI CANDIDATI:\n" . json_encode($candidates) . "\n\n" .
-                "REGOLE:\n" .
-                "1. Analizza sport, competizione e volumi.\n" .
-                "2. Suggerisci fino a 10 pronostici interessanti.\n" .
-                "3. Per ogni pronostico specifica l'advice, la motivazione tecnica (motivation) e il sentiment globale del mercato.\n\n" .
-                "RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI):\n" .
+                "SYSTEM CONSTRAINTS:\n" .
+                "1. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON (ARRAY DI OGGETTI).\n" .
                 "[\n" .
                 "  {\n" .
                 "    \"marketId\": \"1.XXXXX\",\n" .
@@ -57,7 +90,7 @@ class GeminiService
                 "  }\n" .
                 "]";
         } elseif ($isGiaNik) {
-            $prompt = ($options['custom_prompt'] ?? "Sei un ANALISTA ELITE e TRADER di Betfair. Il tuo compito è analizzare un EVENTO LIVE con i suoi molteplici mercati e decidere l'operazione migliore.") . "\n\n" .
+            $prompt = ($options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('gianik')) . "\n\n" .
                 $balanceText .
                 "DATI EVENTO E MERCATI:\n" . json_encode($candidates[0]) . "\n\n" .
                 "DATI STATISTICI AVANZATI (Se disponibili):\n" .
@@ -72,38 +105,18 @@ class GeminiService
                 "Se presenti in api_football.live, troverai:\n" .
                 "- live_score: {home, away, halftime_home, halftime_away} = SCORE ATTUALE E HALFTIME\n" .
                 "- live_status: {short, long, elapsed_minutes} = STATO MATCH E MINUTI TRASCORSI\n" .
-                "- match_info: {fixture_id, date, venue_id}\n" .
-                "USA QUESTI DATI per contestualizzare la tua analisi! Non dire mai che non conosci lo score o il minuto se questi dati sono presenti.\n\n" .
+                "- match_info: {fixture_id, date, venue_id}\n\n" .
                 "📊 STATISTICS LIVE DEL MATCH:\n" .
-                "Se presenti in api_football.statistics, troverai array per home/away con:\n" .
-                "- Shots on Goal, Shots off Goal, Total Shots, Blocked Shots\n" .
-                "- Ball Possession (% possesso palla)\n" .
-                "- Corner Kicks, Offsides, Fouls\n" .
-                "- Yellow Cards, Red Cards\n" .
-                "- Total passes, Passes accurate, Passes %\n" .
-                "- Goalkeeper Saves\n" .
-                "USA QUESTE STATISTICHE per valutare il dominio del match, pericolosità, e probabilità di gol!\n\n" .
+                (isset($candidates[0]['api_football']['statistics']) ? json_encode($candidates[0]['api_football']['statistics']) : "Non disponibili") . "\n\n" .
                 "⚡ MOMENTUM (Variazione ultimi 10-15 minuti):\n" .
                 (isset($candidates[0]['api_football']['momentum']) ? $candidates[0]['api_football']['momentum'] : "Dati momentum non ancora disponibili.") . "\n\n" .
                 "⚽ EVENTS LIVE DEL MATCH:\n" .
-                "Se presenti in api_football.events, troverai cronologia eventi con:\n" .
-                "- Goal (Normal Goal, Own Goal, Penalty, Missed Penalty) + giocatore + assist + minuto\n" .
-                "- Card (Yellow Card, Red Card) + giocatore + minuto\n" .
-                "- Subst (Substitution 1/2/3) + giocatore IN/OUT + minuto\n" .
-                "- Var (Goal cancelled, Penalty confirmed)\n" .
-                "USA QUESTI EVENTI per capire momentum, espulsioni, cambi tattici, e chi ha segnato!\n\n" .
-                "REGOLE RIGIDE:\n" .
-                "1. Analizza TUTTI i mercati forniti (Match Odds, Double Chance, varie linee di Under/Over, BTTS).\n" .
-                "2. Scegli l'operazione che offre il miglior rapporto rischio/rendimento. Non sei obbligato a scegliere il mercato principale se un altro (es. Over 1.5) è più sicuro o profittevole.\n" .
-                "3. Analizza quote Back/Lay, volumi e DATI STATISTICI LIVE.\n" .
-                "4. Usa la CLASSIFICA e i PRONOSTICI esterni (predictions) per validare la tua scelta.\n" .
-                "5. Sii molto tecnico nella spiegazione (motivation), correlando stats live, classifica e volumi Betfair.\n" .
-                "6. SOGLIA DI CONFIDENZA: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE che l'evento si verifichi. Non gonfiare i numeri.\n" .
-                "   Se la quota è 1.50 (probabilità implicita 66%) e tu stimi una probabilità del 60%, la tua confidence deve essere 60.\n" .
-                "7. REGOLA CALCIO (SINGOLA GIOCATA CONTEMPORANEA): È permessa solo UNA scommessa attiva alla volta per match.\n" .
-                "8. ⚠️ QUOTA MINIMA: 1.25 è la tua quota MINIMA di ingresso. Se la quota attuale è inferiore ma l'evento è valido, imposta 'odds' a 1.25 nel JSON.\n" .
-                "9. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON.\n" .
-                "10. STILE RISPOSTA: La 'motivation' deve essere sintetica (max 80 parole). Evita di ripetere dati già chiari.\n\n" .
+                (isset($candidates[0]['api_football']['events']) ? json_encode($candidates[0]['api_football']['events']) : "Non disponibili") . "\n\n" .
+                "SYSTEM CONSTRAINTS (MANDATORY):\n" .
+                "1. REGOLA CALCIO: È permessa solo UNA scommessa attiva alla volta per match.\n" .
+                "2. ⚠️ QUOTA MINIMA: 1.25. Se la quota attuale è inferiore ma l'evento è valido, imposta 'odds' a 1.25.\n" .
+                "3. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON.\n" .
+                "4. STILE RISPOSTA: La 'motivation' deve essere sintetica (max 80 parole). Evita di ripetere dati già chiari.\n\n" .
                 "RISPONDI ESCLUSIVAMENTE CON QUESTO SCHEMA JSON:\n" .
                 "{\n" .
                 "  \"eventName\": \"Team A v Team B\",\n" .
@@ -115,18 +128,12 @@ class GeminiService
                 "  \"motivation\": \"Sintesi tecnica qui (Menziona SEMPRE i nomi delle squadre e i dati statistici chiave usati per la decisione).\"\n" .
                 "}";
         } else {
-            $prompt = ($options['custom_prompt'] ?? "Sei un TRADER ELITE di Betfair. Il tuo compito è analizzare il mercato live multi-sport e scovare la scommessa migliore tra quelle fornite.") . "\n\n" .
+            $prompt = ($options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('dio')) . "\n\n" .
                 $balanceText .
                 "LISTA EVENTI LIVE CANDIDATI:\n" . json_encode($candidates) . "\n\n" .
-                "REGOLE RIGIDE:\n" .
-                "1. Analizza i volumi (totalMatched) e le quote Back/Lay.\n" .
-                "2. SCEGLI SOLO 1 EVENTO dalla lista che ritieni più profittevole.\n" .
-                "3. Se nessun evento è convincente (risk/reward scarso), non scegliere nulla.\n" .
-                "4. NON INVENTARE QUOTE: usa solo quelle presenti nel JSON per il runner scelto.\n" .
-                "5. CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE. Sii brutale e onesto. Se non c'è valore rispetto alla quota, scrivi una confidence bassa.\n" .
-                "6. QUOTA MINIMA: 1.25 è la quota minima di ingresso.\n" .
-                "7. Se per uno sport non hai dati statistici (ma solo quote), sii più prudente.\n\n" .
-                "RISPONDI ESCLUSIVAMENTE IN FORMATO JSON:\n" .
+                "SYSTEM CONSTRAINTS (MANDATORY):\n" .
+                "1. QUOTA MINIMA: 1.25.\n" .
+                "2. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON:\n" .
                 "{\n" .
                 "  \"marketId\": \"1.XXXXX\",\n" .
                 "  \"advice\": \"Runner Name\",\n" .
@@ -196,16 +203,11 @@ class GeminiService
                 "- $labelAvailable: " . number_format($options['available_balance'], 2) . "€\n\n";
         }
 
-        $prompt = ($options['custom_prompt'] ?? "Sei un ANALISTA ELITE e TRADER di Betfair Exchange. Il tuo compito è analizzare un BATCH di EVENTI LIVE (Calcio) e decidere le operazioni migliori.") . "\n\n" .
+        $prompt = ($options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('batch')) . "\n\n" .
             $balanceText .
             "LISTA EVENTI DA ANALIZZARE:\n" . json_encode($events, JSON_PRETTY_PRINT) . "\n\n" .
-            "REGOLE RIGIDE:\n" .
-            "1. Per ogni evento, analizza i mercati, i volumi, i dati statistici live, il momentum e il contesto storico.\n" .
-            "2. Scegli l'operazione migliore per ogni evento (o nessuna se il rischio/rendimento è scarso).\n" .
-            "3. CONFIDENCE: La tua 'confidence' (0-100) deve rispecchiare la PROBABILITÀ REALE. Sii onesto: se la quota è 1.50 (66% imp) e tu stimi il 60%, scrivi confidence 60.\n" .
-            "4. Quota Minima: 1.25. Se la quota attuale è inferiore ma l'evento è valido, scrivi '1.25' per piazzare un ordine limite.\n" .
-            "5. Rispondi con un ARRAY JSON di oggetti, uno per ogni evento che ritieni meritevole di analisi.\n\n" .
-            "RISPONDI ESCLUSIVAMENTE CON QUESTO SCHEMA JSON (ARRAY):\n" .
+            "SYSTEM CONSTRAINTS:\n" .
+            "1. RISPONDI ESCLUSIVAMENTE CON QUESTO SCHEMA JSON (ARRAY DI OGGETTI):\n" .
             "[\n" .
             "  {\n" .
             "    \"eventName\": \"Team A v Team B\",\n" .

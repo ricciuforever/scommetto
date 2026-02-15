@@ -49,7 +49,7 @@ class GiaNikDatabase
 
         // Ensure default dynamic configuration
         $defaults = [
-            'strategy_prompt' => "Sei GiaNik, un esperto di scommesse sportive. Analizza i dati live e storici per trovare Value Bets.",
+            'strategy_prompt' => (new \App\Services\GeminiService())->getDefaultStrategyPrompt('gianik'),
             'stake_mode' => 'kelly',
             'stake_value' => '0.15',
             'min_confidence' => '80',
