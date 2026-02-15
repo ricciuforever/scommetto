@@ -740,13 +740,17 @@ class GiaNikController
             $stakeMode = $this->db->query("SELECT value FROM system_state WHERE key = 'stake_mode'")->fetchColumn() ?: 'kelly';
             $stakeValue = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'stake_value'")->fetchColumn() ?: 0.15);
             $minStake = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'min_stake'")->fetchColumn() ?: 2.00);
+            $minConfidence = (int)($this->db->query("SELECT value FROM system_state WHERE key = 'min_confidence'")->fetchColumn() ?: 80);
+            $minLiquidity = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'min_liquidity'")->fetchColumn() ?: 2000.00);
 
             // Debug $event
             file_put_contents(Config::LOGS_PATH . 'gianik_event_debug.log', date('[Y-m-d H:i:s] ') . json_encode($event, JSON_PRETTY_PRINT) . PHP_EOL, FILE_APPEND);
 
             $predictionRaw = $gemini->analyze([$event], array_merge($balance, [
                 'is_gianik' => true,
-                'custom_prompt' => $strategyPrompt
+                'custom_prompt' => $strategyPrompt,
+                'min_liquidity' => $minLiquidity,
+                'min_confidence' => $minConfidence
             ]));
 
             $analysis = json_decode($predictionRaw, true);
@@ -1046,6 +1050,7 @@ class GiaNikController
             $stakeMode = $this->db->query("SELECT value FROM system_state WHERE key = 'stake_mode'")->fetchColumn() ?: 'kelly';
             $stakeValue = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'stake_value'")->fetchColumn() ?: 0.15);
             $minConfidence = (int)($this->db->query("SELECT value FROM system_state WHERE key = 'min_confidence'")->fetchColumn() ?: 80);
+            $minLiquidity = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'min_liquidity'")->fetchColumn() ?: 2000.00);
             $minStake = (float)($this->db->query("SELECT value FROM system_state WHERE key = 'min_stake'")->fetchColumn() ?: 2.00);
 
             // Fetch correct balance for Gemini based on operational mode
@@ -1104,6 +1109,8 @@ class GiaNikController
                         if (!isset($booksMap[$mId])) continue;
 
                         $book = $booksMap[$mId];
+                        if (($book['totalMatched'] ?? 0) < $minLiquidity) continue;
+
                         $m = [
                             'marketId' => $mId,
                             'marketName' => $mc['marketName'],
@@ -1197,7 +1204,9 @@ class GiaNikController
                     'is_gianik' => true,
                     'available_balance' => $activeBalance['available'],
                     'current_portfolio' => $activeBalance['total'],
-                    'custom_prompt' => $strategyPrompt
+                    'custom_prompt' => $strategyPrompt,
+                    'min_liquidity' => $minLiquidity,
+                    'min_confidence' => $minConfidence
                 ]);
 
                 $batchAnalysis = json_decode($predictionRaw, true);

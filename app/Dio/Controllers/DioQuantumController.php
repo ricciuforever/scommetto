@@ -332,7 +332,7 @@ class DioQuantumController
                 $allOpportunities = []; // Reset for recording actual opportunities later
 
                 // 5. AI Analysis (Quantum Batch Mode - 1 call for up to 40 tickers)
-                $batchResults = $this->analyzeQuantumBatch($batchTickers, $strategyPrompt, $minConfidence);
+                $batchResults = $this->analyzeQuantumBatch($batchTickers, $strategyPrompt, $minConfidence, $minLiquidity);
                 $trace['ai_results'] = $batchResults;
 
                 $workingTotalBankroll = $portfolio['total_balance'];
@@ -496,7 +496,7 @@ class DioQuantumController
         ];
     }
 
-    private function analyzeQuantumBatch($tickers, $customPrompt = null, $minConfidence = 80)
+    private function analyzeQuantumBatch($tickers, $customPrompt = null, $minConfidence = 80, $minLiquidity = 5000)
     {
         $portfolio = $this->recalculatePortfolio();
         $totalBalance = $portfolio['total_balance'];
@@ -523,8 +523,13 @@ class DioQuantumController
         }
         if (!$hasExperiences) $ragContext = "";
 
+        $systemOverride = "SYSTEM OVERRIDE (USER SETTINGS):\n" .
+            "- LIQUIDITY THRESHOLD: " . number_format($minLiquidity, 0, '', '') . "€. If volume > " . number_format($minLiquidity, 0, '', '') . ", consider it SUFFICIENT. Do not PASS solely because of volume if it exceeds this threshold.\n" .
+            "- CONFIDENCE THRESHOLD: " . $minConfidence . "%. If you identify a profitable opportunity (Value Bet), your Confidence score MUST be scaled to at least " . $minConfidence . " (or higher) to trigger the bet. Do not output low confidence (e.g. 60) for valid trades just because the raw probability is low; scale it to the signal strength.\n";
+
         $prompt = ($customPrompt ?: "Sei un QUANT TRADER denominato 'Dio'. Non sei uno scommettitore, sei un analista di Price Action (Tape Reading).") . "\n\n" .
             ($ragContext ? $ragContext . "\n" : "") .
+            $systemOverride . "\n" .
             "SITUAZIONE PORTAFOGLIO: Saldo Totale " . number_format($totalBalance, 2) . "€, Saldo Disponibile " . number_format($availableBalance, 2) . "€\n\n" .
             "DATI ASSET (BATCH DI TICKERS):\n" . json_encode($tickers, JSON_PRETTY_PRINT) . "\n\n" .
             "IL TUO VANTAGGIO (Price Action Rules):\n" .
