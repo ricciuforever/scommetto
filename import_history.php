@@ -26,7 +26,10 @@ echo "Cert Path: $certPath (" . (file_exists($certPath) ? "FOUND" : "MISSING") .
 echo "Key Path: $keyPath (" . (file_exists($keyPath) ? "FOUND" : "MISSING") . ")\n";
 
 // 2. Explicit Service Login Debug
-$bf = new BetfairService();
+// Force override of SSO URL to Italian endpoint as requested
+$bf = new BetfairService([
+    'BETFAIR_SSO_URL' => 'https://identitysso.betfair.it/api/certlogin'
+]);
 
 echo "\nAttempting BetfairService->authenticate()...\n";
 // Temporarily enable debug logging to screen if possible, or just read the result

@@ -240,8 +240,17 @@ class BetfairService
                 curl_setopt($ch, CURLOPT_HTTPHEADER, [
                     "X-Application: {$this->appKey}",
                     "Content-Type: application/x-www-form-urlencoded",
+                    "Accept: application/json",
                     "Accept-Language: it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
-                    "Referer: https://www.betfair.it/"
+                    "Referer: https://www.betfair.it/",
+                    "Origin: https://www.betfair.it",
+                    "Sec-Fetch-Dest: empty",
+                    "Sec-Fetch-Mode: cors",
+                    "Sec-Fetch-Site: same-site",
+                    "Sec-Ch-Ua: \"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"",
+                    "Sec-Ch-Ua-Mobile: ?0",
+                    "Sec-Ch-Ua-Platform: \"Windows\"",
+                    "Connection: keep-alive"
                 ]);
                 curl_setopt($ch, CURLOPT_SSLCERT, $this->certPath);
                 curl_setopt($ch, CURLOPT_SSLKEY, $this->keyPath);
