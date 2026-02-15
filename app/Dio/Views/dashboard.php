@@ -4,6 +4,17 @@ $isEmbedded = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/war-room') !== false
 if (!$isEmbedded) {
     require __DIR__ . '/../../Views/layout/top.php';
 }
+
+$formatRome = function($dateStr, $format = 'd/m H:i:s') {
+    if (empty($dateStr)) return '-';
+    try {
+        $dt = new DateTime($dateStr, new DateTimeZone('UTC'));
+        $dt->setTimezone(new DateTimeZone('Europe/Rome'));
+        return $dt->format($format);
+    } catch (Exception $e) {
+        return '-';
+    }
+};
 ?>
 
 <div class="space-y-6 <?= $isEmbedded ? 'p-4' : '' ?>">
@@ -29,7 +40,7 @@ if (!$isEmbedded) {
                     <div class="mt-1 flex items-center gap-1.5 opacity-60">
                         <i data-lucide="cpu" class="w-2.5 h-2.5 text-indigo-400"></i>
                         <span class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
-                            Ultimo Check AI: <?php echo date('d/m H:i:s', strtotime($lastScan . ' UTC')); ?>
+                            Ultimo Check AI: <?php echo $formatRome($lastScan); ?>
                         </span>
                     </div>
                 <?php endif; ?>
@@ -48,7 +59,7 @@ if (!$isEmbedded) {
         <div class="flex items-center gap-3">
             <div class="text-right">
                 <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Ultimo Aggiornamento</p>
-                <p class="text-xs font-black text-white"><?php echo date('H:i:s'); ?></p>
+                <p class="text-xs font-black text-white"><?php echo $formatRome('now', 'H:i:s'); ?></p>
             </div>
         </div>
     </div>
@@ -271,7 +282,7 @@ if (!$isEmbedded) {
                             <?php foreach ($recentLogs as $log): ?>
                                 <tr class="hover:bg-white/5 transition-colors">
                                     <td class="px-6 py-3 text-[10px] font-bold text-slate-500 w-16">
-                                        <?php echo date('H:i', strtotime($log['created_at'])); ?>
+                                        <?php echo $formatRome($log['created_at'], 'H:i'); ?>
                                     </td>
                                     <td class="px-6 py-3">
                                         <div class="flex items-center gap-2">
@@ -329,7 +340,7 @@ if (!$isEmbedded) {
                 <?php else: ?>
                     <div class="flex justify-between border-b border-white/5 pb-2">
                         <span class="text-slate-500">Ultimo Check:</span>
-                        <span class="text-white font-mono"><?php echo date('H:i:s', strtotime(($lastScanTrace['timestamp'] ?? 'now') . ' UTC')); ?></span>
+                        <span class="text-white font-mono"><?php echo $formatRome($lastScanTrace['timestamp'] ?? 'now', 'H:i:s'); ?></span>
                     </div>
 
                     <div>
