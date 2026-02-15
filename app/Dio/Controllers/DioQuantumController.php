@@ -188,11 +188,6 @@ class DioQuantumController
                     // Safety Cap: Massimo 5 analisi AI per ciclo (in un singolo batch)
                     if (count($batchTickers) >= 5) break 2;
 
-                    // Conflict Prevention with GiaNik (for Soccer: avoid same match)
-                    if ($sportId === 1 && $this->isMatchActiveInGiaNik($mc['event']['name'] ?? '')) {
-                        continue;
-                    }
-
                     // Avoid duplicate bets in Dio for the same match
                     if ($this->isMatchActiveInDio($mc['event']['name'] ?? '')) {
                         continue;
@@ -547,27 +542,6 @@ class DioQuantumController
         $stmt = $this->db->prepare("SELECT * FROM experiences ORDER BY created_at DESC LIMIT 10");
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    private function isMatchActiveInGiaNik($eventName)
-    {
-        if (empty($eventName)) return false;
-        try {
-            $gianikDbPath = \App\Config\Config::DATA_PATH . 'gianik.sqlite';
-            if (!file_exists($gianikDbPath)) return false;
-            $gDb = new PDO("sqlite:" . $gianikDbPath);
-
-            $stmt = $gDb->query("SELECT event_name FROM bets WHERE status = 'pending'");
-            $pending = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-            $normCurrent = $this->normalizeEventName($eventName);
-            foreach ($pending as $pName) {
-                if ($this->normalizeEventName($pName) === $normCurrent) return true;
-            }
-            return false;
-        } catch (\Exception $e) {
-            return false;
-        }
     }
 
     private function isMatchActiveInDio($eventName)
