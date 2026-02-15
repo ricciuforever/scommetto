@@ -70,6 +70,12 @@ class GeminiService
         $isUpcoming = $options['is_upcoming'] ?? false;
         $isGiaNik = $options['is_gianik'] ?? false;
 
+        $minLiquidity = $options['min_liquidity'] ?? 2000;
+        $minConfidence = $options['min_confidence'] ?? 80;
+        $systemOverride = "SYSTEM OVERRIDE (USER SETTINGS):\n" .
+            "- LIQUIDITY THRESHOLD: " . number_format($minLiquidity, 0, '', '') . "€. If volume > " . number_format($minLiquidity, 0, '', '') . ", consider it SUFFICIENT. Do not PASS solely because of volume if it exceeds this threshold.\n" .
+            "- CONFIDENCE THRESHOLD: " . $minConfidence . "%. If you identify a profitable opportunity (Value Bet), your Confidence score MUST be scaled to at least " . $minConfidence . " (or higher) to trigger the bet. Do not output low confidence (e.g. 60) for valid trades just because the raw probability is low; scale it to the signal strength.";
+
         if ($isUpcoming) {
             $customPrompt = $options['custom_prompt'] ?? $this->getDefaultStrategyPrompt('upcoming');
 
@@ -135,7 +141,7 @@ class GeminiService
                     implode("\n\n", array_values($mapping));
             }
 
-            $prompt .= "\n\nSYSTEM CONSTRAINTS (MANDATORY):\n" .
+            $prompt .= "\n\n" . $systemOverride . "\n\nSYSTEM CONSTRAINTS (MANDATORY):\n" .
                 "1. REGOLA CALCIO: È permessa solo UNA scommessa attiva alla volta per match.\n" .
                 "2. ⚠️ QUOTA MINIMA: 1.25. Se la quota attuale è inferiore ma l'evento è valido, imposta 'odds' a 1.25.\n" .
                 "3. RISPONDI ESCLUSIVAMENTE IN FORMATO JSON.\n" .
@@ -231,6 +237,12 @@ class GeminiService
 
         $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=" . $this->apiKey;
 
+        $minLiquidity = $options['min_liquidity'] ?? 2000;
+        $minConfidence = $options['min_confidence'] ?? 80;
+        $systemOverride = "SYSTEM OVERRIDE (USER SETTINGS):\n" .
+            "- LIQUIDITY THRESHOLD: " . number_format($minLiquidity, 0, '', '') . "€. If volume > " . number_format($minLiquidity, 0, '', '') . ", consider it SUFFICIENT. Do not PASS solely because of volume if it exceeds this threshold.\n" .
+            "- CONFIDENCE THRESHOLD: " . $minConfidence . "%. If you identify a profitable opportunity (Value Bet), your Confidence score MUST be scaled to at least " . $minConfidence . " (or higher) to trigger the bet. Do not output low confidence (e.g. 60) for valid trades just because the raw probability is low; scale it to the signal strength.";
+
         $balanceText = "";
         if (isset($options['current_portfolio'])) {
             $labelPortfolio = ($options['is_gianik'] ?? false) ? "Budget Totale Virtuale GiaNik" : "Portfolio Reale";
@@ -259,7 +271,7 @@ class GeminiService
                 $mapping['{{events_batch}}'];
         }
 
-        $prompt .= "\n\nSYSTEM CONSTRAINTS:\n" .
+        $prompt .= "\n\n" . $systemOverride . "\n\nSYSTEM CONSTRAINTS:\n" .
             "1. RISPONDI ESCLUSIVAMENTE CON QUESTO SCHEMA JSON (ARRAY DI OGGETTI):\n" .
             "[\n" .
             "  {\n" .
