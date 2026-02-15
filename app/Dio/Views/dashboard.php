@@ -82,7 +82,8 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Saldo
                 Disponibile</span>
             <div class="text-lg font-black text-indigo-400">
-                <?php echo number_format($stats['available_balance'], 2); ?>€</div>
+                <?php echo number_format($stats['available_balance'], 2); ?>€
+            </div>
         </div>
         <div
             class="bg-white/5 p-4 rounded-xl border border-white/10 glass group hover:border-amber-500/30 transition-all">
@@ -144,7 +145,6 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                     <tr class="text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-white/10">
                         <th class="px-6 py-4">Data</th>
                         <th class="px-6 py-4">Sport / Evento</th>
-                        <th class="px-6 py-4 text-center">Score</th>
                         <th class="px-6 py-4">Mercato / Selezione</th>
                         <th class="px-6 py-4">Quota</th>
                         <th class="px-6 py-4 text-center">Stake</th>
@@ -172,11 +172,6 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                                         <?php if (!empty($bet['score'])): ?>
                                             <span class="text-yellow-400 ml-1 font-mono"><?php echo $bet['score']; ?></span>
                                         <?php endif; ?>
-                                            </span>
-                                        </td>
-                                        <td class="px-6 py-4 text-center">
-                                            <span class="text-xs font-mono font-bold text-yellow-400">
-                                                <?php echo !empty($bet['score']) ? $bet['score'] : '-'; ?>
                                     </span>
                                 </td>
                                 <td class="px-6 py-4">
@@ -370,10 +365,10 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                     <div>
                         <p class="text-indigo-400 font-bold uppercase mb-1">Sport Scansionati</p>
                         <div class="flex flex-wrap gap-1">
-                                <?php foreach (($lastScanTrace['scanned_sports'] ?? []) as $s):
-                                    $details = $lastScanTrace['scanned_details'][$s] ?? null;
-                                    $label = $s . ($details ? " ({$details['events']}/{$details['markets']})" : "");
-                                    ?>
+                            <?php foreach (($lastScanTrace['scanned_sports'] ?? []) as $s):
+                                $details = $lastScanTrace['scanned_details'][$s] ?? null;
+                                $label = $s . ($details ? " ({$details['events']}/{$details['markets']})" : "");
+                                ?>
                                 <span
                                     class="px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded"><?php echo $label; ?></span>
                             <?php endforeach; ?>
