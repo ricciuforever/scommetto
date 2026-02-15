@@ -4,29 +4,29 @@
     </div>
 <?php endif; ?>
 
-<div class="flex flex-1 gap-8 min-h-[600px]">
+<div class="flex flex-1 gap-4 min-h-[600px]">
 
     <!-- Sidebar Tabelle -->
-    <div class="w-64 bg-gray-900/50 rounded-3xl border border-gray-800 flex flex-col shrink-0 overflow-hidden">
-        <div class="p-4 text-[10px] font-bold text-gray-500 uppercase border-b border-gray-800 flex justify-between items-center">
+    <div class="w-56 bg-gray-900/40 rounded-2xl border border-gray-800/50 flex flex-col shrink-0 overflow-hidden">
+        <div class="p-3 text-[9px] font-bold text-gray-600 uppercase border-b border-gray-800/50 flex justify-between items-center">
             <span>Tabelle: <?= $dbConfig['name'] ?></span>
-            <span class="<?= $dbConfig['color'] ?>">●</span>
+            <span class="<?= $dbConfig['color'] ?> opacity-50">●</span>
         </div>
-        <div class="overflow-y-auto flex-1 p-4 space-y-1 no-scrollbar">
+        <div class="overflow-y-auto flex-1 p-2 space-y-0.5 no-scrollbar">
             <?php foreach ($tables as $t): ?>
                 <a href="?db=<?= $currentDbKey ?>&table=<?= $t ?>&tab=<?= $tab ?? 'data' ?>"
-                   class="block px-4 py-2 rounded-xl text-xs truncate transition-all <?= $currentTable === $t ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-500 hover:bg-white/5 hover:text-white' ?>">
+                   class="block px-3 py-1.5 rounded-lg text-[11px] truncate transition-all <?= $currentTable === $t ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300' ?>">
                     <?= $t ?>
                 </a>
             <?php endforeach; ?>
         </div>
-        <div class="p-4 border-t border-gray-800 flex flex-col bg-black/20 gap-2">
-            <span class="text-[9px] text-gray-600 uppercase font-black tracking-widest ml-1 mb-1">Seleziona Database</span>
-            <div class="flex gap-2">
+        <div class="p-3 border-t border-gray-800/50 flex flex-col bg-black/10 gap-2">
+            <span class="text-[8px] text-gray-600 uppercase font-black tracking-widest ml-1">Database</span>
+            <div class="flex gap-1.5">
                 <?php foreach ($databases as $k => $info): ?>
                     <a href="?db=<?= $k ?>"
                        title="<?= $info['name'] ?>"
-                       class="flex-1 py-2 rounded-lg text-[9px] text-center font-bold uppercase border border-gray-800 hover:bg-gray-800 transition-all <?= $currentDbKey === $k ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'text-gray-600' ?>">
+                       class="flex-1 py-1.5 rounded-md text-[9px] text-center font-bold uppercase border border-gray-800 hover:bg-gray-800 transition-all <?= $currentDbKey === $k ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'text-gray-600' ?>">
                         <?= $k ?>
                     </a>
                 <?php endforeach; ?>
@@ -35,85 +35,86 @@
     </div>
 
     <!-- Main Data Table -->
-    <div class="flex-1 flex flex-col bg-gray-900/50 rounded-3xl border border-gray-800 overflow-hidden relative min-h-[500px]">
+    <div class="flex-1 flex flex-col bg-gray-900/40 rounded-2xl border border-gray-800/50 overflow-hidden relative min-h-[500px]">
 
-        <div class="p-6 border-b border-gray-800 bg-gray-800/50 flex justify-between items-center shrink-0">
-            <div class="flex items-center gap-8">
+        <div class="px-6 py-2.5 border-b border-gray-800/50 bg-gray-800/20 flex justify-between items-center shrink-0">
+            <div class="flex items-center gap-6">
                 <!-- Tabs -->
-                <div class="flex bg-black/20 p-1 rounded-xl border border-white/5">
-                    <a href="?db=<?= $currentDbKey ?>&tab=data" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all <?= ($tab ?? 'data') === 'data' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white' ?>">
-                        Data Browser
+                <div class="flex bg-black/30 p-0.5 rounded-lg border border-white/5">
+                    <a href="?db=<?= $currentDbKey ?>&tab=data" class="px-3 py-1.5 rounded-md text-[9px] font-black uppercase transition-all <?= ($tab ?? 'data') === 'data' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white' ?>">
+                        Data
                     </a>
                     <?php if($currentDbKey === 'gianik'): ?>
-                        <a href="?db=<?= $currentDbKey ?>&tab=intelligence" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all <?= ($tab ?? '') === 'intelligence' ? 'bg-purple-600 text-white' : 'text-gray-500 hover:text-white' ?>">
-                            Brain Intelligence
+                        <a href="?db=<?= $currentDbKey ?>&tab=intelligence" class="px-3 py-1.5 rounded-md text-[9px] font-black uppercase transition-all <?= ($tab ?? '') === 'intelligence' ? 'bg-purple-600 text-white' : 'text-gray-500 hover:text-white' ?>">
+                            Brain
                         </a>
                     <?php endif; ?>
                     <?php if($currentDbKey === 'dio'): ?>
-                        <a href="?db=<?= $currentDbKey ?>&tab=quantum" class="px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all <?= ($tab ?? '') === 'quantum' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-white' ?>">
-                            Quantum Tracker
+                        <a href="?db=<?= $currentDbKey ?>&tab=quantum" class="px-3 py-1.5 rounded-md text-[9px] font-black uppercase transition-all <?= ($tab ?? '') === 'quantum' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-white' ?>">
+                            Quantum
                         </a>
                     <?php endif; ?>
                 </div>
 
-                <div class="h-8 w-px bg-white/10"></div>
+                <div class="h-6 w-px bg-white/10"></div>
 
-                <div class="flex items-center gap-4">
-                <div>
-                    <span class="text-[10px] text-gray-500 uppercase font-bold block">Tabella Corrente</span>
-                    <span class="<?= $dbConfig['color'] ?> font-black italic text-xl"><?= strtoupper($currentTable) ?></span>
-                </div>
-                <div class="px-3 py-1 bg-black/30 rounded-lg border border-white/5">
-                    <span class="text-xs text-gray-400 font-mono"><?= number_format($totalRows) ?> rows</span>
+                <div class="flex items-center gap-3">
+                    <span class="<?= $dbConfig['color'] ?> font-black italic text-sm tracking-tighter"><?= strtoupper($currentTable) ?></span>
+                    <span class="px-2 py-0.5 bg-black/30 rounded border border-white/5 text-[10px] text-gray-500 font-mono"><?= number_format($totalRows) ?></span>
                 </div>
             </div>
 
-            <form action="" method="GET" class="flex items-center gap-2">
+            <form action="" method="GET" class="flex items-center gap-4">
                 <input type="hidden" name="db" value="<?= $currentDbKey ?>">
                 <input type="hidden" name="table" value="<?= $currentTable ?>">
                 <input type="hidden" name="tab" value="<?= $tab ?? 'data' ?>">
-                <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Search..." class="input-dark w-64 text-xs py-2 px-4 rounded-xl bg-slate-900 border-slate-700 outline-none focus:border-blue-500">
 
-                <div class="flex gap-1 items-center ml-4">
+                <div class="relative">
+                    <i data-lucide="search" class="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"></i>
+                    <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Cerca..."
+                           class="bg-slate-950 border border-slate-800 text-[10px] pl-8 pr-4 py-1.5 rounded-lg w-48 outline-none focus:border-blue-500/50 transition-all text-gray-300">
+                </div>
+
+                <div class="flex gap-1 items-center bg-black/20 rounded-lg p-0.5 border border-white/5">
                     <?php if($page > 1): ?>
-                        <a href="?db=<?= $currentDbKey ?>&table=<?= $currentTable ?>&tab=<?= $tab ?? 'data' ?>&search=<?= urlencode($search) ?>&page=<?= $page-1 ?>" class="w-8 h-8 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded-lg">◀</a>
+                        <a href="?db=<?= $currentDbKey ?>&table=<?= $currentTable ?>&tab=<?= $tab ?? 'data' ?>&search=<?= urlencode($search) ?>&page=<?= $page-1 ?>" class="w-6 h-6 flex items-center justify-center hover:bg-white/5 rounded text-gray-500 hover:text-white transition-all text-[10px]">◀</a>
                     <?php endif; ?>
-                    <span class="px-3 text-[10px] font-bold text-gray-500 uppercase"><?= $page ?> / <?= $totalPages ?: 1 ?></span>
+                    <span class="px-2 text-[9px] font-bold text-gray-600 uppercase"><?= $page ?> / <?= $totalPages ?: 1 ?></span>
                     <?php if($page < $totalPages): ?>
-                        <a href="?db=<?= $currentDbKey ?>&table=<?= $currentTable ?>&tab=<?= $tab ?? 'data' ?>&search=<?= urlencode($search) ?>&page=<?= $page+1 ?>" class="w-8 h-8 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded-lg">▶</a>
+                        <a href="?db=<?= $currentDbKey ?>&table=<?= $currentTable ?>&tab=<?= $tab ?? 'data' ?>&search=<?= urlencode($search) ?>&page=<?= $page+1 ?>" class="w-6 h-6 flex items-center justify-center hover:bg-white/5 rounded text-gray-500 hover:text-white transition-all text-[10px]">▶</a>
                     <?php endif; ?>
                 </div>
             </form>
         </div>
 
         <div class="flex-1 overflow-auto">
-            <table class="w-full text-left border-collapse text-[11px] font-mono">
-                <thead class="bg-gray-900 text-gray-500 uppercase sticky top-0 z-10">
+            <table class="w-full text-left border-collapse text-[10px] font-mono">
+                <thead class="bg-gray-950 text-gray-500 uppercase sticky top-0 z-10">
                     <tr>
-                        <th class="p-4 border-b border-gray-800 w-16">Act</th>
+                        <th class="p-2 border-b border-gray-800 w-16 text-center bg-gray-900/50">Act</th>
                         <?php
                         $displayCols = !empty($rows) ? array_keys($rows[0]) : $validColumns;
                         foreach($displayCols as $col) {
                             if($col === '_id') continue;
-                            echo "<th class='p-4 border-b border-gray-800 whitespace-nowrap'>$col</th>";
+                            echo "<th class='p-2 px-3 border-b border-gray-800 whitespace-nowrap bg-gray-900/50'>$col</th>";
                         }
                         ?>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-800 bg-gray-900/20">
+                <tbody class="divide-y divide-gray-800/30 bg-gray-900/10">
                     <?php foreach ($rows as $row): ?>
                         <tr class="hover:bg-white/5 group transition-colors">
-                            <td class="p-4 flex gap-3 items-center">
+                            <td class="p-2 flex gap-3 items-center justify-center">
                                 <?php if($dbConfig['editable'] && $row['_id']): ?>
                                     <button onclick="openEdit(<?= htmlspecialchars(json_encode($row)) ?>)" class="text-blue-500 hover:text-blue-300 transition-colors" title="Edit">
-                                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                        <i data-lucide="edit-3" class="w-3 h-3"></i>
                                     </button>
                                     <a href="?db=<?= $currentDbKey ?>&table=<?= $currentTable ?>&action=delete&id=<?= $row['_id'] ?>"
                                        onclick="return confirm('Sicuro?')" class="text-red-500 hover:text-red-300 transition-colors" title="Delete">
-                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                        <i data-lucide="trash-2" class="w-3 h-3"></i>
                                     </a>
                                 <?php else: ?>
-                                    <i data-lucide="lock" class="w-3.5 h-3.5 text-gray-700"></i>
+                                    <i data-lucide="lock" class="w-3 h-3 text-gray-700"></i>
                                 <?php endif; ?>
                             </td>
                             <?php foreach ($row as $col => $val):
@@ -123,12 +124,12 @@
                                 if ($val === null) { $val = 'NULL'; $color='text-gray-700 italic'; }
 
                                 // Dynamic max-width for content
-                                $maxWidth = 'max-w-[320px]';
+                                $maxWidth = 'max-w-[200px]';
                                 if ($col === 'strategy_prompt' || $col === 'motivation' || $col === 'lesson_text') {
-                                    $maxWidth = 'max-w-[500px]';
+                                    $maxWidth = 'max-w-[400px]';
                                 }
                             ?>
-                                <td class="p-4 whitespace-nowrap <?= $maxWidth ?> truncate <?= $color ?>" title="<?= htmlspecialchars($val) ?>">
+                                <td class="p-2 px-3 whitespace-nowrap <?= $maxWidth ?> truncate <?= $color ?>" title="<?= htmlspecialchars($val) ?>">
                                     <?= htmlspecialchars($val) ?>
                                 </td>
                             <?php endforeach; ?>
