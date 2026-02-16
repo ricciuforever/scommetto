@@ -160,7 +160,9 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                     <?php else: ?>
                         <?php foreach ($recentBets as $bet): ?>
                             <tr class="hover:bg-white/5 transition-colors group">
-                                <?php echo $formatRome($bet['created_at'], 'H:i'); ?>
+                                <td class="px-6 py-4 text-xs font-bold text-slate-400">
+                                    <?php echo $formatRome($bet['created_at'], 'H:i'); ?>
+                                </td>
                                 <td class="px-6 py-4">
                                     <span class="text-[10px] font-black uppercase text-indigo-400 block mb-0.5">
                                         <?php echo $bet['sport']; ?>
