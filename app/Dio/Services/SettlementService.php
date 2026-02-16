@@ -90,5 +90,4 @@ class SettlementService
         $stmt = $this->db->prepare("UPDATE system_state SET value = value + ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'virtual_balance'");
         $stmt->execute([number_format($amount, 2, '.', '')]);
     }
-
-
+}
