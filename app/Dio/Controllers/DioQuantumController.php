@@ -1012,6 +1012,7 @@ class DioQuantumController
             $betById[$bet['id']] = $bet;
         }
 
+        $romeTz = new \DateTimeZone('Europe/Rome');
         foreach ($events as $event) {
             if ($event['type'] === 'place') {
                 $stake = $event['amount'];
@@ -1049,8 +1050,11 @@ class DioQuantumController
                 $settledCount++;
             }
 
+            $dt = new \DateTime($event['time']);
+            $dt->setTimezone($romeTz);
+
             $history[] = [
-                't' => date('d/m H:i', strtotime($event['time'])),
+                't' => $dt->format('d/m H:i'),
                 'v' => round($currentBalance + $exposure, 2)
             ];
         }
@@ -1070,6 +1074,7 @@ class DioQuantumController
 
             // Re-trace history with the offset
             $runningTotal = $initialBankroll + $initialPnl + $offset;
+            $romeTz = new \DateTimeZone('Europe/Rome');
             foreach ($events as $event) {
                 if ($event['type'] === 'place') {
                     if (!($placedBets[$event['id']] ?? false))
@@ -1081,8 +1086,12 @@ class DioQuantumController
                     $bet = $betById[$event['id']];
                     $runningTotal += (float) $bet['profit'];
                 }
+
+                $dt = new \DateTime($event['time']);
+                $dt->setTimezone($romeTz);
+
                 $newHistory[] = [
-                    't' => date('d/m H:i', strtotime($event['time'])),
+                    't' => $dt->format('d/m H:i'),
                     'v' => round($runningTotal, 2)
                 ];
             }

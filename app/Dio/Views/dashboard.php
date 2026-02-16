@@ -160,9 +160,7 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                     <?php else: ?>
                         <?php foreach ($recentBets as $bet): ?>
                             <tr class="hover:bg-white/5 transition-colors group">
-                                <td class="px-6 py-4 text-xs font-bold text-slate-400">
-                                    <?php echo date('H:i', strtotime($bet['created_at'])); ?>
-                                </td>
+                                <?php echo $formatRome($bet['created_at'], 'H:i'); ?>
                                 <td class="px-6 py-4">
                                     <span class="text-[10px] font-black uppercase text-indigo-400 block mb-0.5">
                                         <?php echo $bet['sport']; ?>
@@ -456,28 +454,41 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
     const performanceData = <?php echo json_encode($performanceHistory); ?>;
     if (performanceData.length > 1) {
         const ctx = document.getElementById('performanceChart').getContext('2d');
-        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
-        gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
 
         new Chart(ctx, {
             type: 'line',
             data: {
                 labels: performanceData.map(d => d.t),
-                datasets: [{
-                    label: '<?= ($currentMode ?? 'virtual') === 'real' ? 'Real' : 'Virtual' ?> Bankroll (€)',
-                    data: performanceData.map(d => d.v),
-                    borderColor: '#6366f1',
-                    borderWidth: 3,
-                    fill: true,
-                    backgroundColor: gradient,
-                    tension: 0.4,
-                    pointRadius: 0,
-                    pointHoverRadius: 6,
-                    pointHoverBackgroundColor: '#6366f1',
-                    pointHoverBorderColor: '#fff',
-                    pointHoverBorderWidth: 2
-                }]
+                datasets: [
+                    {
+                        label: 'Baseline (100€)',
+                        data: performanceData.map(() => 100),
+                        borderColor: 'rgba(255, 255, 255, 0.5)',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false,
+                        order: 1
+                    },
+                    {
+                        label: '<?= ($currentMode ?? 'virtual') === 'real' ? 'Real' : 'Virtual' ?> Bankroll (€)',
+                        data: performanceData.map(d => d.v),
+                        borderColor: '#6366f1',
+                        borderWidth: 3,
+                        fill: {
+                            target: { value: 100 },
+                            above: 'rgba(34, 197, 94, 0.2)',   // Green
+                            below: 'rgba(239, 68, 68, 0.2)'    // Red
+                        },
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        pointHoverBackgroundColor: '#6366f1',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2,
+                        order: 0
+                    }
+                ]
             },
             options: {
                 responsive: true,
@@ -496,6 +507,7 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                         displayColors: false,
                         callbacks: {
                             label: function (context) {
+                                if (context.dataset.label.includes('Baseline')) return null;
                                 return context.parsed.y.toFixed(2) + ' €';
                             }
                         }
