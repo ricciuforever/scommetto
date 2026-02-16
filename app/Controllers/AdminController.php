@@ -38,22 +38,22 @@ class AdminController
         $databases = [
             'gianik' => [
                 'driver' => 'sqlite',
-                'path'   => Config::DATA_PATH . 'gianik.sqlite',
-                'name'   => '🧠 GiaNik (Brain)',
-                'color'  => 'text-green-400',
+                'path' => Config::DATA_PATH . 'gianik.sqlite',
+                'name' => '🧠 GiaNik (Brain)',
+                'color' => 'text-green-400',
                 'editable' => true
             ],
-            'dio'    => [
+            'dio' => [
                 'driver' => 'sqlite',
-                'path'   => Config::DATA_PATH . 'dio.sqlite',
-                'name'   => '⚛️ Dio (Quantum)',
-                'color'  => 'text-purple-400',
+                'path' => Config::DATA_PATH . 'dio.sqlite',
+                'name' => '⚛️ Dio (Quantum)',
+                'color' => 'text-purple-400',
                 'editable' => true
             ],
-            'core'   => [
+            'core' => [
                 'driver' => 'mysql',
-                'name'   => '⚽ Core Data (MySQL)',
-                'color'  => 'text-blue-400',
+                'name' => '⚽ Core Data (MySQL)',
+                'color' => 'text-blue-400',
                 'editable' => ($user['role'] === 'admin') // Only Super Admin can edit Core
             ]
         ];
@@ -74,7 +74,8 @@ class AdminController
         }
 
         $currentDbKey = $_GET['db'] ?? array_key_first($databases);
-        if (!isset($databases[$currentDbKey])) $currentDbKey = array_key_first($databases);
+        if (!isset($databases[$currentDbKey]))
+            $currentDbKey = array_key_first($databases);
 
         $dbConfig = $databases[$currentDbKey];
 
@@ -107,7 +108,8 @@ class AdminController
         if ($currentTable && !in_array($currentTable, $tables)) {
             die("Access Denied: Invalid Table");
         }
-        if (!$currentTable && !empty($tables)) $currentTable = $tables[0];
+        if (!$currentTable && !empty($tables))
+            $currentTable = $tables[0];
 
         // Fetch valid columns and Primary Key
         $validColumns = [];
@@ -148,7 +150,8 @@ class AdminController
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dbConfig['editable'] && $currentTable) {
             if ($action === 'update') {
                 $id = $_POST['id'];
-                $fields = []; $params = [];
+                $fields = [];
+                $params = [];
                 foreach ($_POST['data'] as $col => $val) {
                     // Critical Whitelisting: Ensure column exists in table
                     if ($col !== '_id' && in_array($col, $validColumns)) {
@@ -162,7 +165,9 @@ class AdminController
                     try {
                         $pdo->prepare($sql)->execute($params);
                         $message = "✅ Record aggiornato con successo.";
-                    } catch (\Exception $e) { $message = "❌ Errore Update: " . $e->getMessage(); }
+                    } catch (\Exception $e) {
+                        $message = "❌ Errore Update: " . $e->getMessage();
+                    }
                 }
             }
         }
@@ -171,14 +176,16 @@ class AdminController
             try {
                 $pdo->prepare("DELETE FROM `$currentTable` WHERE `$pkName` = ?")->execute([$_GET['id']]);
                 $message = "🗑️ Record eliminato.";
-            } catch (\Exception $e) { $message = "❌ Errore Delete: " . $e->getMessage(); }
+            } catch (\Exception $e) {
+                $message = "❌ Errore Delete: " . $e->getMessage();
+            }
         }
 
         // Fetch Data
         $rows = [];
         $totalRows = 0;
         $search = $_GET['search'] ?? '';
-        $page = (int)($_GET['page'] ?? 1);
+        $page = (int) ($_GET['page'] ?? 1);
         $limit = 50;
         $offset = ($page - 1) * $limit;
 
@@ -196,8 +203,15 @@ class AdminController
             try {
                 $totalRows = $pdo->query("SELECT COUNT(*) FROM `$currentTable` $whereClause")->fetchColumn();
 
+                $sort = $_GET['sort'] ?? '';
+                $order = strtoupper($_GET['order'] ?? 'DESC');
+                if (!in_array($order, ['ASC', 'DESC']))
+                    $order = 'DESC';
+
                 $orderBy = "";
-                if ($pkName && in_array($pkName, $validColumns)) {
+                if ($sort && in_array($sort, $validColumns)) {
+                    $orderBy = "ORDER BY `$sort` $order";
+                } elseif ($pkName && in_array($pkName, $validColumns)) {
                     $orderBy = "ORDER BY `$pkName` DESC";
                 } elseif ($isSqlite) {
                     $orderBy = "ORDER BY rowid DESC";
@@ -245,7 +259,8 @@ class AdminController
         }
 
         $currentAgent = $_GET['agent'] ?? $agents[0];
-        if (!in_array($currentAgent, $agents)) $currentAgent = $agents[0];
+        if (!in_array($currentAgent, $agents))
+            $currentAgent = $agents[0];
 
         $db = ($currentAgent === 'gianik') ? GiaNikDatabase::getInstance()->getConnection() : DioDatabase::getInstance()->getConnection();
 
@@ -257,7 +272,7 @@ class AdminController
                 }
 
                 // Validation for min_stake
-                if ($key === 'min_stake' && (float)$val < 2.0) {
+                if ($key === 'min_stake' && (float) $val < 2.0) {
                     $val = '2.00';
                 }
 
@@ -296,7 +311,9 @@ class AdminController
                     $stmt = $db->prepare("INSERT INTO users (username, password_hash, role, assigned_agent) VALUES (?, ?, ?, ?)");
                     $stmt->execute([$username, $password, $role, $agent]);
                     $message = "✅ Utente creato.";
-                } catch (\Exception $e) { $message = "❌ Errore: " . $e->getMessage(); }
+                } catch (\Exception $e) {
+                    $message = "❌ Errore: " . $e->getMessage();
+                }
             } elseif ($action === 'delete') {
                 $id = $_POST['id'];
                 $db->prepare("DELETE FROM users WHERE id = ?")->execute([$id]);

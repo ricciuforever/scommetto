@@ -40,7 +40,7 @@ class BrainController
             SELECT b.* FROM bets b
             LEFT JOIN experiences e ON b.id = e.data_context
             WHERE b.status IN ('won', 'lost') AND e.id IS NULL
-            ORDER BY CASE WHEN b.status = 'lost' THEN 0 ELSE 1 END ASC, b.created_at DESC
+            ORDER BY b.created_at DESC
             LIMIT 3
         ");
         $stmt->execute();
