@@ -194,7 +194,6 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                                 </td>
                                 <td class="px-6 py-4 text-center text-xs font-bold">
                                     <?php 
-                                    <?php 
                                         if ($bet['status'] === 'pending') {
                                             if (isset($bet['live_pnl'])) {
                                                 $pnl = (float)$bet['live_pnl'];
@@ -217,7 +216,6 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                                             }
                                         }
                                     ?>
-                                    ?>
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <?php if ($bet['status'] === 'pending'): ?>
@@ -239,68 +237,7 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
         </div>
     </div>
 
-    <!-- 5. Sport Tabs & Live Events -->
-    <?php
-    $activeSport = array_key_first($liveSportsData) ?: 'Soccer';
-    ?>
-    <div class="bg-white/5 rounded-2xl border border-white/10 glass overflow-hidden flex flex-col min-h-[500px]"
-        id="dashboard-tabs" x-data="{ activeTab: '<?php echo $activeSport; ?>' }">
-        <div class="flex border-b border-white/10 bg-white/5 overflow-x-auto custom-scrollbar">
-            <?php foreach ($liveSportsData as $sportName => $data): ?>
-                <button @click="activeTab = '<?php echo $sportName; ?>'"
-                    :class="activeTab === '<?php echo $sportName; ?>' ? 'bg-indigo-500/20 text-white border-b-2 border-indigo-500' : 'text-slate-500 hover:text-white'"
-                    class="px-6 py-4 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap">
-                    <?php echo $sportName; ?> (<?php echo count($data['events']); ?>)
-                </button>
-            <?php endforeach; ?>
-        </div>
 
-        <div class="p-6 flex-1">
-            <?php foreach ($liveSportsData as $sportName => $data): ?>
-                <div x-show="activeTab === '<?php echo $sportName; ?>'" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <?php foreach ($data['events'] as $event): ?>
-                        <div
-                            class="bg-white/5 p-5 rounded-2xl border border-white/10 hover:border-indigo-500/30 transition-all group flex flex-col justify-between">
-                            <div class="flex justify-between items-start mb-4">
-                                <div>
-                                    <span
-                                        class="text-[10px] font-black uppercase text-indigo-400"><?php echo $sportName; ?></span>
-                                    <div class="text-xs text-slate-400 mb-1">
-                                        <?php echo $event['event']['countryCode'] ?? 'World'; ?>
-                                    </div>
-                                    <div class="font-bold text-white mb-2"><?php echo $event['event']['name']; ?></div>
-
-                                    <?php if (isset($event['score'])): ?>
-                                        <div class="text-xl font-black text-yellow-400 mb-2 animate-pulse">
-                                            <?php echo $event['score']; ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                                <div
-                                    class="bg-danger/10 text-danger px-2 py-1 rounded text-[10px] font-black uppercase flex items-center gap-1 border border-danger/20">
-                                    <span class="w-1.5 h-1.5 bg-danger rounded-full animate-pulse"></span>
-                                    LIVE
-                                </div>
-                            </div>
-
-                            <div
-                                class="flex items-center justify-between text-xs font-bold text-slate-400 bg-black/20 p-3 rounded-xl border border-white/5">
-                                <div class="flex flex-col gap-1">
-                                    <span class="text-[9px] uppercase text-slate-500">Inizio</span>
-                                    <span
-                                        class="text-white"><?php echo date('H:i', strtotime($event['event']['openDate'])); ?></span>
-                                </div>
-                                <div class="flex flex-col gap-1 text-right">
-                                    <span class="text-[9px] uppercase text-slate-500">Exchange ID</span>
-                                    <span class="text-white"><?php echo $event['event']['id']; ?></span>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endforeach; ?>
-        </div>
-    </div>
 
     <!-- 6. Analisi Autonoma (Thinking Logs) & Live Trace -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
