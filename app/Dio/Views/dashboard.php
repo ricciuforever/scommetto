@@ -167,6 +167,13 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                                 <td class="px-6 py-4">
                                     <span class="text-[10px] font-black uppercase text-indigo-400 block mb-0.5">
                                         <?php echo $bet['sport']; ?>
+                                        <?php if (isset($bet['total_matched']) && $bet['total_matched'] > 0): ?>
+                                            <span class="text-slate-500 ml-1 font-bold normal-case">
+                                                Vol: <?php echo ($bet['total_matched'] > 1000000)
+                                                    ? round($bet['total_matched'] / 1000000, 1) . 'M€'
+                                                    : round($bet['total_matched'] / 1000, 0) . 'k€'; ?>
+                                            </span>
+                                        <?php endif; ?>
                                     </span>
                                     <span class="text-xs font-bold text-white">
                                         <?php echo $bet['event_name']; ?>
@@ -176,16 +183,14 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                                     </span>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <span class="text-[10px] font-black uppercase text-slate-500 block mb-0.5">
-                                        <?php echo $bet['market_name']; ?>
-                                    </span>
-                                    <span class="text-xs font-bold text-white">
-                                        <?php echo $bet['runner_name']; ?>
-                                    </span>
+                                    <div class="flex flex-col">
+                                        <span class="text-xs font-bold text-slate-300"><?php echo $bet['market_name']; ?></span>
+                                        <span class="text-[10px] text-slate-500"><?php echo $bet['runner_name']; ?></span>
+                                    </div>
                                 </td>
                                 <td class="px-6 py-4">
                                     <span
-                                        class="px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-black text-accent">
+                                        class="px-2 py-1 bg-white/5 rounded text-xs font-bold text-white border border-white/10">
                                         <?php echo number_format($bet['odds'], 2); ?>
                                     </span>
                                 </td>
@@ -193,28 +198,30 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                                     <?php echo number_format($bet['stake'], 2); ?>€
                                 </td>
                                 <td class="px-6 py-4 text-center text-xs font-bold">
-                                    <?php 
-                                        if ($bet['status'] === 'pending') {
-                                            if (isset($bet['live_pnl'])) {
-                                                $pnl = (float)$bet['live_pnl'];
-                                                $colorClass = $pnl >= 0 ? 'text-emerald-400' : 'text-rose-400';
-                                                echo '<div class="flex flex-col items-center leading-none">';
-                                                echo '<span class="' . $colorClass . ' font-black text-[11px]">' . ($pnl >= 0 ? '+' : '') . number_format($pnl, 2) . '€</span>';
-                                                echo '<span class="text-[9px] text-slate-500 mt-0.5">Live ' . number_format($bet['live_odds'], 2) . '</span>';
-                                                echo '</div>';
-                                            } else {
-                                                echo '<span class="text-slate-600">-</span>';
-                                            }
+                                    <?php
+                                    if ($bet['status'] === 'pending') {
+                                        if (isset($bet['market_status']) && $bet['market_status'] === 'SUSPENDED') {
+                                            echo '<span class="text-amber-500 flex flex-col items-center"><i data-lucide="lock" class="w-3 h-3 mb-0.5"></i><span class="text-[9px] uppercase">Sospeso</span></span>';
+                                        } elseif (isset($bet['live_pnl'])) {
+                                            $pnl = (float) $bet['live_pnl'];
+                                            $colorClass = $pnl >= 0 ? 'text-emerald-400' : 'text-rose-400';
+                                            echo '<div class="flex flex-col items-center leading-none">';
+                                            echo '<span class="' . $colorClass . ' font-black text-[11px]">' . ($pnl >= 0 ? '+' : '') . number_format($pnl, 2) . '€</span>';
+                                            echo '<span class="text-[9px] text-slate-500 mt-0.5">Live ' . number_format($bet['live_odds'], 2) . '</span>';
+                                            echo '</div>';
                                         } else {
-                                            $pnl = (float)$bet['profit'];
-                                            if ($pnl > 0) {
-                                                echo '<span class="text-success hover:scale-110 transition-transform cursor-default">+' . number_format($pnl, 2) . '€</span>';
-                                            } elseif ($pnl < 0) {
-                                                echo '<span class="text-danger hover:scale-110 transition-transform cursor-default">' . number_format($pnl, 2) . '€</span>';
-                                            } else {
-                                                echo '<span class="text-slate-500">0.00€</span>';
-                                            }
+                                            echo '<span class="text-slate-600">-</span>';
                                         }
+                                    } else {
+                                        $pnl = (float) $bet['profit'];
+                                        if ($pnl > 0) {
+                                            echo '<span class="text-success hover:scale-110 transition-transform cursor-default">+' . number_format($pnl, 2) . '€</span>';
+                                        } elseif ($pnl < 0) {
+                                            echo '<span class="text-danger hover:scale-110 transition-transform cursor-default">' . number_format($pnl, 2) . '€</span>';
+                                        } else {
+                                            echo '<span class="text-slate-500">0.00€</span>';
+                                        }
+                                    }
                                     ?>
                                 </td>
                                 <td class="px-6 py-4 text-center">

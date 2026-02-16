@@ -86,7 +86,10 @@ class DioQuantumController
         $activeMarketIds = array_unique(array_column($pendingBetEvents, 'market_id'));
 
         // FETCH LIVE ODDS FOR PENDING BETS (CASHOUT)
+        // FETCH LIVE ODDS FOR PENDING BETS (CASHOUT) & MARKET STATUS
         $liveOdds = [];
+        $marketMeta = []; // To store status and volume
+
         if (!empty($activeMarketIds)) {
             // Chunk if necessary (max 5 for safety, typically small)
             $marketIdChunks = array_chunk($activeMarketIds, 5);
@@ -96,21 +99,22 @@ class DioQuantumController
                     'priceProjection' => ['priceData' => ['EX_BEST_OFFERS']]
                 ]);
 
-                $books = $oddsRes['result'] ?? []; // Direct result array
-                // If 'result' is missing, it might be the array itself if bf->request returns decoded directly?
-                // BetfairService::request returns ['result' => ...] or error.
+                $books = $oddsRes['result'] ?? [];
 
                 foreach ($books as $book) {
                     $mId = $book['marketId'];
+
+                    // Capture Market Meta
+                    $marketMeta[$mId] = [
+                        'status' => $book['status'] ?? 'OPEN', // OPEN, SUSPENDED, CLOSED
+                        'totalMatched' => $book['totalMatched'] ?? 0,
+                    ];
+
                     if (!isset($book['runners']))
                         continue;
 
                     foreach ($book['runners'] as $runner) {
                         $sId = $runner['selectionId'];
-                        // Best price to LAY (to close a Back bet) is in availableToLay (Pink column)
-                        // If we want to exit immediately, we take the best price offered by Backers?
-                        // "availableToLay" in API = prices available for ME to LAY.
-                        // So yes, index 0 is best price.
                         $bestLayPrice = $runner['ex']['availableToLay'][0]['price'] ?? null;
 
                         if ($bestLayPrice) {
@@ -121,18 +125,24 @@ class DioQuantumController
             }
         }
 
-        // INJECT LIVE P&L INTO RECENT BETS
+        // INJECT LIVE P&L AND META INTO RECENT BETS
         foreach ($recentBets as &$bet) {
             if ($bet['status'] === 'pending') {
-                $key = "{$bet['market_id']}-{$bet['selection_id']}";
+                $mId = $bet['market_id'];
+                $key = "{$mId}-{$bet['selection_id']}";
+
+                // Inject Market Meta
+                if (isset($marketMeta[$mId])) {
+                    $bet['market_status'] = $marketMeta[$mId]['status'];
+                    $bet['total_matched'] = $marketMeta[$mId]['totalMatched'];
+                }
+
                 if (isset($liveOdds[$key])) {
                     $currentPrice = $liveOdds[$key];
                     $entryPrice = (float) $bet['odds'];
                     $stake = (float) $bet['stake'];
 
-                    // Hedge Formula: Profit = Stake * (Entry / Exit - 1)
-                    // Exit price for a Back bet is the Lay price.
-                    if ($currentPrice > 1.01) { // Avoid division by zero or crazy numbers
+                    if ($currentPrice > 1.01) {
                         $bet['live_pnl'] = $stake * ($entryPrice / $currentPrice - 1);
                         $bet['live_odds'] = $currentPrice;
                     }
