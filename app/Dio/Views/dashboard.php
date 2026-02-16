@@ -148,6 +148,7 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                         <th class="px-6 py-4">Mercato / Selezione</th>
                         <th class="px-6 py-4">Quota</th>
                         <th class="px-6 py-4 text-center">Stake</th>
+                        <th class="px-6 py-4 text-center">P&L</th>
                         <th class="px-6 py-4 text-center">Stato</th>
                     </tr>
                 </thead>
@@ -190,6 +191,22 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                                 </td>
                                 <td class="px-6 py-4 text-center text-xs font-bold text-white">
                                     <?php echo number_format($bet['stake'], 2); ?>€
+                                </td>
+                                <td class="px-6 py-4 text-center text-xs font-bold">
+                                    <?php 
+                                        if ($bet['status'] === 'pending') {
+                                            echo '<span class="text-slate-600">-</span>';
+                                        } else {
+                                            $pnl = (float)$bet['profit'];
+                                            if ($pnl > 0) {
+                                                echo '<span class="text-success">+' . number_format($pnl, 2) . '€</span>';
+                                            } elseif ($pnl < 0) {
+                                                echo '<span class="text-danger">' . number_format($pnl, 2) . '€</span>';
+                                            } else {
+                                                echo '<span class="text-slate-500">0.00€</span>';
+                                            }
+                                        }
+                                    ?>
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <?php if ($bet['status'] === 'pending'): ?>
