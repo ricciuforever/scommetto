@@ -83,7 +83,63 @@ class DioQuantumController
 
         // Fetch active events from the pending bets to filter the display
         $pendingBetEvents = array_filter($recentBets, fn($b) => $b['status'] === 'pending');
-        $activeMarketIds = array_column($pendingBetEvents, 'market_id');
+        $activeMarketIds = array_unique(array_column($pendingBetEvents, 'market_id'));
+
+        // FETCH LIVE ODDS FOR PENDING BETS (CASHOUT)
+        $liveOdds = [];
+        if (!empty($activeMarketIds)) {
+            // Chunk if necessary (max 5 for safety, typically small)
+            $marketIdChunks = array_chunk($activeMarketIds, 5);
+            foreach ($marketIdChunks as $chunk) {
+                $oddsRes = $this->bf->request('listMarketBook', [
+                    'marketIds' => $chunk,
+                    'priceProjection' => ['priceData' => ['EX_BEST_OFFERS']]
+                ]);
+
+                $books = $oddsRes['result'] ?? []; // Direct result array
+                // If 'result' is missing, it might be the array itself if bf->request returns decoded directly?
+                // BetfairService::request returns ['result' => ...] or error.
+
+                foreach ($books as $book) {
+                    $mId = $book['marketId'];
+                    if (!isset($book['runners']))
+                        continue;
+
+                    foreach ($book['runners'] as $runner) {
+                        $sId = $runner['selectionId'];
+                        // Best price to LAY (to close a Back bet) is in availableToLay (Pink column)
+                        // If we want to exit immediately, we take the best price offered by Backers?
+                        // "availableToLay" in API = prices available for ME to LAY.
+                        // So yes, index 0 is best price.
+                        $bestLayPrice = $runner['ex']['availableToLay'][0]['price'] ?? null;
+
+                        if ($bestLayPrice) {
+                            $liveOdds["$mId-$sId"] = $bestLayPrice;
+                        }
+                    }
+                }
+            }
+        }
+
+        // INJECT LIVE P&L INTO RECENT BETS
+        foreach ($recentBets as &$bet) {
+            if ($bet['status'] === 'pending') {
+                $key = "{$bet['market_id']}-{$bet['selection_id']}";
+                if (isset($liveOdds[$key])) {
+                    $currentPrice = $liveOdds[$key];
+                    $entryPrice = (float) $bet['odds'];
+                    $stake = (float) $bet['stake'];
+
+                    // Hedge Formula: Profit = Stake * (Entry / Exit - 1)
+                    // Exit price for a Back bet is the Lay price.
+                    if ($currentPrice > 1.01) { // Avoid division by zero or crazy numbers
+                        $bet['live_pnl'] = $stake * ($entryPrice / $currentPrice - 1);
+                        $bet['live_odds'] = $currentPrice;
+                    }
+                }
+            }
+        }
+        unset($bet); // Break reference
 
         // LOAD LIVE SCORES CACHE
         $liveScoresCache = [];

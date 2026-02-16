@@ -194,18 +194,29 @@ $formatRome = function ($dateStr, $format = 'd/m H:i:s') {
                                 </td>
                                 <td class="px-6 py-4 text-center text-xs font-bold">
                                     <?php 
+                                    <?php 
                                         if ($bet['status'] === 'pending') {
-                                            echo '<span class="text-slate-600">-</span>';
+                                            if (isset($bet['live_pnl'])) {
+                                                $pnl = (float)$bet['live_pnl'];
+                                                $colorClass = $pnl >= 0 ? 'text-emerald-400' : 'text-rose-400';
+                                                echo '<div class="flex flex-col items-center leading-none">';
+                                                echo '<span class="' . $colorClass . ' font-black text-[11px]">' . ($pnl >= 0 ? '+' : '') . number_format($pnl, 2) . '€</span>';
+                                                echo '<span class="text-[9px] text-slate-500 mt-0.5">Live ' . number_format($bet['live_odds'], 2) . '</span>';
+                                                echo '</div>';
+                                            } else {
+                                                echo '<span class="text-slate-600">-</span>';
+                                            }
                                         } else {
                                             $pnl = (float)$bet['profit'];
                                             if ($pnl > 0) {
-                                                echo '<span class="text-success">+' . number_format($pnl, 2) . '€</span>';
+                                                echo '<span class="text-success hover:scale-110 transition-transform cursor-default">+' . number_format($pnl, 2) . '€</span>';
                                             } elseif ($pnl < 0) {
-                                                echo '<span class="text-danger">' . number_format($pnl, 2) . '€</span>';
+                                                echo '<span class="text-danger hover:scale-110 transition-transform cursor-default">' . number_format($pnl, 2) . '€</span>';
                                             } else {
                                                 echo '<span class="text-slate-500">0.00€</span>';
                                             }
                                         }
+                                    ?>
                                     ?>
                                 </td>
                                 <td class="px-6 py-4 text-center">
