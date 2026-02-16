@@ -77,12 +77,7 @@ class SettlementService
                         $settledCount++;
                     }
                 } else {
-                    // Market is OPEN/SUSPENDED - Update Score for Dashboard
-                    $score = $this->extractScore($book, $bet['sport'] ?? 'Unknown');
-                    if ($score && $score !== $bet['score']) {
-                        $upd = $this->db->prepare("UPDATE bets SET score = ? WHERE id = ?");
-                        $upd->execute([$score, $bet['id']]);
-                    }
+                    // Market is OPEN/SUSPENDED - Do nothing for scores
                 }
             }
         }
@@ -96,36 +91,4 @@ class SettlementService
         $stmt->execute([number_format($amount, 2, '.', '')]);
     }
 
-    private function extractScore($book, $sportName = 'Unknown')
-    {
-        $scoreData = $book['marketDefinition']['score'] ?? null;
-        if (!$scoreData)
-            return null;
 
-        $home = $scoreData['home'] ?? [];
-        $away = $scoreData['away'] ?? [];
-
-        // 1. Try Nested Keys (standard doc)
-        $sHome = $home['score'] ?? $home['numberOfSets'] ?? $home['sets'] ?? null;
-        $sAway = $away['score'] ?? $away['numberOfSets'] ?? $away['sets'] ?? null;
-
-        // 2. Try Flat Keys (suggested feedback)
-        if ($sHome === null)
-            $sHome = $scoreData['homeScore'] ?? $scoreData['homeSets'] ?? null;
-        if ($sAway === null)
-            $sAway = $scoreData['awayScore'] ?? $scoreData['awaySets'] ?? null;
-
-        if ($sHome !== null && $sAway !== null) {
-            $score = "$sHome - $sAway";
-
-            // Add details: Games or Sets
-            if (stripos($sportName, 'Tennis') !== false && isset($home['games'])) {
-                $score = "Sets: $score (G: {$home['games']}-{$away['games']})";
-            } elseif (isset($scoreData['homeSets']) && strpos($score, 'Sets') === false) {
-                $score .= " (Sets: {$scoreData['homeSets']}-{$scoreData['awaySets']})";
-            }
-            return $score;
-        }
-        return null;
-    }
-}

@@ -141,40 +141,7 @@ class DioQuantumController
         }
         unset($bet); // Break reference
 
-        // LOAD LIVE SCORES CACHE
-        $liveScoresCache = [];
-        if (file_exists(\App\Config\Config::DATA_PATH . 'live_scores.json')) {
-            $liveScoresCache = json_decode(file_get_contents(\App\Config\Config::DATA_PATH . 'live_scores.json'), true) ?? [];
-        }
 
-        $liveSportsData = [];
-        $eventTypes = is_array($eventTypes) ? $eventTypes : [];
-
-        foreach ($eventTypes as $et) {
-            $name = $et['eventType']['name'];
-            $id = $et['eventType']['id'];
-
-            $res = $this->bf->getLiveEvents([$id]);
-            $events = $res['result'] ?? [];
-
-            if (!empty($events)) {
-                $liveSportsData[$name] = [
-                    'id' => $id,
-                    'events' => $events
-                ];
-            }
-        }
-
-        // INJECT SCORES
-        foreach ($liveSportsData as $sport => &$data) {
-            foreach ($data['events'] as &$eventObj) {
-                $eventName = $eventObj['event']['name'];
-                if (isset($liveScoresCache[$eventName])) {
-                    $eventObj['score'] = $liveScoresCache[$eventName];
-                }
-            }
-        }
-        unset($data, $eventObj); // Break references
 
         $currentMode = $operationalMode;
         require __DIR__ . '/../Views/dashboard.php';
